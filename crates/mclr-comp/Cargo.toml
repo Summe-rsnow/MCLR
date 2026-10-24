@@ -8,6 +8,8 @@ license.workspace = true
 [dependencies]
 mclr-core.workspace = true
 mclr-net.workspace = true
+mclr-game.workspace = true
+mclr-loaders.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
@@ -19,6 +21,10 @@ sha1.workspace = true
 sha2.workspace = true
 hex.workspace = true
 tracing.workspace = true
+zip.workspace = true
+toml.workspace = true
+trash.workspace = true
+tempfile.workspace = true
 
 [dev-dependencies]
 wiremock.workspace = true

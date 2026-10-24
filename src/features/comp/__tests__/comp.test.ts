@@ -6,6 +6,7 @@ import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { useCompStore } from '../store'
 import CompBrowserPage from '../CompBrowserPage.vue'
+import { ipcClient } from '../../../ipc/client'
 import { setupMockIpc } from '../../../ipc/mock'
 import zhCnComp from '../../../locales/zh-CN/comp.json'
 import zhCnCommon from '../../../locales/zh-CN/common.json'
@@ -125,5 +126,41 @@ describe('Community platform feature (Comp)', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Modrinth')
     expect(wrapper.text()).toContain('CurseForge')
+  })
+
+  it('resolves dependencies for mod download', async () => {
+    const file = {
+      id: 'test-file',
+      projectId: 'test-project',
+      platform: 'modrinth' as const,
+      name: 'test-mod.jar',
+      fileName: 'test-mod.jar',
+      mcVersions: ['1.20.1'],
+      loaders: ['fabric'],
+      channel: 'release' as const,
+      releaseDate: '2024-01-01',
+      size: 1024,
+      hashes: {},
+      downloadUrls: [],
+      distributionDisabled: false,
+      dependencies: [],
+    }
+    const deps = await ipcClient.compResolveDependencies(file, 'TestInstance', '1.20.1', 'fabric')
+    expect(deps.length).toBe(2)
+    expect(deps[0].project.title).toBe('Fabric API')
+    expect(deps[0].installed).toBe(true)
+    expect(deps[1].project.title).toBe('Mod Menu')
+    expect(deps[1].installed).toBe(false)
+  })
+
+  it('inspects and imports modpack archive file', async () => {
+    const inspect = await ipcClient.modpackInspect('C:/packs/fabulous.mrpack')
+    expect(inspect.name).toBe('Fabulously Optimized')
+    expect(inspect.format).toBe('modrinth')
+    expect(inspect.mcVersion).toBe('1.20.1')
+    expect(inspect.fileCount).toBe(42)
+
+    const taskId = await ipcClient.modpackImportFile('C:/packs/fabulous.mrpack', 'Fabulous')
+    expect(taskId).toMatch(/^task-modpack-import-/)
   })
 })

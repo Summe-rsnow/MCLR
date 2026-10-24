@@ -325,6 +325,86 @@ async compDownload(file: CompFile, targetInstance: string, kind: CompType) : Pro
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async modpackInspect(archivePath: string) : Promise<Result<ModpackInspectResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("modpack_inspect", { archivePath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async modpackImportFile(archivePath: string, instanceName: string) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("modpack_import_file", { archivePath, instanceName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async modpackInstallRemote(file: CompFile, instanceName: string) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("modpack_install_remote", { file, instanceName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async localModsList(instanceId: string) : Promise<Result<LocalModInfo[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("local_mods_list", { instanceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async localModToggle(instanceId: string, fileName: string, enabled: boolean) : Promise<Result<LocalModInfo, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("local_mod_toggle", { instanceId, fileName, enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async localModDelete(instanceId: string, fileName: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("local_mod_delete", { instanceId, fileName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async localModsCheckUpdates(instanceId: string, mcVersion: string, loader: string) : Promise<Result<LocalModInfo[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("local_mods_check_updates", { instanceId, mcVersion, loader }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async localModUpdate(instanceId: string, currentFileName: string, newFile: CompFile) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("local_mod_update", { instanceId, currentFileName, newFile }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async localModJarInJar(instanceId: string, fileName: string) : Promise<Result<JarInJarNode[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("local_mod_jar_in_jar", { instanceId, fileName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async compResolveDependencies(file: CompFile, instanceId: string, mcVersion: string, loader: string) : Promise<Result<ResolvedDependencyItem[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("comp_resolve_dependencies", { file, instanceId, mcVersion, loader }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -384,6 +464,10 @@ export type InstanceKind = "vanilla" | "snapshot" | "oldBeta" | "oldAlpha" | "fa
  */
 export type InstanceState = "ok" | "broken" | "incomplete"
 /**
+ * A node in the nested Jar-in-Jar tree.
+ */
+export type JarInJarNode = { id: string; name: string; version: string; path: string; size: number; children: JarInJarNode[] }
+/**
  * Description of an installed Java runtime on the machine.
  */
 export type JavaInstallation = { path: string; home: string; version: string; major: number; implementor: string; arch: string; isJdk: boolean; source: string }
@@ -402,6 +486,10 @@ export type LaunchStartResult = { taskId: string; processId: number | null }
 export type LoaderKind = "fabric" | "legacyFabric" | "liteLoader" | "labyMod" | "optiFine" | "forge" | "neoForge" | "cleanroom"
 export type LoaderVersionEntry = { loader: LoaderKind; mcVersion: string; version: string; stable: boolean; releaseTime: string | null }
 /**
+ * Information about a locally installed mod in the instance's `mods` folder.
+ */
+export type LocalModInfo = { fileName: string; path: string; enabled: boolean; modId: string; name: string; version: string; description: string | null; authors: string[]; loader: string; sha1: string; murmur2: number; size: number; projectId: string | null; updateFile: CompFile | null }
+/**
  * Log severity classification.
  */
 export type LogLevel = "info" | "warn" | "error" | "debug" | "fatal"
@@ -410,8 +498,20 @@ export type LogLevel = "info" | "warn" | "error" | "debug" | "fatal"
  */
 export type LogLine = { lineId: number; processId: number; instanceId: string; level: LogLevel; text: string; timestamp: string }
 export type MaterialMode = "flat" | "glass"
+/**
+ * Supported modpack archive formats.
+ */
+export type ModpackFormat = "curseforge" | "modrinth" | "prism" | "mcbbs" | "hmcl" | "nested" | "rawMinecraft"
+/**
+ * Metadata extracted from a modpack archive.
+ */
+export type ModpackInspectResult = { format: ModpackFormat; name: string; version: string; author: string | null; mcVersion: string; loader: string | null; loaderVersion: string | null; fileCount: number }
 export type NetSettings = { proxyMode: ProxyMode; proxyUrl: string; doh: boolean; sourcePriority: SourcePriority; connectionsPerFile: number; maxConcurrentFiles: number }
 export type ProxyMode = "none" | "system" | "custom"
+/**
+ * A resolved dependency item containing project metadata, the chosen file, and whether it is already installed.
+ */
+export type ResolvedDependencyItem = { project: CompProject; file: CompFile; installed: boolean }
 /**
  * Presence status of optional launcher secrets.
  */

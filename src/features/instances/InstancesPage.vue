@@ -5,6 +5,7 @@ import { useInstancesStore } from './store'
 import type { InstanceInfo } from '../../ipc/client'
 import {
   MInput,
+  MButton,
   MIconButton,
   MSelect,
   MSegmented,
@@ -16,7 +17,9 @@ import {
   useDialog,
   type ContextMenuItem,
 } from '../../ui'
+import ModpackImportDialog from '../comp/ModpackImportDialog.vue'
 
+const showImportModpackDialog = ref(false)
 const { t } = useI18n()
 const instancesStore = useInstancesStore()
 const { confirm } = useDialog()
@@ -246,6 +249,15 @@ function getLoaderBadgeVariant(kind: string): 'primary' | 'warning' | 'neutral' 
           :options="filterOptions"
           size="sm"
         />
+
+        <MButton
+          variant="tonal"
+          size="sm"
+          @click="showImportModpackDialog = true"
+        >
+          <span class="i-lucide-file-up mr-1.5 w-4 h-4" />
+          {{ t('instances.actions.importModpack') }}
+        </MButton>
 
         <MIconButton
           icon="i-lucide-rotate-cw"
@@ -511,6 +523,13 @@ function getLoaderBadgeVariant(kind: string): 'primary' | 'warning' | 'neutral' 
       :y="contextMenuY"
       @update:model-value="(val) => (contextMenuOpen = val)"
       @select="handleContextMenuSelect"
+    />
+
+    <!-- Modpack Import Dialog -->
+    <ModpackImportDialog
+      :open="showImportModpackDialog"
+      @update:open="showImportModpackDialog = $event"
+      @imported="instancesStore.fetchInstances"
     />
   </div>
 </template>

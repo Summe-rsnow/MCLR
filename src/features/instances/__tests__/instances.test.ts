@@ -8,6 +8,7 @@ import { setupMockIpc } from '../../../ipc/mock'
 import { resetMockInstances } from '../mock'
 import zhCnInstances from '../../../locales/zh-CN/instances.json'
 import zhCnCommon from '../../../locales/zh-CN/common.json'
+import zhCnComp from '../../../locales/zh-CN/comp.json'
 
 const i18n = createI18n({
   legacy: false,
@@ -16,6 +17,7 @@ const i18n = createI18n({
     'zh-CN': {
       instances: zhCnInstances,
       common: zhCnCommon,
+      comp: zhCnComp,
     },
   },
 })

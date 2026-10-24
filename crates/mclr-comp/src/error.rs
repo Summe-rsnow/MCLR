@@ -17,6 +17,20 @@ pub enum CompError {
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
 
+    #[error("zip error: {0}")]
+    Zip(#[from] zip::result::ZipError),
+
+    #[error("game error: {0}")]
+    Game(#[from] mclr_game::GameError),
+
+    #[error("loader error: {0}")]
+    Loader(#[from] mclr_loaders::LoaderError),
+
+    #[error("quilt modpacks are not supported")]
+    QuiltUnsupported,
+
+    #[error("unsupported or corrupted modpack format: {0}")]
+    UnsupportedModpack(String),
     #[error("curseforge api key not configured")]
     NotConfigured,
 
@@ -44,6 +58,11 @@ impl CompError {
             CompError::Http(_) => "comp.http",
             CompError::Io(_) => "comp.io",
             CompError::Json(_) => "comp.json",
+            CompError::Zip(_) => "comp.zip",
+            CompError::Game(e) => e.code(),
+            CompError::Loader(e) => e.code(),
+            CompError::QuiltUnsupported => "modpack.quiltUnsupported",
+            CompError::UnsupportedModpack(_) => "modpack.unsupported",
             CompError::NotConfigured => "notConfigured",
             CompError::DistributionDisabled { .. } => "comp.cf.distributionDisabled",
             CompError::ProjectNotFound(_) => "comp.projectNotFound",
@@ -57,6 +76,8 @@ impl From<CompError> for AppError {
     fn from(err: CompError) -> Self {
         match err {
             CompError::Net(e) => e.into(),
+            CompError::Game(e) => e.into(),
+            CompError::Loader(e) => e.into(),
             CompError::NotConfigured => {
                 AppError::new("notConfigured").with_param("what", "curseforge")
             }

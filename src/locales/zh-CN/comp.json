@@ -71,7 +71,37 @@
     "confirm": "开始下载",
     "cancel": "取消",
     "success": "已创建下载任务",
-    "failed": "创建下载任务失败"
+    "failed": "创建下载任务失败",
+    "dependenciesTitle": "前置依赖模组",
+    "dependenciesDesc": "建议一并下载以下前置依赖，以保证模组正常运行：",
+    "depInstalled": "已安装",
+    "depRequired": "必需"
+  },
+  "modpackInstallDialog": {
+    "title": "安装整合包",
+    "instanceName": "新实例名称",
+    "instanceNamePlaceholder": "请输入新实例名称",
+    "install": "开始安装",
+    "success": "已创建整合包安装任务",
+    "failed": "创建整合包安装任务失败"
+  },
+  "modpackImport": {
+    "button": "导入整合包文件",
+    "dialogTitle": "导入整合包文件",
+    "selectFile": "选择整合包文件 (.zip / .mrpack)",
+    "browse": "浏览",
+    "inspecting": "正在解析整合包结构...",
+    "inspectFailed": "解析整合包文件失败",
+    "format": "整合包格式：{format}",
+    "mcVersion": "游戏版本：{version}",
+    "loader": "加载器：{loader} {loaderVersion}",
+    "fileCount": "文件数量：{count}",
+    "author": "作者：{author}",
+    "targetName": "新实例名称",
+    "targetNamePlaceholder": "请输入实例名称",
+    "import": "导入并创建",
+    "success": "已创建整合包导入任务",
+    "failed": "整合包导入失败"
   },
   "favorites": {
     "empty": "暂无收藏的项目",

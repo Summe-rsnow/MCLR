@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.8] - 2026-10-24
+
+### Added
+- `mclr-comp::modpack`: Modpack format inspector and importer for CurseForge (`manifest.json`), Modrinth (`.mrpack` / `modrinth.index.json`), MultiMC/Prism (`instance.cfg` + `mmc-pack.json`), MCBBS (`mcbbs.packmeta`), HMCL (`modpack.json`), nested launcher packs, and raw `.minecraft` zips, with Quilt modpack rejection (`modpack.quiltUnsupported`).
+- `mclr-comp::local`: Local mod scanner parsing `fabric.mod.json`, `quilt.mod.json`, `META-INF/neoforge.mods.toml`, `META-INF/mods.toml`, and `mcmod.info`, CurseForge MurmurHash2 fingerprint calculation, `.jar` ↔ `.jar.disabled` toggling, and batch update checking.
+- `mclr-comp::jarinjar`: Nested Jar-in-Jar tree analyzer (`fabric.mod.json`, `quilt.mod.json`, `META-INF/jarjar/metadata.json`, and 72-col unfolded `MANIFEST.MF`).
+- `mclr-comp::resolver`: DFS mod dependency resolver (depth ≤ 32, installed-satisfaction check, channel priority `release > beta > alpha`).
+- Local Mod Management UI (`src/features/mods`), JarInJar drawer, dependency resolution dialog in `CompDetailPage.vue`, and `ModpackImportDialog.vue`.
+
 ## [0.0.7] - 2026-10-24
 
 ### Added

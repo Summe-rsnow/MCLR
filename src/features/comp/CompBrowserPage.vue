@@ -16,7 +16,9 @@ import {
   MEmpty,
   MSkeleton,
 } from '../../ui'
+import ModpackImportDialog from './ModpackImportDialog.vue'
 
+const showImportDialog = ref(false)
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
@@ -185,6 +187,16 @@ watch(
         :tabs="tabs"
         @update:model-value="onTabChange"
       />
+      <div v-if="compStore.activeTab === 'modpack'">
+        <MButton
+          variant="primary"
+          size="sm"
+          @click="showImportDialog = true"
+        >
+          <span class="i-lucide-file-up mr-1.5 w-4 h-4" />
+          {{ t('comp.modpackImport.button') }}
+        </MButton>
+      </div>
     </div>
 
     <!-- Filter Bar (visible when not in favorites tab) -->
@@ -390,5 +402,11 @@ watch(
         </div>
       </div>
     </div>
+
+    <!-- Modpack Import Dialog -->
+    <ModpackImportDialog
+      :open="showImportDialog"
+      @update:open="showImportDialog = $event"
+    />
   </div>
 </template>

@@ -56,7 +56,17 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::comp::comp_files,
         crate::ipc::comp::comp_download,
         // [modpack]
+        crate::ipc::modpack::modpack_inspect,
+        crate::ipc::modpack::modpack_import_file,
+        crate::ipc::modpack::modpack_install_remote,
         // [localmods]
+        crate::ipc::localmods::local_mods_list,
+        crate::ipc::localmods::local_mod_toggle,
+        crate::ipc::localmods::local_mod_delete,
+        crate::ipc::localmods::local_mods_check_updates,
+        crate::ipc::localmods::local_mod_update,
+        crate::ipc::localmods::local_mod_jar_in_jar,
+        crate::ipc::localmods::comp_resolve_dependencies,
         // [saves]
         // [servers]
         // [export]

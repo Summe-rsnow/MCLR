@@ -288,6 +288,58 @@ export interface CompFavoriteEntry {
 export interface CompSettings {
   favorites: CompFavoriteEntry[]
 }
+export type ModpackFormat =
+  | 'curseforge'
+  | 'modrinth'
+  | 'prism'
+  | 'mcbbs'
+  | 'hmcl'
+  | 'nested'
+  | 'rawMinecraft'
+
+export interface ModpackInspectResult {
+  format: ModpackFormat
+  name: string
+  version: string
+  author?: string | null
+  mcVersion: string
+  loader?: string | null
+  loaderVersion?: string | null
+  fileCount: number
+}
+
+export interface LocalModInfo {
+  fileName: string
+  path: string
+  enabled: boolean
+  modId: string
+  name: string
+  version: string
+  description?: string | null
+  authors: string[]
+  loader: string
+  sha1: string
+  murmur2: number
+  size: number
+  projectId?: string | null
+  updateFile?: CompFile | null
+}
+
+export interface JarInJarNode {
+  id: string
+  name: string
+  version: string
+  path: string
+  size: number
+  children: JarInJarNode[]
+}
+
+export interface ResolvedDependencyItem {
+  project: CompProject
+  file: CompFile
+  installed: boolean
+}
+
 
 export type AccountKind = 'offline' | 'microsoft' | 'authlib' | 'yggdrasilConnect'
 
@@ -499,4 +551,57 @@ export const ipcClient = {
     }),
   compDownload: (file: CompFile, targetInstance: string, kind: CompType): Promise<string> =>
     invokeCommand<string>('comp_download', { file, targetInstance, kind }),
+  // Modpack
+  modpackInspect: (archivePath: string): Promise<ModpackInspectResult> =>
+    invokeCommand<ModpackInspectResult>('modpack_inspect', { archivePath }),
+  modpackImportFile: (archivePath: string, instanceName: string): Promise<string> =>
+    invokeCommand<string>('modpack_import_file', { archivePath, instanceName }),
+  modpackInstallRemote: (file: CompFile, instanceName: string): Promise<string> =>
+    invokeCommand<string>('modpack_install_remote', { file, instanceName }),
+
+  // Local Mods & JarInJar & Dependency Resolver
+  localModsList: (instanceId: string): Promise<LocalModInfo[]> =>
+    invokeCommand<LocalModInfo[]>('local_mods_list', { instanceId }),
+  localModToggle: (
+    instanceId: string,
+    fileName: string,
+    enabled: boolean,
+  ): Promise<LocalModInfo> =>
+    invokeCommand<LocalModInfo>('local_mod_toggle', { instanceId, fileName, enabled }),
+  localModDelete: (instanceId: string, fileName: string): Promise<void> =>
+    invokeCommand<void>('local_mod_delete', { instanceId, fileName }),
+  localModsCheckUpdates: (
+    instanceId: string,
+    mcVersion: string,
+    loader: string,
+  ): Promise<LocalModInfo[]> =>
+    invokeCommand<LocalModInfo[]>('local_mods_check_updates', {
+      instanceId,
+      mcVersion,
+      loader,
+    }),
+  localModUpdate: (
+    instanceId: string,
+    currentFileName: string,
+    newFile: CompFile,
+  ): Promise<string> =>
+    invokeCommand<string>('local_mod_update', {
+      instanceId,
+      currentFileName,
+      newFile,
+    }),
+  localModJarInJar: (instanceId: string, fileName: string): Promise<JarInJarNode[]> =>
+    invokeCommand<JarInJarNode[]>('local_mod_jar_in_jar', { instanceId, fileName }),
+  compResolveDependencies: (
+    file: CompFile,
+    instanceId: string,
+    mcVersion: string,
+    loader: string,
+  ): Promise<ResolvedDependencyItem[]> =>
+    invokeCommand<ResolvedDependencyItem[]>('comp_resolve_dependencies', {
+      file,
+      instanceId,
+      mcVersion,
+      loader,
+    }),
 }

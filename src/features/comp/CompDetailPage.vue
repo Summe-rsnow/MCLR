@@ -6,7 +6,13 @@ import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { useCompStore } from './store'
 import { useInstancesStore } from '../instances/store'
-import type { CompPlatform, CompFile, CompType } from '../../ipc/client'
+import {
+  ipcClient,
+  type CompPlatform,
+  type CompFile,
+  type CompType,
+  type ResolvedDependencyItem,
+} from '../../ipc/client'
 import {
   MButton,
   MIconButton,
@@ -16,9 +22,10 @@ import {
   MSelect,
   MSkeleton,
   MEmpty,
+  MCheckbox,
+  MInput,
   useToast,
 } from '../../ui'
-
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
@@ -43,6 +50,17 @@ const downloadDialogOpen = ref(false)
 const selectedFile = ref<CompFile | null>(null)
 const selectedTargetInstance = ref<string>('')
 const downloading = ref(false)
+
+// Dependencies state
+const dependencies = ref<ResolvedDependencyItem[]>([])
+const selectedDepFiles = ref<Record<string, boolean>>({})
+const resolvingDependencies = ref(false)
+
+// Modpack Install Dialog state
+const modpackInstallDialogOpen = ref(false)
+const modpackTargetFile = ref<CompFile | null>(null)
+const modpackInstanceName = ref('')
+const installingModpack = ref(false)
 
 const renderedDescription = computed(() => {
   const desc = compStore.currentProject?.description
@@ -120,8 +138,56 @@ function getChannelVariant(channel: string): 'primary' | 'warning' | 'danger' {
   return 'danger'
 }
 
-function openDownloadDialog(file: CompFile): void {
+async function resolveDependenciesForSelectedInstance(): Promise<void> {
+  if (!selectedFile.value || !selectedTargetInstance.value) {
+    dependencies.value = []
+    selectedDepFiles.value = {}
+    return
+  }
+  if (compStore.currentProject?.compType !== 'mod') {
+    dependencies.value = []
+    selectedDepFiles.value = {}
+    return
+  }
+  const targetInst = instancesStore.instances.find(
+    (i) => i.name === selectedTargetInstance.value,
+  )
+  const mcVer = targetInst?.mcVersion || selectedFile.value.mcVersions[0] || '1.20.1'
+  const loader = targetInst?.loaders[0] || selectedFile.value.loaders[0] || 'fabric'
+
+  resolvingDependencies.value = true
+  try {
+    const res = await ipcClient.compResolveDependencies(
+      selectedFile.value,
+      selectedTargetInstance.value,
+      mcVer,
+      loader,
+    )
+    dependencies.value = res
+    const initialChecks: Record<string, boolean> = {}
+    for (const item of res) {
+      if (!item.installed) {
+        initialChecks[item.file.id] = true
+      }
+    }
+    selectedDepFiles.value = initialChecks
+  } catch (err) {
+    console.error('Failed to resolve dependencies', err)
+    dependencies.value = []
+  } finally {
+    resolvingDependencies.value = false
+  }
+}
+
+async function openDownloadDialog(file: CompFile): Promise<void> {
   selectedFile.value = file
+  if (compStore.currentProject?.compType === 'modpack') {
+    modpackTargetFile.value = file
+    modpackInstanceName.value = compStore.currentProject.title || file.name.replace(/\.[^/.]+$/, '')
+    modpackInstallDialogOpen.value = true
+    return
+  }
+
   if (instancesStore.instances.length > 0) {
     const match = instancesStore.instances.find((i) =>
       file.mcVersions.includes(i.mcVersion),
@@ -131,6 +197,7 @@ function openDownloadDialog(file: CompFile): void {
     selectedTargetInstance.value = ''
   }
   downloadDialogOpen.value = true
+  await resolveDependenciesForSelectedInstance()
 }
 
 async function startDownload(): Promise<void> {
@@ -143,6 +210,18 @@ async function startDownload(): Promise<void> {
       selectedTargetInstance.value,
       targetKind,
     )
+
+    // Also download selected dependencies
+    for (const dep of dependencies.value) {
+      if (selectedDepFiles.value[dep.file.id]) {
+        await compStore.downloadFile(
+          dep.file,
+          selectedTargetInstance.value,
+          'mod',
+        )
+      }
+    }
+
     toast.show({
       message: t('comp.downloadDialog.success'),
       type: 'success',
@@ -155,6 +234,29 @@ async function startDownload(): Promise<void> {
     })
   } finally {
     downloading.value = false
+  }
+}
+
+async function startModpackInstall(): Promise<void> {
+  if (!modpackTargetFile.value || !modpackInstanceName.value.trim()) return
+  installingModpack.value = true
+  try {
+    await ipcClient.modpackInstallRemote(
+      modpackTargetFile.value,
+      modpackInstanceName.value.trim(),
+    )
+    toast.show({
+      message: t('comp.modpackInstallDialog.success'),
+      type: 'success',
+    })
+    modpackInstallDialogOpen.value = false
+  } catch (err: unknown) {
+    toast.show({
+      message: `${t('comp.modpackInstallDialog.failed')}: ${err instanceof Error ? err.message : String(err)}`,
+      type: 'danger',
+    })
+  } finally {
+    installingModpack.value = false
   }
 }
 
@@ -391,9 +493,54 @@ onMounted(async () => {
           <MSelect
             v-model="selectedTargetInstance"
             :options="instanceOptions"
+            @update:model-value="resolveDependenciesForSelectedInstance"
           />
           <div class="text-xs text-text-muted">
             {{ t('comp.downloadDialog.targetSubfolder', { folder: compStore.currentProject?.compType || 'mods' }) }}
+          </div>
+
+          <!-- Dependencies Checklist -->
+          <div v-if="compStore.currentProject?.compType === 'mod' && (resolvingDependencies || dependencies.length > 0)" class="pt-2 border-t border-outline/10 space-y-2">
+            <div class="text-xs font-semibold text-text">
+              {{ t('comp.downloadDialog.dependenciesTitle') }}
+            </div>
+            <div class="text-[11px] text-text-muted">
+              {{ t('comp.downloadDialog.dependenciesDesc') }}
+            </div>
+
+            <div v-if="resolvingDependencies" class="space-y-1.5 py-1">
+              <MSkeleton class="h-6 rounded" />
+              <MSkeleton class="h-6 rounded" />
+            </div>
+
+            <div v-else class="space-y-1.5 max-h-40 overflow-y-auto">
+              <div
+                v-for="dep in dependencies"
+                :key="dep.file.id"
+                class="flex items-center justify-between p-2 rounded-lg bg-surface-variant/30 text-xs"
+              >
+                <div class="flex items-center space-x-2 min-w-0">
+                  <MCheckbox
+                    v-if="!dep.installed"
+                    v-model="selectedDepFiles[dep.file.id]"
+                  />
+                  <span v-else class="i-lucide-check text-success shrink-0 w-4 h-4 ml-0.5" />
+                  <span class="font-medium text-text truncate">
+                    {{ dep.project.title }}
+                  </span>
+                  <span class="text-text-muted font-mono text-[11px]">v{{ dep.file.name }}</span>
+                </div>
+
+                <div class="shrink-0">
+                  <MBadge
+                    :variant="dep.installed ? 'success' : 'neutral'"
+                    size="sm"
+                  >
+                    {{ dep.installed ? t('comp.downloadDialog.depInstalled') : t('comp.downloadDialog.depRequired') }}
+                  </MBadge>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -413,6 +560,45 @@ onMounted(async () => {
             @click="startDownload"
           >
             {{ t('comp.downloadDialog.confirm') }}
+          </MButton>
+        </div>
+      </template>
+    </MDialog>
+
+    <!-- Modpack Install Dialog -->
+    <MDialog
+      :open="modpackInstallDialogOpen"
+      :title="t('comp.modpackInstallDialog.title')"
+      @update:open="modpackInstallDialogOpen = $event"
+      @cancel="modpackInstallDialogOpen = false"
+    >
+      <div class="space-y-4 py-2">
+        <div class="space-y-2">
+          <label class="text-xs font-semibold text-text-muted block">
+            {{ t('comp.modpackInstallDialog.instanceName') }}
+          </label>
+          <MInput
+            v-model="modpackInstanceName"
+            :placeholder="t('comp.modpackInstallDialog.instanceNamePlaceholder')"
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="flex items-center justify-end space-x-3">
+          <MButton
+            variant="text"
+            @click="modpackInstallDialogOpen = false"
+          >
+            {{ t('comp.downloadDialog.cancel') }}
+          </MButton>
+          <MButton
+            variant="primary"
+            :loading="installingModpack"
+            :disabled="!modpackInstanceName.trim()"
+            @click="startModpackInstall"
+          >
+            {{ t('comp.modpackInstallDialog.install') }}
           </MButton>
         </div>
       </template>

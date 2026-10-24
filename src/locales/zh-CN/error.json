@@ -82,5 +82,11 @@
     "projectFailed": "获取社区项目详情失败",
     "filesFailed": "获取文件列表失败",
     "downloadFailed": "下载社区资源失败"
+  },
+  "modpack": {
+    "quiltUnsupported": "暂不支持 Quilt 整合包导入",
+    "unsupported": "未能识别该整合包格式或压缩包损坏",
+    "importFailed": "整合包导入失败",
+    "inspectFailed": "解析整合包失败"
   }
 }
