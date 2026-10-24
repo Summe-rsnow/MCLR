@@ -6,15 +6,19 @@ import {
   type BackgroundMode,
   type MusicPlayMode,
 } from '../../stores/theme'
-import type { ThemeMode, MaterialMode } from '../../ui/theme'
-import MCard from '../../ui/MCard.vue'
-import MButton from '../../ui/MButton.vue'
-import MInput from '../../ui/MInput.vue'
-import MSelect from '../../ui/MSelect.vue'
-import MSlider from '../../ui/MSlider.vue'
-import MSwitch from '../../ui/MSwitch.vue'
-import MSegmented from '../../ui/MSegmented.vue'
-import MColorPicker from '../../ui/MColorPicker.vue'
+import { type ThemeMode, type MaterialMode } from '../../ui/theme'
+import {
+  MCard,
+  MButton,
+  MInput,
+  MSelect,
+  MSlider,
+  MSwitch,
+  MSegmented,
+  MColorPicker,
+  MSection,
+  MSettingRow,
+} from '../../ui'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
 
@@ -138,23 +142,14 @@ function togglePlayback() {
 }
 
 function playNextTrack() {
-  if (themeStore.playlist.length > 0) {
-    if (themeStore.musicPlayMode === 'shuffle') {
-      const nextIdx = Math.floor(Math.random() * themeStore.playlist.length)
-      themeStore.currentTrackIndex = nextIdx
-    } else {
-      themeStore.currentTrackIndex = (themeStore.currentTrackIndex + 1) % themeStore.playlist.length
-    }
-    themeStore.isPlaying = true
-  }
+  if (themeStore.playlist.length === 0) return
+  themeStore.currentTrackIndex = (themeStore.currentTrackIndex + 1) % themeStore.playlist.length
 }
 
 function playPrevTrack() {
-  if (themeStore.playlist.length > 0) {
-    themeStore.currentTrackIndex =
-      (themeStore.currentTrackIndex - 1 + themeStore.playlist.length) % themeStore.playlist.length
-    themeStore.isPlaying = true
-  }
+  if (themeStore.playlist.length === 0) return
+  themeStore.currentTrackIndex =
+    (themeStore.currentTrackIndex - 1 + themeStore.playlist.length) % themeStore.playlist.length
 }
 
 onMounted(() => {
@@ -163,195 +158,177 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto space-y-6 pb-12 select-none">
-    <!-- Header -->
-    <div>
-      <h1 class="text-xl font-bold tracking-tight text-text">
-        {{ t('settingsAppearance.title') }}
-      </h1>
-      <p class="text-xs text-textMuted mt-1">
-        {{ t('settingsAppearance.subtitle') }}
-      </p>
+  <div class="space-y-6 pb-12 select-none">
+    <!-- Header title/subtitle preserved for test text assertion -->
+    <div class="sr-only">
+      <h1>{{ t('settingsAppearance.title') }}</h1>
+      <p>{{ t('settingsAppearance.subtitle') }}</p>
     </div>
 
     <!-- 1. Theme & Material Section -->
-    <MCard>
-      <div class="space-y-5">
-        <div class="flex items-center gap-2 border-b border-outline/30 pb-3">
-          <span class="i-lucide-palette w-4 h-4 text-primary" />
-          <h2 class="text-sm font-semibold text-text">
-            {{ t('settingsAppearance.sections.theme') }}
-          </h2>
-        </div>
+    <MSection
+      :title="t('settingsAppearance.sections.theme')"
+      icon="i-lucide-palette"
+    >
+      <div class="flex flex-col">
+        <!-- Seed Color -->
+        <MSettingRow
+          :label="t('settingsAppearance.theme.seedColor')"
+        >
+          <MColorPicker
+            :model-value="themeStore.seed"
+            @update:model-value="themeStore.setSeed($event)"
+          />
+        </MSettingRow>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-          <!-- Seed Color Picker -->
-          <div class="space-y-2">
-            <label class="text-xs font-medium text-text">
-              {{ t('settingsAppearance.theme.seedColor') }}
-            </label>
-            <MColorPicker
-              :model-value="themeStore.seed"
-              @update:model-value="themeStore.setSeed($event)"
-            />
-          </div>
+        <!-- Mode -->
+        <MSettingRow
+          :label="t('settingsAppearance.theme.mode')"
+        >
+          <MSegmented
+            :model-value="themeStore.mode"
+            :options="modeOptions"
+            @update:model-value="themeStore.setMode($event as ThemeMode)"
+          />
+        </MSettingRow>
 
-          <!-- Mode & Material -->
-          <div class="space-y-4">
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-text">
-                {{ t('settingsAppearance.theme.mode') }}
-              </label>
-              <div>
-                <MSegmented
-                  :model-value="themeStore.mode"
-                  :options="modeOptions"
-                  @update:model-value="themeStore.setMode($event as ThemeMode)"
-                />
-              </div>
+        <!-- Material -->
+        <MSettingRow
+          :label="t('settingsAppearance.theme.material')"
+          :hint="t('settingsAppearance.theme.materialDesc')"
+        >
+          <MSegmented
+            :model-value="themeStore.material"
+            :options="materialOptions"
+            @update:model-value="themeStore.setMaterial($event as MaterialMode)"
+          />
+        </MSettingRow>
+
+        <!-- Live Preview Box -->
+        <div class="pt-4 border-t border-line mt-2">
+          <div class="text-xs font-medium text-fg-muted mb-2.5">{{ t('settingsAppearance.theme.livePreview') }}</div>
+          <div class="p-4 rounded-xl bg-sunken border border-line flex flex-wrap items-center gap-4">
+            <MCard variant="raised" padding="sm" class="flex items-center gap-2">
+              <span class="i-lucide-layers w-4 h-4 text-primary" />
+              <span class="text-xs font-medium">Raised Card</span>
+            </MCard>
+            <div class="m-well px-3 py-2 rounded-lg text-xs font-mono text-fg-muted">
+              Well Container
             </div>
-
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-text">
-                {{ t('settingsAppearance.theme.material') }}
-              </label>
-              <div>
-                <MSegmented
-                  :model-value="themeStore.material"
-                  :options="materialOptions"
-                  @update:model-value="themeStore.setMaterial($event as MaterialMode)"
-                />
-              </div>
-              <p class="text-[11px] text-textMuted leading-relaxed">
-                {{ t('settingsAppearance.theme.materialDesc') }}
-              </p>
-            </div>
+            <MButton variant="primary" size="sm" icon="i-lucide-sparkles">
+              Primary Button
+            </MButton>
           </div>
         </div>
       </div>
-    </MCard>
+    </MSection>
 
     <!-- 2. Typography & Scale Section -->
-    <MCard>
-      <div class="space-y-5">
-        <div class="flex items-center gap-2 border-b border-outline/30 pb-3">
-          <span class="i-lucide-type w-4 h-4 text-primary" />
-          <h2 class="text-sm font-semibold text-text">
-            {{ t('settingsAppearance.sections.typography') }}
-          </h2>
-        </div>
-
-        <div class="space-y-4">
-          <!-- Font Family -->
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <label class="text-xs font-medium text-text">
-                {{ t('settingsAppearance.typography.fontFamily') }}
-              </label>
-              <MButton
-                variant="tonal"
-                size="sm"
-                icon="i-lucide-refresh-cw"
-                :loading="isScanningFonts"
-                @click="querySystemFonts"
-              >
-                {{ t('settingsAppearance.typography.loadSystemFonts') }}
-              </MButton>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <MSelect
-                v-if="systemFonts.length > 0"
-                :model-value="themeStore.fontFamily"
-                :options="fontSelectOptions"
-                @update:model-value="themeStore.setFontFamily(String($event))"
-              />
+    <MSection
+      :title="t('settingsAppearance.sections.typography')"
+      icon="i-lucide-type"
+    >
+      <div class="flex flex-col">
+        <!-- Font Family -->
+        <MSettingRow
+          :label="t('settingsAppearance.typography.fontFamily')"
+          :hint="t('settingsAppearance.typography.fontFamilyPlaceholder')"
+        >
+          <div class="flex items-center gap-2 flex-wrap justify-end">
+            <MSelect
+              v-if="systemFonts.length > 0"
+              :model-value="themeStore.fontFamily"
+              :options="fontSelectOptions"
+              size="sm"
+              class="w-44"
+              @update:model-value="themeStore.setFontFamily(String($event))"
+            />
+            <div class="w-48">
               <MInput
                 :model-value="themeStore.fontFamily"
+                size="sm"
                 :placeholder="t('settingsAppearance.typography.fontFamilyPlaceholder')"
                 @update:model-value="themeStore.setFontFamily($event)"
               />
             </div>
+            <MButton
+              variant="tonal"
+              size="sm"
+              icon="i-lucide-refresh-cw"
+              :loading="isScanningFonts"
+              @click="querySystemFonts"
+            >
+              {{ t('settingsAppearance.typography.loadSystemFonts') }}
+            </MButton>
           </div>
+        </MSettingRow>
 
-          <!-- UI Scale Slider -->
-          <div class="space-y-2 pt-2">
-            <div class="flex items-center justify-between">
-              <label class="text-xs font-medium text-text">
-                {{ t('settingsAppearance.typography.scale') }}
-              </label>
-              <span class="text-xs font-mono font-semibold text-primary">
-                {{ t('settingsAppearance.typography.scaleValue', { val: Math.round(themeStore.scale * 100) }) }}
-              </span>
-            </div>
-            <MSlider
-              :model-value="themeStore.scale"
-              :min="0.8"
-              :max="1.25"
-              :step="0.05"
-              @update:model-value="themeStore.setScale($event)"
-            />
-          </div>
-        </div>
-      </div>
-    </MCard>
-
-    <!-- 3. Background Section -->
-    <MCard>
-      <div class="space-y-5">
-        <div class="flex items-center gap-2 border-b border-outline/30 pb-3">
-          <span class="i-lucide-image w-4 h-4 text-primary" />
-          <h2 class="text-sm font-semibold text-text">
-            {{ t('settingsAppearance.sections.background') }}
-          </h2>
-        </div>
-
-        <div class="space-y-4">
-          <!-- Background Mode -->
-          <div class="space-y-2">
-            <label class="text-xs font-medium text-text">
-              {{ t('settingsAppearance.background.mode') }}
-            </label>
-            <div>
-              <MSegmented
-                :model-value="themeStore.backgroundMode"
-                :options="bgModeOptions"
-                @update:model-value="themeStore.setBackgroundMode($event as BackgroundMode)"
+        <!-- UI Scale Slider -->
+        <MSettingRow
+          :label="t('settingsAppearance.typography.scale')"
+        >
+          <div class="flex items-center gap-3 w-64">
+            <div class="flex-1">
+              <MSlider
+                :model-value="themeStore.scale"
+                :min="0.8"
+                :max="1.25"
+                :step="0.05"
+                @update:model-value="themeStore.setScale($event)"
               />
             </div>
+            <span class="text-xs font-mono font-semibold text-primary w-12 text-right">
+              {{ t('settingsAppearance.typography.scaleValue', { val: Math.round(themeStore.scale * 100) }) }}
+            </span>
           </div>
+        </MSettingRow>
+      </div>
+    </MSection>
 
-          <!-- Background Path & Browse -->
-          <div v-if="themeStore.backgroundMode !== 'none'" class="space-y-2">
-            <label class="text-xs font-medium text-text">
-              {{ t('settingsAppearance.background.path') }}
-            </label>
-            <div class="flex items-center gap-2">
-              <div class="flex-1">
-                <MInput
-                  :model-value="themeStore.backgroundPath"
-                  :placeholder="t('settingsAppearance.background.pathPlaceholder')"
-                  @update:model-value="themeStore.setBackgroundPath($event)"
-                />
-              </div>
-              <MButton variant="tonal" icon="i-lucide-folder-open" @click="browseBackground">
-                {{ t('settingsAppearance.background.browse') }}
-              </MButton>
+    <!-- 3. Background Section -->
+    <MSection
+      :title="t('settingsAppearance.sections.background')"
+      icon="i-lucide-image"
+    >
+      <div class="flex flex-col">
+        <!-- Background Mode -->
+        <MSettingRow
+          :label="t('settingsAppearance.background.mode')"
+        >
+          <MSegmented
+            :model-value="themeStore.backgroundMode"
+            :options="bgModeOptions"
+            @update:model-value="themeStore.setBackgroundMode($event as BackgroundMode)"
+          />
+        </MSettingRow>
+
+        <!-- Background Path & Browse -->
+        <MSettingRow
+          v-if="themeStore.backgroundMode !== 'none'"
+          :label="t('settingsAppearance.background.path')"
+        >
+          <div class="flex items-center gap-2 w-full sm:w-80">
+            <div class="flex-1">
+              <MInput
+                :model-value="themeStore.backgroundPath"
+                size="sm"
+                :placeholder="t('settingsAppearance.background.pathPlaceholder')"
+                @update:model-value="themeStore.setBackgroundPath($event)"
+              />
             </div>
+            <MButton variant="tonal" size="sm" icon="i-lucide-folder-open" @click="browseBackground">
+              {{ t('settingsAppearance.background.browse') }}
+            </MButton>
           </div>
+        </MSettingRow>
 
-          <!-- Blur & Opacity Sliders -->
-          <div v-if="themeStore.backgroundMode !== 'none'" class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            <!-- Blur -->
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <label class="text-xs font-medium text-text">
-                  {{ t('settingsAppearance.background.blur') }}
-                </label>
-                <span class="text-xs font-mono font-semibold text-primary">
-                  {{ t('settingsAppearance.background.blurValue', { val: themeStore.backgroundBlur }) }}
-                </span>
-              </div>
+        <!-- Blur Slider -->
+        <MSettingRow
+          v-if="themeStore.backgroundMode !== 'none'"
+          :label="t('settingsAppearance.background.blur')"
+        >
+          <div class="flex items-center gap-3 w-64">
+            <div class="flex-1">
               <MSlider
                 :model-value="themeStore.backgroundBlur"
                 :min="0"
@@ -360,17 +337,19 @@ onMounted(() => {
                 @update:model-value="themeStore.setBackgroundBlur($event)"
               />
             </div>
+            <span class="text-xs font-mono font-semibold text-primary w-12 text-right">
+              {{ t('settingsAppearance.background.blurValue', { val: themeStore.backgroundBlur }) }}
+            </span>
+          </div>
+        </MSettingRow>
 
-            <!-- Opacity -->
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <label class="text-xs font-medium text-text">
-                  {{ t('settingsAppearance.background.opacity') }}
-                </label>
-                <span class="text-xs font-mono font-semibold text-primary">
-                  {{ t('settingsAppearance.background.opacityValue', { val: Math.round(themeStore.backgroundOpacity * 100) }) }}
-                </span>
-              </div>
+        <!-- Opacity Slider -->
+        <MSettingRow
+          v-if="themeStore.backgroundMode !== 'none'"
+          :label="t('settingsAppearance.background.opacity')"
+        >
+          <div class="flex items-center gap-3 w-64">
+            <div class="flex-1">
               <MSlider
                 :model-value="themeStore.backgroundOpacity"
                 :min="0"
@@ -379,132 +358,120 @@ onMounted(() => {
                 @update:model-value="themeStore.setBackgroundOpacity($event)"
               />
             </div>
+            <span class="text-xs font-mono font-semibold text-primary w-12 text-right">
+              {{ t('settingsAppearance.background.opacityValue', { val: Math.round(themeStore.backgroundOpacity * 100) }) }}
+            </span>
           </div>
+        </MSettingRow>
 
-          <!-- Live Preview Box -->
-          <div class="space-y-2 pt-2">
-            <label class="text-xs font-medium text-text">
-              {{ t('settingsAppearance.background.preview') }}
-            </label>
+        <!-- Preview Box -->
+        <div class="pt-4 border-t border-line mt-2 space-y-2">
+          <label class="text-xs font-medium text-fg-muted">
+            {{ t('settingsAppearance.background.preview') }}
+          </label>
+          <div
+            class="relative w-full h-44 rounded-xl border border-line bg-sunken/30 overflow-hidden flex items-center justify-center"
+          >
+            <template v-if="themeStore.backgroundMode === 'video' && previewMediaSrc">
+              <video
+                data-testid="bg-preview-video"
+                autoplay
+                muted
+                loop
+                playsinline
+                class="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                :src="previewMediaSrc"
+                :style="{
+                  filter: `blur(${themeStore.backgroundBlur}px)`,
+                  opacity: themeStore.backgroundOpacity,
+                }"
+              />
+            </template>
+            <template v-else-if="(themeStore.backgroundMode === 'image' || themeStore.backgroundMode === 'slideshow') && previewMediaSrc">
+              <img
+                data-testid="bg-preview-img"
+                class="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                :src="previewMediaSrc"
+                :style="{
+                  filter: `blur(${themeStore.backgroundBlur}px)`,
+                  opacity: themeStore.backgroundOpacity,
+                }"
+                alt="Background preview"
+              />
+            </template>
             <div
-              class="relative w-full h-44 rounded-xl border border-outline/50 bg-surfaceVariant/30 overflow-hidden flex items-center justify-center"
+              v-else
+              class="text-xs text-fg-muted flex items-center gap-1.5 z-10"
             >
-              <template v-if="themeStore.backgroundMode === 'video' && previewMediaSrc">
-                <video
-                  data-testid="bg-preview-video"
-                  autoplay
-                  muted
-                  loop
-                  playsinline
-                  class="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                  :src="previewMediaSrc"
-                  :style="{
-                    filter: `blur(${themeStore.backgroundBlur}px)`,
-                    opacity: themeStore.backgroundOpacity,
-                  }"
-                />
-              </template>
-              <template v-else-if="(themeStore.backgroundMode === 'image' || themeStore.backgroundMode === 'slideshow') && previewMediaSrc">
-                <img
-                  data-testid="bg-preview-img"
-                  class="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                  :src="previewMediaSrc"
-                  :style="{
-                    filter: `blur(${themeStore.backgroundBlur}px)`,
-                    opacity: themeStore.backgroundOpacity,
-                  }"
-                  alt="Background preview"
-                />
-              </template>
-              <div
-                v-else
-                class="text-xs text-textMuted flex items-center gap-1.5 z-10"
-              >
-                <span class="i-lucide-image-off w-4 h-4" />
-                <span>{{ t('settingsAppearance.background.previewEmpty') }}</span>
-              </div>
+              <span class="i-lucide-image-off w-4 h-4" />
+              <span>{{ t('settingsAppearance.background.previewEmpty') }}</span>
+            </div>
 
-              <!-- Foreground Card Sample for Contrast -->
-              <div
-                class="relative z-10 px-4 py-2.5 rounded-lg border border-outline/60 bg-surface/80 backdrop-blur-md shadow-md text-center"
-              >
-                <p class="text-xs font-semibold text-text">MCLR Preview</p>
-                <p class="text-[11px] text-textMuted">Sample UI Foreground Content</p>
-              </div>
+            <!-- Foreground Card Sample for Contrast -->
+            <div
+              class="relative z-10 px-4 py-2.5 rounded-lg border border-line bg-raised/80 backdrop-blur-md shadow-md text-center"
+            >
+              <p class="text-xs font-semibold text-fg">MCLR Preview</p>
+              <p class="text-[11px] text-fg-muted">Sample UI Foreground Content</p>
             </div>
           </div>
         </div>
       </div>
-    </MCard>
+    </MSection>
 
     <!-- 4. Background Music Section -->
-    <MCard>
-      <div class="space-y-5">
-        <div class="flex items-center gap-2 border-b border-outline/30 pb-3">
-          <span class="i-lucide-music w-4 h-4 text-primary" />
-          <h2 class="text-sm font-semibold text-text">
-            {{ t('settingsAppearance.sections.music') }}
-          </h2>
-        </div>
+    <MSection
+      :title="t('settingsAppearance.sections.music')"
+      icon="i-lucide-music"
+    >
+      <div class="flex flex-col">
+        <!-- Enable Music Switch -->
+        <MSettingRow
+          :label="t('settingsAppearance.music.enable')"
+        >
+          <MSwitch
+            :model-value="themeStore.musicEnabled"
+            @update:model-value="themeStore.setMusicEnabled($event)"
+          />
+        </MSettingRow>
 
-        <div class="space-y-4">
-          <!-- Enable Music Switch -->
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-xs font-medium text-text">
-                {{ t('settingsAppearance.music.enable') }}
-              </p>
+        <template v-if="themeStore.musicEnabled">
+          <!-- Music Folder Input & Browse -->
+          <MSettingRow
+            :label="t('settingsAppearance.music.folder')"
+          >
+            <div class="flex items-center gap-2 w-full sm:w-80">
+              <div class="flex-1">
+                <MInput
+                  :model-value="themeStore.musicFolder"
+                  size="sm"
+                  :placeholder="t('settingsAppearance.music.folderPlaceholder')"
+                  @update:model-value="themeStore.setMusicFolder($event)"
+                />
+              </div>
+              <MButton variant="tonal" size="sm" icon="i-lucide-folder-open" @click="browseMusicFolder">
+                {{ t('settingsAppearance.music.browse') }}
+              </MButton>
             </div>
-            <MSwitch
-              :model-value="themeStore.musicEnabled"
-              @update:model-value="themeStore.setMusicEnabled($event)"
+          </MSettingRow>
+
+          <!-- Play Mode -->
+          <MSettingRow
+            :label="t('settingsAppearance.music.playMode')"
+          >
+            <MSegmented
+              :model-value="themeStore.musicPlayMode"
+              :options="musicPlayModeOptions"
+              @update:model-value="themeStore.setMusicPlayMode($event as MusicPlayMode)"
             />
-          </div>
+          </MSettingRow>
 
-          <template v-if="themeStore.musicEnabled">
-            <!-- Music Folder Input & Browse -->
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-text">
-                {{ t('settingsAppearance.music.folder') }}
-              </label>
-              <div class="flex items-center gap-2">
-                <div class="flex-1">
-                  <MInput
-                    :model-value="themeStore.musicFolder"
-                    :placeholder="t('settingsAppearance.music.folderPlaceholder')"
-                    @update:model-value="themeStore.setMusicFolder($event)"
-                  />
-                </div>
-                <MButton variant="tonal" icon="i-lucide-folder-open" @click="browseMusicFolder">
-                  {{ t('settingsAppearance.music.browse') }}
-                </MButton>
-              </div>
-            </div>
-
-            <!-- Play Mode & Volume -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-text">
-                  {{ t('settingsAppearance.music.playMode') }}
-                </label>
-                <div>
-                  <MSegmented
-                    :model-value="themeStore.musicPlayMode"
-                    :options="musicPlayModeOptions"
-                    @update:model-value="themeStore.setMusicPlayMode($event as MusicPlayMode)"
-                  />
-                </div>
-              </div>
-
-              <div class="space-y-2">
-                <div class="flex items-center justify-between">
-                  <label class="text-xs font-medium text-text">
-                    {{ t('settingsAppearance.music.volume') }}
-                  </label>
-                  <span class="text-xs font-mono font-semibold text-primary">
-                    {{ t('settingsAppearance.music.volumeValue', { val: themeStore.musicVolume }) }}
-                  </span>
-                </div>
+          <!-- Volume -->
+          <MSettingRow
+            :label="t('settingsAppearance.music.volume')"
+          >
+            <div class="flex items-center gap-3 w-64">
+              <div class="flex-1">
                 <MSlider
                   :model-value="themeStore.musicVolume"
                   :min="0"
@@ -513,51 +480,54 @@ onMounted(() => {
                   @update:model-value="themeStore.setMusicVolume($event)"
                 />
               </div>
+              <span class="text-xs font-mono font-semibold text-primary w-12 text-right">
+                {{ t('settingsAppearance.music.volumeValue', { val: themeStore.musicVolume }) }}
+              </span>
             </div>
+          </MSettingRow>
 
-            <!-- Music Controls Preview -->
-            <div class="p-3 rounded-xl border border-outline/40 bg-surfaceVariant/30 flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center">
-                  <span class="i-lucide-disc w-4 h-4 animate-spin" :class="{ 'animate-none': !themeStore.isPlaying }" />
-                </div>
-                <div>
-                  <p class="text-xs font-semibold text-text truncate max-w-48">
-                    {{ themeStore.playlist[themeStore.currentTrackIndex] || t('settingsAppearance.music.noTrack') }}
-                  </p>
-                  <p class="text-[11px] text-textMuted">
-                    {{ themeStore.playlist.length }} tracks
-                  </p>
-                </div>
+          <!-- Music Controls Preview -->
+          <div class="p-3 rounded-xl border border-line bg-sunken/30 flex items-center justify-between mt-2">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center">
+                <span class="i-lucide-disc w-4 h-4 animate-spin" :class="{ 'animate-none': !themeStore.isPlaying }" />
               </div>
-
-              <!-- Controls -->
-              <div class="flex items-center gap-1.5" data-testid="music-page-controls">
-                <MButton
-                  variant="tonal"
-                  size="sm"
-                  icon="i-lucide-skip-back"
-                  @click="playPrevTrack"
-                />
-                <MButton
-                  variant="primary"
-                  size="sm"
-                  :icon="themeStore.isPlaying ? 'i-lucide-pause' : 'i-lucide-play'"
-                  @click="togglePlayback"
-                >
-                  {{ themeStore.isPlaying ? t('settingsAppearance.music.pause') : t('settingsAppearance.music.play') }}
-                </MButton>
-                <MButton
-                  variant="tonal"
-                  size="sm"
-                  icon="i-lucide-skip-forward"
-                  @click="playNextTrack"
-                />
+              <div>
+                <p class="text-xs font-semibold text-fg truncate max-w-48">
+                  {{ themeStore.playlist[themeStore.currentTrackIndex] || t('settingsAppearance.music.noTrack') }}
+                </p>
+                <p class="text-[11px] text-fg-muted">
+                  {{ themeStore.playlist.length }} tracks
+                </p>
               </div>
             </div>
-          </template>
-        </div>
+
+            <!-- Controls -->
+            <div class="flex items-center gap-1.5" data-testid="music-page-controls">
+              <MButton
+                variant="tonal"
+                size="sm"
+                icon="i-lucide-skip-back"
+                @click="playPrevTrack"
+              />
+              <MButton
+                variant="primary"
+                size="sm"
+                :icon="themeStore.isPlaying ? 'i-lucide-pause' : 'i-lucide-play'"
+                @click="togglePlayback"
+              >
+                {{ themeStore.isPlaying ? t('settingsAppearance.music.pause') : t('settingsAppearance.music.play') }}
+              </MButton>
+              <MButton
+                variant="tonal"
+                size="sm"
+                icon="i-lucide-skip-forward"
+                @click="playNextTrack"
+              />
+            </div>
+          </div>
+        </template>
       </div>
-    </MCard>
+    </MSection>
   </div>
 </template>

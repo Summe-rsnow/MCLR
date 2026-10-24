@@ -24,6 +24,9 @@ import {
   MEmpty,
   MCheckbox,
   MInput,
+  MBrandIcon,
+  compTypeMeta,
+  type CompTypeKey,
   useToast,
 } from '../../ui'
 const route = useRoute()
@@ -278,19 +281,18 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col p-6 space-y-6 overflow-y-auto">
-    <!-- Back Button -->
+  <div class="m-page">
+    <!-- Back Navigation -->
     <div class="flex items-center space-x-3">
       <MIconButton
         icon="i-lucide-arrow-left"
         size="sm"
         @click="router.back()"
       />
-      <span class="text-sm font-semibold text-text-muted">
+      <span class="text-sm font-semibold text-fg-muted">
         {{ t('comp.nav') }}
       </span>
     </div>
-
     <!-- Loading State -->
     <div v-if="compStore.loading" class="space-y-4">
       <MSkeleton class="h-28 rounded-xl" />
@@ -306,35 +308,37 @@ onMounted(async () => {
             <img
               v-if="compStore.currentProject.iconUrl"
               :src="compStore.currentProject.iconUrl"
-              class="w-20 h-20 rounded-xl object-cover bg-surface-variant flex-shrink-0"
+              class="w-20 h-20 rounded-xl object-cover bg-sunken shrink-0"
               alt=""
             />
             <div
               v-else
-              class="w-20 h-20 rounded-xl bg-surface-variant flex items-center justify-center flex-shrink-0"
+              class="w-20 h-20 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
             >
-              <i class="i-lucide-box text-3xl text-text-muted" />
+              <span :class="compTypeMeta[compStore.currentProject.compType as CompTypeKey]?.icon || 'i-lucide-box'" class="w-10 h-10 inline-block" />
             </div>
 
             <div>
               <div class="flex items-center space-x-3">
-                <h2 class="text-2xl font-bold">{{ compStore.currentProject.title }}</h2>
-                <MBadge variant="neutral">{{ compStore.currentProject.platform }}</MBadge>
+                <h2 class="text-2xl font-bold text-fg">{{ compStore.currentProject.title }}</h2>
+                <MBadge variant="neutral">
+                  <MBrandIcon v-if="compStore.currentProject.platform === 'modrinth' || compStore.currentProject.platform === 'curseforge'" :name="compStore.currentProject.platform" class="w-3.5 h-3.5 mr-1" />
+                  {{ compStore.currentProject.platform }}
+                </MBadge>
                 <MBadge variant="neutral">{{ compStore.currentProject.compType }}</MBadge>
               </div>
 
-              <div class="text-sm text-text-muted mt-1">
+              <div class="text-sm text-fg-muted mt-1">
                 {{ t('comp.project.author', { author: compStore.currentProject.author }) }}
               </div>
 
-              <div class="flex items-center space-x-4 mt-2 text-xs text-text-muted">
+              <div class="flex items-center space-x-4 mt-2 text-xs text-fg-muted">
                 <span>{{ t('comp.project.downloads', { count: compStore.currentProject.downloads.toString() }) }}</span>
                 <span>{{ t('comp.project.follows', { count: compStore.currentProject.follows.toString() }) }}</span>
                 <span>{{ t('comp.project.updated', { date: formatDate(compStore.currentProject.updatedAt) }) }}</span>
               </div>
             </div>
           </div>
-
           <div class="flex items-center space-x-3 self-end md:self-auto">
             <MButton
               v-if="compStore.currentProject.websiteUrl"
@@ -350,7 +354,7 @@ onMounted(async () => {
               :class="
                 compStore.isFavorite(compStore.currentProject.platform, compStore.currentProject.id)
                   ? 'text-danger hover:opacity-80'
-                  : 'text-text-muted hover:text-text'
+                  : 'text-fg-muted hover:text-fg'
               "
               @click="compStore.toggleFavorite(compStore.currentProject)"
             />
@@ -369,7 +373,7 @@ onMounted(async () => {
               class="prose prose-sm dark:prose-invert max-w-none break-words"
               v-html="renderedDescription"
             />
-            <div v-else class="text-text-muted py-8 text-center text-sm">
+            <div v-else class="text-fg-muted py-8 text-center text-sm">
               {{ t('comp.project.noDescription') }}
             </div>
           </MCard>
@@ -413,21 +417,21 @@ onMounted(async () => {
             <MCard
               v-for="file in filteredFiles"
               :key="file.id"
+              variant="well"
+              hoverable
               class="p-4 space-y-3"
             >
-              <div class="flex items-start justify-between">
-                <div>
-                  <div class="flex items-center space-x-2">
-                    <MBadge :variant="getChannelVariant(file.channel)">
-                      {{ t(`comp.files.channel.${file.channel}`) }}
-                    </MBadge>
-                    <span class="font-medium text-sm truncate max-w-[200px]" :title="file.name">
-                      {{ file.name }}
-                    </span>
-                  </div>
-                  <div class="text-xs text-text-muted mt-1">
-                    {{ formatDate(file.releaseDate) }} • {{ formatFileSize(file.size) }}
-                  </div>
+              <div>
+                <div class="flex items-center space-x-2">
+                  <MBadge :variant="getChannelVariant(file.channel)">
+                    {{ t(`comp.files.channel.${file.channel}`) }}
+                  </MBadge>
+                  <span class="font-medium text-sm truncate max-w-[200px]" :title="file.name">
+                    {{ file.name }}
+                  </span>
+                </div>
+                <div class="text-xs text-fg-muted mt-1">
+                  {{ formatDate(file.releaseDate) }} • {{ formatFileSize(file.size) }}
                 </div>
               </div>
 
@@ -448,7 +452,7 @@ onMounted(async () => {
                 </MBadge>
               </div>
 
-              <div class="pt-2 border-t border-outline/10 flex items-center justify-end">
+              <div class="pt-2 border-t border-line flex items-center justify-end">
                 <div v-if="file.distributionDisabled" class="flex items-center space-x-2">
                   <span class="text-xs text-danger">{{ t('comp.files.distributionDisabled') }}</span>
                   <MButton
@@ -487,7 +491,7 @@ onMounted(async () => {
           {{ t('comp.downloadDialog.noInstances') }}
         </div>
         <div v-else class="space-y-3">
-          <label class="text-xs font-semibold text-text-muted block">
+          <label class="text-xs font-semibold text-fg-muted block">
             {{ t('comp.downloadDialog.selectInstance') }}
           </label>
           <MSelect
@@ -495,16 +499,16 @@ onMounted(async () => {
             :options="instanceOptions"
             @update:model-value="resolveDependenciesForSelectedInstance"
           />
-          <div class="text-xs text-text-muted">
+          <div class="text-xs text-fg-muted">
             {{ t('comp.downloadDialog.targetSubfolder', { folder: compStore.currentProject?.compType || 'mods' }) }}
           </div>
 
           <!-- Dependencies Checklist -->
-          <div v-if="compStore.currentProject?.compType === 'mod' && (resolvingDependencies || dependencies.length > 0)" class="pt-2 border-t border-outline/10 space-y-2">
-            <div class="text-xs font-semibold text-text">
+          <div v-if="compStore.currentProject?.compType === 'mod' && (resolvingDependencies || dependencies.length > 0)" class="pt-2 border-t border-line space-y-2">
+            <div class="text-xs font-semibold text-fg">
               {{ t('comp.downloadDialog.dependenciesTitle') }}
             </div>
-            <div class="text-[11px] text-text-muted">
+            <div class="text-[11px] text-fg-muted">
               {{ t('comp.downloadDialog.dependenciesDesc') }}
             </div>
 
@@ -517,7 +521,7 @@ onMounted(async () => {
               <div
                 v-for="dep in dependencies"
                 :key="dep.file.id"
-                class="flex items-center justify-between p-2 rounded-lg bg-surface-variant/30 text-xs"
+                class="flex items-center justify-between p-2 rounded-lg bg-sunken/30 text-xs"
               >
                 <div class="flex items-center space-x-2 min-w-0">
                   <MCheckbox
@@ -525,10 +529,10 @@ onMounted(async () => {
                     v-model="selectedDepFiles[dep.file.id]"
                   />
                   <span v-else class="i-lucide-check text-success shrink-0 w-4 h-4 ml-0.5" />
-                  <span class="font-medium text-text truncate">
+                  <span class="font-medium text-fg truncate">
                     {{ dep.project.title }}
                   </span>
-                  <span class="text-text-muted font-mono text-[11px]">v{{ dep.file.name }}</span>
+                  <span class="text-fg-muted font-mono text-[11px]">v{{ dep.file.name }}</span>
                 </div>
 
                 <div class="shrink-0">
@@ -574,7 +578,7 @@ onMounted(async () => {
     >
       <div class="space-y-4 py-2">
         <div class="space-y-2">
-          <label class="text-xs font-semibold text-text-muted block">
+          <label class="text-xs font-semibold text-fg-muted block">
             {{ t('comp.modpackInstallDialog.instanceName') }}
           </label>
           <MInput

@@ -61,6 +61,9 @@
     "jdkBadge": "JDK",
     "jreBadge": "JRE",
     "vendor": "供应商：{vendor}",
-    "path": "路径：{path}"
+    "path": "路径：{path}",
+    "scanComplete": "Java 扫描完成",
+    "alreadyExists": "该 Java 路径已存在",
+    "downloadStarted": "已开始下载 Java 运行时"
   }
 }

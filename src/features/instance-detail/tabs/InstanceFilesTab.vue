@@ -96,10 +96,10 @@ onMounted(() => {
     <!-- Top Bar -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <h2 class="text-base font-bold text-text">
+        <h2 class="text-base font-bold text-fg">
           {{ title }}
         </h2>
-        <span class="text-xs text-textMuted font-mono">
+        <span class="text-xs text-fg-muted font-mono">
           ({{ files.length }})
         </span>
       </div>
@@ -119,7 +119,7 @@ onMounted(() => {
     <div v-if="files.length === 0" class="py-16">
       <MEmpty
         :title="t('instanceDetail.files.empty')"
-        :subtitle="t('instanceDetail.files.emptyHint')"
+        :description="t('instanceDetail.files.emptyHint')"
         icon="i-lucide-file-archive"
       />
     </div>
@@ -129,26 +129,29 @@ onMounted(() => {
       <MCard
         v-for="file in files"
         :key="file.fileName"
-        class="p-4 flex items-center justify-between gap-4 transition-all"
-        :class="{ 'opacity-60 bg-surfaceVariant/20': !file.enabled }"
+        variant="well"
+        hoverable
+        padding="sm"
+        class="flex items-center justify-between gap-4 transition-all"
+        :class="{ 'opacity-60': !file.enabled }"
       >
         <div class="flex items-center gap-3.5 min-w-0">
           <div
-            class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-outline/20"
+            class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-line"
             :class="[
               file.enabled
                 ? 'bg-primary/10 text-primary border-primary/30'
-                : 'bg-surfaceVariant text-textMuted',
+                : 'bg-sunken text-fg-muted',
             ]"
           >
             <span class="w-5 h-5 i-lucide-file-box" />
           </div>
 
           <div class="min-w-0">
-            <div class="text-sm font-semibold text-text truncate">
+            <div class="text-sm font-semibold text-fg truncate">
               {{ file.fileName }}
             </div>
-            <div class="flex items-center gap-3 text-xs text-textMuted mt-0.5">
+            <div class="flex items-center gap-3 text-xs text-fg-muted mt-0.5">
               <span>{{ formatBytes(file.size) }}</span>
               <span v-if="file.modifiedAt">{{ file.modifiedAt.split('T')[0] }}</span>
             </div>

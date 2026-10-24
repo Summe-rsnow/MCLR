@@ -10,13 +10,15 @@ import {
 } from '../../ipc/client'
 import { useToast } from '../../ui/useToast'
 import { useInstancesStore } from '../instances/store'
-import MCard from '../../ui/MCard.vue'
-import MButton from '../../ui/MButton.vue'
-import MInput from '../../ui/MInput.vue'
-import MSelect from '../../ui/MSelect.vue'
-import MCheckbox from '../../ui/MCheckbox.vue'
-import MProgress from '../../ui/MProgress.vue'
-
+import {
+  MCard,
+  MButton,
+  MInput,
+  MSelect,
+  MCheckbox,
+  MProgress,
+  MPageHeader,
+} from '../../ui'
 const { t } = useI18n()
 const toast = useToast()
 const instancesStore = useInstancesStore()
@@ -225,25 +227,27 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="p-6 max-w-6xl mx-auto space-y-6">
+  <div class="m-page">
     <!-- Header -->
-    <div>
-      <h1 class="text-2xl font-bold tracking-tight text-text flex items-center gap-2">
-        <span class="i-lucide-wrench w-7 h-7 text-primary" />
-        {{ t('tools.title') }}
-      </h1>
-      <p class="text-sm text-textMuted mt-1">{{ t('tools.subtitle') }}</p>
-    </div>
+    <MPageHeader
+      :title="t('tools.title')"
+      :description="t('tools.subtitle')"
+      icon="i-lucide-wrench"
+    />
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <!-- Card 1: Avatar / Skin Fetcher -->
-      <MCard class="p-5 flex flex-col justify-between space-y-4">
+      <MCard hoverable class="p-5 flex flex-col justify-between space-y-4">
         <div>
-          <div class="flex items-center gap-2">
-            <span class="i-lucide-user-check w-5 h-5 text-primary" />
-            <h2 class="text-base font-semibold text-text">{{ t('tools.skin.title') }}</h2>
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0">
+              <span class="i-lucide-user-check w-5 h-5 inline-block" />
+            </div>
+            <div>
+              <h2 class="text-base font-semibold text-fg">{{ t('tools.skin.title') }}</h2>
+              <p class="text-xs text-fg-muted mt-0.5">{{ t('tools.skin.desc') }}</p>
+            </div>
           </div>
-          <p class="text-xs text-textMuted mt-1">{{ t('tools.skin.desc') }}</p>
 
           <div class="flex items-center gap-2 mt-4">
             <MInput
@@ -263,24 +267,24 @@ onMounted(async () => {
           </div>
 
           <!-- Result Display -->
-          <div v-if="skinResult" class="mt-4 p-4 rounded-xl bg-surfaceVariant/40 border border-outline/40 space-y-3">
+          <div v-if="skinResult" class="mt-4 p-4 rounded-xl m-well space-y-3">
             <div class="flex items-center gap-4">
               <div class="flex flex-col items-center">
-                <span class="text-xs text-textMuted mb-1">{{ t('tools.skin.headPreview') }}</span>
+                <span class="text-xs text-fg-muted mb-1">{{ t('tools.skin.headPreview') }}</span>
                 <img
                   :src="skinResult.headDataUrl"
                   :alt="skinResult.username"
-                  class="w-16 h-16 rounded-lg border border-outline bg-surface [image-rendering:pixelated]"
+                  class="w-16 h-16 rounded-lg border border-line bg-raised [image-rendering:pixelated]"
                 />
               </div>
 
               <div class="flex-1 min-w-0 space-y-1 text-xs">
-                <div class="font-bold text-sm text-text truncate">{{ skinResult.username }}</div>
-                <div class="text-textMuted truncate">
+                <div class="font-bold text-sm text-fg truncate">{{ skinResult.username }}</div>
+                <div class="text-fg-muted truncate">
                   <span class="font-medium">{{ t('tools.skin.uuid') }}:</span>
                   <span class="font-mono ml-1">{{ skinResult.uuid }}</span>
                 </div>
-                <div class="text-textMuted">
+                <div class="text-fg-muted">
                   <span class="font-medium">{{ t('tools.skin.model') }}:</span>
                   <span class="ml-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
                     {{ skinResult.slim ? t('tools.skin.modelSlim') : t('tools.skin.modelClassic') }}
@@ -288,10 +292,9 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
-
             <div>
-              <span class="text-xs text-textMuted block mb-1">{{ t('tools.skin.skinPreview') }}</span>
-              <div class="p-2 rounded-lg bg-surface border border-outline/50 flex justify-center">
+              <span class="text-xs text-fg-muted block mb-1">{{ t('tools.skin.skinPreview') }}</span>
+              <div class="p-2 rounded-lg bg-raised border border-line flex justify-center">
                 <img
                   :src="skinResult.skinDataUrl"
                   alt="Skin Texture"
@@ -304,10 +307,10 @@ onMounted(async () => {
               <MButton
                 variant="tonal"
                 size="sm"
+                icon="i-lucide-download"
                 data-testid="download-skin-btn"
                 @click="downloadSkinPng"
               >
-                <span class="i-lucide-download w-4 h-4 mr-1.5" />
                 {{ t('tools.skin.downloadSkin') }}
               </MButton>
             </div>
@@ -316,32 +319,35 @@ onMounted(async () => {
       </MCard>
 
       <!-- Card 2: Cache Cleaner -->
-      <MCard class="p-5 flex flex-col justify-between space-y-4">
+      <MCard hoverable class="p-5 flex flex-col justify-between space-y-4">
         <div>
-          <div class="flex items-center gap-2">
-            <span class="i-lucide-trash-2 w-5 h-5 text-primary" />
-            <h2 class="text-base font-semibold text-text">{{ t('tools.cache.title') }}</h2>
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0">
+              <span class="i-lucide-trash-2 w-5 h-5 inline-block" />
+            </div>
+            <div>
+              <h2 class="text-base font-semibold text-fg">{{ t('tools.cache.title') }}</h2>
+              <p class="text-xs text-fg-muted mt-0.5">{{ t('tools.cache.desc') }}</p>
+            </div>
           </div>
-          <p class="text-xs text-textMuted mt-1">{{ t('tools.cache.desc') }}</p>
-
           <div class="mt-4 space-y-3">
-            <div class="flex items-center justify-between p-3 rounded-xl bg-surfaceVariant/40 border border-outline/40">
+            <div class="flex items-center justify-between p-3 rounded-xl m-well">
               <MCheckbox v-model="cleanCacheChecked" :label="t('tools.cache.itemCache')" />
-              <span class="text-xs font-mono font-semibold text-text tabular-nums">
+              <span class="text-xs font-mono font-semibold text-fg tabular-nums">
                 {{ formatBytes(cacheInfo.cacheBytes) }}
               </span>
             </div>
 
-            <div class="flex items-center justify-between p-3 rounded-xl bg-surfaceVariant/40 border border-outline/40">
+            <div class="flex items-center justify-between p-3 rounded-xl m-well">
               <MCheckbox v-model="cleanLogsChecked" :label="t('tools.cache.itemLogs')" />
-              <span class="text-xs font-mono font-semibold text-text tabular-nums">
+              <span class="text-xs font-mono font-semibold text-fg tabular-nums">
                 {{ formatBytes(cacheInfo.logsBytes) }}
               </span>
             </div>
 
-            <div class="flex items-center justify-between p-3 rounded-xl bg-surfaceVariant/40 border border-outline/40">
+            <div class="flex items-center justify-between p-3 rounded-xl m-well">
               <MCheckbox v-model="cleanSkinsChecked" :label="t('tools.cache.itemSkins')" />
-              <span class="text-xs font-mono font-semibold text-text tabular-nums">
+              <span class="text-xs font-mono font-semibold text-fg tabular-nums">
                 {{ formatBytes(cacheInfo.skinCacheBytes) }}
               </span>
             </div>
@@ -350,38 +356,41 @@ onMounted(async () => {
         <div v-if="cacheCleanedNotice" class="text-xs text-primary font-medium">
           {{ t('tools.cache.cleaned') }}
         </div>
-        <div class="pt-2 border-t border-outline/40 flex items-center justify-between">
-          <div class="text-xs text-textMuted">
+        <div class="pt-2 border-t border-line flex items-center justify-between">
+          <div class="text-xs text-fg-muted">
             {{ t('tools.cache.totalSize') }}:
-            <span class="font-mono font-bold text-sm text-text ml-1">
+            <span class="font-mono font-bold text-sm text-fg ml-1">
               {{ formatBytes(cacheInfo.totalBytes) }}
             </span>
           </div>
 
           <MButton
             variant="danger"
+            icon="i-lucide-trash"
             :loading="cacheCleaning"
             data-testid="clean-cache-btn"
             @click="cleanCache"
           >
-            <span class="i-lucide-trash w-4 h-4 mr-1.5" />
             {{ t('tools.cache.cleanNow') }}
           </MButton>
         </div>
       </MCard>
 
       <!-- Card 3: Custom Downloader -->
-      <MCard class="p-5 flex flex-col justify-between space-y-4">
+      <MCard hoverable class="p-5 flex flex-col justify-between space-y-4">
         <div>
-          <div class="flex items-center gap-2">
-            <span class="i-lucide-download-cloud w-5 h-5 text-primary" />
-            <h2 class="text-base font-semibold text-text">{{ t('tools.download.title') }}</h2>
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0">
+              <span class="i-lucide-cloud-download w-5 h-5 inline-block" />
+            </div>
+            <div>
+              <h2 class="text-base font-semibold text-fg">{{ t('tools.download.title') }}</h2>
+              <p class="text-xs text-fg-muted mt-0.5">{{ t('tools.download.desc') }}</p>
+            </div>
           </div>
-          <p class="text-xs text-textMuted mt-1">{{ t('tools.download.desc') }}</p>
-
           <div class="mt-4 space-y-3">
             <div>
-              <label class="text-xs text-textMuted block mb-1 font-medium">{{ t('tools.download.urlLabel') }}</label>
+              <label class="text-xs text-fg-muted block mb-1 font-medium">{{ t('tools.download.urlLabel') }}</label>
               <MInput
                 v-model="downloadUrl"
                 :placeholder="t('tools.download.urlPlaceholder')"
@@ -390,7 +399,7 @@ onMounted(async () => {
             </div>
 
             <div>
-              <label class="text-xs text-textMuted block mb-1 font-medium">{{ t('tools.download.destLabel') }}</label>
+              <label class="text-xs text-fg-muted block mb-1 font-medium">{{ t('tools.download.destLabel') }}</label>
               <div class="flex items-center gap-2">
                 <MInput
                   v-model="downloadDestPath"
@@ -407,32 +416,34 @@ onMounted(async () => {
             </div>
           </div>
         </div>
-
         <div class="pt-2 flex justify-end">
           <MButton
             variant="primary"
+            icon="i-lucide-play"
             :loading="downloadLoading"
             data-testid="custom-download-btn"
             @click="startCustomDownload"
           >
-            <span class="i-lucide-play w-4 h-4 mr-1.5" />
             {{ t('tools.download.start') }}
           </MButton>
         </div>
       </MCard>
 
       <!-- Card 4: Desktop Shortcut -->
-      <MCard class="p-5 flex flex-col justify-between space-y-4">
+      <MCard hoverable class="p-5 flex flex-col justify-between space-y-4">
         <div>
-          <div class="flex items-center gap-2">
-            <span class="i-lucide-external-link w-5 h-5 text-primary" />
-            <h2 class="text-base font-semibold text-text">{{ t('tools.shortcut.title') }}</h2>
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0">
+              <span class="i-lucide-external-link w-5 h-5 inline-block" />
+            </div>
+            <div>
+              <h2 class="text-base font-semibold text-fg">{{ t('tools.shortcut.title') }}</h2>
+              <p class="text-xs text-fg-muted mt-0.5">{{ t('tools.shortcut.desc') }}</p>
+            </div>
           </div>
-          <p class="text-xs text-textMuted mt-1">{{ t('tools.shortcut.desc') }}</p>
-
           <div class="mt-4 space-y-3">
             <div>
-              <label class="text-xs text-textMuted block mb-1 font-medium">{{ t('tools.shortcut.selectInstance') }}</label>
+              <label class="text-xs text-fg-muted block mb-1 font-medium">{{ t('tools.shortcut.selectInstance') }}</label>
               <MSelect
                 v-model="shortcutInstanceId"
                 :options="instanceOptions"
@@ -441,7 +452,7 @@ onMounted(async () => {
             </div>
 
             <div>
-              <label class="text-xs text-textMuted block mb-1 font-medium">{{ t('tools.shortcut.nameLabel') }}</label>
+              <label class="text-xs text-fg-muted block mb-1 font-medium">{{ t('tools.shortcut.nameLabel') }}</label>
               <MInput
                 v-model="shortcutName"
                 :placeholder="t('tools.shortcut.namePlaceholder')"
@@ -450,15 +461,14 @@ onMounted(async () => {
             </div>
           </div>
         </div>
-
         <div class="pt-2 flex justify-end">
           <MButton
             variant="primary"
+            icon="i-lucide-monitor"
             :loading="shortcutLoading"
             data-testid="create-shortcut-btn"
             @click="createShortcut"
           >
-            <span class="i-lucide-monitor w-4 h-4 mr-1.5" />
             {{ t('tools.shortcut.create') }}
           </MButton>
         </div>
@@ -466,16 +476,17 @@ onMounted(async () => {
     </div>
 
     <!-- Card 5: Daily Luck -->
-    <MCard class="p-6">
+    <MCard hoverable class="p-6">
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="i-lucide-sparkles w-6 h-6 text-amber-500" />
-            <h2 class="text-lg font-bold text-text">{{ t('tools.luck.title') }}</h2>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-warning-soft text-warning-fg flex items-center justify-center shrink-0">
+            <span class="i-lucide-sparkles w-5 h-5 inline-block" />
           </div>
-          <p class="text-xs text-textMuted mt-1">{{ t('tools.luck.desc') }}</p>
+          <div>
+            <h2 class="text-lg font-bold text-fg">{{ t('tools.luck.title') }}</h2>
+            <p class="text-xs text-fg-muted mt-0.5">{{ t('tools.luck.desc') }}</p>
+          </div>
         </div>
-
         <div class="flex items-center gap-2 w-full md:w-auto">
           <MInput
             v-model="luckUsername"
@@ -494,19 +505,19 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div v-if="luckResult" class="mt-6 p-6 rounded-2xl bg-surfaceVariant/30 border border-outline/40">
+      <div v-if="luckResult" class="mt-6 p-6 rounded-2xl m-well">
         <div class="flex flex-col md:flex-row items-center gap-6">
-          <div class="flex flex-col items-center justify-center p-4 rounded-2xl bg-surface border border-outline/50 shadow-sm w-36 h-36">
-            <span class="text-xs text-textMuted mb-1 font-medium">{{ t('tools.luck.scoreLabel') }}</span>
+          <div class="flex flex-col items-center justify-center p-4 rounded-2xl bg-raised border border-line shadow-sm w-36 h-36">
+            <span class="text-xs text-fg-muted mb-1 font-medium">{{ t('tools.luck.scoreLabel') }}</span>
             <span class="text-4xl font-extrabold text-primary tabular-nums tracking-tight">
               {{ luckResult.score }}
             </span>
-            <span class="text-xs text-textMuted mt-1">/ 100</span>
+            <span class="text-xs text-fg-muted mt-1">/ 100</span>
           </div>
 
           <div class="flex-1 w-full space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-sm font-semibold text-text">
+              <span class="text-sm font-semibold text-fg">
                 {{ luckResult.username }} - {{ luckResult.date }}
               </span>
               <span class="text-sm font-bold text-primary">

@@ -207,10 +207,10 @@ onMounted(() => {
     <!-- Top Bar -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <h2 class="text-base font-bold text-text">
+        <h2 class="text-base font-bold text-fg">
           {{ t('instanceDetail.tabs.saves') }}
         </h2>
-        <span class="text-xs text-textMuted font-mono">
+        <span class="text-xs text-fg-muted font-mono">
           ({{ saves.length }})
         </span>
       </div>
@@ -243,11 +243,14 @@ onMounted(() => {
       <MCard
         v-for="save in saves"
         :key="save.folderName"
-        class="p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all"
+        variant="well"
+        hoverable
+        padding="md"
+        class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all"
       >
         <div class="flex items-start gap-4 min-w-0">
           <!-- Icon / Thumbnail -->
-          <div class="w-14 h-14 rounded-xl bg-surfaceVariant/60 flex items-center justify-center shrink-0 border border-outline/30 overflow-hidden text-primary">
+          <div class="w-14 h-14 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 border border-line overflow-hidden text-primary">
             <img
               v-if="save.iconDataUrl"
               :src="save.iconDataUrl"
@@ -260,7 +263,7 @@ onMounted(() => {
           <!-- Metadata -->
           <div class="min-w-0 space-y-1">
             <div class="flex items-center gap-2.5">
-              <span class="text-base font-bold text-text truncate">
+              <span class="text-base font-bold text-fg truncate">
                 {{ save.name || save.folderName }}
               </span>
               <MBadge v-if="save.dataVersion" variant="primary" size="sm">
@@ -268,7 +271,7 @@ onMounted(() => {
               </MBadge>
             </div>
 
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-textMuted">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
               <span>{{ t('instanceDetail.saves.gameMode') }}: {{ getGameModeText(save.gameMode) }}</span>
               <span>{{ t('instanceDetail.saves.difficulty') }}: {{ getDifficultyText(save.difficulty) }}</span>
               <span v-if="save.playTime > 0">{{ t('instanceDetail.saves.playTime') }}: {{ formatPlayTime(save.playTime) }}</span>
@@ -324,19 +327,19 @@ onMounted(() => {
           <div
             v-for="pack in datapacksList"
             :key="pack.id"
-            class="p-3 rounded-xl border border-outline/20 bg-surface flex items-center justify-between gap-3"
+            class="p-3 rounded-xl border border-line bg-raised flex items-center justify-between gap-3"
           >
             <div class="min-w-0">
-              <div class="text-sm font-semibold text-text flex items-center gap-2 truncate">
+              <div class="text-sm font-semibold text-fg flex items-center gap-2 truncate">
                 <span>{{ pack.fileName }}</span>
                 <MBadge v-if="pack.builtIn" variant="neutral" size="sm">
                   {{ t('instanceDetail.saves.builtIn') }}
                 </MBadge>
               </div>
-              <div v-if="pack.description" class="text-xs text-textMuted mt-0.5 truncate">
+              <div v-if="pack.description" class="text-xs text-fg-muted mt-0.5 truncate">
                 {{ pack.description }}
               </div>
-              <div class="text-[11px] text-textMuted/60 font-mono mt-0.5">
+              <div class="text-[11px] text-fg-muted/60 font-mono mt-0.5">
                 {{ t('instanceDetail.saves.datapackFormat') }}: {{ pack.packFormat }}
               </div>
             </div>

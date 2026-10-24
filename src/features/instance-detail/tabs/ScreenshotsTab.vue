@@ -80,10 +80,10 @@ onMounted(() => {
     <!-- Top Bar -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <h2 class="text-base font-bold text-text">
+        <h2 class="text-base font-bold text-fg">
           {{ t('instanceDetail.tabs.screenshots') }}
         </h2>
-        <span class="text-xs text-textMuted font-mono">
+        <span class="text-xs text-fg-muted font-mono">
           ({{ screenshots.length }})
         </span>
       </div>
@@ -112,11 +112,14 @@ onMounted(() => {
       <MCard
         v-for="item in screenshots"
         :key="item.fileName"
-        class="overflow-hidden group flex flex-col justify-between border-outline/30 hover:border-primary/50 transition-all shadow-sm"
+        variant="well"
+        hoverable
+        padding="none"
+        class="overflow-hidden group flex flex-col justify-between transition-all"
       >
         <!-- Thumbnail / Image -->
         <div
-          class="aspect-video bg-surfaceVariant/50 relative overflow-hidden cursor-pointer flex items-center justify-center"
+          class="aspect-video bg-sunken/50 relative overflow-hidden cursor-pointer flex items-center justify-center"
           @click="previewTarget = item"
         >
           <img
@@ -125,19 +128,19 @@ onMounted(() => {
             :alt="item.fileName"
             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
-          <span v-else class="w-10 h-10 i-lucide-image text-textMuted/40" />
+          <span v-else class="w-10 h-10 i-lucide-image text-fg-muted/40" />
           <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
             <span class="w-6 h-6 i-lucide-maximize-2" />
           </div>
         </div>
 
         <!-- Info Bar -->
-        <div class="p-3 flex items-center justify-between gap-2 border-t border-outline/20">
+        <div class="p-3 flex items-center justify-between gap-2 border-t border-line">
           <div class="min-w-0">
-            <div class="text-xs font-semibold text-text truncate">
+            <div class="text-xs font-semibold text-fg truncate">
               {{ item.fileName }}
             </div>
-            <div class="text-[11px] text-textMuted mt-0.5">
+            <div class="text-[11px] text-fg-muted mt-0.5">
               {{ formatBytes(item.size) }}
             </div>
           </div>
@@ -159,20 +162,20 @@ onMounted(() => {
       :title="previewTarget?.fileName || t('instanceDetail.screenshots.preview')"
       @update:open="!$event && (previewTarget = null)"
     >
-      <div class="py-2 flex items-center justify-center max-h-[70vh] overflow-hidden bg-surfaceVariant/30 rounded-xl">
+      <div class="py-2 flex items-center justify-center max-h-[70vh] overflow-hidden bg-sunken/30 rounded-xl">
         <img
           v-if="previewTarget?.dataUrl"
           :src="previewTarget.dataUrl"
           :alt="previewTarget.fileName"
           class="max-w-full max-h-[65vh] object-contain rounded-lg"
         />
-        <div v-else class="py-20 text-textMuted">
+        <div v-else class="py-20 text-fg-muted">
           {{ previewTarget?.path }}
         </div>
       </div>
       <template #footer>
         <div class="flex items-center justify-between w-full">
-          <div class="text-xs text-textMuted">
+          <div class="text-xs text-fg-muted">
             {{ previewTarget ? formatBytes(previewTarget.size) : '' }}
           </div>
           <div class="flex gap-2">

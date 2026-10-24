@@ -7,12 +7,20 @@ import { useInstancesStore } from '../instances/store'
 import { useAccountsStore } from '../accounts/store'
 import { useToast } from '../../ui/useToast'
 import { ipcClient } from '../../ipc/client'
-import MCard from '../../ui/MCard.vue'
-import MButton from '../../ui/MButton.vue'
-import MSelect from '../../ui/MSelect.vue'
-import MAvatar from '../../ui/MAvatar.vue'
-import MBadge from '../../ui/MBadge.vue'
-import MProgress from '../../ui/MProgress.vue'
+import {
+  MPageHeader,
+  MSection,
+  MSettingRow,
+  MCard,
+  MButton,
+  MSelect,
+  MAvatar,
+  MBadge,
+  MProgress,
+  MLoaderIcon,
+  MBrandIcon,
+  getAccountKindMeta,
+} from '../../ui'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -49,6 +57,10 @@ const accountOptions = computed(() => {
 
 const stageLabel = computed(() => {
   return t(`launch.stage.${launchStore.currentStage}`)
+})
+
+const accountMeta = computed(() => {
+  return getAccountKindMeta(launchStore.selectedAccount?.kind)
 })
 
 async function onLaunchClick() {
@@ -125,20 +137,14 @@ function onInstanceSelectChange(id: string | number) {
 </script>
 
 <template>
-  <div class="h-full flex flex-col p-6 max-w-4xl mx-auto gap-6 overflow-y-auto">
+  <div class="m-page">
     <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight text-text">
-          {{ t('launch.title') }}
-        </h1>
-        <p v-if="launchStore.activeProcess" class="text-xs text-success mt-1 flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-success animate-pulse inline-block" />
-          {{ t('launch.running') }} (PID: {{ launchStore.activeProcess.processId }})
-        </p>
-      </div>
-
-      <div class="flex items-center gap-2">
+    <MPageHeader
+      :title="t('launch.title')"
+      :description="launchStore.activeProcess ? `${t('launch.running')} (PID: ${launchStore.activeProcess.processId})` : undefined"
+      icon="i-lucide-rocket"
+    >
+      <template #actions>
         <MButton
           v-if="launchStore.activeProcess"
           variant="tonal"
@@ -156,13 +162,13 @@ function onInstanceSelectChange(id: string | number) {
         >
           {{ t('settingsGame.title') }}
         </MButton>
-      </div>
-    </div>
+      </template>
+    </MPageHeader>
 
-    <!-- Java Missing Banner -->
+    <!-- Java Missing Warning Banner -->
     <div
       v-if="launchStore.javaMissingMajor"
-      class="p-4 rounded-xl bg-danger/10 border border-danger/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+      class="bg-danger-soft text-danger-fg border border-danger/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
     >
       <div class="flex items-start gap-3">
         <div class="w-8 h-8 rounded-lg bg-danger/20 text-danger flex items-center justify-center shrink-0">
@@ -172,7 +178,7 @@ function onInstanceSelectChange(id: string | number) {
           <h4 class="font-semibold text-danger text-sm">
             {{ t('launch.javaMissing.title') }}
           </h4>
-          <p class="text-xs text-text-muted mt-0.5">
+          <p class="text-xs text-fg-muted mt-0.5">
             {{ t('launch.javaMissing.message', { major: launchStore.javaMissingMajor }) }}
           </p>
         </div>
@@ -189,171 +195,170 @@ function onInstanceSelectChange(id: string | number) {
       </MButton>
     </div>
 
-    <!-- Selection Cards Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- Instance Card -->
-      <MCard class="p-5 flex flex-col justify-between h-48 border border-outline/20">
-        <div>
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
-              {{ t('launch.selectInstance') }}
-            </span>
-            <MButton
-              v-if="launchStore.selectedInstance"
-              variant="text"
-              size="xs"
-              icon="i-lucide-wrench"
-              :loading="isRepairing"
-              @click="onRepairClick"
-            >
-              {{ t('launch.repairInstance') }}
-            </MButton>
-          </div>
-
-          <div v-if="launchStore.selectedInstance" class="flex items-start gap-3">
-            <div class="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <i class="i-lucide-box text-2xl" />
+    <!-- Hero Card -->
+    <MCard variant="tinted" padding="lg" class="relative overflow-hidden">
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div class="flex items-center gap-5 min-w-0">
+          <MLoaderIcon
+            :kind="launchStore.selectedInstance?.kind || (launchStore.selectedInstance?.loaders?.[0]?.toLowerCase() ?? 'vanilla')"
+            :size="56"
+          />
+          <div class="min-w-0 space-y-1.5">
+            <div class="flex items-center gap-2">
+              <h2 class="text-2xl font-bold text-fg truncate">
+                {{ launchStore.selectedInstance?.name || t('launch.noInstance') }}
+              </h2>
+              <MButton
+                v-if="launchStore.selectedInstance"
+                variant="text"
+                size="xs"
+                icon="i-lucide-wrench"
+                :loading="isRepairing"
+                @click="onRepairClick"
+              >
+                {{ t('launch.repairInstance') }}
+              </MButton>
             </div>
-            <div class="min-w-0 flex-1">
-              <h3 class="font-bold text-lg text-text truncate">
-                {{ launchStore.selectedInstance.name }}
-              </h3>
-              <div class="flex items-center gap-2 mt-1">
-                <MBadge variant="primary">
-                  {{ launchStore.selectedInstance.mcVersion }}
-                </MBadge>
-                <MBadge
-                  v-if="launchStore.selectedInstance.loaders.length > 0"
-                  variant="neutral"
-                >
-                  {{ launchStore.selectedInstance.loaders[0] }}
-                </MBadge>
-                <MBadge v-else variant="neutral">
-                  Vanilla
-                </MBadge>
-              </div>
+            <div v-if="launchStore.selectedInstance" class="flex flex-wrap items-center gap-2">
+              <MBadge variant="primary">
+                {{ launchStore.selectedInstance.mcVersion }}
+              </MBadge>
+              <MBadge
+                v-if="launchStore.selectedInstance.loaders.length > 0"
+                variant="neutral"
+              >
+                {{ launchStore.selectedInstance.loaders[0] }}
+              </MBadge>
+              <MBadge v-else variant="neutral">
+                Vanilla
+              </MBadge>
             </div>
-          </div>
-          <div v-else class="text-sm text-text-muted py-4">
-            {{ t('launch.noInstance') }}
           </div>
         </div>
 
-        <div class="pt-2">
-          <MSelect
-            v-if="instancesStore.instances.length > 0"
-            :model-value="launchStore.selectedInstance?.id || ''"
-            :options="instanceOptions"
-            size="sm"
-            @update:model-value="onInstanceSelectChange"
-          />
+        <!-- Launch CTA inside hero -->
+        <div class="flex flex-col items-center sm:items-end w-full md:w-auto shrink-0 gap-2">
           <MButton
-            v-else
-            variant="tonal"
-            size="sm"
+            size="lg"
+            icon="i-lucide-play"
+            class="h-14 px-10 rounded-2xl text-lg font-bold m-refract w-full sm:w-auto shadow-2"
+            :loading="launchStore.isLaunching"
+            :disabled="!launchStore.selectedInstance || !launchStore.selectedAccount"
+            @click="onLaunchClick"
+          >
+            <span v-if="launchStore.isLaunching">{{ stageLabel }}</span>
+            <span v-else>{{ t('launch.launchButton') }}</span>
+          </MButton>
+          <div v-if="launchStore.isLaunching" class="w-full sm:w-56 flex flex-col gap-1 items-center sm:items-end">
+            <MProgress :value="launchStore.launchProgress" size="sm" class="w-full" />
+            <span class="text-xs text-fg-muted font-mono">{{ stageLabel }}</span>
+          </div>
+        </div>
+      </div>
+    </MCard>
+
+    <!-- Selection Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Instance Selection Section -->
+      <MSection :title="t('launch.selectInstance')" icon="i-lucide-box">
+        <template #actions>
+          <MButton
+            variant="text"
+            size="xs"
             icon="i-lucide-plus"
-            block
             @click="router.push('/download')"
           >
             {{ t('launch.createInstance') }}
           </MButton>
-        </div>
-      </MCard>
-
-      <!-- Account Card -->
-      <MCard class="p-5 flex flex-col justify-between h-48 border border-outline/20">
-        <div>
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
-              {{ t('launch.selectAccount') }}
-            </span>
+        </template>
+        <div class="space-y-4">
+          <MSettingRow :label="t('launch.selectInstance')">
+            <MSelect
+              v-if="instancesStore.instances.length > 0"
+              :model-value="launchStore.selectedInstance?.id || ''"
+              :options="instanceOptions"
+              size="sm"
+              class="w-56"
+              @update:model-value="onInstanceSelectChange"
+            />
             <MButton
-              variant="text"
-              size="xs"
+              v-else
+              variant="tonal"
+              size="sm"
+              icon="i-lucide-plus"
+              @click="router.push('/download')"
+            >
+              {{ t('launch.createInstance') }}
+            </MButton>
+          </MSettingRow>
+        </div>
+      </MSection>
+
+      <!-- Account Selection Section -->
+      <MSection :title="t('launch.selectAccount')" icon="i-lucide-user-round">
+        <template #actions>
+          <MButton
+            variant="text"
+            size="xs"
+            icon="i-lucide-user-plus"
+            @click="router.push('/accounts')"
+          >
+            {{ t('launch.addAccount') }}
+          </MButton>
+        </template>
+        <div class="space-y-4">
+          <!-- Account Preview Card -->
+          <MCard v-if="launchStore.selectedAccount" variant="well" padding="sm" class="flex items-center gap-3">
+            <MAvatar
+              :name="launchStore.selectedAccount.username"
+              :src="launchStore.selectedAccount.skinHeadDataUrl || undefined"
+              :size="36"
+            />
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1.5">
+                <span class="font-semibold text-sm text-fg truncate">
+                  {{ launchStore.selectedAccount.username }}
+                </span>
+                <MBrandIcon
+                  v-if="accountMeta.brand"
+                  :name="accountMeta.brand"
+                  class="w-3.5 h-3.5 text-primary shrink-0"
+                />
+                <i
+                  v-else
+                  :class="[accountMeta.icon, 'text-xs text-fg-muted shrink-0']"
+                />
+              </div>
+              <div class="flex items-center gap-2 text-xs text-fg-muted">
+                <span class="capitalize">{{ launchStore.selectedAccount.kind }}</span>
+                <span v-if="launchStore.selectedAccount.serverName" class="truncate">
+                  • {{ launchStore.selectedAccount.serverName }}
+                </span>
+              </div>
+            </div>
+          </MCard>
+
+          <MSettingRow :label="t('launch.selectAccount')">
+            <MSelect
+              v-if="accountsStore.accounts.length > 0"
+              :model-value="launchStore.selectedAccount?.id || ''"
+              :options="accountOptions"
+              size="sm"
+              class="w-56"
+              @update:model-value="onAccountSelectChange"
+            />
+            <MButton
+              v-else
+              variant="tonal"
+              size="sm"
               icon="i-lucide-user-plus"
               @click="router.push('/accounts')"
             >
               {{ t('launch.addAccount') }}
             </MButton>
-          </div>
-
-          <div v-if="launchStore.selectedAccount" class="flex items-start gap-3">
-            <MAvatar
-              :name="launchStore.selectedAccount.username"
-              :src="launchStore.selectedAccount.skinHeadDataUrl || undefined"
-              :size="48"
-            />
-            <div class="min-w-0 flex-1">
-              <h3 class="font-bold text-lg text-text truncate">
-                {{ launchStore.selectedAccount.username }}
-              </h3>
-              <div class="flex items-center gap-2 mt-1">
-                <MBadge
-                  :variant="
-                    launchStore.selectedAccount.kind === 'microsoft'
-                      ? 'primary'
-                      : launchStore.selectedAccount.kind === 'authlib'
-                        ? 'warning'
-                        : 'neutral'
-                  "
-                >
-                  {{ launchStore.selectedAccount.kind }}
-                </MBadge>
-                <span
-                  v-if="launchStore.selectedAccount.serverName"
-                  class="text-xs text-text-muted truncate"
-                >
-                  {{ launchStore.selectedAccount.serverName }}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div v-else class="text-sm text-text-muted py-4">
-            {{ t('launch.noAccount') }}
-          </div>
+          </MSettingRow>
         </div>
-
-        <div class="pt-2">
-          <MSelect
-            v-if="accountsStore.accounts.length > 0"
-            :model-value="launchStore.selectedAccount?.id || ''"
-            :options="accountOptions"
-            size="sm"
-            @update:model-value="onAccountSelectChange"
-          />
-          <MButton
-            v-else
-            variant="tonal"
-            size="sm"
-            icon="i-lucide-user-plus"
-            block
-            @click="router.push('/accounts')"
-          >
-            {{ t('launch.addAccount') }}
-          </MButton>
-        </div>
-      </MCard>
-    </div>
-
-    <!-- Big Launch Button Area -->
-    <div class="flex flex-col items-center justify-center py-6 gap-4">
-      <MButton
-        variant="primary"
-        size="lg"
-        :loading="launchStore.isLaunching"
-        :disabled="!launchStore.selectedInstance || !launchStore.selectedAccount"
-        icon="i-lucide-play"
-        class="w-72 h-16 text-lg font-bold shadow-lg"
-        @click="onLaunchClick"
-      >
-        <span v-if="launchStore.isLaunching">{{ stageLabel }}</span>
-        <span v-else>{{ t('launch.launchButton') }}</span>
-      </MButton>
-
-      <div v-if="launchStore.isLaunching" class="w-72 flex flex-col gap-1.5 items-center">
-        <MProgress :value="launchStore.launchProgress" class="w-full h-2" />
-        <span class="text-xs text-text-muted">{{ stageLabel }}</span>
-      </div>
+      </MSection>
     </div>
   </div>
 </template>

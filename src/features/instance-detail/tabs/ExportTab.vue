@@ -10,6 +10,8 @@ import type {
 } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
 import {
+  MSection,
+  MSettingRow,
   MCard,
   MButton,
   MInput,
@@ -62,19 +64,17 @@ watch(format, () => {
 })
 
 function updateDefaultOutputPath() {
-  const safeName = (packName.value || props.instanceId || 'modpack').trim().replace(/[^a-zA-Z0-9_\u4e00-\u9fa5.-]/g, '_')
   const ext = format.value === 'modrinth' ? 'mrpack' : 'zip'
-  if (!outputPath.value || outputPath.value.endsWith('.mrpack') || outputPath.value.endsWith('.zip')) {
-    outputPath.value = `${safeName}-${packVersion.value || '1.0.0'}.${ext}`
-  }
+  const safeName = (packName.value || 'modpack').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5-]/g, '_')
+  outputPath.value = `${safeName}-${packVersion.value || '1.0.0'}.${ext}`
 }
 
-async function loadCandidates() {
+async function fetchCandidates() {
   loadingCandidates.value = true
   try {
     const list = await ipcClient.exportScanInstance(props.instanceId)
     candidates.value = list
-    // Pre-populate with defaultSelected
+    // Pre-select defaults
     selectedPaths.value = list.filter((c) => c.defaultSelected).map((c) => c.relPath)
   } catch (e: unknown) {
     toast.danger(String(e))
@@ -83,18 +83,23 @@ async function loadCandidates() {
   }
 }
 
-onMounted(() => {
-  loadCandidates()
-  updateDefaultOutputPath()
-})
-
-function togglePath(relPath: string, checked: boolean) {
-  if (checked) {
-    if (!selectedPaths.value.includes(relPath)) {
-      selectedPaths.value.push(relPath)
+async function browseOutputFile() {
+  try {
+    const ext = format.value === 'modrinth' ? 'mrpack' : 'zip'
+    const chosen = await saveFileDialog({
+      defaultPath: outputPath.value,
+      filters: [
+        {
+          name: format.value === 'modrinth' ? 'Modrinth Modpack (*.mrpack)' : 'CurseForge Modpack (*.zip)',
+          extensions: [ext],
+        },
+      ],
+    })
+    if (chosen && typeof chosen === 'string') {
+      outputPath.value = chosen
     }
-  } else {
-    selectedPaths.value = selectedPaths.value.filter((p) => p !== relPath)
+  } catch {
+    // Non-tauri browser mode fallback
   }
 }
 
@@ -110,50 +115,26 @@ function restoreDefault() {
   selectedPaths.value = candidates.value.filter((c) => c.defaultSelected).map((c) => c.relPath)
 }
 
-async function browseOutputFile() {
-  try {
-    const ext = format.value === 'modrinth' ? 'mrpack' : 'zip'
-    const defaultName = outputPath.value || `${packName.value || 'modpack'}.${ext}`
-    const selected = await saveFileDialog({
-      defaultPath: defaultName,
-      filters: [
-        {
-          name: t('instanceDetail.export.fileFilter'),
-          extensions: [ext],
-        },
-      ],
-    })
-    if (selected && typeof selected === 'string') {
-      outputPath.value = selected
+function togglePath(relPath: string, checked: boolean) {
+  if (checked) {
+    if (!selectedPaths.value.includes(relPath)) {
+      selectedPaths.value.push(relPath)
     }
-  } catch {
-    // Non-tauri browser mode fallback
+  } else {
+    selectedPaths.value = selectedPaths.value.filter((p) => p !== relPath)
   }
 }
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`
+  const units = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
 }
 
 async function handleStartExport() {
-  if (!packName.value.trim()) {
-    toast.warning(t('instanceDetail.export.validation.nameRequired'))
-    return
-  }
-  if (!packVersion.value.trim()) {
-    toast.warning(t('instanceDetail.export.validation.versionRequired'))
-    return
-  }
   if (!outputPath.value.trim()) {
-    toast.warning(t('instanceDetail.export.validation.outputPathRequired'))
-    return
-  }
-  if (selectedPaths.value.length === 0) {
-    toast.warning(t('instanceDetail.export.validation.filesRequired'))
+    toast.danger(t('instanceDetail.export.pathRequired'))
     return
   }
 
@@ -162,158 +143,139 @@ async function handleStartExport() {
     const options: ModpackExportOptions = {
       instanceId: props.instanceId,
       format: format.value,
-      packName: packName.value.trim(),
-      packVersion: packVersion.value.trim(),
-      author: author.value.trim(),
-      summary: summary.value.trim(),
-      selectedPaths: [...selectedPaths.value],
-      outputPath: outputPath.value.trim(),
+      packName: packName.value,
+      packVersion: packVersion.value,
+      author: author.value,
+      summary: summary.value,
+      selectedPaths: selectedPaths.value,
+      outputPath: outputPath.value,
     }
     await ipcClient.exportModpack(options)
-    toast.success(t('instanceDetail.export.exportSuccess'))
+    toast.success(t('instanceDetail.export.success', { path: outputPath.value }))
   } catch (e: unknown) {
     toast.danger(String(e))
   } finally {
     exporting.value = false
   }
 }
+
+onMounted(() => {
+  fetchCandidates()
+})
 </script>
 
 <template>
-  <div class="space-y-6 max-w-4xl pb-10">
-    <!-- Header Card -->
-    <MCard class="p-6">
-      <div class="flex items-center gap-3 mb-2">
-        <span class="w-6 h-6 i-lucide-package-plus text-primary shrink-0" />
-        <h2 class="text-xl font-bold text-text">
+  <div class="space-y-6">
+    <!-- Header Summary Card -->
+    <MCard padding="md">
+      <div class="flex items-center gap-3 mb-1">
+        <span class="w-5 h-5 i-lucide-package-plus text-primary shrink-0" />
+        <h2 class="text-lg font-bold text-fg">
           {{ t('instanceDetail.export.title') }}
         </h2>
       </div>
-      <p class="text-sm text-text-muted">
+      <p class="text-xs text-fg-muted">
         {{ t('instanceDetail.export.description') }}
       </p>
     </MCard>
 
-    <!-- Configuration Options -->
-    <MCard class="p-6 space-y-5">
-      <!-- Format Selector -->
-      <div>
-        <label class="block text-sm font-medium text-text mb-2">
-          {{ t('instanceDetail.export.formatLabel') }}
-        </label>
-        <MSegmented
-          v-model="format"
-          :options="formatOptions"
-          class="w-full sm:w-auto"
-        />
-      </div>
+    <!-- Configuration Options Section -->
+    <MSection :title="t('instanceDetail.export.title')" icon="i-lucide-settings-2">
+      <div class="divide-y divide-line">
+        <MSettingRow :label="t('instanceDetail.export.formatLabel')">
+          <MSegmented
+            v-model="format"
+            :options="formatOptions"
+            size="sm"
+          />
+        </MSettingRow>
 
-      <!-- Basic metadata -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-text mb-1.5">
-            {{ t('instanceDetail.export.packName') }}
-          </label>
+        <MSettingRow :label="t('instanceDetail.export.packName')">
           <MInput
             v-model="packName"
             :placeholder="t('instanceDetail.export.packNamePlaceholder')"
-            class="w-full"
+            size="sm"
+            class="w-72"
           />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-text mb-1.5">
-            {{ t('instanceDetail.export.packVersion') }}
-          </label>
+        </MSettingRow>
+
+        <MSettingRow :label="t('instanceDetail.export.packVersion')">
           <MInput
             v-model="packVersion"
             :placeholder="t('instanceDetail.export.packVersionPlaceholder')"
-            class="w-full"
+            size="sm"
+            class="w-72"
           />
-        </div>
-      </div>
+        </MSettingRow>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-text mb-1.5">
-            {{ t('instanceDetail.export.author') }}
-          </label>
+        <MSettingRow :label="t('instanceDetail.export.author')">
           <MInput
             v-model="author"
             :placeholder="t('instanceDetail.export.authorPlaceholder')"
-            class="w-full"
+            size="sm"
+            class="w-72"
           />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-text mb-1.5">
-            {{ t('instanceDetail.export.outputPath') }}
-          </label>
-          <div class="flex gap-2">
+        </MSettingRow>
+
+        <MSettingRow :label="t('instanceDetail.export.outputPath')">
+          <div class="flex items-center gap-2">
             <MInput
               v-model="outputPath"
               :placeholder="t('instanceDetail.export.outputPathPlaceholder')"
-              class="flex-1"
+              size="sm"
+              class="w-72"
             />
             <MButton
               variant="tonal"
+              size="sm"
               icon="i-lucide-folder-open"
               @click="browseOutputFile"
             >
               {{ t('instanceDetail.export.browse') }}
             </MButton>
           </div>
-        </div>
-      </div>
+        </MSettingRow>
 
-      <div>
-        <label class="block text-sm font-medium text-text mb-1.5">
-          {{ t('instanceDetail.export.summary') }}
-        </label>
-        <MTextarea
-          v-model="summary"
-          :placeholder="t('instanceDetail.export.summaryPlaceholder')"
-          :rows="2"
-          class="w-full"
-        />
+        <MSettingRow :label="t('instanceDetail.export.summary')">
+          <MTextarea
+            v-model="summary"
+            :placeholder="t('instanceDetail.export.summaryPlaceholder')"
+            :rows="2"
+            class="w-72"
+          />
+        </MSettingRow>
       </div>
-    </MCard>
+    </MSection>
 
-    <!-- File selection checklist -->
-    <MCard class="p-6">
-      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 class="text-base font-semibold text-text">
-            {{ t('instanceDetail.export.filesSelection') }}
-          </h3>
-          <p class="text-xs text-text-muted mt-0.5">
-            {{ t('instanceDetail.export.filesSelectionSubtitle') }}
-          </p>
-        </div>
+    <!-- File selection checklist Section -->
+    <MSection :title="t('instanceDetail.export.filesSelection')" :description="t('instanceDetail.export.filesSelectionSubtitle')" icon="i-lucide-folder-tree">
+      <template #actions>
         <div class="flex items-center gap-2">
           <MButton
             variant="text"
-            size="sm"
+            size="xs"
             @click="selectAll"
           >
             {{ t('instanceDetail.export.selectAll') }}
           </MButton>
           <MButton
             variant="text"
-            size="sm"
+            size="xs"
             @click="deselectAll"
           >
             {{ t('instanceDetail.export.deselectAll') }}
           </MButton>
           <MButton
             variant="tonal"
-            size="sm"
+            size="xs"
             @click="restoreDefault"
           >
             {{ t('instanceDetail.export.defaultSelection') }}
           </MButton>
         </div>
-      </div>
+      </template>
 
-      <div v-if="loadingCandidates" class="py-8 flex justify-center text-text-muted">
+      <div v-if="loadingCandidates" class="py-8 flex justify-center text-fg-muted">
         <span class="w-6 h-6 i-lucide-loader-2 animate-spin" />
       </div>
       <div v-else-if="candidates.length === 0" class="py-8">
@@ -324,12 +286,12 @@ async function handleStartExport() {
       </div>
       <div
         v-else
-        class="border border-outline/20 rounded-xl divide-y divide-outline/10 max-h-96 overflow-y-auto bg-surfaceVariant/20"
+        class="border border-line rounded-xl divide-y divide-line max-h-96 overflow-y-auto bg-sunken/40"
       >
         <div
           v-for="entry in candidates"
           :key="entry.relPath"
-          class="flex items-center justify-between px-4 py-2.5 hover:bg-surfaceVariant/40 transition-colors cursor-pointer"
+          class="flex items-center justify-between px-4 py-2 hover:bg-sunken/80 transition-colors cursor-pointer"
           @click="togglePath(entry.relPath, !selectedPaths.includes(entry.relPath))"
         >
           <div class="flex items-center gap-3 min-w-0" @click.stop>
@@ -339,16 +301,16 @@ async function handleStartExport() {
             />
             <div class="flex items-center gap-2 truncate">
               <span
-                class="w-4 h-4 shrink-0 text-text-muted"
+                class="w-4 h-4 shrink-0 text-fg-muted"
                 :class="entry.isDir ? 'i-lucide-folder text-primary/80' : 'i-lucide-file-text'"
               />
-              <span class="text-sm font-medium text-text truncate">
+              <span class="text-sm font-medium text-fg truncate">
                 {{ entry.relPath }}
               </span>
             </div>
           </div>
           <div class="flex items-center gap-2 shrink-0 ml-3">
-            <span class="text-xs text-text-muted">
+            <span class="text-xs text-fg-muted font-mono">
               {{ formatBytes(entry.size) }}
             </span>
             <MBadge variant="neutral" size="sm">
@@ -359,16 +321,17 @@ async function handleStartExport() {
       </div>
 
       <!-- Action Button -->
-      <div class="mt-6 flex justify-end">
+      <div class="pt-4 flex justify-end">
         <MButton
           variant="primary"
           icon="i-lucide-download"
+          size="sm"
           :loading="exporting"
           @click="handleStartExport"
         >
           {{ exporting ? t('instanceDetail.export.exporting') : t('instanceDetail.export.startExport') }}
         </MButton>
       </div>
-    </MCard>
+    </MSection>
   </div>
 </template>

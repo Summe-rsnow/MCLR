@@ -10,6 +10,7 @@ const routes: RouteRecordRaw[] = [
         titleKey: 'logs.nav',
         icon: 'i-lucide-terminal',
         order: 80,
+        group: 'system',
       },
     },
   },

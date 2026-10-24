@@ -15,7 +15,7 @@ withDefaults(
 
 <template>
   <div
-    class="bg-surfaceVariant animate-pulse"
+    class="bg-sunken animate-pulse"
     :class="rounded ? 'rounded-lg' : ''"
     :style="{ width, height }"
   />

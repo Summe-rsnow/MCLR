@@ -6,12 +6,16 @@ import { useToast } from '../../ui/useToast'
 import { useDialog } from '../../ui/useDialog'
 import { useCrashStore } from '../crash/store'
 import type { LogLevel } from '../../ipc/client'
-import MButton from '../../ui/MButton.vue'
-import MInput from '../../ui/MInput.vue'
-import MSegmented from '../../ui/MSegmented.vue'
-import MSwitch from '../../ui/MSwitch.vue'
-import MSelect from '../../ui/MSelect.vue'
-import MBadge from '../../ui/MBadge.vue'
+import {
+  MPageHeader,
+  MButton,
+  MInput,
+  MSegmented,
+  MSwitch,
+  MSelect,
+  MBadge,
+  MCard,
+} from '../../ui'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -63,24 +67,27 @@ const startIndex = computed(() => {
 })
 
 const endIndex = computed(() => {
+  const visibleCount = Math.ceil(viewportHeight.value / ROW_HEIGHT)
   return Math.min(
     totalCount.value,
-    Math.ceil((scrollTop.value + viewportHeight.value) / ROW_HEIGHT) + overscan,
+    Math.floor(scrollTop.value / ROW_HEIGHT) + visibleCount + overscan,
   )
 })
 
 const visibleLogs = computed(() => {
-  return logsStore.filteredLogs.slice(startIndex.value, endIndex.value).map((line, idx) => ({
-    ...line,
-    virtualIndex: startIndex.value + idx,
-    top: (startIndex.value + idx) * ROW_HEIGHT,
-  }))
+  return logsStore.filteredLogs
+    .slice(startIndex.value, endIndex.value)
+    .map((line, idx) => ({
+      ...line,
+      top: (startIndex.value + idx) * ROW_HEIGHT,
+      lineId: `${line.timestamp}-${startIndex.value + idx}`,
+    }))
 })
 
 function onScroll(e: Event) {
   const target = e.target as HTMLElement
   scrollTop.value = target.scrollTop
-  viewportHeight.value = target.clientHeight
+  // If user scrolled up significantly, autoScroll should ideally pause or stay as-is
 }
 
 function scrollToBottom() {
@@ -93,11 +100,9 @@ function scrollToBottom() {
 }
 
 watch(
-  () => logsStore.filteredLogs.length,
+  () => logsStore.logs.length,
   () => {
-    if (logsStore.autoScroll) {
-      scrollToBottom()
-    }
+    scrollToBottom()
   },
 )
 
@@ -105,7 +110,7 @@ onMounted(async () => {
   await logsStore.fetchLogs()
   await logsStore.startListening()
   if (logContainer.value) {
-    viewportHeight.value = logContainer.value.clientHeight
+    viewportHeight.value = logContainer.value.clientHeight || 600
   }
   scrollToBottom()
 })
@@ -116,32 +121,40 @@ onUnmounted(() => {
 
 async function onCopyLogs() {
   try {
-    await logsStore.copyLogsToClipboard()
+    const text = logsStore.filteredLogs.map((l) => l.text).join('\n')
+    await navigator.clipboard.writeText(text)
     toast.show({
-      message: t('logs.copySuccess'),
+      message: t('logs.copied'),
       type: 'success',
     })
-  } catch {
+  } catch (err: unknown) {
     toast.show({
-      message: t('error.unknown'),
+      message: String(err),
       type: 'danger',
     })
   }
 }
 
-function onExportLogs() {
-  const content = logsStore.exportLogs()
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `mclr-game-${Date.now()}.log`
-  a.click()
-  URL.revokeObjectURL(url)
-  toast.show({
-    message: t('logs.exportSuccess'),
-    type: 'success',
-  })
+async function onExportLogs() {
+  try {
+    const text = logsStore.filteredLogs.map((l) => l.text).join('\n')
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `mclr-log-${Date.now()}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.show({
+      message: t('logs.exported'),
+      type: 'success',
+    })
+  } catch (err: unknown) {
+    toast.show({
+      message: String(err),
+      type: 'danger',
+    })
+  }
 }
 
 async function onKillClick() {
@@ -196,79 +209,71 @@ function getLineTextColor(level: LogLevel) {
     case 'warn':
       return 'text-warning'
     case 'debug':
-      return 'text-text-muted'
+      return 'text-fg-muted'
     default:
-      return 'text-text'
+      return 'text-fg'
   }
 }
 </script>
 
 <template>
-  <div class="h-full flex flex-col p-6 gap-4 overflow-hidden">
+  <div class="m-page max-w-none h-full">
     <!-- Header -->
-    <div class="flex flex-wrap items-center justify-between gap-4 shrink-0">
-      <div class="flex items-center gap-3">
-        <h1 class="text-2xl font-bold tracking-tight text-text">
-          {{ t('logs.title') }}
-        </h1>
-        <MBadge
-          v-if="logsStore.activeProcess"
-          variant="success"
-          class="flex items-center gap-1.5"
-        >
-          <span class="w-2 h-2 rounded-full bg-success animate-pulse" />
-          {{ t('logs.status.running') }}
-        </MBadge>
-      </div>
-
-      <div class="flex items-center gap-2">
-        <MButton
-          variant="tonal"
-          size="sm"
-          icon="i-lucide-copy"
-          @click="onCopyLogs"
-        >
-          {{ t('common.copy') }}
-        </MButton>
-        <MButton
-          variant="tonal"
-          size="sm"
-          icon="i-lucide-download"
-          @click="onExportLogs"
-        >
-          {{ t('logs.export') }}
-        </MButton>
-        <MButton
-          variant="text"
-          size="sm"
-          icon="i-lucide-trash-2"
-          @click="logsStore.clearLogs"
-        >
-          {{ t('logs.clear') }}
-        </MButton>
-        <MButton
-          variant="tonal"
-          size="sm"
-          icon="i-lucide-activity"
-          @click="onAnalyzeCrash"
-        >
-          {{ t('logs.crashAnalyze') }}
-        </MButton>
-        <MButton
-          v-if="logsStore.activeProcess"
-          variant="danger"
-          size="sm"
-          icon="i-lucide-power"
-          :loading="isKilling"
-          @click="onKillClick"
-        >
-          {{ t('logs.killProcess') }}
-        </MButton>
-      </div>
-    </div>
+    <MPageHeader
+      :title="t('logs.title')"
+      :description="logsStore.activeProcess ? `${t('logs.status.running')} (PID: ${logsStore.activeProcess.processId})` : undefined"
+      icon="i-lucide-terminal"
+    >
+      <template #actions>
+        <div class="flex flex-wrap items-center gap-2">
+          <MButton
+            variant="tonal"
+            size="sm"
+            icon="i-lucide-copy"
+            @click="onCopyLogs"
+          >
+            {{ t('common.copy') }}
+          </MButton>
+          <MButton
+            variant="tonal"
+            size="sm"
+            icon="i-lucide-download"
+            @click="onExportLogs"
+          >
+            {{ t('logs.export') }}
+          </MButton>
+          <MButton
+            variant="text"
+            size="sm"
+            icon="i-lucide-trash-2"
+            @click="logsStore.clearLogs"
+          >
+            {{ t('logs.clear') }}
+          </MButton>
+          <MButton
+            variant="tonal"
+            size="sm"
+            icon="i-lucide-activity"
+            @click="onAnalyzeCrash"
+          >
+            {{ t('logs.crashAnalyze') }}
+          </MButton>
+          <MButton
+            v-if="logsStore.activeProcess"
+            variant="danger"
+            size="sm"
+            icon="i-lucide-power"
+            :loading="isKilling"
+            @click="onKillClick"
+          >
+            {{ t('logs.killProcess') }}
+          </MButton>
+        </div>
+      </template>
+    </MPageHeader>
 
     <!-- Toolbar: Filters, Search, Auto-scroll -->
-    <div class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-surface-variant/40 border border-outline/10 shrink-0">
+    <MCard padding="sm" class="flex flex-wrap items-center justify-between gap-3 shrink-0">
       <div class="flex flex-wrap items-center gap-3">
         <MSegmented
           v-model="logsStore.levelFilter"
@@ -282,6 +287,7 @@ function getLineTextColor(level: LogLevel) {
             :placeholder="t('logs.searchPlaceholder')"
             icon="i-lucide-search"
             size="sm"
+            clearable
           />
         </div>
 
@@ -296,20 +302,20 @@ function getLineTextColor(level: LogLevel) {
       </div>
 
       <div class="flex items-center gap-2 pl-2">
-        <span class="text-xs text-text-muted">{{ t('logs.autoScroll') }}</span>
+        <span class="text-xs text-fg-muted">{{ t('logs.autoScroll') }}</span>
         <MSwitch v-model="logsStore.autoScroll" size="sm" />
       </div>
-    </div>
+    </MCard>
 
     <!-- Virtualized Log Output -->
     <div
       ref="logContainer"
-      class="flex-1 bg-surface-variant/20 rounded-xl border border-outline/15 p-4 font-mono text-xs overflow-y-auto relative select-text"
+      class="flex-1 bg-sunken rounded-xl border border-line p-4 font-mono text-xs overflow-y-auto relative select-text min-h-[300px]"
       @scroll="onScroll"
     >
       <div
         v-if="totalCount === 0"
-        class="h-full flex items-center justify-center text-text-muted"
+        class="h-full flex items-center justify-center text-fg-muted"
       >
         {{ t('logs.empty') }}
       </div>
@@ -323,7 +329,7 @@ function getLineTextColor(level: LogLevel) {
           v-for="line in visibleLogs"
           :key="line.lineId"
           :style="{ top: `${line.top}px`, height: `${ROW_HEIGHT}px` }"
-          class="absolute left-0 right-0 flex items-center gap-2 px-1 hover:bg-surface-variant/50 whitespace-nowrap overflow-hidden text-ellipsis leading-tight"
+          class="absolute left-0 right-0 flex items-center gap-2 px-1 hover:bg-sunken whitespace-nowrap overflow-hidden text-ellipsis leading-tight"
         >
           <MBadge
             :variant="getLevelBadgeVariant(line.level)"

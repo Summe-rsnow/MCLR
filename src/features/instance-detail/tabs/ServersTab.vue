@@ -211,10 +211,10 @@ onMounted(() => {
     <!-- Top Bar -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <h2 class="text-base font-bold text-text">
+        <h2 class="text-base font-bold text-fg">
           {{ t('instanceDetail.tabs.servers') }}
         </h2>
-        <span class="text-xs text-textMuted font-mono">
+        <span class="text-xs text-fg-muted font-mono">
           ({{ servers.length }})
         </span>
       </div>
@@ -243,11 +243,14 @@ onMounted(() => {
       <MCard
         v-for="server in servers"
         :key="server.index"
-        class="p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all"
+        variant="well"
+        hoverable
+        padding="md"
+        class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all"
       >
         <div class="flex items-start gap-4 min-w-0">
           <!-- Server Icon -->
-          <div class="w-14 h-14 rounded-xl bg-surfaceVariant/60 flex items-center justify-center shrink-0 border border-outline/30 overflow-hidden text-primary">
+          <div class="w-14 h-14 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 border border-line overflow-hidden text-primary">
             <img
               v-if="pingResults[server.ip]?.favicon || server.icon"
               :src="pingResults[server.ip]?.favicon || server.icon || ''"
@@ -260,7 +263,7 @@ onMounted(() => {
           <!-- Metadata & Ping Status -->
           <div class="min-w-0 space-y-1">
             <div class="flex items-center gap-2.5">
-              <span class="text-base font-bold text-text truncate">
+              <span class="text-base font-bold text-fg truncate">
                 {{ server.name }}
               </span>
               <template v-if="pingResults[server.ip]">
@@ -280,24 +283,24 @@ onMounted(() => {
               </MBadge>
             </div>
 
-            <div class="text-xs text-textMuted font-mono">
+            <div class="text-xs text-fg-muted font-mono">
               {{ server.ip }}
             </div>
 
             <div
               v-if="pingResults[server.ip]?.online"
-              class="text-xs text-textMuted/80 line-clamp-1"
+              class="text-xs text-fg-muted/80 line-clamp-1"
             >
               {{ pingResults[server.ip].motd }}
             </div>
 
             <div
               v-if="pingResults[server.ip]?.online"
-              class="flex flex-wrap items-center gap-x-4 text-[11px] text-textMuted"
+              class="flex flex-wrap items-center gap-x-4 text-[11px] text-fg-muted"
             >
               <span>
                 {{ t('instanceDetail.servers.players') }}:
-                <span class="font-mono font-medium text-text">
+                <span class="font-mono font-medium text-fg">
                   {{ pingResults[server.ip].playersOnline }}/{{ pingResults[server.ip].playersMax }}
                 </span>
               </span>
@@ -368,7 +371,7 @@ onMounted(() => {
         />
 
         <div class="space-y-1.5">
-          <label class="text-sm font-semibold text-text">
+          <label class="text-sm font-semibold text-fg">
             {{ t('instanceDetail.servers.acceptTextures') }}
           </label>
           <MSelect

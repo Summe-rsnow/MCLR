@@ -6,6 +6,36 @@
     "download": "下载",
     "settings": "设置"
   },
+  "navGroup": {
+    "start": "开始",
+    "game": "游戏",
+    "discover": "发现",
+    "system": "系统",
+    "dev": "开发"
+  },
+  "sidebar": {
+    "collapse": "收起侧边栏",
+    "expand": "展开侧边栏"
+  },
+  "quick": {
+    "title": "快捷外观",
+    "mode": "色彩模式",
+    "material": "界面材质",
+    "accent": "强调色",
+    "moreAppearance": "更多外观设置"
+  },
+  "mode": {
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
+  "material": {
+    "flat": "扁平",
+    "glass": "液态玻璃"
+  },
+  "account": {
+    "add": "添加账号"
+  },
   "titlebar": {
     "tasks": "任务",
     "theme": "切换主题",

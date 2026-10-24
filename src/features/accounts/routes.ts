@@ -8,8 +8,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       nav: {
         titleKey: 'accounts.nav',
-        icon: 'i-lucide-user-circle',
+        icon: 'i-lucide-user-round',
         order: 20,
+        group: 'game',
       },
     },
   },

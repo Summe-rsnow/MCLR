@@ -10,6 +10,7 @@ const routes: RouteRecordRaw[] = [
         titleKey: 'mods.nav',
         icon: 'i-lucide-puzzle',
         order: 25,
+        group: 'game',
       },
     },
   },

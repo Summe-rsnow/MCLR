@@ -12,12 +12,14 @@ export interface ContextMenuItem {
 const props = withDefaults(
   defineProps<{
     items: ContextMenuItem[]
-    open: boolean
+    open?: boolean
+    modelValue?: boolean
     x: number
     y: number
   }>(),
   {
     open: false,
+    modelValue: undefined,
     x: 0,
     y: 0,
   },
@@ -55,7 +57,7 @@ onUnmounted(() => {
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed z-50 min-w-36 p-1 rounded-xl shadow-xl border border-outline/50 bg-surface text-text flex flex-col gap-0.5 select-none"
+      class="fixed z-50 m-overlay m-refract min-w-40 p-1 rounded-xl text-fg flex flex-col gap-0.5 select-none"
       :style="{ left: `${x}px`, top: `${y}px` }"
       @click.stop
       @contextmenu.stop.prevent
@@ -65,15 +67,15 @@ onUnmounted(() => {
         :key="item.key"
         type="button"
         :disabled="item.disabled"
-        class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer text-left disabled:cursor-not-allowed disabled:opacity-40"
+        class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer text-left disabled:cursor-not-allowed disabled:opacity-45"
         :class="
           item.danger
-            ? 'text-danger hover:bg-danger/10'
-            : 'text-text hover:bg-surfaceVariant/80'
+            ? 'text-danger-fg hover:bg-danger-soft'
+            : 'text-fg hover:bg-sunken'
         "
         @click="onItemClick(item)"
       >
-        <span v-if="item.icon" :class="item.icon" class="w-3.5 h-3.5" />
+        <span v-if="item.icon" :class="item.icon" class="w-3.5 h-3.5 shrink-0" />
         <span class="flex-1">{{ item.label }}</span>
       </button>
     </div>

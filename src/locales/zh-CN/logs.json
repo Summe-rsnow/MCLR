@@ -8,6 +8,8 @@
   "copySuccess": "日志已复制到剪贴板",
   "export": "导出日志",
   "exportSuccess": "日志文件已导出",
+  "copied": "日志已复制到剪贴板",
+  "exported": "日志文件已导出",
   "clear": "清空日志",
   "killProcess": "强制结束进程",
     "crashAnalyze": "分析崩溃日志",

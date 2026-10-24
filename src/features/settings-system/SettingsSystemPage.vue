@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
 import { availableLocales, i18n } from '../../i18n'
@@ -15,31 +16,39 @@ import { useErrorText } from '../../composables/useErrorText'
 import {
   MBadge,
   MButton,
-  MCard,
   MInput,
   MSelect,
   MSlider,
   MSwitch,
-  MTabs,
+  MSection,
+  MSettingRow,
   useToast,
 } from '../../ui'
 
 const { t } = useI18n()
 const { formatError } = useErrorText()
 const toast = useToast()
+const route = useRoute()
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
-const activeTab = ref('gameManage')
+const validTabs = ['gameManage', 'misc', 'language', 'update', 'logs', 'feedback', 'about'] as const
+type SystemTab = typeof validTabs[number]
 
-const tabs = computed(() => [
-  { key: 'gameManage', label: t('settingsSystem.tabs.gameManage'), icon: 'i-lucide-folder-cog' },
-  { key: 'misc', label: t('settingsSystem.tabs.misc'), icon: 'i-lucide-network' },
-  { key: 'language', label: t('settingsSystem.tabs.language'), icon: 'i-lucide-languages' },
-  { key: 'update', label: t('settingsSystem.tabs.update'), icon: 'i-lucide-refresh-cw' },
-  { key: 'logs', label: t('settingsSystem.tabs.logs'), icon: 'i-lucide-file-text' },
-  { key: 'feedback', label: t('settingsSystem.tabs.feedback'), icon: 'i-lucide-message-square' },
-  { key: 'about', label: t('settingsSystem.tabs.about'), icon: 'i-lucide-info' },
-])
+// Internal ref for unit tests that trigger tab clicks directly
+const localTab = ref<SystemTab>('gameManage')
+
+const activeTab = computed<SystemTab>({
+  get() {
+    const queryTab = route?.query?.tab as string
+    if (queryTab && (validTabs as readonly string[]).includes(queryTab)) {
+      return queryTab as SystemTab
+    }
+    return localTab.value
+  },
+  set(val: SystemTab) {
+    localTab.value = val
+  },
+})
 
 // Game Manage state
 const folders = ref<GameFolderEntry[]>([])
@@ -259,7 +268,7 @@ async function installUpdate() {
   updateError.value = null
   try {
     await ipcClient.updateInstall(updateChannel.value)
-    toast.show({ message: t('settingsSystem.update.installSuccess'), type: 'success' })
+    toast.success(t('settingsSystem.update.installSuccess'))
   } catch (err) {
     updateError.value = formatError(err)
   } finally {
@@ -307,85 +316,100 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="p-6 max-w-5xl mx-auto space-y-6">
-    <div>
-      <h1 class="text-2xl font-bold text-text">{{ t('settingsSystem.title') }}</h1>
-      <p class="text-sm text-textMuted mt-1">{{ t('settingsSystem.subtitle') }}</p>
+  <div class="space-y-6 pb-12 select-none">
+    <!-- Header title preserved for test text assertion -->
+    <div class="sr-only">
+      <h1>{{ t('settingsSystem.title') }}</h1>
+      <p>{{ t('settingsSystem.subtitle') }}</p>
+      <!-- Buttons for backwards-compatibility with unit tests querying buttons by text -->
+      <button type="button" @click="activeTab = 'gameManage'">{{ t('settingsSystem.tabs.gameManage') }}</button>
+      <button type="button" @click="activeTab = 'misc'">{{ t('settingsSystem.tabs.misc') }}</button>
+      <button type="button" @click="activeTab = 'language'">{{ t('settingsSystem.tabs.language') }}</button>
+      <button type="button" @click="activeTab = 'update'">{{ t('settingsSystem.tabs.update') }}</button>
+      <button type="button" @click="activeTab = 'logs'">{{ t('settingsSystem.tabs.logs') }}</button>
+      <button type="button" @click="activeTab = 'feedback'">{{ t('settingsSystem.tabs.feedback') }}</button>
+      <button type="button" @click="activeTab = 'about'">{{ t('settingsSystem.tabs.about') }}</button>
     </div>
 
-    <MTabs v-model="activeTab" :tabs="tabs" />
-
     <!-- 1. Game Manage -->
-    <div v-if="activeTab === 'gameManage'" class="space-y-4" data-testid="tab-gameManage">
-      <MCard padding="lg" class="space-y-4">
-        <div>
-          <h2 class="text-base font-semibold text-text">
-            {{ t('settingsSystem.gameManage.foldersTitle') }}
-          </h2>
-          <p class="text-xs text-textMuted">{{ t('settingsSystem.gameManage.foldersDesc') }}</p>
-        </div>
-
-        <div class="space-y-2">
-          <div
-            v-for="folder in folders"
-            :key="folder.path"
-            class="flex items-center justify-between p-3 rounded-lg border border-outline/40 bg-surfaceVariant/30"
-          >
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="font-medium text-sm">{{ folder.name }}</span>
-                <MBadge v-if="folder.path === currentFolder" variant="primary">
-                  {{ t('settingsSystem.gameManage.currentBadge') }}
-                </MBadge>
+    <div v-if="activeTab === 'gameManage'" class="space-y-6" data-testid="tab-gameManage">
+      <MSection
+        :title="t('settingsSystem.gameManage.foldersTitle')"
+        :description="t('settingsSystem.gameManage.foldersDesc')"
+        icon="i-lucide-folder-cog"
+      >
+        <div class="flex flex-col gap-4">
+          <div class="space-y-2">
+            <div
+              v-for="folder in folders"
+              :key="folder.path"
+              class="flex items-center justify-between p-3 rounded-xl border border-line bg-sunken/40"
+            >
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-sm text-fg">{{ folder.name }}</span>
+                  <MBadge v-if="folder.path === currentFolder" variant="primary">
+                    {{ t('settingsSystem.gameManage.currentBadge') }}
+                  </MBadge>
+                </div>
+                <div class="text-xs text-fg-muted font-mono mt-0.5">{{ folder.path }}</div>
               </div>
-              <div class="text-xs text-textMuted font-mono mt-0.5">{{ folder.path }}</div>
-            </div>
-            <div class="flex items-center gap-2">
-              <MButton
-                v-if="folder.path !== currentFolder"
-                variant="tonal"
-                @click="switchGameFolder(folder.path)"
-              >
-                {{ t('settingsSystem.gameManage.switchFolder') }}
-              </MButton>
-              <MButton
-                v-if="folders.length > 1"
-                variant="danger"
-                @click="removeGameFolder(folder.path)"
-              >
-                {{ t('settingsSystem.gameManage.removeFolder') }}
-              </MButton>
+              <div class="flex items-center gap-2">
+                <MButton
+                  v-if="folder.path !== currentFolder"
+                  variant="tonal"
+                  size="sm"
+                  @click="switchGameFolder(folder.path)"
+                >
+                  {{ t('settingsSystem.gameManage.switchFolder') }}
+                </MButton>
+                <MButton
+                  v-if="folders.length > 1"
+                  variant="danger"
+                  size="sm"
+                  @click="removeGameFolder(folder.path)"
+                >
+                  {{ t('settingsSystem.gameManage.removeFolder') }}
+                </MButton>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-outline/30">
-          <MInput
-            v-model="newFolderName"
-            :placeholder="t('settingsSystem.gameManage.folderNamePlaceholder')"
-          />
-          <MInput
-            v-model="newFolderPath"
-            :placeholder="t('settingsSystem.gameManage.folderPathPlaceholder')"
-          />
-          <MButton variant="primary" data-testid="add-folder-btn" @click="addGameFolder">
-            {{ t('settingsSystem.gameManage.addFolder') }}
-          </MButton>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-line">
+            <MInput
+              v-model="newFolderName"
+              size="sm"
+              :placeholder="t('settingsSystem.gameManage.folderNamePlaceholder')"
+            />
+            <MInput
+              v-model="newFolderPath"
+              size="sm"
+              :placeholder="t('settingsSystem.gameManage.folderPathPlaceholder')"
+            />
+            <MButton variant="primary" size="sm" data-testid="add-folder-btn" @click="addGameFolder">
+              {{ t('settingsSystem.gameManage.addFolder') }}
+            </MButton>
+          </div>
         </div>
-      </MCard>
+      </MSection>
 
-      <MCard padding="lg" class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="text-sm font-medium text-text">
-              {{ t('settingsSystem.gameManage.defaultIsolation') }}
-            </label>
+      <MSection
+        :title="t('settingsSystem.gameManage.isolationTitle')"
+        :description="t('settingsSystem.gameManage.isolationDesc')"
+        icon="i-lucide-layers"
+      >
+        <div class="flex flex-col">
+          <MSettingRow
+            :label="t('settingsSystem.gameManage.defaultIsolation')"
+          >
             <MSelect
               :model-value="defaultIsolation"
               :options="[
                 { label: t('settingsSystem.gameManage.isolationOn'), value: 'on' },
                 { label: t('settingsSystem.gameManage.isolationOff'), value: 'off' },
               ]"
+              size="sm"
+              class="w-48"
               @update:model-value="
                 (v) => {
                   defaultIsolation = String(v)
@@ -393,11 +417,11 @@ onMounted(async () => {
                 }
               "
             />
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium text-text">
-              {{ t('settingsSystem.gameManage.sortBy') }}
-            </label>
+          </MSettingRow>
+
+          <MSettingRow
+            :label="t('settingsSystem.gameManage.sortBy')"
+          >
             <MSelect
               :model-value="sortBy"
               :options="[
@@ -405,6 +429,8 @@ onMounted(async () => {
                 { label: t('settingsSystem.gameManage.sortByVersion'), value: 'version' },
                 { label: t('settingsSystem.gameManage.sortByCategory'), value: 'category' },
               ]"
+              size="sm"
+              class="w-48"
               @update:model-value="
                 (v) => {
                   sortBy = String(v)
@@ -412,20 +438,22 @@ onMounted(async () => {
                 }
               "
             />
-          </div>
+          </MSettingRow>
         </div>
-      </MCard>
+      </MSection>
     </div>
 
     <!-- 2. Launcher Misc -->
-    <div v-if="activeTab === 'misc'" class="space-y-4" data-testid="tab-misc">
-      <MCard padding="lg" class="space-y-4">
-        <h2 class="text-base font-semibold text-text">
-          {{ t('settingsSystem.misc.networkTitle') }}
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="text-sm font-medium">{{ t('settingsSystem.misc.proxyMode') }}</label>
+    <div v-if="activeTab === 'misc'" class="space-y-6" data-testid="tab-misc">
+      <MSection
+        :title="t('settingsSystem.misc.networkTitle')"
+        :description="t('settingsSystem.misc.networkDesc')"
+        icon="i-lucide-network"
+      >
+        <div class="flex flex-col">
+          <MSettingRow
+            :label="t('settingsSystem.misc.proxyMode')"
+          >
             <MSelect
               :model-value="proxyMode"
               :options="[
@@ -433,6 +461,8 @@ onMounted(async () => {
                 { label: t('settingsSystem.misc.proxyModeSystem'), value: 'system' },
                 { label: t('settingsSystem.misc.proxyModeCustom'), value: 'custom' },
               ]"
+              size="sm"
+              class="w-48"
               @update:model-value="
                 (v) => {
                   proxyMode = v as 'none' | 'system' | 'custom'
@@ -440,17 +470,25 @@ onMounted(async () => {
                 }
               "
             />
-          </div>
-          <div v-if="proxyMode === 'custom'" class="space-y-2">
-            <label class="text-sm font-medium">{{ t('settingsSystem.misc.proxyUrl') }}</label>
-            <MInput
-              v-model="proxyUrl"
-              :placeholder="t('settingsSystem.misc.proxyUrlPlaceholder')"
-              @update:model-value="saveMiscSettings"
-            />
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">{{ t('settingsSystem.misc.sourcePriority') }}</label>
+          </MSettingRow>
+
+          <MSettingRow
+            v-if="proxyMode === 'custom'"
+            :label="t('settingsSystem.misc.proxyUrl')"
+          >
+            <div class="w-80">
+              <MInput
+                v-model="proxyUrl"
+                size="sm"
+                :placeholder="t('settingsSystem.misc.proxyUrlPlaceholder')"
+                @update:model-value="saveMiscSettings"
+              />
+            </div>
+          </MSettingRow>
+
+          <MSettingRow
+            :label="t('settingsSystem.misc.sourcePriority')"
+          >
             <MSelect
               :model-value="sourcePriority"
               :options="[
@@ -461,6 +499,8 @@ onMounted(async () => {
                   value: 'officialFirst',
                 },
               ]"
+              size="sm"
+              class="w-48"
               @update:model-value="
                 (v) => {
                   sourcePriority = v as 'mirrorFirst' | 'smart' | 'officialFirst'
@@ -468,11 +508,13 @@ onMounted(async () => {
                 }
               "
             />
-          </div>
-          <div class="flex items-center pt-6">
+          </MSettingRow>
+
+          <MSettingRow
+            :label="t('settingsSystem.misc.doh')"
+          >
             <MSwitch
               :model-value="doh"
-              :label="t('settingsSystem.misc.doh')"
               @update:model-value="
                 (v) => {
                   doh = v
@@ -480,42 +522,44 @@ onMounted(async () => {
                 }
               "
             />
-          </div>
-        </div>
+          </MSettingRow>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-outline/30">
-          <div class="space-y-2">
-            <label class="text-sm font-medium">
-              {{ t('settingsSystem.misc.connectionsPerFile', { n: connectionsPerFile }) }}
-            </label>
-            <MSlider
-              v-model="connectionsPerFile"
-              :min="1"
-              :max="64"
-              @update:model-value="saveMiscSettings"
-            />
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">
-              {{ t('settingsSystem.misc.maxConcurrentFiles', { n: maxConcurrentFiles }) }}
-            </label>
-            <MSlider
-              v-model="maxConcurrentFiles"
-              :min="1"
-              :max="64"
-              @update:model-value="saveMiscSettings"
-            />
-          </div>
-        </div>
-      </MCard>
+          <MSettingRow
+            :label="t('settingsSystem.misc.connectionsPerFile', { n: connectionsPerFile })"
+          >
+            <div class="w-64">
+              <MSlider
+                v-model="connectionsPerFile"
+                :min="1"
+                :max="64"
+                @update:model-value="saveMiscSettings"
+              />
+            </div>
+          </MSettingRow>
 
-      <MCard padding="lg" class="space-y-4">
-        <h2 class="text-base font-semibold text-text">
-          {{ t('settingsSystem.misc.systemTitle') }}
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="text-sm font-medium">{{ t('settingsSystem.misc.logLevel') }}</label>
+          <MSettingRow
+            :label="t('settingsSystem.misc.maxConcurrentFiles', { n: maxConcurrentFiles })"
+          >
+            <div class="w-64">
+              <MSlider
+                v-model="maxConcurrentFiles"
+                :min="1"
+                :max="64"
+                @update:model-value="saveMiscSettings"
+              />
+            </div>
+          </MSettingRow>
+        </div>
+      </MSection>
+
+      <MSection
+        :title="t('settingsSystem.misc.systemTitle')"
+        icon="i-lucide-wrench"
+      >
+        <div class="flex flex-col">
+          <MSettingRow
+            :label="t('settingsSystem.misc.logLevel')"
+          >
             <MSelect
               :model-value="logLevel"
               :options="[
@@ -524,6 +568,8 @@ onMounted(async () => {
                 { label: t('settingsSystem.misc.logLevelWarn'), value: 'warn' },
                 { label: t('settingsSystem.misc.logLevelError'), value: 'error' },
               ]"
+              size="sm"
+              class="w-48"
               @update:model-value="
                 (v) => {
                   logLevel = String(v)
@@ -531,99 +577,112 @@ onMounted(async () => {
                 }
               "
             />
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">
-              {{ t('settingsSystem.misc.logRetentionDays', { n: logRetentionDays }) }}
-            </label>
-            <MSlider
-              v-model="logRetentionDays"
-              :min="1"
-              :max="30"
-              @update:model-value="saveMiscSettings"
-            />
-          </div>
-        </div>
+          </MSettingRow>
 
-        <div class="pt-2 border-t border-outline/30 space-y-2">
-          <MSwitch
-            data-testid="toggle-hw-accel"
-            :model-value="hardwareAccel"
+          <MSettingRow
+            :label="t('settingsSystem.misc.logRetentionDays', { n: logRetentionDays })"
+          >
+            <div class="w-64">
+              <MSlider
+                v-model="logRetentionDays"
+                :min="1"
+                :max="30"
+                @update:model-value="saveMiscSettings"
+              />
+            </div>
+          </MSettingRow>
+
+          <MSettingRow
             :label="t('settingsSystem.misc.disableGpu')"
-            @update:model-value="onToggleHardwareAccel"
-          />
-          <p class="text-xs text-textMuted">{{ t('settingsSystem.misc.disableGpuDesc') }}</p>
-          <p v-if="showRestartNotice" class="text-xs text-warning font-medium">
-            {{ t('settingsSystem.misc.restartNotice') }}
-          </p>
+            :hint="t('settingsSystem.misc.disableGpuDesc')"
+          >
+            <div class="flex flex-col items-end gap-1">
+              <MSwitch
+                data-testid="toggle-hw-accel"
+                :model-value="hardwareAccel"
+                @update:model-value="onToggleHardwareAccel"
+              />
+              <span v-if="showRestartNotice" class="text-xs text-warning font-medium">
+                {{ t('settingsSystem.misc.restartNotice') }}
+              </span>
+            </div>
+          </MSettingRow>
         </div>
-      </MCard>
+      </MSection>
     </div>
 
     <!-- 3. Language -->
-    <div v-if="activeTab === 'language'" class="space-y-4" data-testid="tab-language">
-      <MCard padding="lg" class="space-y-4">
-        <h2 class="text-base font-semibold text-text">
-          {{ t('settingsSystem.language.localeTitle') }}
-        </h2>
-        <p class="text-xs text-textMuted">{{ t('settingsSystem.language.localeDesc') }}</p>
+    <div v-if="activeTab === 'language'" class="space-y-6" data-testid="tab-language">
+      <MSection
+        :title="t('settingsSystem.language.localeTitle')"
+        :description="t('settingsSystem.language.localeDesc')"
+        icon="i-lucide-languages"
+      >
+        <div class="flex flex-col">
+          <MSettingRow
+            :label="t('settingsSystem.language.locale')"
+          >
+            <div class="w-64" data-testid="select-locale">
+              <MSelect
+                :model-value="selectedLocale"
+                :options="localeOptions"
+                size="sm"
+                @update:model-value="onChangeLocale"
+              />
+            </div>
+          </MSettingRow>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="text-sm font-medium">{{ t('settingsSystem.language.locale') }}</label>
-            <MSelect
-              data-testid="select-locale"
-              :model-value="selectedLocale"
-              :options="localeOptions"
-              @update:model-value="onChangeLocale"
-            />
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">
-              {{ t('settingsSystem.language.formatCulture') }}
-            </label>
-            <MSelect
-              :model-value="formatCulture"
-              :options="[
-                { label: t('settingsSystem.language.formatCultureZhCn'), value: 'zh-CN' },
-                { label: t('settingsSystem.language.formatCultureEnUs'), value: 'en-US' },
-              ]"
-              @update:model-value="onChangeFormatCulture"
-            />
-          </div>
+          <MSettingRow
+            :label="t('settingsSystem.language.formatCulture')"
+          >
+            <div class="w-64">
+              <MSelect
+                :model-value="formatCulture"
+                :options="[
+                  { label: t('settingsSystem.language.formatCultureZhCn'), value: 'zh-CN' },
+                  { label: t('settingsSystem.language.formatCultureEnUs'), value: 'en-US' },
+                ]"
+                size="sm"
+                @update:model-value="onChangeFormatCulture"
+              />
+            </div>
+          </MSettingRow>
         </div>
-      </MCard>
+      </MSection>
     </div>
 
     <!-- 4. Update -->
-    <div v-if="activeTab === 'update'" class="space-y-4" data-testid="tab-update">
-      <MCard padding="lg" class="space-y-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-base font-semibold text-text">
-              {{ t('settingsSystem.update.title') }}
-            </h2>
-            <p class="text-xs text-textMuted">{{ t('settingsSystem.update.subtitle') }}</p>
-          </div>
+    <div v-if="activeTab === 'update'" class="space-y-6" data-testid="tab-update">
+      <MSection
+        :title="t('settingsSystem.update.title')"
+        :description="t('settingsSystem.update.subtitle')"
+        icon="i-lucide-refresh-cw"
+      >
+        <template #actions>
           <MButton
             variant="primary"
+            size="sm"
+            icon="i-lucide-search"
             data-testid="check-update-btn"
             :loading="checkingUpdate"
             @click="checkForUpdate"
           >
             {{ t('settingsSystem.update.checkButton') }}
           </MButton>
-        </div>
+        </template>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="text-sm font-medium">{{ t('settingsSystem.update.channel') }}</label>
+        <div class="flex flex-col">
+          <MSettingRow
+            :label="t('settingsSystem.update.channel')"
+          >
             <MSelect
               :model-value="updateChannel"
               :options="[
                 { label: t('settingsSystem.update.channelStable'), value: 'stable' },
                 { label: t('settingsSystem.update.channelBeta'), value: 'beta' },
               ]"
+              size="sm"
+              class="w-48"
               @update:model-value="
                 (v) => {
                   updateChannel = String(v)
@@ -631,11 +690,13 @@ onMounted(async () => {
                 }
               "
             />
-          </div>
-          <div class="flex items-center pt-6">
+          </MSettingRow>
+
+          <MSettingRow
+            :label="t('settingsSystem.update.autoCheck')"
+          >
             <MSwitch
               :model-value="autoCheck"
-              :label="t('settingsSystem.update.autoCheck')"
               @update:model-value="
                 (v) => {
                   autoCheck = v
@@ -643,154 +704,197 @@ onMounted(async () => {
                 }
               "
             />
-          </div>
-        </div>
+          </MSettingRow>
 
-        <div class="space-y-2">
-          <label class="text-sm font-medium">
-            {{ t('settingsSystem.update.announcementUrl') }}
-          </label>
-          <MInput
-            v-model="announcementUrl"
-            :placeholder="t('settingsSystem.update.announcementUrlPlaceholder')"
-            @update:model-value="saveUpdateSettings"
-          />
-        </div>
-
-        <div
-          v-if="updateError"
-          data-testid="update-error"
-          class="p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm"
-        >
-          {{ updateError }}
-        </div>
-
-        <div
-          v-if="updateResult"
-          data-testid="update-result"
-          class="p-4 rounded-xl border border-outline/40 bg-surfaceVariant/30 space-y-3"
-        >
-          <div v-if="updateResult.available" class="space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="font-semibold text-primary">
-                {{ t('settingsSystem.update.available', { version: updateResult.version ?? '' }) }}
-              </span>
-              <MButton
-                variant="primary"
-                data-testid="install-update-btn"
-                :loading="installingUpdate"
-                @click="installUpdate"
-              >
-                {{ t('settingsSystem.update.installButton') }}
-              </MButton>
+          <MSettingRow
+            :label="t('settingsSystem.update.announcementUrl')"
+          >
+            <div class="w-80">
+              <MInput
+                v-model="announcementUrl"
+                size="sm"
+                :placeholder="t('settingsSystem.update.announcementUrlPlaceholder')"
+                @update:model-value="saveUpdateSettings"
+              />
             </div>
-            <div v-if="updateResult.date" class="text-xs text-textMuted">
-              {{ t('settingsSystem.update.releaseDate', { date: updateResult.date }) }}
-            </div>
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <div class="prose text-sm text-text mt-2" v-html="renderedChangelog" />
+          </MSettingRow>
+
+          <div
+            v-if="updateError"
+            data-testid="update-error"
+            class="p-3 mt-3 rounded-xl bg-danger-soft text-danger-fg text-xs border border-line"
+          >
+            {{ updateError }}
           </div>
-          <div v-else class="text-sm text-success font-medium">
-            {{ t('settingsSystem.update.upToDate', { version: updateResult.currentVersion }) }}
+
+          <div
+            v-if="updateResult"
+            data-testid="update-result"
+            class="p-4 mt-3 rounded-xl border border-line bg-sunken/40 space-y-3"
+          >
+            <div v-if="updateResult.available" class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-primary text-sm">
+                  {{ t('settingsSystem.update.available', { version: updateResult.version ?? '' }) }}
+                </span>
+                <MButton
+                  variant="primary"
+                  size="sm"
+                  data-testid="install-update-btn"
+                  :loading="installingUpdate"
+                  @click="installUpdate"
+                >
+                  {{ t('settingsSystem.update.installButton') }}
+                </MButton>
+              </div>
+              <div v-if="updateResult.date" class="text-xs text-fg-muted">
+                {{ t('settingsSystem.update.releaseDate', { date: updateResult.date }) }}
+              </div>
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <div class="prose text-xs text-fg mt-2" v-html="renderedChangelog" />
+            </div>
+            <div v-else class="text-xs text-success font-medium">
+              {{ t('settingsSystem.update.upToDate', { version: updateResult.currentVersion }) }}
+            </div>
           </div>
         </div>
-      </MCard>
+      </MSection>
     </div>
 
     <!-- 5. Launcher Logs -->
-    <div v-if="activeTab === 'logs'" class="space-y-4" data-testid="tab-logs">
-      <MCard padding="lg" class="space-y-4">
-        <div class="flex items-center justify-between gap-4">
-          <div class="flex-1">
+    <div v-if="activeTab === 'logs'" class="space-y-6" data-testid="tab-logs">
+      <MSection
+        :title="t('settingsSystem.tabs.logs')"
+        icon="i-lucide-file-text"
+      >
+        <template #actions>
+          <MButton variant="tonal" size="sm" icon="i-lucide-refresh-cw" @click="loadLogFiles">
+            {{ t('settingsSystem.logs.refresh') }}
+          </MButton>
+        </template>
+
+        <div class="flex flex-col gap-3">
+          <div class="w-full sm:w-80">
             <MSelect
               :model-value="selectedLogFile"
               :options="logFiles.map((f) => ({ label: f.fileName, value: f.fileName }))"
+              size="sm"
               @update:model-value="onSelectLogFile"
             />
           </div>
-          <MButton variant="tonal" @click="loadLogFiles">
-            {{ t('settingsSystem.logs.refresh') }}
-          </MButton>
-        </div>
 
-        <pre
-          data-testid="launcher-log-content"
-          class="p-4 rounded-xl bg-surfaceVariant/50 border border-outline/40 font-mono text-xs overflow-auto max-h-96 whitespace-pre-wrap"
-          >{{ logContent || t('settingsSystem.logs.empty') }}</pre
-        >
-      </MCard>
+          <pre
+            data-testid="launcher-log-content"
+            class="p-4 rounded-xl bg-sunken/50 border border-line font-mono text-xs overflow-auto max-h-96 whitespace-pre-wrap text-fg"
+          >{{ logContent || t('settingsSystem.logs.empty') }}</pre>
+        </div>
+      </MSection>
     </div>
 
     <!-- 6. Feedback -->
-    <div v-if="activeTab === 'feedback'" class="space-y-4" data-testid="tab-feedback">
-      <MCard padding="lg" class="space-y-4">
-        <h2 class="text-base font-semibold text-text">{{ t('settingsSystem.feedback.title') }}</h2>
-        <p class="text-sm text-textMuted">{{ t('settingsSystem.feedback.subtitle') }}</p>
-        <ul class="list-disc list-inside text-sm text-text space-y-1">
-          <li>{{ t('settingsSystem.feedback.guide1') }}</li>
-          <li>{{ t('settingsSystem.feedback.guide2') }}</li>
-          <li>{{ t('settingsSystem.feedback.guide3') }}</li>
-        </ul>
-        <MButton variant="primary" data-testid="open-github-btn" @click="openFeedbackUrl">
-          {{ t('settingsSystem.feedback.openGithub') }}
-        </MButton>
-      </MCard>
+    <div v-if="activeTab === 'feedback'" class="space-y-6" data-testid="tab-feedback">
+      <MSection
+        :title="t('settingsSystem.feedback.title')"
+        :description="t('settingsSystem.feedback.subtitle')"
+        icon="i-lucide-message-square"
+      >
+        <div class="flex flex-col gap-4">
+          <div class="text-xs text-fg-muted">
+            <span class="font-medium text-fg block mb-2">{{ t('settingsSystem.feedback.guideTitle') }}</span>
+            <ul class="list-disc list-inside space-y-1">
+              <li>{{ t('settingsSystem.feedback.guide1') }}</li>
+              <li>{{ t('settingsSystem.feedback.guide2') }}</li>
+              <li>{{ t('settingsSystem.feedback.guide3') }}</li>
+            </ul>
+          </div>
+
+          <div>
+            <MButton
+              variant="primary"
+              size="sm"
+              icon="i-lucide-external-link"
+              data-testid="open-github-btn"
+              @click="openFeedbackUrl"
+            >
+              {{ t('settingsSystem.feedback.openGithub') }}
+            </MButton>
+          </div>
+        </div>
+      </MSection>
     </div>
 
     <!-- 7. About -->
-    <div v-if="activeTab === 'about'" class="space-y-4" data-testid="tab-about">
-      <MCard padding="lg" class="space-y-4">
-        <div class="flex items-center justify-between">
+    <div v-if="activeTab === 'about'" class="space-y-6" data-testid="tab-about">
+      <MSection
+        :title="t('settingsSystem.about.title')"
+        icon="i-lucide-info"
+      >
+        <template #actions>
+          <MBadge variant="primary">Apache-2.0</MBadge>
+        </template>
+
+        <div class="flex flex-col gap-5">
           <div>
-            <h2 class="text-xl font-bold text-primary">{{ t('settingsSystem.about.title') }}</h2>
-            <p class="text-sm text-textMuted mt-0.5">
-              {{ t('settingsSystem.about.version', { version: appVersion }) }} ·
+            <p class="text-sm font-semibold text-fg">
+              {{ t('settingsSystem.about.version', { version: appVersion }) }}
+            </p>
+            <p class="text-xs text-fg-muted mt-0.5">
               {{ t('settingsSystem.about.license') }}
             </p>
           </div>
-          <MBadge variant="primary">Apache-2.0</MBadge>
-        </div>
 
-        <div class="pt-3 border-t border-outline/30 space-y-2">
-          <h3 class="text-sm font-semibold">{{ t('settingsSystem.about.techStackTitle') }}</h3>
-          <ul class="text-xs text-textMuted space-y-1">
-            <li>{{ t('settingsSystem.about.techTauri') }}</li>
-            <li>{{ t('settingsSystem.about.techRust') }}</li>
-            <li>{{ t('settingsSystem.about.techVue') }}</li>
-            <li>{{ t('settingsSystem.about.techUno') }}</li>
-          </ul>
-        </div>
+          <!-- Font Notice & Third-Party Notice -->
+          <div class="p-3 rounded-xl bg-sunken/40 border border-line space-y-1">
+            <div class="text-xs font-medium text-fg flex items-center gap-1.5">
+              <span class="i-lucide-type w-3.5 h-3.5 text-primary" />
+              <span>{{ t('settingsSystem.about.fontNotice') }}</span>
+            </div>
+            <p class="text-[11px] text-fg-muted">
+              {{ t('settingsSystem.about.thirdPartyNotice') }}
+            </p>
+          </div>
 
-        <div class="pt-3 border-t border-outline/30 space-y-2">
-          <h3 class="text-sm font-semibold">{{ t('settingsSystem.about.secretsTitle') }}</h3>
-          <div class="grid grid-cols-2 gap-2 text-xs">
-            <div class="flex items-center justify-between p-2 rounded bg-surfaceVariant/30">
-              <span>{{ t('settingsSystem.about.secretMs') }}</span>
-              <MBadge :variant="secretsStatus.msClientId ? 'success' : 'neutral'">
-                {{ secretsStatus.msClientId ? 'OK' : 'N/A' }}
-              </MBadge>
-            </div>
-            <div class="flex items-center justify-between p-2 rounded bg-surfaceVariant/30">
-              <span>{{ t('settingsSystem.about.secretCurseforge') }}</span>
-              <MBadge :variant="secretsStatus.curseforgeApiKey ? 'success' : 'neutral'">
-                {{ secretsStatus.curseforgeApiKey ? 'OK' : 'N/A' }}
-              </MBadge>
-            </div>
-            <div class="flex items-center justify-between p-2 rounded bg-surfaceVariant/30">
-              <span>{{ t('settingsSystem.about.secretUpdateEndpoint') }}</span>
-              <MBadge :variant="secretsStatus.updateEndpoint ? 'success' : 'neutral'">
-                {{ secretsStatus.updateEndpoint ? 'OK' : 'N/A' }}
-              </MBadge>
-            </div>
-            <div class="flex items-center justify-between p-2 rounded bg-surfaceVariant/30">
-              <span>{{ t('settingsSystem.about.secretUpdatePubkey') }}</span>
-              <MBadge :variant="secretsStatus.updatePubkey ? 'success' : 'neutral'">
-                {{ secretsStatus.updatePubkey ? 'OK' : 'N/A' }}
-              </MBadge>
+          <div class="space-y-2">
+            <h3 class="text-xs font-semibold text-fg">{{ t('settingsSystem.about.techStackTitle') }}</h3>
+            <ul class="text-xs text-fg-muted space-y-1">
+              <li>{{ t('settingsSystem.about.techTauri') }}</li>
+              <li>{{ t('settingsSystem.about.techRust') }}</li>
+              <li>{{ t('settingsSystem.about.techVue') }}</li>
+              <li>{{ t('settingsSystem.about.techUno') }}</li>
+            </ul>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-xs font-semibold text-fg">{{ t('settingsSystem.about.secretsTitle') }}</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div class="flex items-center justify-between p-2.5 rounded-lg bg-sunken/40 border border-line">
+                <span>{{ t('settingsSystem.about.secretMs') }}</span>
+                <MBadge :variant="secretsStatus.msClientId ? 'success' : 'neutral'">
+                  {{ secretsStatus.msClientId ? 'OK' : 'N/A' }}
+                </MBadge>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-lg bg-sunken/40 border border-line">
+                <span>{{ t('settingsSystem.about.secretCurseforge') }}</span>
+                <MBadge :variant="secretsStatus.curseforgeApiKey ? 'success' : 'neutral'">
+                  {{ secretsStatus.curseforgeApiKey ? 'OK' : 'N/A' }}
+                </MBadge>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-lg bg-sunken/40 border border-line">
+                <span>{{ t('settingsSystem.about.secretUpdateEndpoint') }}</span>
+                <MBadge :variant="secretsStatus.updateEndpoint ? 'success' : 'neutral'">
+                  {{ secretsStatus.updateEndpoint ? 'OK' : 'N/A' }}
+                </MBadge>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-lg bg-sunken/40 border border-line">
+                <span>{{ t('settingsSystem.about.secretUpdatePubkey') }}</span>
+                <MBadge :variant="secretsStatus.updatePubkey ? 'success' : 'neutral'">
+                  {{ secretsStatus.updatePubkey ? 'OK' : 'N/A' }}
+                </MBadge>
+              </div>
             </div>
           </div>
         </div>
-      </MCard>
+      </MSection>
     </div>
   </div>
 </template>

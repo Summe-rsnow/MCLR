@@ -1,6 +1,6 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.12`
+- **Current Version**: `0.0.13`
 - **Next Milestone**: `None (Complete)`
 
 | Milestone | Title | Status | Commit | Tag | Date |
@@ -17,3 +17,4 @@
 | v0.0.10 | Modpack export + crash analysis | done | 93cacea | v0.0.10 | 2026-10-24 |
 | v0.0.11 | Personalisation, home, tools | done | a952780 | v0.0.11 | 2026-10-24 |
 | v0.0.12 | Updates, remaining settings, i18n audit, packaging | done | v0.0.12 | v0.0.12 | 2026-10-25 |
+| v0.0.13 | UI redesign: Tonal Layers | done | v0.0.13 | v0.0.13 | 2026-10-25 |

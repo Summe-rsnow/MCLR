@@ -8,8 +8,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       nav: {
         titleKey: 'tasks.nav',
-        icon: 'i-lucide-list-todo',
+        icon: 'i-lucide-list-checks',
         order: 90,
+        group: 'system',
       },
     },
   },

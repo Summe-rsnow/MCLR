@@ -1,5 +1,7 @@
 {
   "nav": "首页",
+  "title": "首页",
+  "subtitle": "Minecraft 最新资讯、官方公告与完整帮助文档",
   "tabs": {
     "news": "资讯与公告",
     "help": "帮助中心"

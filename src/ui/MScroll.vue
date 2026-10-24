@@ -11,16 +11,9 @@ withDefaults(
 
 <template>
   <div
-    class="overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-outline/50 hover:scrollbar-thumb-outline"
+    class="overflow-y-auto overflow-x-hidden"
     :style="{ maxHeight }"
   >
     <slot />
   </div>
 </template>
-
-<style scoped>
-.scrollbar-thin {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--c-outline) / 0.5) transparent;
-}
-</style>

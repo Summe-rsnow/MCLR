@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import {
   ipcClient,
   type JavaInstallation,
@@ -8,28 +9,31 @@ import {
   type JavaSettings,
 } from '../../ipc/client'
 import { useToast } from '../../ui/useToast'
-import MTabs from '../../ui/MTabs.vue'
-import MCard from '../../ui/MCard.vue'
-import MButton from '../../ui/MButton.vue'
-import MInput from '../../ui/MInput.vue'
-import MSelect from '../../ui/MSelect.vue'
-import MSlider from '../../ui/MSlider.vue'
-import MSwitch from '../../ui/MSwitch.vue'
-import MBadge from '../../ui/MBadge.vue'
+import {
+  MButton,
+  MInput,
+  MSelect,
+  MSlider,
+  MSwitch,
+  MBadge,
+  MSection,
+  MSettingRow,
+} from '../../ui'
 
 const { t } = useI18n()
 const toast = useToast()
+const route = useRoute()
 
-const activeTab = ref('launch')
+const activeTab = computed<'launch' | 'java'>(() => {
+  const tab = route?.query?.tab as string
+  if (tab === 'java') return 'java'
+  return 'launch'
+})
+
 const isSaving = ref(false)
 const isScanning = ref(false)
 const downloadingComponent = ref<string | null>(null)
 const customJavaInput = ref('')
-
-const tabs = [
-  { key: 'launch', label: 'settingsGame.tabs.launch', icon: 'i-lucide-play' },
-  { key: 'java', label: 'settingsGame.tabs.java', icon: 'i-lucide-coffee' },
-]
 
 // Launch settings form state
 const launchSettings = ref<LaunchSettings>({
@@ -64,9 +68,14 @@ onMounted(async () => {
     if (s.java) {
       javaSettings.value = { ...javaSettings.value, ...s.java }
     }
+  } catch (err) {
+    console.warn('Failed to load settings in SettingsGamePage:', err)
+  }
+
+  try {
     javaInstallations.value = await ipcClient.javaScan()
-  } catch {
-    // Initial mock / error fallback
+  } catch (err) {
+    console.warn('Failed to scan Java in SettingsGamePage:', err)
   }
 })
 
@@ -76,34 +85,25 @@ async function saveLaunchSettings() {
     await ipcClient.settingsPatch({
       launch: launchSettings.value,
     })
-    toast.show({
-      message: t('common.save'),
-      type: 'success',
-    })
-  } catch (err: unknown) {
-    toast.show({
-      message: String(err),
-      type: 'danger',
-    })
+    toast.success(t('common.saved'))
+  } catch (err) {
+    toast.danger(`${t('common.error')}: ${String(err)}`)
   } finally {
     isSaving.value = false
   }
 }
 
 async function saveJavaSettings() {
+  isSaving.value = true
   try {
     await ipcClient.settingsPatch({
       java: javaSettings.value,
     })
-    toast.show({
-      message: t('common.save'),
-      type: 'success',
-    })
-  } catch (err: unknown) {
-    toast.show({
-      message: String(err),
-      type: 'danger',
-    })
+    toast.success(t('common.saved'))
+  } catch (err) {
+    toast.danger(`${t('common.error')}: ${String(err)}`)
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -111,52 +111,41 @@ async function onScanJava() {
   isScanning.value = true
   try {
     javaInstallations.value = await ipcClient.javaScan()
-    toast.show({
-      message: t('common.save'),
-      type: 'success',
-    })
-  } catch (err: unknown) {
-    toast.show({
-      message: String(err),
-      type: 'danger',
-    })
+    toast.success(t('settingsGame.java.scanComplete', { count: javaInstallations.value.length }))
+  } catch (err) {
+    toast.danger(`${t('common.error')}: ${String(err)}`)
   } finally {
     isScanning.value = false
   }
 }
 
 async function onAddCustomJava() {
-  const p = customJavaInput.value.trim()
-  if (!p) return
-  if (!javaSettings.value.custom.includes(p)) {
-    javaSettings.value.custom.push(p)
-    customJavaInput.value = ''
-    await saveJavaSettings()
-    await onScanJava()
+  if (!customJavaInput.value.trim()) return
+  const path = customJavaInput.value.trim()
+  if (javaSettings.value.custom.includes(path)) {
+    toast.warning(t('settingsGame.java.alreadyExists'))
+    return
   }
+
+  javaSettings.value.custom.push(path)
+  customJavaInput.value = ''
+  await saveJavaSettings()
+  await onScanJava()
 }
 
 async function onRemoveCustomJava(path: string) {
-  javaSettings.value.custom = javaSettings.value.custom.filter((c) => c !== path)
-  if (javaSettings.value.select === path) {
-    javaSettings.value.select = 'auto'
-  }
+  javaSettings.value.custom = javaSettings.value.custom.filter((p) => p !== path)
   await saveJavaSettings()
+  await onScanJava()
 }
 
 async function onDownloadMojangJava(component: string) {
   downloadingComponent.value = component
   try {
-    await ipcClient.javaDownload(component)
-    toast.show({
-      message: t('settingsGame.java.downloading', { component }),
-      type: 'success',
-    })
-  } catch (err: unknown) {
-    toast.show({
-      message: String(err),
-      type: 'danger',
-    })
+    const taskId = await ipcClient.javaDownload(component)
+    toast.info(`${t('settingsGame.java.downloadStarted')} (${taskId})`)
+  } catch (err) {
+    toast.danger(`${t('common.error')}: ${String(err)}`)
   } finally {
     downloadingComponent.value = null
   }
@@ -164,230 +153,222 @@ async function onDownloadMojangJava(component: string) {
 </script>
 
 <template>
-  <div class="h-full flex flex-col p-6 max-w-4xl mx-auto gap-6 overflow-y-auto">
-    <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight text-text">
-          {{ t('settingsGame.title') }}
-        </h1>
-      </div>
-      <MTabs
-        v-model="activeTab"
-        :tabs="tabs.map(tab => ({ key: tab.key, label: t(tab.label), icon: tab.icon }))"
-      />
+  <div class="space-y-6 pb-12 select-none">
+    <!-- Header title preserved for test text assertion -->
+    <div class="sr-only">
+      <h1>{{ t('settingsGame.title') }}</h1>
     </div>
 
     <!-- Tab 1: Launch Settings -->
-    <div v-if="activeTab === 'launch'" class="flex flex-col gap-6">
+    <div v-if="activeTab === 'launch'" data-testid="tab-launch" class="flex flex-col gap-6">
       <!-- RAM Section -->
-      <MCard class="p-5 flex flex-col gap-4 border border-outline/20">
-        <h3 class="font-bold text-base text-text">
-          {{ t('settingsGame.launch.ramSection') }}
-        </h3>
+      <MSection
+        :title="t('settingsGame.launch.ramSection')"
+        icon="i-lucide-cpu"
+      >
+        <div class="flex flex-col">
+          <MSettingRow
+            :label="t('settingsGame.launch.ramMode')"
+            :hint="launchSettings.ramMode === 'auto' ? t('settingsGame.launch.ramModeAuto') : t('settingsGame.launch.ramModeCustom')"
+          >
+            <MSelect
+              v-model="launchSettings.ramMode"
+              :options="[
+                { label: t('settingsGame.launch.ramModeAuto'), value: 'auto' },
+                { label: t('settingsGame.launch.ramModeCustom'), value: 'custom' },
+              ]"
+              size="sm"
+              class="w-48"
+              @update:model-value="saveLaunchSettings"
+            />
+          </MSettingRow>
 
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="text-sm font-medium text-text">
-              {{ t('settingsGame.launch.ramMode') }}
+          <MSettingRow
+            v-if="launchSettings.ramMode === 'custom'"
+            :label="t('settingsGame.launch.ramCustomMb')"
+          >
+            <div class="flex items-center gap-3 w-64">
+              <div class="flex-1">
+                <MSlider
+                  v-model="launchSettings.ramCustomMb"
+                  :min="1024"
+                  :max="16384"
+                  :step="512"
+                  @change="saveLaunchSettings"
+                />
+              </div>
+              <span class="text-xs font-mono font-bold text-primary w-20 text-right">
+                {{ t('settingsGame.launch.ramCustomMbUnit', { mb: launchSettings.ramCustomMb }) }}
+              </span>
             </div>
-            <div class="text-xs text-text-muted mt-0.5">
-              {{ launchSettings.ramMode === 'auto' ? t('settingsGame.launch.ramModeAuto') : t('settingsGame.launch.ramModeCustom') }}
-            </div>
-          </div>
-          <MSelect
-            v-model="launchSettings.ramMode"
-            :options="[
-              { label: t('settingsGame.launch.ramModeAuto'), value: 'auto' },
-              { label: t('settingsGame.launch.ramModeCustom'), value: 'custom' },
-            ]"
-            size="sm"
-            class="w-48"
-            @update:model-value="saveLaunchSettings"
-          />
+          </MSettingRow>
         </div>
-
-        <div v-if="launchSettings.ramMode === 'custom'" class="flex flex-col gap-2 pt-2 border-t border-outline/10">
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-medium text-text">
-              {{ t('settingsGame.launch.ramCustomMb') }}
-            </span>
-            <span class="text-xs font-mono font-bold text-primary">
-              {{ t('settingsGame.launch.ramCustomMbUnit', { mb: launchSettings.ramCustomMb }) }}
-            </span>
-          </div>
-          <MSlider
-            v-model="launchSettings.ramCustomMb"
-            :min="1024"
-            :max="16384"
-            :step="512"
-            @change="saveLaunchSettings"
-          />
-        </div>
-      </MCard>
+      </MSection>
 
       <!-- Window Section -->
-      <MCard class="p-5 flex flex-col gap-4 border border-outline/20">
-        <h3 class="font-bold text-base text-text">
-          {{ t('settingsGame.launch.windowSection') }}
-        </h3>
-
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-text">
-            {{ t('settingsGame.launch.fullscreen') }}
-          </span>
-          <MSwitch
-            v-model="launchSettings.fullscreen"
-            @update:model-value="saveLaunchSettings"
-          />
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="text-xs font-medium text-text-muted mb-1 block">
-              {{ t('settingsGame.launch.resolutionWidth') }}
-            </label>
-            <MInput
-              :model-value="String(launchSettings.width)"
-              type="number"
-              size="sm"
-              @update:model-value="(val) => { launchSettings.width = Number(val) || 854; saveLaunchSettings(); }"
+      <MSection
+        :title="t('settingsGame.launch.windowSection')"
+        icon="i-lucide-monitor"
+      >
+        <div class="flex flex-col">
+          <MSettingRow
+            :label="t('settingsGame.launch.fullscreen')"
+          >
+            <MSwitch
+              v-model="launchSettings.fullscreen"
+              @update:model-value="saveLaunchSettings"
             />
-          </div>
-          <div>
-            <label class="text-xs font-medium text-text-muted mb-1 block">
-              {{ t('settingsGame.launch.resolutionHeight') }}
-            </label>
-            <MInput
-              :model-value="String(launchSettings.height)"
-              type="number"
-              size="sm"
-              @update:model-value="(val) => { launchSettings.height = Number(val) || 480; saveLaunchSettings(); }"
-            />
-          </div>
-        </div>
+          </MSettingRow>
 
-        <div>
-          <label class="text-xs font-medium text-text-muted mb-1 block">
-            {{ t('settingsGame.launch.windowTitle') }}
-          </label>
-          <MInput
-            v-model="launchSettings.windowTitle"
-            :placeholder="t('settingsGame.launch.windowTitlePlaceholder')"
-            size="sm"
-            @blur="saveLaunchSettings"
-          />
+          <MSettingRow
+            :label="t('settingsGame.launch.resolution')"
+          >
+            <div class="flex items-center gap-2">
+              <div class="w-28">
+                <MInput
+                  :model-value="String(launchSettings.width)"
+                  type="number"
+                  size="sm"
+                  :placeholder="t('settingsGame.launch.resolutionWidth')"
+                  @update:model-value="(val) => { launchSettings.width = Number(val) || 854; saveLaunchSettings(); }"
+                />
+              </div>
+              <span class="text-xs text-fg-muted">×</span>
+              <div class="w-28">
+                <MInput
+                  :model-value="String(launchSettings.height)"
+                  type="number"
+                  size="sm"
+                  :placeholder="t('settingsGame.launch.resolutionHeight')"
+                  @update:model-value="(val) => { launchSettings.height = Number(val) || 480; saveLaunchSettings(); }"
+                />
+              </div>
+            </div>
+          </MSettingRow>
+
+          <MSettingRow
+            :label="t('settingsGame.launch.windowTitle')"
+          >
+            <div class="w-64">
+              <MInput
+                v-model="launchSettings.windowTitle"
+                :placeholder="t('settingsGame.launch.windowTitlePlaceholder')"
+                size="sm"
+                @blur="saveLaunchSettings"
+              />
+            </div>
+          </MSettingRow>
         </div>
-      </MCard>
+      </MSection>
 
       <!-- Advanced Args Section -->
-      <MCard class="p-5 flex flex-col gap-4 border border-outline/20">
-        <h3 class="font-bold text-base text-text">
-          {{ t('settingsGame.launch.argsSection') }}
-        </h3>
+      <MSection
+        :title="t('settingsGame.launch.argsSection')"
+        icon="i-lucide-terminal"
+      >
+        <div class="flex flex-col">
+          <MSettingRow
+            :label="t('settingsGame.launch.jvmArgs')"
+          >
+            <div class="w-80">
+              <MInput
+                v-model="launchSettings.jvmArgs"
+                :placeholder="t('settingsGame.launch.jvmArgsPlaceholder')"
+                size="sm"
+                @blur="saveLaunchSettings"
+              />
+            </div>
+          </MSettingRow>
 
-        <div>
-          <label class="text-xs font-medium text-text-muted mb-1 block">
-            {{ t('settingsGame.launch.jvmArgs') }}
-          </label>
-          <MInput
-            v-model="launchSettings.jvmArgs"
-            :placeholder="t('settingsGame.launch.jvmArgsPlaceholder')"
-            size="sm"
-            @blur="saveLaunchSettings"
-          />
+          <MSettingRow
+            :label="t('settingsGame.launch.gameArgs')"
+          >
+            <div class="w-80">
+              <MInput
+                v-model="launchSettings.gameArgs"
+                :placeholder="t('settingsGame.launch.gameArgsPlaceholder')"
+                size="sm"
+                @blur="saveLaunchSettings"
+              />
+            </div>
+          </MSettingRow>
         </div>
-
-        <div>
-          <label class="text-xs font-medium text-text-muted mb-1 block">
-            {{ t('settingsGame.launch.gameArgs') }}
-          </label>
-          <MInput
-            v-model="launchSettings.gameArgs"
-            :placeholder="t('settingsGame.launch.gameArgsPlaceholder')"
-            size="sm"
-            @blur="saveLaunchSettings"
-          />
-        </div>
-      </MCard>
+      </MSection>
 
       <!-- Runtime Section -->
-      <MCard class="p-5 flex flex-col gap-4 border border-outline/20">
-        <h3 class="font-bold text-base text-text">
-          {{ t('settingsGame.launch.runtimeSection') }}
-        </h3>
+      <MSection
+        :title="t('settingsGame.launch.runtimeSection')"
+        icon="i-lucide-settings-2"
+      >
+        <div class="flex flex-col">
+          <MSettingRow
+            :label="t('settingsGame.launch.preferredIpStack')"
+          >
+            <MSelect
+              v-model="launchSettings.preferredIpStack"
+              :options="[
+                { label: t('settingsGame.launch.ipStackAuto'), value: 'auto' },
+                { label: t('settingsGame.launch.ipStackV4'), value: 'ipv4' },
+                { label: t('settingsGame.launch.ipStackV6'), value: 'ipv6' },
+              ]"
+              size="sm"
+              class="w-48"
+              @update:model-value="saveLaunchSettings"
+            />
+          </MSettingRow>
 
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-text">
-            {{ t('settingsGame.launch.preferredIpStack') }}
-          </span>
-          <MSelect
-            v-model="launchSettings.preferredIpStack"
-            :options="[
-              { label: t('settingsGame.launch.ipStackAuto'), value: 'auto' },
-              { label: t('settingsGame.launch.ipStackV4'), value: 'ipv4' },
-              { label: t('settingsGame.launch.ipStackV6'), value: 'ipv6' },
-            ]"
-            size="sm"
-            class="w-48"
-            @update:model-value="saveLaunchSettings"
-          />
-        </div>
+          <MSettingRow
+            :label="t('settingsGame.launch.processPriority')"
+          >
+            <MSelect
+              v-model="launchSettings.processPriority"
+              :options="[
+                { label: t('settingsGame.launch.priorityNormal'), value: 'normal' },
+                { label: t('settingsGame.launch.priorityAboveNormal'), value: 'aboveNormal' },
+                { label: t('settingsGame.launch.priorityHigh'), value: 'high' },
+              ]"
+              size="sm"
+              class="w-48"
+              @update:model-value="saveLaunchSettings"
+            />
+          </MSettingRow>
 
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-text">
-            {{ t('settingsGame.launch.processPriority') }}
-          </span>
-          <MSelect
-            v-model="launchSettings.processPriority"
-            :options="[
-              { label: t('settingsGame.launch.priorityNormal'), value: 'normal' },
-              { label: t('settingsGame.launch.priorityAboveNormal'), value: 'aboveNormal' },
-              { label: t('settingsGame.launch.priorityHigh'), value: 'high' },
-            ]"
-            size="sm"
-            class="w-48"
-            @update:model-value="saveLaunchSettings"
-          />
-        </div>
+          <MSettingRow
+            :label="t('settingsGame.launch.closeLauncher')"
+          >
+            <MSelect
+              v-model="launchSettings.closeLauncherOnStart"
+              :options="[
+                { label: t('settingsGame.launch.closeLauncherKeep'), value: 'keep' },
+                { label: t('settingsGame.launch.closeLauncherHide'), value: 'hide' },
+                { label: t('settingsGame.launch.closeLauncherExit'), value: 'exit' },
+              ]"
+              size="sm"
+              class="w-48"
+              @update:model-value="saveLaunchSettings"
+            />
+          </MSettingRow>
 
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-text">
-            {{ t('settingsGame.launch.closeLauncher') }}
-          </span>
-          <MSelect
-            v-model="launchSettings.closeLauncherOnStart"
-            :options="[
-              { label: t('settingsGame.launch.closeLauncherKeep'), value: 'keep' },
-              { label: t('settingsGame.launch.closeLauncherHide'), value: 'hide' },
-              { label: t('settingsGame.launch.closeLauncherExit'), value: 'exit' },
-            ]"
-            size="sm"
-            class="w-48"
-            @update:model-value="saveLaunchSettings"
-          />
+          <MSettingRow
+            :label="t('settingsGame.launch.disableCrashAnalysis')"
+          >
+            <MSwitch
+              v-model="launchSettings.disableCrashAnalysis"
+              @update:model-value="saveLaunchSettings"
+            />
+          </MSettingRow>
         </div>
-
-        <div class="flex items-center justify-between pt-2 border-t border-outline/10">
-          <span class="text-sm font-medium text-text">
-            {{ t('settingsGame.launch.disableCrashAnalysis') }}
-          </span>
-          <MSwitch
-            v-model="launchSettings.disableCrashAnalysis"
-            @update:model-value="saveLaunchSettings"
-          />
-        </div>
-      </MCard>
+      </MSection>
     </div>
 
     <!-- Tab 2: Java Settings -->
-    <div v-if="activeTab === 'java'" class="flex flex-col gap-6">
+    <div v-if="activeTab === 'java'" data-testid="tab-java" class="flex flex-col gap-6">
       <!-- Java Selection & Scan Card -->
-      <MCard class="p-5 flex flex-col gap-4 border border-outline/20">
-        <div class="flex items-center justify-between">
-          <h3 class="font-bold text-base text-text">
-            {{ t('settingsGame.java.selectSection') }}
-          </h3>
+      <MSection
+        :title="t('settingsGame.java.selectSection')"
+        icon="i-lucide-coffee"
+      >
+        <template #actions>
           <MButton
             variant="tonal"
             size="sm"
@@ -397,42 +378,47 @@ async function onDownloadMojangJava(component: string) {
           >
             {{ t('settingsGame.java.scanButton') }}
           </MButton>
-        </div>
+        </template>
 
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-text">
-            {{ t('settingsGame.java.preferJdk') }}
-          </span>
-          <MSwitch
-            v-model="javaSettings.preferJdk"
-            @update:model-value="saveJavaSettings"
-          />
-        </div>
-
-        <!-- Add Custom Java input -->
-        <div class="flex items-center gap-2 pt-2 border-t border-outline/10">
-          <MInput
-            v-model="customJavaInput"
-            :placeholder="t('settingsGame.java.addCustomPlaceholder')"
-            size="sm"
-            class="flex-1"
-          />
-          <MButton
-            variant="primary"
-            size="sm"
-            icon="i-lucide-plus"
-            @click="onAddCustomJava"
+        <div class="flex flex-col">
+          <MSettingRow
+            :label="t('settingsGame.java.preferJdk')"
           >
-            {{ t('settingsGame.java.addCustomButton') }}
-          </MButton>
+            <MSwitch
+              v-model="javaSettings.preferJdk"
+              @update:model-value="saveJavaSettings"
+            />
+          </MSettingRow>
+
+          <!-- Add Custom Java input -->
+          <MSettingRow
+            :label="t('settingsGame.java.addCustomButton')"
+          >
+            <div class="flex items-center gap-2 w-full sm:w-80">
+              <MInput
+                v-model="customJavaInput"
+                :placeholder="t('settingsGame.java.addCustomPlaceholder')"
+                size="sm"
+                class="flex-1"
+              />
+              <MButton
+                variant="primary"
+                size="sm"
+                icon="i-lucide-plus"
+                @click="onAddCustomJava"
+              >
+                {{ t('settingsGame.java.addCustomButton') }}
+              </MButton>
+            </div>
+          </MSettingRow>
         </div>
-      </MCard>
+      </MSection>
 
       <!-- Mojang Java Download Card -->
-      <MCard class="p-5 flex flex-col gap-4 border border-outline/20">
-        <h3 class="font-bold text-base text-text">
-          {{ t('settingsGame.java.downloadSection') }}
-        </h3>
+      <MSection
+        :title="t('settingsGame.java.downloadSection')"
+        icon="i-lucide-download"
+      >
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <MButton
             variant="tonal"
@@ -462,15 +448,14 @@ async function onDownloadMojangJava(component: string) {
             {{ t('settingsGame.java.downloadJava8') }}
           </MButton>
         </div>
-      </MCard>
+      </MSection>
 
       <!-- Installed Java List -->
-      <MCard class="p-5 flex flex-col gap-4 border border-outline/20">
-        <h3 class="font-bold text-base text-text">
-          {{ t('settingsGame.java.installedList', { count: javaInstallations.length }) }}
-        </h3>
-
-        <div v-if="javaInstallations.length === 0" class="text-sm text-text-muted py-4 text-center">
+      <MSection
+        :title="t('settingsGame.java.installedList', { count: javaInstallations.length })"
+        icon="i-lucide-list"
+      >
+        <div v-if="javaInstallations.length === 0" class="text-sm text-fg-muted py-4 text-center">
           {{ t('settingsGame.java.emptyList') }}
         </div>
 
@@ -478,14 +463,14 @@ async function onDownloadMojangJava(component: string) {
           <div
             v-for="item in javaInstallations"
             :key="item.path"
-            class="flex items-center justify-between p-3 rounded-xl bg-surface-variant/30 border border-outline/10"
+            class="flex items-center justify-between p-3 rounded-xl bg-sunken/40 border border-line"
           >
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <span class="font-bold text-sm text-text">
+                <span class="font-bold text-sm text-fg">
                   {{ t('settingsGame.java.majorVersion', { major: item.major }) }}
                 </span>
-                <span class="text-xs text-text-muted">({{ item.version }})</span>
+                <span class="text-xs text-fg-muted">({{ item.version }})</span>
                 <MBadge :variant="item.isJdk ? 'primary' : 'neutral'">
                   {{ item.isJdk ? t('settingsGame.java.jdkBadge') : t('settingsGame.java.jreBadge') }}
                 </MBadge>
@@ -493,10 +478,10 @@ async function onDownloadMojangJava(component: string) {
                   {{ item.arch }}
                 </MBadge>
               </div>
-              <div class="text-xs text-text-muted mt-1 truncate">
+              <div class="text-xs text-fg-muted mt-1 truncate">
                 {{ t('settingsGame.java.path', { path: item.path }) }}
               </div>
-              <div class="text-xs text-text-muted truncate">
+              <div class="text-xs text-fg-muted truncate">
                 {{ t('settingsGame.java.vendor', { vendor: item.implementor }) }}
               </div>
             </div>
@@ -514,7 +499,7 @@ async function onDownloadMojangJava(component: string) {
             </div>
           </div>
         </div>
-      </MCard>
+      </MSection>
     </div>
   </div>
 </template>

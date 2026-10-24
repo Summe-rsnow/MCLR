@@ -2714,7 +2714,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-app"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -2751,7 +2751,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-auth"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "aes-gcm",
  "async-trait",
@@ -2782,7 +2782,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-cli"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "anyhow",
  "clap",
@@ -2800,7 +2800,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-comp"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "hex",
  "mclr-core",
@@ -2826,7 +2826,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-core"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2846,7 +2846,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-crash"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "chrono",
  "mclr-comp",
@@ -2865,7 +2865,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-game"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -2894,7 +2894,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-loaders"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "async-trait",
  "hex",
@@ -2917,7 +2917,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-net"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "futures-util",
  "hex",
@@ -2942,7 +2942,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-saves"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "base64 0.22.1",
  "fastnbt",
@@ -2962,7 +2962,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-update"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "mclr-core",
  "mclr-net",

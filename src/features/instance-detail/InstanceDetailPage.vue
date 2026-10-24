@@ -3,13 +3,17 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useInstancesStore } from '../instances/store'
+import { useLaunchStore } from '../launch/store'
 import { instanceDetailTabs } from './tabs'
 import {
+  MPageHeader,
   MButton,
   MBadge,
   MTabs,
+  MCard,
   MEmpty,
   MSkeleton,
+  MLoaderIcon,
 } from '../../ui'
 
 const props = defineProps<{
@@ -20,6 +24,7 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const instancesStore = useInstancesStore()
+const launchStore = useLaunchStore()
 
 const currentInstanceId = computed(() => {
   return (props.id || (route.params.id as string) || '').trim()
@@ -75,47 +80,83 @@ onMounted(async () => {
 function goBack() {
   router.push('/instances')
 }
+
+function handleLaunch() {
+  if (!instance.value) return
+  launchStore.selectInstance(instance.value.id)
+  router.push('/launch')
+}
 </script>
 
 <template>
-  <div class="h-full flex flex-col overflow-hidden bg-surface">
+  <div class="m-page">
     <!-- Header -->
-    <div class="shrink-0 border-b border-outline/20 px-6 py-4 flex items-center justify-between gap-4 bg-surface/80 backdrop-blur">
-      <div class="flex items-center gap-3 min-w-0">
-        <MButton variant="text" size="sm" @click="goBack">
-          <span class="w-4 h-4 i-lucide-arrow-left mr-1" />
-          {{ t('instanceDetail.back') }}
-        </MButton>
-        <div class="h-4 w-px bg-outline/20" />
-        <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-8 h-8 rounded-lg bg-surfaceVariant/60 flex items-center justify-center shrink-0 border border-outline/30 text-primary">
-            <span
-              class="w-5 h-5"
-              :class="{
-                'i-lucide-box': instance?.kind === 'vanilla',
-                'i-lucide-layers': instance?.kind === 'fabric',
-                'i-lucide-flame': instance?.kind === 'forge' || instance?.kind === 'neoforge',
-                'i-lucide-cpu': instance?.kind !== 'vanilla' && instance?.kind !== 'fabric' && instance?.kind !== 'forge' && instance?.kind !== 'neoforge',
-              }"
-            />
+    <MPageHeader
+      :title="instance ? instance.name : (currentInstanceId || t('instanceDetail.nav'))"
+      :description="instance?.mcVersion ? `${instance.mcVersion} • ${instance.loaders.length > 0 ? instance.loaders.join(', ') : 'Vanilla'}` : undefined"
+      icon="i-lucide-box"
+    >
+      <template #actions>
+        <div class="flex items-center gap-2">
+          <MButton
+            variant="text"
+            size="sm"
+            icon="i-lucide-arrow-left"
+            @click="goBack"
+          >
+            {{ t('instanceDetail.back') }}
+          </MButton>
+          <MButton
+            v-if="instance"
+            variant="primary"
+            size="sm"
+            icon="i-lucide-play"
+            @click="handleLaunch"
+          >
+            {{ t('instanceDetail.launch') }}
+          </MButton>
+        </div>
+      </template>
+    </MPageHeader>
+
+    <!-- Header Summary Card -->
+    <MCard v-if="instance" padding="md" class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-center gap-4 min-w-0">
+        <MLoaderIcon
+          :kind="instance.kind || (instance.loaders?.[0]?.toLowerCase() ?? 'vanilla')"
+          :size="56"
+          class="shrink-0"
+        />
+        <div class="min-w-0 space-y-1">
+          <div class="flex items-center gap-2">
+            <h2 class="text-xl font-bold text-fg truncate">
+              {{ instance.name }}
+            </h2>
+            <MBadge v-if="instance.state !== 'ok'" variant="danger">
+              {{ t(`instances.card.state.${instance.state}`) }}
+            </MBadge>
           </div>
-          <div class="min-w-0">
-            <h1 class="text-base font-bold text-text truncate">
-              {{ instance ? instance.name : currentInstanceId }}
-            </h1>
-            <div class="flex items-center gap-2 text-xs text-textMuted">
-              <span class="font-mono">{{ instance?.mcVersion || '' }}</span>
-              <MBadge v-if="instance && instance.state !== 'ok'" variant="danger">
-                {{ t(`instances.card.state.${instance.state}`) }}
-              </MBadge>
-            </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <MBadge variant="primary">
+              {{ instance.mcVersion }}
+            </MBadge>
+            <MBadge
+              v-for="loader in instance.loaders"
+              :key="loader"
+              variant="neutral"
+            >
+              {{ loader }}
+            </MBadge>
+            <MBadge v-if="instance.loaders.length === 0" variant="neutral">
+              Vanilla
+            </MBadge>
           </div>
         </div>
       </div>
-    </div>
+    </MCard>
 
     <!-- Navigation Tabs -->
-    <div class="shrink-0 px-6 pt-3 border-b border-outline/20 bg-surface/50">
+    <div class="border-b border-line pb-1">
       <MTabs
         :model-value="activeTab"
         :tabs="tabOptions"
@@ -124,7 +165,7 @@ function goBack() {
     </div>
 
     <!-- Tab Content -->
-    <div class="flex-1 overflow-y-auto p-6">
+    <div>
       <div v-if="!instance && instancesStore.loading" class="space-y-4">
         <MSkeleton class="h-10 w-48" />
         <MSkeleton class="h-64 w-full" />
@@ -133,7 +174,11 @@ function goBack() {
         <MEmpty
           :title="t('instanceDetail.notFound')"
           icon="i-lucide-alert-circle"
-        />
+        >
+          <MButton variant="tonal" size="sm" icon="i-lucide-arrow-left" @click="goBack">
+            {{ t('instanceDetail.back') }}
+          </MButton>
+        </MEmpty>
       </div>
       <component
         :is="activeComponent"

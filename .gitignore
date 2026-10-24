@@ -7,3 +7,4 @@ target/
 src-tauri/gen/
 .DS_Store
 Thumbs.db
+.shots/

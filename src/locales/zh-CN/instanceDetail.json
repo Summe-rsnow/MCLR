@@ -1,6 +1,7 @@
 {
   "nav": "实例详情",
   "back": "返回实例列表",
+  "launch": "启动游戏",
   "notFound": "未找到指定的实例",
   "tabs": {
     "overview": "概览",
@@ -50,6 +51,7 @@
       "title": "版本隔离",
       "hint": "开启后，当前实例将使用自身独立的 mods、saves、config 等文件夹",
       "global": "遵循全局默认",
+      "instance": "启用独立隔离",
       "on": "启用独立隔离",
       "off": "共用主目录"
     },
@@ -222,6 +224,8 @@
     "startExport": "开始导出",
     "exporting": "正在导出...",
     "exportSuccess": "整合包导出成功，任务已开始！",
+    "success": "整合包导出成功：{path}",
+    "pathRequired": "请指定输出文件路径",
     "validation": {
       "nameRequired": "请输入整合包名称",
       "versionRequired": "请输入整合包版本",

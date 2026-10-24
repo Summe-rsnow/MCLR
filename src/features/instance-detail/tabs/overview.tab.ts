@@ -4,7 +4,7 @@ import type { InstanceDetailTab } from '../tabs'
 const tab: InstanceDetailTab = {
   key: 'overview',
   titleKey: 'instanceDetail.tabs.overview',
-  icon: 'i-lucide-layout-dashboard',
+  icon: 'i-lucide-info',
   order: 10,
   component: OverviewTab,
 }

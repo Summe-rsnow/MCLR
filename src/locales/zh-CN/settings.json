@@ -1,0 +1,22 @@
+{
+  "title": "设置",
+  "subtitle": "自定义启动器外观、游戏运行环境及系统全局设置",
+  "group": {
+    "personal": "个性化",
+    "game": "游戏",
+    "launcher": "启动器",
+    "other": "其他"
+  },
+  "nav": {
+    "appearance": "外观",
+    "language": "语言与格式",
+    "launch": "启动",
+    "java": "Java",
+    "gameManage": "游戏文件夹",
+    "network": "网络与下载",
+    "update": "更新",
+    "logs": "启动器日志",
+    "feedback": "反馈",
+    "about": "关于"
+  }
+}

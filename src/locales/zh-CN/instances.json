@@ -40,7 +40,8 @@
     "delete": "删除",
     "deleteConfirmTitle": "删除实例",
     "deleteConfirmMessage": "确定要将实例「{name}」放入回收站吗？此操作可以从系统回收站恢复。",
-    "importModpack": "导入整合包"
+    "importModpack": "导入整合包",
+    "create": "安装新版本"
   },
   "dialog": {
     "renameTitle": "重命名实例",

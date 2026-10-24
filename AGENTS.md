@@ -8,3 +8,4 @@
 - **Integration**: after all slices return, the main agent runs `pnpm check`, fixes seams, smoke-tests (see per-milestone Verification), updates `PROGRESS.md` + `CHANGELOG.md`, bumps version, commits, tags.
 - **Reference rule**: before implementing a behavior, read the PCL-CE files named in `docs/reference-map.md` (`../PCL-CE/...`); re-implement, never copy code or assets from `Plain Craft Launcher 2/`.
 - **PROGRESS.md format**: header (current version, next milestone) + table `Milestone | Title | Status (todo/doing/done) | Commit | Tag | Date`; each `progress/vX.Y.Z.md` holds that milestone's task table and a "Notes/Blockers" list.
+- **UI**: use only tokens/classes from `docs/design-language.md`; `lint-ui-contracts` must pass.

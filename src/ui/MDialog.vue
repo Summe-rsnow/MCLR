@@ -40,25 +40,27 @@ function onConfirm() {
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs"
       @click.self="onCancel"
     >
       <div
-        class="m-card w-full max-w-md p-6 rounded-2xl shadow-xl flex flex-col gap-4 bg-surface text-text"
+        class="m-overlay m-refract w-full max-w-md p-6 rounded-2xl flex flex-col gap-4 text-fg"
         role="dialog"
       >
-        <div v-if="title || $slots.header" class="flex items-center justify-between">
-          <h3 class="text-lg font-semibold">{{ title }}</h3>
+        <div v-if="title || $slots.header" class="flex items-center justify-between gap-3">
+          <slot name="header">
+            <h3 class="text-lg font-bold text-fg">{{ title }}</h3>
+          </slot>
           <button
             type="button"
-            class="text-textMuted hover:text-text cursor-pointer p-1 rounded-lg"
+            class="text-fg-muted hover:text-fg hover:bg-sunken cursor-pointer p-1.5 rounded-lg transition-colors"
             @click="onCancel"
           >
             <span class="i-lucide-x w-4 h-4 block" />
           </button>
         </div>
 
-        <div class="text-sm text-textMuted">
+        <div class="text-sm text-fg-muted">
           <slot />
         </div>
 

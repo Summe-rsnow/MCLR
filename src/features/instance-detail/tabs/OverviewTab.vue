@@ -6,7 +6,8 @@ import type { InstanceInfo } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
 import { useInstancesStore } from '../../instances/store'
 import {
-  MCard,
+  MSection,
+  MSettingRow,
   MButton,
   MBadge,
   MDialog,
@@ -93,18 +94,22 @@ async function handleDelete() {
 
 async function setIcon(iconKey: string) {
   try {
-    await ipcClient.instanceUpdateConfig(props.instance.id, {
+    const updated = await ipcClient.instanceUpdateConfig(props.instance.id, {
       ...props.instance.config,
       icon: iconKey,
     })
-    await instancesStore.fetchInstances()
+    const idx = instancesStore.instances.findIndex((i) => i.id === props.instance.id)
+    if (idx >= 0) {
+      instancesStore.instances[idx] = updated
+    }
+    toast.success(t('common.save'))
   } catch (e: unknown) {
     toast.danger(String(e))
   }
 }
 
 const presetIcons = [
-  { key: 'grass_block', labelKey: 'instanceDetail.overview.iconGrass', icon: 'i-lucide-box' },
+  { key: 'grass', labelKey: 'instanceDetail.overview.iconGrass', icon: 'i-lucide-box' },
   { key: 'chest', labelKey: 'instanceDetail.overview.iconChest', icon: 'i-lucide-archive' },
   { key: 'diamond', labelKey: 'instanceDetail.overview.iconDiamond', icon: 'i-lucide-gem' },
   { key: 'sword', labelKey: 'instanceDetail.overview.iconSword', icon: 'i-lucide-sword' },
@@ -113,51 +118,30 @@ const presetIcons = [
 </script>
 
 <template>
-  <div class="max-w-4xl space-y-6">
-    <!-- Basic Info Card -->
-    <MCard class="p-6 space-y-4">
-      <h2 class="text-base font-bold text-text flex items-center gap-2">
-        <span class="w-5 h-5 i-lucide-info text-primary" />
-        {{ t('instanceDetail.overview.title') }}
-      </h2>
+  <div class="space-y-6">
+    <!-- Basic Info Section -->
+    <MSection :title="t('instanceDetail.overview.title')" icon="i-lucide-info">
+      <template #actions>
+        <MButton variant="text" size="xs" icon="i-lucide-edit-2" @click="openRename">
+          {{ t('instanceDetail.overview.rename') }}
+        </MButton>
+      </template>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-        <div class="space-y-1">
-          <div class="text-xs text-textMuted font-medium">
-            {{ t('instanceDetail.overview.name') }}
-          </div>
-          <div class="text-text font-semibold flex items-center gap-2">
-            <span>{{ instance.name }}</span>
-            <MButton variant="text" size="sm" @click="openRename">
-              <span class="w-3.5 h-3.5 i-lucide-edit-2 mr-1" />
-              {{ t('instanceDetail.overview.rename') }}
-            </MButton>
-          </div>
-        </div>
+      <div class="divide-y divide-line">
+        <MSettingRow :label="t('instanceDetail.overview.name')">
+          <span class="font-semibold text-fg">{{ instance.name }}</span>
+        </MSettingRow>
 
-        <div class="space-y-1">
-          <div class="text-xs text-textMuted font-medium">
-            {{ t('instanceDetail.overview.mcVersion') }}
-          </div>
-          <div class="text-text font-mono font-semibold">
-            {{ instance.mcVersion }}
-          </div>
-        </div>
+        <MSettingRow :label="t('instanceDetail.overview.mcVersion')">
+          <span class="font-mono text-fg">{{ instance.mcVersion }}</span>
+        </MSettingRow>
 
-        <div class="space-y-1">
-          <div class="text-xs text-textMuted font-medium">
-            {{ t('instanceDetail.overview.kind') }}
-          </div>
-          <div class="text-text capitalize">
-            {{ instance.kind }}
-          </div>
-        </div>
+        <MSettingRow :label="t('instanceDetail.overview.kind')">
+          <span class="capitalize text-fg">{{ instance.kind }}</span>
+        </MSettingRow>
 
-        <div class="space-y-1">
-          <div class="text-xs text-textMuted font-medium">
-            {{ t('instanceDetail.overview.loaders') }}
-          </div>
-          <div class="flex flex-wrap gap-1.5 items-center">
+        <MSettingRow :label="t('instanceDetail.overview.loaders')">
+          <div class="flex flex-wrap gap-1.5 items-center justify-end">
             <MBadge
               v-for="loader in instance.loaders"
               :key="loader"
@@ -165,39 +149,30 @@ const presetIcons = [
             >
               {{ loader }}
             </MBadge>
-            <span v-if="instance.loaders.length === 0" class="text-textMuted">
+            <span v-if="instance.loaders.length === 0" class="text-fg-muted">
               Vanilla
             </span>
           </div>
-        </div>
+        </MSettingRow>
 
-        <div class="space-y-1 md:col-span-2">
-          <div class="text-xs text-textMuted font-medium">
-            {{ t('instanceDetail.overview.path') }}
-          </div>
-          <div class="text-text font-mono text-xs break-all bg-surfaceVariant/40 p-2.5 rounded-lg border border-outline/20">
-            {{ instance.path }}
-          </div>
-        </div>
+        <MSettingRow :label="t('instanceDetail.overview.path')">
+          <span class="font-mono text-xs text-fg-muted break-all text-right max-w-md">{{ instance.path }}</span>
+        </MSettingRow>
       </div>
-    </MCard>
+    </MSection>
 
-    <!-- Icon Picker Card -->
-    <MCard class="p-6 space-y-4">
-      <h2 class="text-base font-bold text-text flex items-center gap-2">
-        <span class="w-5 h-5 i-lucide-smile text-primary" />
-        {{ t('instanceDetail.overview.icon') }}
-      </h2>
+    <!-- Icon Picker Section -->
+    <MSection :title="t('instanceDetail.overview.icon')" icon="i-lucide-smile">
       <div class="flex flex-wrap gap-3">
         <button
           v-for="item in presetIcons"
           :key="item.key"
           type="button"
-          class="flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition-all"
+          class="flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition-all cursor-pointer"
           :class="[
             instance.config?.icon === item.key
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-outline/30 hover:border-outline text-textMuted hover:text-text',
+              ? 'border-primary bg-primary-soft text-primary-soft-fg'
+              : 'border-line hover:border-line-strong text-fg-muted hover:text-fg bg-sunken/40',
           ]"
           @click="setIcon(item.key)"
         >
@@ -205,36 +180,30 @@ const presetIcons = [
           <span>{{ t(item.labelKey) }}</span>
         </button>
       </div>
-    </MCard>
+    </MSection>
 
-    <!-- Actions Card -->
-    <MCard class="p-6 space-y-4">
-      <h2 class="text-base font-bold text-text flex items-center gap-2">
-        <span class="w-5 h-5 i-lucide-wrench text-primary" />
-        {{ t('instanceDetail.overview.actions') }}
-      </h2>
-
+    <!-- Actions Section -->
+    <MSection :title="t('instanceDetail.overview.actions')" icon="i-lucide-wrench">
       <div class="flex flex-wrap gap-3">
-        <MButton variant="tonal" @click="handleOpenFolder">
-          <span class="w-4 h-4 i-lucide-folder-open mr-1.5" />
+        <MButton variant="tonal" size="sm" icon="i-lucide-folder-open" @click="handleOpenFolder">
           {{ t('instanceDetail.overview.openFolder') }}
         </MButton>
 
         <MButton
           variant="tonal"
+          size="sm"
+          icon="i-lucide-refresh-cw"
           :loading="repairing"
           @click="handleRepair"
         >
-          <span class="w-4 h-4 i-lucide-refresh-cw mr-1.5" />
           {{ t('instanceDetail.overview.repair') }}
         </MButton>
 
-        <MButton variant="danger" @click="handleDelete">
-          <span class="w-4 h-4 i-lucide-trash-2 mr-1.5" />
+        <MButton variant="danger" size="sm" icon="i-lucide-trash-2" @click="handleDelete">
           {{ t('instanceDetail.overview.delete') }}
         </MButton>
       </div>
-    </MCard>
+    </MSection>
 
     <!-- Rename Dialog -->
     <MDialog
@@ -246,16 +215,17 @@ const presetIcons = [
         <MInput
           v-model="newName"
           :label="t('instanceDetail.overview.name')"
+          size="sm"
           autofocus
-          @keydown.enter="handleRename"
+          @keyup.enter="handleRename"
         />
       </div>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <MButton variant="text" @click="showRenameModal = false">
+          <MButton variant="text" size="sm" @click="showRenameModal = false">
             {{ t('common.cancel') }}
           </MButton>
-          <MButton variant="primary" @click="handleRename">
+          <MButton variant="primary" size="sm" @click="handleRename">
             {{ t('common.confirm') }}
           </MButton>
         </div>

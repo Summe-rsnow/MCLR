@@ -1,9 +1,12 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 
+import type { NavGroupKey } from './features/shell/navGroups'
+export type { NavGroupKey }
 export interface NavMeta {
   titleKey: string
   icon: string
   order: number
+  group?: NavGroupKey
 }
 
 const routeModules = import.meta.glob<{ default: RouteRecordRaw[] }>(

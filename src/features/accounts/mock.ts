@@ -25,7 +25,7 @@ export const mockAccounts: AccountView[] = [
     server: null,
     serverName: null,
     skinHeadDataUrl:
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAJElEQVQoU2P8z8BQDwAEgAF/QualIQAAAABJRU5ErkJggg==',
+      "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%23b58463'/%3E%3Cpath d='M0 0h8v2H0zM0 2h1v1H0zM7 2h1v1H7z' fill='%233d2817'/%3E%3Crect x='1' y='4' width='1' height='1' fill='%23fff'/%3E%3Crect x='2' y='4' width='1' height='1' fill='%23493b7f'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%23493b7f'/%3E%3Crect x='6' y='4' width='1' height='1' fill='%23fff'/%3E%3Crect x='3' y='5' width='2' height='1' fill='%239c6347'/%3E%3Cpath d='M2 6h4v1H2z' fill='%23633924'/%3E%3C/svg%3E",
     capes: mockCapes,
     defaultSkinModel: 'classic',
   },

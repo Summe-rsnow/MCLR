@@ -10,6 +10,7 @@ const routes: RouteRecordRaw[] = [
         titleKey: 'tools.nav',
         icon: 'i-lucide-wrench',
         order: 50,
+        group: 'discover',
       },
     },
   },

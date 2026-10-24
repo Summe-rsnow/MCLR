@@ -1,0 +1,12 @@
+{
+  "preset": {
+    "sky": "天空蓝",
+    "indigo": "靛蓝",
+    "emerald": "翠绿",
+    "amber": "琥珀",
+    "rose": "玫红",
+    "violet": "紫罗兰",
+    "teal": "青碧",
+    "slate": "石板灰"
+  }
+}

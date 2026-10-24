@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { wcagContrast } from 'culori'
 import { useThemeStore } from '../../stores/theme'
 import {
   MButton,
@@ -20,16 +21,30 @@ import {
   MDialog,
   MTooltip,
   MProgress,
-  MScroll,
   MContextMenu,
   MColorPicker,
   MEmpty,
   MSkeleton,
   MBadge,
   MAvatar,
+  MPageHeader,
+  MSection,
+  MSettingRow,
+  MBrandIcon,
+  MLoaderIcon,
+  MPopover,
+  SEED_PRESETS,
+  generatePalette,
+  resolveEffectiveMode,
+  loaderMeta,
+  brandIconMap,
+  compTypeMeta,
   useDialog,
   useToast,
   type ContextMenuItem,
+  type LoaderKindKey,
+  type BrandName,
+  type CompTypeKey,
 } from '../../ui'
 
 const { t } = useI18n()
@@ -37,26 +52,131 @@ const themeStore = useThemeStore()
 const dialog = useDialog()
 const toast = useToast()
 
-// Theme controls
-const modeOptions = [
-  { label: t('devUi.modeLight'), value: 'light' },
-  { label: t('devUi.modeDark'), value: 'dark' },
-  { label: t('devUi.modeSystem'), value: 'system' },
-]
+const modeOptions = computed(() => [
+  { label: t('devUi.modeLight'), value: 'light', icon: 'i-lucide-sun' },
+  { label: t('devUi.modeDark'), value: 'dark', icon: 'i-lucide-moon' },
+  { label: t('devUi.modeSystem'), value: 'system', icon: 'i-lucide-monitor' },
+])
 
-const materialOptions = [
-  { label: t('devUi.materialFlat'), value: 'flat' },
-  { label: t('devUi.materialGlass'), value: 'glass' },
-]
+const materialOptions = computed(() => [
+  { label: t('devUi.materialFlat'), value: 'flat', icon: 'i-lucide-square' },
+  { label: t('devUi.materialGlass'), value: 'glass', icon: 'i-lucide-sparkles' },
+])
 
-// Component state
+const currentPalette = computed(() =>
+  generatePalette(themeStore.seed, resolveEffectiveMode(themeStore.mode)),
+)
+
+function parseCuloriRgb(rgbStr: string) {
+  const [r, g, b] = rgbStr.trim().split(/\s+/).map((n) => parseInt(n, 10) / 255)
+  return { mode: 'rgb' as const, r, g, b }
+}
+
+const tokenSwatches = computed(() => {
+  const p = currentPalette.value
+  const raised = parseCuloriRgb(p.raised)
+  const canvas = parseCuloriRgb(p.canvas)
+  const primary = parseCuloriRgb(p.primary)
+  const primarySoft = parseCuloriRgb(p.primarySoft)
+  const dangerSoft = parseCuloriRgb(p.dangerSoft)
+  const warningSoft = parseCuloriRgb(p.warningSoft)
+  const successSoft = parseCuloriRgb(p.successSoft)
+
+  const fmtC = (a: string, b: { mode: 'rgb'; r: number; g: number; b: number }) =>
+    `${wcagContrast(parseCuloriRgb(a), b).toFixed(1)}:1`
+
+  return [
+    { name: 'canvas', rgb: p.canvas, bgClass: 'bg-canvas', fgClass: 'text-fg', info: 'Base' },
+    { name: 'panel', rgb: p.panel, bgClass: 'bg-panel', fgClass: 'text-fg', info: 'Sidebar' },
+    { name: 'raised', rgb: p.raised, bgClass: 'bg-raised', fgClass: 'text-fg', info: 'Card' },
+    { name: 'sunken', rgb: p.sunken, bgClass: 'bg-sunken', fgClass: 'text-fg', info: 'Well' },
+    { name: 'overlay', rgb: p.overlay, bgClass: 'bg-overlay', fgClass: 'text-fg', info: 'Popup' },
+    { name: 'line', rgb: p.line, bgClass: 'bg-line', fgClass: 'text-fg', info: 'Hairline' },
+    {
+      name: 'line-strong',
+      rgb: p.lineStrong,
+      bgClass: 'bg-line-strong',
+      fgClass: 'text-fg',
+      info: 'Border',
+    },
+    {
+      name: 'fg',
+      rgb: p.fg,
+      bgClass: 'bg-fg',
+      fgClass: 'text-canvas',
+      info: `vs canvas ${fmtC(p.fg, canvas)}`,
+    },
+    {
+      name: 'fg-muted',
+      rgb: p.fgMuted,
+      bgClass: 'bg-fg-muted',
+      fgClass: 'text-canvas',
+      info: `vs raised ${fmtC(p.fgMuted, raised)}`,
+    },
+    {
+      name: 'fg-subtle',
+      rgb: p.fgSubtle,
+      bgClass: 'bg-fg-subtle',
+      fgClass: 'text-canvas',
+      info: `vs raised ${fmtC(p.fgSubtle, raised)}`,
+    },
+    {
+      name: 'primary',
+      rgb: p.primary,
+      bgClass: 'bg-primary',
+      fgClass: 'text-primary-on',
+      info: `on ${fmtC(p.primaryOn, primary)}`,
+    },
+    {
+      name: 'primary-hover',
+      rgb: p.primaryHover,
+      bgClass: 'bg-primary-hover',
+      fgClass: 'text-primary-on',
+      info: 'Hover',
+    },
+    {
+      name: 'primary-soft',
+      rgb: p.primarySoft,
+      bgClass: 'bg-primary-soft',
+      fgClass: 'text-primary-soft-fg',
+      info: `fg ${fmtC(p.primarySoftFg, primarySoft)}`,
+    },
+    {
+      name: 'danger-soft',
+      rgb: p.dangerSoft,
+      bgClass: 'bg-danger-soft',
+      fgClass: 'text-danger-fg',
+      info: `fg ${fmtC(p.dangerFg, dangerSoft)}`,
+    },
+    {
+      name: 'warning-soft',
+      rgb: p.warningSoft,
+      bgClass: 'bg-warning-soft',
+      fgClass: 'text-warning-fg',
+      info: `fg ${fmtC(p.warningFg, warningSoft)}`,
+    },
+    {
+      name: 'success-soft',
+      rgb: p.successSoft,
+      bgClass: 'bg-success-soft',
+      fgClass: 'text-success-fg',
+      info: `fg ${fmtC(p.successFg, successSoft)}`,
+    },
+  ]
+})
+
+const loaderKinds = Object.keys(loaderMeta) as LoaderKindKey[]
+const brandNames = Object.keys(brandIconMap) as BrandName[]
+const compTypes = Object.keys(compTypeMeta) as CompTypeKey[]
+
 const inputText = ref('')
+const errorInputText = ref('bad_path')
 const textareaText = ref('')
 const selectVal = ref('opt1')
 const selectOptions = [
-  { label: 'Option 1', value: 'opt1' },
-  { label: 'Option 2', value: 'opt2' },
-  { label: 'Option 3', value: 'opt3' },
+  { label: 'Option 1 (Fabric)', value: 'opt1', icon: 'i-lucide-waypoints' },
+  { label: 'Option 2 (Forge)', value: 'opt2', icon: 'i-lucide-anvil' },
+  { label: 'Option 3 (NeoForge)', value: 'opt3', icon: 'i-lucide-flame' },
 ]
 
 const switchVal = ref(true)
@@ -78,21 +198,21 @@ const segmentedOptions = [
 const activeTab = ref('general')
 const tabsList = [
   { key: 'general', label: 'General', icon: 'i-lucide-settings' },
-  { key: 'advanced', label: 'Advanced', icon: 'i-lucide-sliders' },
+  { key: 'advanced', label: 'Advanced', icon: 'i-lucide-sliders-horizontal' },
   { key: 'about', label: 'About', icon: 'i-lucide-info' },
 ]
 
 const progressVal = ref(0.68)
 const dialogVisible = ref(false)
+const popoverOpen = ref(false)
 
-// Context Menu
 const contextMenuOpen = ref(false)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
 const contextMenuItems: ContextMenuItem[] = [
-  { key: 'edit', label: 'Edit', icon: 'i-lucide-edit' },
+  { key: 'edit', label: 'Edit', icon: 'i-lucide-pencil' },
   { key: 'copy', label: 'Copy', icon: 'i-lucide-copy' },
-  { key: 'delete', label: 'Delete', icon: 'i-lucide-trash', danger: true },
+  { key: 'delete', label: 'Delete', icon: 'i-lucide-trash-2', danger: true },
 ]
 
 function openContextMenu(evt: MouseEvent) {
@@ -116,245 +236,285 @@ async function triggerConfirmDialog() {
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto space-y-8 pb-12 select-none" @contextmenu="openContextMenu">
-    <div>
-      <h2 class="text-2xl font-bold tracking-tight text-text">{{ t('devUi.title') }}</h2>
-      <p class="text-sm text-textMuted mt-1">{{ t('devUi.themeSettings') }}</p>
-    </div>
-
-    <!-- Theme & Material Controllers -->
-    <MCard padding="lg" class="space-y-4">
-      <h3 class="text-sm font-semibold text-text uppercase tracking-wider">{{ t('devUi.themeSettings') }}</h3>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-        <div class="space-y-2">
-          <label class="text-xs font-medium text-textMuted">{{ t('devUi.seedColor') }}</label>
-          <MColorPicker
-            :model-value="themeStore.seed"
-            @update:model-value="themeStore.setSeed($event)"
-          />
+  <div class="m-page pb-12 select-none" @contextmenu="openContextMenu">
+    <MPageHeader
+      :title="t('devUi.title')"
+      :description="t('devUi.themeSettings')"
+      icon="i-lucide-swatch-book"
+    >
+      <template #actions>
+        <div class="relative">
+          <MButton
+            variant="tonal"
+            size="sm"
+            icon="i-lucide-sliders-horizontal"
+            @click="popoverOpen = !popoverOpen"
+          >
+            Popover
+          </MButton>
+          <MPopover :open="popoverOpen" @update:open="popoverOpen = $event">
+            <div class="text-xs text-fg space-y-1 w-48">
+              <div class="font-medium">Liquid Glass Popover</div>
+              <p class="text-fg-muted">Uses .m-overlay.m-refract surface tier.</p>
+            </div>
+          </MPopover>
         </div>
+      </template>
+    </MPageHeader>
 
-        <div class="space-y-2">
-          <label class="text-xs font-medium text-textMuted">{{ t('devUi.themeMode') }}</label>
-          <MSegmented
-            :model-value="themeStore.mode"
-            :options="modeOptions"
-            @update:model-value="themeStore.setMode($event as any)"
-          />
+    <!-- 1. Theme Controls -->
+    <MSection :title="t('devUi.themeSettings')" icon="i-lucide-palette">
+      <MSettingRow :label="t('devUi.seedColor')">
+        <MColorPicker
+          :model-value="themeStore.seed"
+          @update:model-value="themeStore.setSeed($event)"
+        />
+      </MSettingRow>
+      <MSettingRow :label="t('devUi.themeMode')">
+        <MSegmented
+          :model-value="themeStore.mode"
+          :options="modeOptions"
+          @update:model-value="themeStore.setMode($event as any)"
+        />
+      </MSettingRow>
+      <MSettingRow :label="t('devUi.materialMode')">
+        <MSegmented
+          :model-value="themeStore.material"
+          :options="materialOptions"
+          @update:model-value="themeStore.setMaterial($event as any)"
+        />
+      </MSettingRow>
+      <MSettingRow label="Seed Presets">
+        <div class="flex items-center gap-2 flex-wrap">
+          <button
+            v-for="preset in SEED_PRESETS"
+            :key="preset.key"
+            type="button"
+            class="px-2.5 py-1 rounded-full text-xs font-medium border border-line flex items-center gap-1.5 cursor-pointer hover:bg-sunken transition"
+            @click="themeStore.setSeed(preset.hex)"
+          >
+            <span class="w-3 h-3 rounded-full" :style="{ backgroundColor: preset.hex }" />
+            <span>{{ preset.key }}</span>
+          </button>
         </div>
+      </MSettingRow>
+    </MSection>
 
-        <div class="space-y-2">
-          <label class="text-xs font-medium text-textMuted">{{ t('devUi.materialMode') }}</label>
-          <MSegmented
-            :model-value="themeStore.material"
-            :options="materialOptions"
-            @update:model-value="themeStore.setMaterial($event as any)"
-          />
+    <!-- 2. Token Swatch Grid -->
+    <MSection title="Tonal Palette & WCAG Contrast" icon="i-lucide-pipette">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div
+          v-for="sw in tokenSwatches"
+          :key="sw.name"
+          class="p-3 rounded-xl border border-line flex flex-col justify-between gap-2"
+          :class="[sw.bgClass, sw.fgClass]"
+        >
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-xs font-bold">{{ sw.name }}</span>
+            <span class="text-[11px] opacity-80 font-mono">{{ sw.info }}</span>
+          </div>
+          <div class="text-[11px] opacity-75 font-mono">{{ sw.rgb }}</div>
         </div>
       </div>
-    </MCard>
+    </MSection>
 
-    <!-- Buttons & Icon Buttons -->
-    <div class="space-y-3">
-      <h3 class="text-base font-semibold text-text">{{ t('devUi.buttons') }}</h3>
-      <div class="flex flex-wrap gap-3 items-center">
-        <MButton variant="primary">{{ t('common.save') }}</MButton>
-        <MButton variant="tonal">{{ t('common.search') }}</MButton>
-        <MButton variant="text">{{ t('common.cancel') }}</MButton>
-        <MButton variant="danger">{{ t('common.delete') }}</MButton>
-        <MButton variant="primary" loading>{{ t('common.loading') }}</MButton>
-        <MButton variant="primary" disabled>{{ t('common.save') }}</MButton>
-
-        <div class="h-6 w-px bg-outline/50 mx-2" />
-
-        <MIconButton icon="i-lucide-play" size="sm" />
-        <MIconButton icon="i-lucide-settings" size="md" />
-        <MIconButton icon="i-lucide-trash" size="lg" />
-        <MIconButton icon="i-lucide-refresh-cw" disabled />
-      </div>
-    </div>
-
-    <!-- Cards (Flat vs Glass showcase) -->
-    <div class="space-y-3">
-      <h3 class="text-base font-semibold text-text">{{ t('devUi.cards') }}</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <MCard>
-          <h4 class="font-semibold text-text mb-1">{{ t('devUi.cardTitle') }} (Auto Material)</h4>
-          <p class="text-sm text-textMuted">{{ t('devUi.cardDescription') }}</p>
+    <!-- 3. Surface Tiers -->
+    <MSection title="Surface Tiers (Panel / Card / Well / Overlay / Refract)" icon="i-lucide-layers">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div class="m-panel p-4 rounded-xl border border-line">
+          <div class="text-sm font-medium text-fg">.m-panel</div>
+          <div class="text-xs text-fg-muted mt-1">Sidebar & chrome tier</div>
+        </div>
+        <MCard variant="raised">
+          <div class="text-sm font-medium text-fg">MCard raised</div>
+          <div class="text-xs text-fg-muted mt-1">Primary card tier</div>
         </MCard>
-
-        <MCard :glass="true">
-          <h4 class="font-semibold text-text mb-1">{{ t('devUi.cardTitle') }} (Forced Glass)</h4>
-          <p class="text-sm text-textMuted">{{ t('devUi.cardDescription') }}</p>
+        <MCard variant="well">
+          <div class="text-sm font-medium text-fg">MCard well</div>
+          <div class="text-xs text-fg-muted mt-1">Sunken container</div>
         </MCard>
-      </div>
-    </div>
-
-    <!-- Form Inputs & Select -->
-    <div class="space-y-3">
-      <h3 class="text-base font-semibold text-text">{{ t('devUi.inputs') }}</h3>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <MInput v-model="inputText" :placeholder="t('devUi.placeholder')" clearable />
-        <MSelect v-model="selectVal" :options="selectOptions" />
-        <MInput model-value="Disabled Value" disabled />
-      </div>
-      <MTextarea v-model="textareaText" :placeholder="t('devUi.placeholder')" :rows="2" />
-    </div>
-
-    <!-- Toggles, Checkbox, Radios -->
-    <div class="space-y-3">
-      <h3 class="text-base font-semibold text-text">{{ t('devUi.switches') }}</h3>
-      <div class="flex flex-wrap gap-6 items-center">
-        <MSwitch v-model="switchVal" label="Switch toggle" />
-        <MCheckbox v-model="checkboxVal" label="Checkbox option" />
-        <MRadioGroup v-model="radioVal" :options="radioOptions" />
-      </div>
-    </div>
-
-    <!-- Sliders -->
-    <div class="space-y-3">
-      <h3 class="text-base font-semibold text-text">{{ t('devUi.sliders') }}</h3>
-      <div class="max-w-md">
-        <MSlider v-model="sliderVal" :min="0" :max="100" />
-      </div>
-    </div>
-
-    <!-- Navigation: Tabs & Segmented -->
-    <div class="space-y-3">
-      <h3 class="text-base font-semibold text-text">{{ t('devUi.navigation') }}</h3>
-      <div class="space-y-4">
-        <MSegmented v-model="segmentedVal" :options="segmentedOptions" />
-        <MTabs v-model="activeTab" :tabs="tabsList" />
-      </div>
-    </div>
-
-    <!-- Lists & Scroll -->
-    <div class="space-y-3">
-      <h3 class="text-base font-semibold text-text">{{ t('devUi.lists') }}</h3>
-      <MCard padding="none" class="max-w-md overflow-hidden">
-        <MScroll max-height="160px">
-          <MList>
-            <MListItem
-              :title="`${t('devUi.itemTitle')} 1`"
-              :subtitle="t('devUi.itemSubtitle')"
-              active
-            >
-              <template #prefix>
-                <span class="i-lucide-folder w-4 h-4 text-primary" />
-              </template>
-              <template #suffix>
-                <MBadge variant="primary">Active</MBadge>
-              </template>
-            </MListItem>
-            <MListItem
-              :title="`${t('devUi.itemTitle')} 2`"
-              :subtitle="t('devUi.itemSubtitle')"
-            >
-              <template #prefix>
-                <span class="i-lucide-file w-4 h-4 text-textMuted" />
-              </template>
-            </MListItem>
-            <MListItem
-              :title="`${t('devUi.itemTitle')} 3`"
-              :subtitle="t('devUi.itemSubtitle')"
-            >
-              <template #prefix>
-                <span class="i-lucide-box w-4 h-4 text-textMuted" />
-              </template>
-            </MListItem>
-          </MList>
-        </MScroll>
-      </MCard>
-    </div>
-
-    <!-- Feedback: Progress, Badges, Skeleton, Avatar -->
-    <div class="space-y-3">
-      <h3 class="text-base font-semibold text-text">{{ t('devUi.feedback') }}</h3>
-      <div class="space-y-4">
-        <div class="max-w-md space-y-2">
-          <MProgress :value="progressVal" show-label />
-          <MProgress indeterminate />
+        <MCard variant="tinted" hoverable>
+          <div class="text-sm font-medium text-primary-soft-fg">MCard tinted</div>
+          <div class="text-xs text-fg-muted mt-1">Hoverable hero tier</div>
+        </MCard>
+        <div class="m-overlay m-refract p-4 rounded-xl">
+          <div class="text-sm font-medium text-fg">.m-overlay.m-refract</div>
+          <div class="text-xs text-fg-muted mt-1">Liquid glass refraction</div>
         </div>
+      </div>
+    </MSection>
 
-        <div class="flex flex-wrap gap-2 items-center">
-          <MBadge variant="primary">Primary</MBadge>
-          <MBadge variant="success">Success</MBadge>
-          <MBadge variant="warning">Warning</MBadge>
-          <MBadge variant="danger">Danger</MBadge>
+    <!-- 4. Buttons & Badges -->
+    <MSection :title="t('devUi.buttons')" icon="i-lucide-mouse-pointer-click">
+      <div class="space-y-4">
+        <div class="flex flex-wrap items-center gap-3">
+          <MButton variant="primary" icon="i-lucide-play">{{ t('devUi.btnPrimary') }}</MButton>
+          <MButton variant="tonal" icon="i-lucide-sparkles">{{ t('devUi.btnTonal') }}</MButton>
+          <MButton variant="outline" icon="i-lucide-folder">Outline</MButton>
+          <MButton variant="text">{{ t('devUi.btnText') }}</MButton>
+          <MButton variant="danger" icon="i-lucide-trash-2">{{ t('devUi.btnDanger') }}</MButton>
+          <MButton variant="primary" loading>{{ t('devUi.btnLoading') }}</MButton>
+          <MButton variant="primary" disabled>{{ t('devUi.btnDisabled') }}</MButton>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <MButton size="xs" variant="tonal" icon="i-lucide-zap">Size XS</MButton>
+          <MButton size="sm" variant="tonal" icon="i-lucide-zap">Size SM</MButton>
+          <MButton size="md" variant="tonal" icon="i-lucide-zap">Size MD</MButton>
+          <MButton size="lg" variant="primary" icon="i-lucide-rocket" icon-right="i-lucide-arrow-right">
+            Size LG
+          </MButton>
+          <MIconButton icon="i-lucide-play" size="sm" variant="tonal" tooltip="Small" />
+          <MIconButton icon="i-lucide-settings" size="md" variant="outline" tooltip="Medium" />
+          <MIconButton icon="i-lucide-trash-2" size="lg" variant="danger" tooltip="Large" />
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <MBadge variant="primary" dot>Primary</MBadge>
+          <MBadge variant="info" icon="i-lucide-info">Info</MBadge>
+          <MBadge variant="success" dot>Success</MBadge>
+          <MBadge variant="warning" size="sm">Warning SM</MBadge>
+          <MBadge variant="danger" icon="i-lucide-circle-alert">Danger</MBadge>
           <MBadge variant="neutral">Neutral</MBadge>
         </div>
+      </div>
+    </MSection>
 
-        <div class="flex items-center gap-4">
-          <MAvatar name="Alex" :size="40" />
-          <MAvatar name="Steve" :size="40" />
-          <div class="space-y-1.5 flex-1 max-w-xs">
-            <MSkeleton width="100%" height="0.875rem" />
-            <MSkeleton width="60%" height="0.75rem" />
+    <!-- 5. Inputs & Controls -->
+    <MSection :title="t('devUi.inputs')" icon="i-lucide-text-cursor-input">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <MInput
+          v-model="inputText"
+          label="Search Input"
+          hint="Supports leading icon & clearable"
+          icon="i-lucide-search"
+          :placeholder="t('devUi.inputPlaceholder')"
+          clearable
+        />
+        <MInput
+          v-model="errorInputText"
+          label="Validated Input"
+          error="Invalid folder path specified"
+          icon="i-lucide-folder-x"
+        />
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-medium text-fg">Custom Listbox Select</label>
+          <MSelect v-model="selectVal" :options="selectOptions" />
+        </div>
+        <MTextarea
+          v-model="textareaText"
+          label="Notes"
+          hint="Multi-line input"
+          :placeholder="t('devUi.textareaPlaceholder')"
+          :rows="2"
+        />
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-line">
+        <div class="space-y-3">
+          <MSwitch v-model="switchVal" :label="t('devUi.switchLabel')" />
+          <MCheckbox v-model="checkboxVal" :label="t('devUi.checkboxLabel')" />
+        </div>
+        <MRadioGroup v-model="radioVal" :options="radioOptions" />
+        <div class="space-y-3">
+          <MSlider v-model="sliderVal" :min="0" :max="100" />
+          <MSegmented v-model="segmentedVal" :options="segmentedOptions" />
+        </div>
+      </div>
+    </MSection>
+
+    <!-- 6. Icon Grids (Loaders / Brands / Comp Types) -->
+    <MSection title="Loader, Brand & Content Icons" icon="i-lucide-grid-2x2">
+      <div class="space-y-4">
+        <div class="flex flex-wrap items-center gap-3">
+          <div
+            v-for="k in loaderKinds"
+            :key="k"
+            class="flex items-center gap-2 px-3 py-2 rounded-xl m-well"
+          >
+            <MLoaderIcon :kind="k" :size="32" />
+            <span class="text-xs font-medium text-fg">{{ loaderMeta[k].label }}</span>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <div
+            v-for="b in brandNames"
+            :key="b"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sunken text-xs font-medium text-fg"
+          >
+            <MBrandIcon :name="b" class="w-4 h-4" />
+            <span>{{ b }}</span>
+          </div>
+          <div
+            v-for="ct in compTypes"
+            :key="ct"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary-soft text-xs font-medium text-primary-soft-fg"
+          >
+            <span :class="compTypeMeta[ct].icon" class="w-4 h-4" />
+            <span>{{ ct }}</span>
           </div>
         </div>
       </div>
-    </div>
+    </MSection>
 
-    <!-- Overlays: Dialog, Toast, Tooltip -->
-    <div class="space-y-3">
-      <h3 class="text-base font-semibold text-text">{{ t('devUi.overlays') }}</h3>
-      <div class="flex flex-wrap gap-3 items-center">
-        <MButton variant="tonal" @click="dialogVisible = true">
-          {{ t('devUi.dialogDemo') }}
-        </MButton>
-        <MButton variant="primary" @click="triggerConfirmDialog">
-          {{ t('devUi.dialogConfirm') }}
-        </MButton>
-
-        <MButton variant="text" @click="toast.info(t('devUi.toastInfo'))">
-          {{ t('devUi.toastInfo') }}
-        </MButton>
-        <MButton variant="text" @click="toast.success(t('devUi.toastSuccess'))">
-          {{ t('devUi.toastSuccess') }}
-        </MButton>
-        <MButton variant="text" @click="toast.danger(t('devUi.toastDanger'))">
-          {{ t('devUi.toastDanger') }}
-        </MButton>
-
-        <MTooltip text="Tooltip demo text!">
-          <span class="text-xs text-textMuted border-b border-dashed border-outline cursor-help">
-            Hover for tooltip
-          </span>
-        </MTooltip>
+    <!-- 7. Tabs, Progress, Feedback & Empty -->
+    <MSection :title="t('devUi.feedback')" icon="i-lucide-bell">
+      <div class="space-y-4">
+        <MTabs v-model="activeTab" :tabs="tabsList" />
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="space-y-3">
+            <MProgress :value="progressVal" show-label />
+            <MProgress indeterminate size="sm" />
+            <div class="flex flex-wrap gap-2">
+              <MButton size="sm" variant="tonal" @click="toast.info(t('devUi.toastInfo'))">
+                {{ t('devUi.toastInfo') }}
+              </MButton>
+              <MButton size="sm" variant="tonal" @click="toast.success(t('devUi.toastSuccess'))">
+                {{ t('devUi.toastSuccess') }}
+              </MButton>
+              <MButton size="sm" variant="tonal" @click="toast.warning(t('devUi.toastWarning'))">
+                {{ t('devUi.toastWarning') }}
+              </MButton>
+              <MButton size="sm" variant="danger" @click="toast.danger(t('devUi.toastDanger'))">
+                {{ t('devUi.toastDanger') }}
+              </MButton>
+              <MButton size="sm" variant="primary" @click="dialogVisible = true">
+                {{ t('devUi.dialogOpen') }}
+              </MButton>
+              <MButton size="sm" variant="tonal" @click="triggerConfirmDialog">
+                {{ t('devUi.dialogConfirm') }}
+              </MButton>
+            </div>
+          </div>
+          <MEmpty :title="t('devUi.emptyTitle')" :description="t('devUi.emptyDesc')">
+            <MButton size="sm" variant="tonal" icon="i-lucide-refresh-cw">Retry</MButton>
+          </MEmpty>
+        </div>
+        <div class="flex items-center gap-4">
+          <MAvatar name="Alex" :size="36" />
+          <MTooltip text="Tooltip Content">
+            <MBadge variant="neutral">Hover Tooltip</MBadge>
+          </MTooltip>
+          <MSkeleton width="160px" height="20px" />
+          <MList class="flex-1">
+            <MListItem title="Minecraft 1.21.4" subtitle="Fabric 0.16.10" active />
+          </MList>
+        </div>
       </div>
-    </div>
+    </MSection>
 
-    <!-- Empty State -->
-    <div class="space-y-3">
-      <h3 class="text-base font-semibold text-text">{{ t('devUi.emptyState') }}</h3>
-      <MCard>
-        <MEmpty
-          :title="t('devUi.emptyTitle')"
-          :description="t('devUi.emptyDesc')"
-        >
-          <MButton variant="primary" size="sm">
-            {{ t('common.retry') }}
-          </MButton>
-        </MEmpty>
-      </MCard>
-    </div>
-
-    <!-- Dialog Demo Component -->
     <MDialog
       v-model:open="dialogVisible"
-      :title="t('devUi.dialogDemo')"
+      :title="t('devUi.dialogOpen')"
       @confirm="dialogVisible = false"
     >
       <p>{{ t('devUi.cardDescription') }}</p>
     </MDialog>
 
-    <!-- Context Menu Component -->
     <MContextMenu
-      v-model:open="contextMenuOpen"
-      :items="contextMenuItems"
+      v-model="contextMenuOpen"
+      :open="contextMenuOpen"
       :x="contextMenuX"
       :y="contextMenuY"
-      @select="toast.info(`Selected: ${$event}`)"
+      :items="contextMenuItems"
+      @select="(k) => toast.info(`Context: ${k}`)"
     />
   </div>
 </template>

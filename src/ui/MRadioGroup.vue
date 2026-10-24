@@ -13,10 +13,6 @@ withDefaults(
 const emit = defineEmits<{
   (e: 'update:modelValue', val: string | number): void
 }>()
-
-function onSelect(val: string | number) {
-  emit('update:modelValue', val)
-}
 </script>
 
 <template>
@@ -24,8 +20,8 @@ function onSelect(val: string | number) {
     <label
       v-for="opt in options"
       :key="String(opt.value)"
-      class="inline-flex items-center gap-2 cursor-pointer select-none text-sm text-text"
-      :class="{ 'opacity-50 cursor-not-allowed': opt.disabled }"
+      class="inline-flex items-center gap-2 cursor-pointer select-none text-sm text-fg"
+      :class="{ 'opacity-45 cursor-not-allowed': opt.disabled }"
     >
       <input
         type="radio"
@@ -33,8 +29,8 @@ function onSelect(val: string | number) {
         :value="opt.value"
         :checked="modelValue === opt.value"
         :disabled="opt.disabled"
-        class="w-4 h-4 border-outline text-primary focus:ring-primary/40 cursor-pointer disabled:cursor-not-allowed"
-        @change="onSelect(opt.value)"
+        class="w-4 h-4 border-line-strong text-primary accent-primary focus:ring-primary/40 cursor-pointer disabled:cursor-not-allowed"
+        @change="emit('update:modelValue', opt.value)"
       />
       <span>{{ opt.label }}</span>
     </label>

@@ -4,7 +4,7 @@ import type { InstanceDetailTab } from '../tabs'
 const tab: InstanceDetailTab = {
   key: 'schematics',
   titleKey: 'instanceDetail.tabs.schematics',
-  icon: 'i-lucide-box-select',
+  icon: 'i-lucide-box',
   order: 60,
   component: SchematicsTab,
 }

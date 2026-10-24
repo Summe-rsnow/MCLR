@@ -18,4 +18,5 @@ declare module 'culori' {
   export function oklch(color: string | unknown): Oklch | undefined
   export function clampChroma(color: unknown, mode?: string): unknown
   export function formatRgb(color: unknown): string
+  export function wcagContrast(a: unknown, b: unknown): number
 }

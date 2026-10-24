@@ -31,6 +31,7 @@ if (hasCommits() && beforeBindings !== null && beforeBindings !== afterBindings)
 run('pnpm exec vue-tsc --noEmit')
 run('pnpm exec vitest run')
 run('node scripts/lint-i18n.mjs')
+run('node scripts/lint-ui-contracts.mjs')
 run('pnpm exec vite build')
 
 console.log('\nAll check gates passed.')

@@ -10,6 +10,7 @@ const routes: RouteRecordRaw[] = [
         titleKey: 'launch.nav',
         icon: 'i-lucide-play',
         order: 5,
+        group: 'start',
       },
     },
   },

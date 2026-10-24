@@ -21,9 +21,10 @@ import {
   MBadge,
   MDialog,
   MEmpty,
+  MPageHeader,
+  MLoaderIcon,
   useToast,
 } from '../../ui'
-
 const props = withDefaults(
   defineProps<{
     loader?: LoaderKind
@@ -157,37 +158,35 @@ function formatDate(iso?: string | null): string {
 </script>
 
 <template>
-  <div class="h-full flex flex-col p-6 overflow-hidden gap-6">
+  <div class="m-page">
     <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <div class="flex items-center gap-3">
-          <MIconButton
-            icon="i-lucide-arrow-left"
-            :title="t('common.cancel')"
-            @click="router.push('/download')"
-          />
-          <h1 class="text-2xl font-bold text-[rgb(var(--c-text))]">
-            {{ t('download.loaderPage.title', { name: loaderDisplayName }) }}
-          </h1>
-        </div>
-        <p class="text-sm text-[rgb(var(--c-text-muted))] mt-1 ml-11">
-          {{ t('download.loaderPage.subtitle', { name: loaderDisplayName }) }}
-        </p>
-      </div>
-
+    <div class="flex items-center gap-3">
       <MIconButton
-        icon="i-lucide-refresh-cw"
-        :loading="loadingVersions"
-        :title="t('download.loaderPage.refreshVersions')"
-        @click="fetchLoaderList"
+        icon="i-lucide-arrow-left"
+        :title="t('common.cancel')"
+        @click="router.push('/download')"
       />
+      <div class="flex-1 min-w-0">
+        <MPageHeader
+          :title="t('download.loaderPage.title', { name: loaderDisplayName })"
+          :description="t('download.loaderPage.subtitle', { name: loaderDisplayName })"
+        >
+          <template #actions>
+            <MIconButton
+              icon="i-lucide-refresh-cw"
+              :loading="loadingVersions"
+              :title="t('download.loaderPage.refreshVersions')"
+              @click="fetchLoaderList"
+            />
+          </template>
+        </MPageHeader>
+      </div>
     </div>
-
     <!-- MC Version Select Bar -->
-    <MCard class="p-4 flex flex-wrap items-center justify-between gap-4 border border-[rgb(var(--c-outline)/0.2)]">
+    <MCard class="p-4 flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-3 flex-1 min-w-[280px]">
-        <label class="text-sm font-medium text-[rgb(var(--c-text))] shrink-0">
+        <MLoaderIcon :kind="activeLoader" :size="32" />
+        <label class="text-sm font-medium text-fg shrink-0">
           {{ t('download.loaderPage.selectMc') }}:
         </label>
         <div class="flex-1 max-w-xs">
@@ -205,7 +204,7 @@ function formatDate(iso?: string | null): string {
       <MCard v-if="versions.length === 0" class="p-8">
         <MEmpty
           :title="t('download.loaderPage.emptyVersions', { name: loaderDisplayName })"
-          icon="i-lucide-package-x"
+          icon="i-lucide-box"
         />
       </MCard>
 
@@ -213,21 +212,22 @@ function formatDate(iso?: string | null): string {
         <MCard
           v-for="v in versions"
           :key="v.version"
-          class="p-4 flex items-center justify-between gap-3 border border-[rgb(var(--c-outline)/0.2)] hover:border-[rgb(var(--c-primary)/0.5)] transition-all duration-200"
+          hoverable
+          class="p-4 flex items-center justify-between gap-3"
         >
           <div class="min-w-0">
             <div class="flex items-center gap-2">
-              <span class="font-semibold text-base font-mono text-[rgb(var(--c-text))] truncate">
+              <span class="font-semibold text-base font-mono text-fg truncate">
                 {{ v.version }}
               </span>
               <MBadge
-                :variant="v.stable ? 'primary' : 'warning'"
+                :variant="v.stable ? 'success' : 'warning'"
                 size="sm"
               >
                 {{ v.stable ? t('download.loaderPage.badgeStable') : t('download.loaderPage.badgeSnapshot') }}
               </MBadge>
             </div>
-            <div v-if="v.releaseTime" class="text-xs text-[rgb(var(--c-text-muted))] mt-1 truncate">
+            <div v-if="v.releaseTime" class="text-xs text-fg-muted mt-1 truncate">
               {{ t('download.versionItem.releasedAt', { date: formatDate(v.releaseTime) }) }}
             </div>
           </div>
@@ -250,17 +250,19 @@ function formatDate(iso?: string | null): string {
       :title="t('download.dialog.installTitle')"
     >
       <div v-if="targetLoaderVersion" class="flex flex-col gap-4 py-2">
-        <div>
-          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
-            {{ t('download.dialog.version') }}
-          </label>
-          <div class="p-2.5 rounded bg-[rgb(var(--c-surface-variant)/0.4)] font-mono text-sm text-[rgb(var(--c-text))]">
-            {{ selectedMcVersion }} - {{ loaderDisplayName }} {{ targetLoaderVersion.version }}
+        <div class="flex items-center gap-3 p-3 rounded-xl m-well">
+          <MLoaderIcon :kind="activeLoader" :size="40" />
+          <div class="min-w-0">
+            <div class="text-xs font-medium text-fg-muted">
+              {{ t('download.dialog.version') }}
+            </div>
+            <div class="font-mono text-sm font-semibold text-fg truncate">
+              {{ selectedMcVersion }} - {{ loaderDisplayName }} {{ targetLoaderVersion.version }}
+            </div>
           </div>
         </div>
-
         <div>
-          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
+          <label class="text-xs font-medium text-fg-muted mb-1 block">
             {{ t('download.dialog.instanceName') }}
           </label>
           <MInput
@@ -269,7 +271,7 @@ function formatDate(iso?: string | null): string {
           />
         </div>
 
-        <div v-if="installError" class="text-xs text-[rgb(var(--c-danger))]">
+        <div v-if="installError" class="text-xs text-danger">
           {{ installError }}
         </div>
       </div>

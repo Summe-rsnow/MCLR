@@ -13,10 +13,12 @@ import {
   MAvatar,
   MDialog,
   MEmpty,
+  MPageHeader,
+  MBrandIcon,
+  getAccountKindMeta,
   useDialog,
   useToast,
 } from '../../ui'
-
 const { t } = useI18n()
 const accountsStore = useAccountsStore()
 const { confirm } = useDialog()
@@ -256,28 +258,26 @@ async function openCloset(serverUrl?: string | null) {
 </script>
 
 <template>
-  <div class="h-full flex flex-col p-6 overflow-y-auto gap-6">
+  <div class="m-page">
     <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold text-[rgb(var(--c-text))]">
-          {{ t('accounts.title') }}
-        </h1>
-        <p class="text-sm text-[rgb(var(--c-text-muted))] mt-1">
-          {{ t('accounts.emptySubtitle') }}
-        </p>
-      </div>
-      <MButton variant="primary" icon="i-lucide-plus" @click="openAddDialog">
-        {{ t('accounts.addAccount') }}
-      </MButton>
-    </div>
+    <MPageHeader
+      :title="t('accounts.title')"
+      :description="t('accounts.emptySubtitle')"
+      icon="i-lucide-user-round"
+    >
+      <template #actions>
+        <MButton variant="primary" icon="i-lucide-plus" @click="openAddDialog">
+          {{ t('accounts.addAccount') }}
+        </MButton>
+      </template>
+    </MPageHeader>
 
     <!-- Empty State -->
     <MCard v-if="accountsStore.accounts.length === 0" class="p-8">
       <MEmpty
         :title="t('accounts.empty')"
         :description="t('accounts.emptySubtitle')"
-        icon="i-lucide-users"
+        icon="i-lucide-user-round"
       >
         <MButton variant="primary" icon="i-lucide-plus" class="mt-4" @click="openAddDialog">
           {{ t('accounts.addAccount') }}
@@ -292,12 +292,9 @@ async function openCloset(serverUrl?: string | null) {
         <MCard
           v-for="acc in accountsStore.accounts"
           :key="acc.id"
-          class="p-4 transition-all duration-200 cursor-pointer border"
-          :class="[
-            acc.selected
-              ? 'border-[rgb(var(--c-primary))] bg-[rgb(var(--c-primary-container)/0.15)]'
-              : 'border-[rgb(var(--c-outline)/0.2)] hover:border-[rgb(var(--c-outline)/0.5)]',
-          ]"
+          hoverable
+          :variant="acc.selected ? 'tinted' : 'raised'"
+          class="p-4 cursor-pointer"
           @click="handleSelectAccount(acc)"
         >
           <div class="flex items-center justify-between gap-4">
@@ -309,20 +306,22 @@ async function openCloset(serverUrl?: string | null) {
               />
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
-                  <span class="font-medium text-[rgb(var(--c-text))] truncate">
+                  <span class="font-medium text-fg truncate">
                     {{ acc.username }}
                   </span>
                   <MBadge
                     :variant="acc.kind === 'microsoft' ? 'primary' : 'neutral'"
                     size="sm"
                   >
+                    <MBrandIcon v-if="acc.kind === 'microsoft'" name="microsoft" class="w-3.5 h-3.5 mr-1" />
+                    <span v-else :class="getAccountKindMeta(acc.kind).icon" class="w-3.5 h-3.5 mr-1 inline-block" />
                     {{ t(`accounts.types.${acc.kind}`) }}
                   </MBadge>
                   <MBadge v-if="acc.selected" variant="success" size="sm">
                     {{ t('accounts.status.current') }}
                   </MBadge>
                 </div>
-                <div class="text-xs text-[rgb(var(--c-text-muted))] truncate mt-0.5">
+                <div class="text-xs text-fg-muted truncate mt-0.5">
                   <span v-if="acc.serverName">{{ acc.serverName }} · </span>
                   <span>{{ acc.uuid }}</span>
                 </div>
@@ -341,7 +340,7 @@ async function openCloset(serverUrl?: string | null) {
                 icon="i-lucide-trash-2"
                 size="sm"
                 variant="text"
-                class="text-[rgb(var(--c-danger))]"
+                class="text-danger"
                 :title="t('accounts.actions.delete')"
                 @click="handleRemoveAccount(acc)"
               />
@@ -353,14 +352,14 @@ async function openCloset(serverUrl?: string | null) {
       <!-- Skin & Cape Panel (Right 5 Cols) -->
       <div class="lg:col-span-5 flex flex-col gap-4">
         <MCard class="p-5 flex flex-col gap-4">
-          <h2 class="text-lg font-semibold text-[rgb(var(--c-text))]">
+          <h2 class="text-lg font-semibold text-fg">
             {{ t('accounts.skin.title') }}
           </h2>
 
           <template v-if="accountsStore.selectedAccount">
             <!-- 2D Head Preview -->
-            <div class="flex items-center gap-4 p-4 rounded-lg bg-[rgb(var(--c-surface-variant)/0.4)]">
-              <div class="w-16 h-16 rounded-md bg-[rgb(var(--c-surface))] flex items-center justify-center border border-[rgb(var(--c-outline)/0.3)] overflow-hidden">
+            <div class="flex items-center gap-4 p-4 rounded-xl bg-sunken">
+              <div class="w-16 h-16 rounded-lg bg-raised flex items-center justify-center border border-line overflow-hidden">
                 <img
                   v-if="accountsStore.selectedAccount.skinHeadDataUrl"
                   :src="accountsStore.selectedAccount.skinHeadDataUrl"
@@ -374,10 +373,10 @@ async function openCloset(serverUrl?: string | null) {
                 />
               </div>
               <div class="flex-1 min-w-0">
-                <div class="font-medium text-[rgb(var(--c-text))] truncate">
+                <div class="font-medium text-fg truncate">
                   {{ accountsStore.selectedAccount.username }}
                 </div>
-                <div class="text-xs text-[rgb(var(--c-text-muted))] mt-1">
+                <div class="text-xs text-fg-muted mt-1">
                   {{ t('accounts.skin.model') }}:
                   {{ t(`accounts.skin.models.${accountsStore.selectedAccount.defaultSkinModel || 'classic'}`) }}
                 </div>
@@ -402,23 +401,23 @@ async function openCloset(serverUrl?: string | null) {
               >
                 {{ t('accounts.actions.openCloset') }}
               </MButton>
-              <p v-if="accountsStore.selectedAccount.kind === 'offline'" class="text-xs text-[rgb(var(--c-text-muted))]">
+              <p v-if="accountsStore.selectedAccount.kind === 'offline'" class="text-xs text-fg-muted">
                 {{ t('accounts.skin.unsupportedOffline') }}
               </p>
             </div>
 
             <!-- Cape Selection (for accounts that have capes) -->
             <div v-if="accountsStore.selectedAccount.capes.length > 0" class="flex flex-col gap-2 mt-2">
-              <div class="text-sm font-medium text-[rgb(var(--c-text))]">
+              <div class="text-sm font-medium text-fg">
                 {{ t('accounts.skin.capes') }}
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <div
-                  class="p-2 rounded border text-center cursor-pointer text-xs"
+                  class="p-2 rounded-lg border text-center cursor-pointer text-xs transition"
                   :class="[
                     !accountsStore.selectedAccount.capes.some((c) => c.active)
-                      ? 'border-[rgb(var(--c-primary))] bg-[rgb(var(--c-primary-container)/0.2)] text-[rgb(var(--c-primary))]'
-                      : 'border-[rgb(var(--c-outline)/0.3)] text-[rgb(var(--c-text-muted))]',
+                      ? 'border-primary bg-primary-soft text-primary font-medium'
+                      : 'border-line text-fg-muted hover:bg-sunken',
                   ]"
                   @click="handleSelectCape(null)"
                 >
@@ -427,11 +426,11 @@ async function openCloset(serverUrl?: string | null) {
                 <div
                   v-for="cape in accountsStore.selectedAccount.capes"
                   :key="cape.id"
-                  class="p-2 rounded border text-center cursor-pointer text-xs truncate"
+                  class="p-2 rounded-lg border text-center cursor-pointer text-xs truncate transition"
                   :class="[
                     cape.active
-                      ? 'border-[rgb(var(--c-primary))] bg-[rgb(var(--c-primary-container)/0.2)] text-[rgb(var(--c-primary))] font-medium'
-                      : 'border-[rgb(var(--c-outline)/0.3)] text-[rgb(var(--c-text))]',
+                      ? 'border-primary bg-primary-soft text-primary font-medium'
+                      : 'border-line text-fg hover:bg-sunken',
                   ]"
                   @click="handleSelectCape(cape.id)"
                 >
@@ -454,25 +453,27 @@ async function openCloset(serverUrl?: string | null) {
       <div class="flex flex-col gap-3 py-2">
         <MButton
           variant="tonal"
-          icon="i-lucide-gamepad-2"
           class="justify-start py-3"
           @click="startAddMicrosoft"
         >
-          <div class="text-left ml-2">
+          <template #icon>
+            <MBrandIcon name="microsoft" class="w-5 h-5 mr-2" />
+          </template>
+          <div class="text-left">
             <div class="font-medium">{{ t('accounts.types.microsoft') }}</div>
-            <div class="text-xs text-[rgb(var(--c-text-muted))]">OAuth 2.0 / Xbox Live</div>
+            <div class="text-xs text-fg-muted">OAuth 2.0 / Xbox Live</div>
           </div>
         </MButton>
 
         <MButton
           variant="tonal"
-          icon="i-lucide-user"
+          icon="i-lucide-user-round"
           class="justify-start py-3"
           @click="startAddOffline"
         >
           <div class="text-left ml-2">
             <div class="font-medium">{{ t('accounts.types.offline') }}</div>
-            <div class="text-xs text-[rgb(var(--c-text-muted))]">Standard MD5 / Custom UUID</div>
+            <div class="text-xs text-fg-muted">Standard MD5 / Custom UUID</div>
           </div>
         </MButton>
 
@@ -484,7 +485,7 @@ async function openCloset(serverUrl?: string | null) {
         >
           <div class="text-left ml-2">
             <div class="font-medium">{{ t('accounts.types.authlib') }}</div>
-            <div class="text-xs text-[rgb(var(--c-text-muted))]">Authlib-Injector / LittleSkin</div>
+            <div class="text-xs text-fg-muted">Authlib-Injector / LittleSkin</div>
           </div>
         </MButton>
       </div>
@@ -502,7 +503,7 @@ async function openCloset(serverUrl?: string | null) {
     >
       <div class="flex flex-col gap-4 py-2">
         <div>
-          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
+          <label class="text-xs font-medium text-fg-muted mb-1 block">
             {{ t('accounts.dialog.username') }}
           </label>
           <MInput
@@ -512,7 +513,7 @@ async function openCloset(serverUrl?: string | null) {
         </div>
 
         <div>
-          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
+          <label class="text-xs font-medium text-fg-muted mb-1 block">
             {{ t('accounts.dialog.uuidMode') }}
           </label>
           <MSelect
@@ -522,7 +523,7 @@ async function openCloset(serverUrl?: string | null) {
         </div>
 
         <div v-if="offlineUuidMode === 'custom'">
-          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
+          <label class="text-xs font-medium text-fg-muted mb-1 block">
             {{ t('accounts.dialog.customUuid') }}
           </label>
           <MInput
@@ -531,7 +532,7 @@ async function openCloset(serverUrl?: string | null) {
           />
         </div>
 
-        <div v-if="offlineError" class="text-xs text-[rgb(var(--c-danger))]">
+        <div v-if="offlineError" class="text-xs text-danger">
           {{ offlineError }}
         </div>
       </div>
@@ -552,7 +553,7 @@ async function openCloset(serverUrl?: string | null) {
     >
       <div class="flex flex-col gap-4 py-2">
         <div>
-          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
+          <label class="text-xs font-medium text-fg-muted mb-1 block">
             {{ t('accounts.dialog.authServer') }}
           </label>
           <MInput
@@ -562,7 +563,7 @@ async function openCloset(serverUrl?: string | null) {
         </div>
 
         <div>
-          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
+          <label class="text-xs font-medium text-fg-muted mb-1 block">
             {{ t('accounts.dialog.authAccount') }}
           </label>
           <MInput
@@ -572,7 +573,7 @@ async function openCloset(serverUrl?: string | null) {
         </div>
 
         <div>
-          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
+          <label class="text-xs font-medium text-fg-muted mb-1 block">
             {{ t('accounts.dialog.authPassword') }}
           </label>
           <MInput
@@ -582,7 +583,7 @@ async function openCloset(serverUrl?: string | null) {
           />
         </div>
 
-        <div v-if="authError" class="text-xs text-[rgb(var(--c-danger))]">
+        <div v-if="authError" class="text-xs text-danger">
           {{ authError }}
         </div>
       </div>
@@ -606,16 +607,16 @@ async function openCloset(serverUrl?: string | null) {
       :title="t('accounts.dialog.msDeviceTitle')"
     >
       <div v-if="accountsStore.deviceCodeData" class="flex flex-col gap-4 py-2">
-        <p class="text-sm text-[rgb(var(--c-text))]">
+        <p class="text-sm text-fg">
           {{ t('accounts.dialog.msDevicePrompt') }}
         </p>
 
-        <div class="flex items-center justify-between p-4 rounded-lg bg-[rgb(var(--c-surface-variant)/0.5)] border border-[rgb(var(--c-outline)/0.3)]">
+        <div class="flex items-center justify-between p-4 rounded-xl m-well">
           <div>
-            <div class="text-xs text-[rgb(var(--c-text-muted))]">
+            <div class="text-xs text-fg-muted">
               {{ t('accounts.dialog.msCodeLabel') }}
             </div>
-            <div class="text-xl font-mono font-bold tracking-wider text-[rgb(var(--c-primary))] mt-0.5">
+            <div class="text-xl font-mono font-bold tracking-wider text-primary mt-0.5">
               {{ accountsStore.deviceCodeData.userCode }}
             </div>
           </div>
@@ -630,7 +631,7 @@ async function openCloset(serverUrl?: string | null) {
           </MButton>
         </div>
 
-        <p class="text-xs text-[rgb(var(--c-text-muted))] flex items-center gap-2">
+        <p class="text-xs text-fg-muted flex items-center gap-2">
           <span class="i-lucide-loader animate-spin inline-block" />
           {{ t('accounts.dialog.msWaiting') }}
         </p>
@@ -648,18 +649,19 @@ async function openCloset(serverUrl?: string | null) {
       :title="t('accounts.actions.selectProfileTitle')"
     >
       <div class="flex flex-col gap-3 py-2">
-        <p class="text-sm text-[rgb(var(--c-text))]">
+        <p class="text-sm text-fg">
           {{ t('accounts.actions.selectProfilePrompt') }}
         </p>
         <div class="flex flex-col gap-2">
           <MCard
             v-for="p in accountsStore.pendingProfiles"
             :key="p.id"
-            class="p-3 cursor-pointer hover:border-[rgb(var(--c-primary))] border border-[rgb(var(--c-outline)/0.2)]"
+            hoverable
+            class="p-3 cursor-pointer border border-line"
             @click="handleSelectProfile(p)"
           >
-            <div class="font-medium text-[rgb(var(--c-text))]">{{ p.name }}</div>
-            <div class="text-xs text-[rgb(var(--c-text-muted))]">{{ p.id }}</div>
+            <div class="font-medium text-fg">{{ p.name }}</div>
+            <div class="text-xs text-fg-muted">{{ p.id }}</div>
           </MCard>
         </div>
       </div>
@@ -677,7 +679,7 @@ async function openCloset(serverUrl?: string | null) {
     >
       <div class="flex flex-col gap-4 py-2">
         <div>
-          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
+          <label class="text-xs font-medium text-fg-muted mb-1 block">
             {{ t('accounts.skin.model') }}
           </label>
           <MSelect
@@ -687,7 +689,7 @@ async function openCloset(serverUrl?: string | null) {
         </div>
 
         <div>
-          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
+          <label class="text-xs font-medium text-fg-muted mb-1 block">
             {{ t('accounts.skin.uploadPathPrompt') }}
           </label>
           <MInput

@@ -15,6 +15,10 @@ import {
   MBadge,
   MEmpty,
   MSkeleton,
+  MPageHeader,
+  MBrandIcon,
+  compTypeMeta,
+  type CompTypeKey,
 } from '../../ui'
 import ModpackImportDialog from './ModpackImportDialog.vue'
 
@@ -179,30 +183,40 @@ watch(
 </script>
 
 <template>
-  <div class="h-full flex flex-col p-6 space-y-4 overflow-y-auto">
-    <!-- Header with Tabs -->
-    <div class="flex items-center justify-between border-b border-surface-variant pb-2">
+  <div class="m-page">
+    <MPageHeader
+      :title="t('comp.title')"
+      :description="t('comp.subtitle')"
+      icon="i-lucide-store"
+    >
+      <template #actions>
+        <div v-if="compStore.activeTab === 'modpack'">
+          <MButton
+            variant="primary"
+            size="sm"
+            icon="i-lucide-file-up"
+            @click="showImportDialog = true"
+          >
+            {{ t('comp.modpackImport.button') }}
+          </MButton>
+        </div>
+      </template>
+    </MPageHeader>
+
+    <!-- Tabs Bar -->
+    <div class="border-b border-line pb-2">
       <MTabs
         :model-value="compStore.activeTab"
         :tabs="tabs"
         @update:model-value="onTabChange"
       />
-      <div v-if="compStore.activeTab === 'modpack'">
-        <MButton
-          variant="primary"
-          size="sm"
-          @click="showImportDialog = true"
-        >
-          <span class="i-lucide-file-up mr-1.5 w-4 h-4" />
-          {{ t('comp.modpackImport.button') }}
-        </MButton>
-      </div>
     </div>
 
     <!-- Filter Bar (visible when not in favorites tab) -->
-    <div
+    <MCard
       v-if="compStore.activeTab !== 'favorites'"
-      class="flex flex-wrap items-center gap-3 bg-surface-variant/20 p-3 rounded-xl border border-outline/20"
+      padding="sm"
+      class="flex flex-wrap items-center gap-3 sticky top-0 z-10"
     >
       <MSegmented
         :model-value="compStore.platform"
@@ -242,8 +256,7 @@ watch(
           @update:model-value="onSortChange"
         />
       </div>
-    </div>
-
+    </MCard>
     <!-- Content Area: Favorites Tab -->
     <div v-if="compStore.activeTab === 'favorites'" class="flex-1 space-y-3">
       <div v-if="compStore.favorites.length === 0" class="py-16">
@@ -256,25 +269,26 @@ watch(
         <MCard
           v-for="fav in compStore.favorites"
           :key="fav.platform + '-' + fav.projectId"
-          class="cursor-pointer transition-all hover:border-primary p-4 flex flex-col justify-between"
+          hoverable
+          class="cursor-pointer p-4 flex flex-col justify-between"
           @click="navigateToProject(fav.platform, fav.projectId)"
         >
           <div class="flex items-start space-x-3">
             <img
               v-if="fav.iconUrl"
               :src="fav.iconUrl"
-              class="w-12 h-12 rounded-lg object-cover bg-surface-variant flex-shrink-0"
+              class="w-14 h-14 rounded-xl object-cover bg-sunken shrink-0"
               alt=""
             />
             <div
               v-else
-              class="w-12 h-12 rounded-lg bg-surface-variant flex items-center justify-center flex-shrink-0"
+              class="w-14 h-14 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
             >
-              <i class="i-lucide-box text-xl text-text-muted" />
+              <span :class="compTypeMeta[fav.compType as CompTypeKey]?.icon || 'i-lucide-box'" class="w-7 h-7 inline-block" />
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
-                <h4 class="font-bold text-base truncate">{{ fav.title }}</h4>
+                <h4 class="font-bold text-base text-fg truncate">{{ fav.title }}</h4>
                 <MIconButton
                   icon="i-lucide-heart-crack"
                   size="sm"
@@ -283,7 +297,10 @@ watch(
                 />
               </div>
               <div class="flex items-center space-x-2 mt-1">
-                <MBadge variant="neutral">{{ fav.platform }}</MBadge>
+                <MBadge variant="neutral">
+                  <MBrandIcon v-if="fav.platform === 'modrinth' || fav.platform === 'curseforge'" :name="fav.platform" class="w-3.5 h-3.5 mr-1" />
+                  {{ fav.platform }}
+                </MBadge>
                 <MBadge variant="neutral">{{ fav.compType }}</MBadge>
               </div>
             </div>
@@ -312,7 +329,7 @@ watch(
 
       <!-- Results Grid -->
       <div v-else class="space-y-4">
-        <div class="text-xs text-text-muted">
+        <div class="text-xs text-fg-muted">
           {{ t('comp.search.totalHits', { count: compStore.totalHits.toString() }) }}
         </div>
 
@@ -320,7 +337,8 @@ watch(
           <MCard
             v-for="project in compStore.hits"
             :key="project.platform + '-' + project.id"
-            class="cursor-pointer transition-all hover:border-primary p-4 flex flex-col justify-between"
+            hoverable
+            class="cursor-pointer p-4 flex flex-col justify-between"
             @click="navigateToProject(project.platform, project.id)"
           >
             <div>
@@ -328,42 +346,43 @@ watch(
                 <img
                   v-if="project.iconUrl"
                   :src="project.iconUrl"
-                  class="w-14 h-14 rounded-lg object-cover bg-surface-variant flex-shrink-0"
+                  class="w-14 h-14 rounded-xl object-cover bg-sunken shrink-0"
                   alt=""
                 />
                 <div
                   v-else
-                  class="w-14 h-14 rounded-lg bg-surface-variant flex items-center justify-center flex-shrink-0"
+                  class="w-14 h-14 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
                 >
-                  <i class="i-lucide-box text-2xl text-text-muted" />
+                  <span :class="compTypeMeta[compStore.activeTab as CompTypeKey]?.icon || 'i-lucide-box'" class="w-7 h-7 inline-block" />
                 </div>
 
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center justify-between">
-                    <h3 class="font-bold text-base truncate">{{ project.title }}</h3>
+                    <h3 class="font-bold text-base text-fg truncate">{{ project.title }}</h3>
                     <MIconButton
-                      :icon="compStore.isFavorite(project.platform, project.id) ? 'i-lucide-heart' : 'i-lucide-heart'"
+                      icon="i-lucide-heart"
                       size="sm"
                       :class="
                         compStore.isFavorite(project.platform, project.id)
                           ? 'text-danger hover:opacity-80'
-                          : 'text-text-muted hover:text-text'
+                          : 'text-fg-muted hover:text-fg'
                       "
                       @click.stop="compStore.toggleFavorite(project)"
                     />
                   </div>
-                  <div class="text-xs text-text-muted mt-0.5 truncate">
-                    {{ t('comp.project.author', { author: project.author }) }}
+                  <div class="text-xs text-fg-muted mt-0.5 truncate flex items-center gap-1.5">
+                    <MBrandIcon v-if="project.platform === 'modrinth' || project.platform === 'curseforge'" :name="project.platform" class="w-3 h-3 text-fg-muted" />
+                    <span>{{ t('comp.project.author', { author: project.author }) }}</span>
                   </div>
                 </div>
               </div>
 
-              <p class="text-xs text-text-muted mt-3 line-clamp-2 h-8 leading-4">
+              <p class="text-xs text-fg-muted mt-3 line-clamp-2 h-8 leading-4">
                 {{ project.summary }}
               </p>
             </div>
 
-            <div class="mt-4 pt-3 border-t border-outline/10 flex items-center justify-between text-xs text-text-muted">
+            <div class="mt-4 pt-3 border-t border-line flex items-center justify-between text-xs text-fg-muted">
               <div class="flex items-center space-x-3">
                 <span class="flex items-center space-x-1">
                   <i class="i-lucide-download text-sm" />

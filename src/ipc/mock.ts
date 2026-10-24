@@ -78,7 +78,7 @@ export function setupMockIpc(): void {
     },
   }
   const handlers: MockHandlers = {
-    app_info: () => ({ name: 'MCLR', version: '0.0.1' }),
+    app_info: () => ({ name: 'MCLR', version: '0.0.13' }),
     secrets_status: () => ({
       msClientId: false,
       curseforgeApiKey: false,

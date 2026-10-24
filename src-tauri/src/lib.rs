@@ -13,23 +13,25 @@ use tauri::Emitter;
 pub fn run() {
     let builder = commands::builder();
 
-    // Initialize core settings
-    let settings_store = SettingsStore::open().expect("failed to open settings store");
+    // `main` has no tokio runtime and these stores spawn tokio tasks on construction.
+    // Enter Tauri's global async runtime (the same one async commands run on).
+    let (settings_store, account_store, log_level, log_retention) =
+        tauri::async_runtime::block_on(async {
+            let settings_store = SettingsStore::open().expect("failed to open settings store");
+            let account_store = AccountStore::open().expect("failed to open account store");
+            let initial_settings = settings_store.get().await;
+            (
+                settings_store,
+                account_store,
+                initial_settings.system.log_level,
+                initial_settings.system.log_retention_days,
+            )
+        });
+    let account_store = Arc::new(account_store);
     let task_center = Arc::new(TaskCenter::new());
-    let account_store = Arc::new(AccountStore::open().expect("failed to open account store"));
     let launch_watcher = Arc::new(LaunchWatcher::new());
 
     // Initialize logging according to settings
-    let (log_level, log_retention) = {
-        // Safe blocking read on startup before runtime begins
-        let initial_settings = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(settings_store.get())
-        });
-        (
-            initial_settings.system.log_level,
-            initial_settings.system.log_retention_days,
-        )
-    };
     let _logging_guard = init_logging(&paths::logs_dir(), &log_level, log_retention);
 
     let tc_for_events = Arc::clone(&task_center);

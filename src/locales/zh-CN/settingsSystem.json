@@ -137,6 +137,8 @@
     "secretMs": "微软账号登录客户端 ID",
     "secretCurseforge": "CurseForge 开发者 API Key",
     "secretUpdateEndpoint": "自更新检测服务端点",
-    "secretUpdatePubkey": "自更新公钥签名"
+    "secretUpdatePubkey": "自更新公钥签名",
+    "fontNotice": "本软件使用 HarmonyOS Sans 字体，© Huawei Device Co., Ltd.",
+    "thirdPartyNotice": "第三方开源组件与字体协议详情请参阅项目 THIRD_PARTY_NOTICES.md 文件。"
   }
 }

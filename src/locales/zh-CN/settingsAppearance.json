@@ -17,7 +17,8 @@
     "material": "高级材质效果",
     "materialFlat": "扁平纯色 (高性能)",
     "materialGlass": "流光玻璃 (液态亚克力/云母效果)",
-    "materialDesc": "开启流光玻璃将启用高斯模糊、折射光晕与系统级云母磨砂材质"
+    "materialDesc": "开启流光玻璃将启用高斯模糊、折射光晕与系统级云母磨砂材质",
+    "livePreview": "实时材质预览"
   },
   "typography": {
     "fontFamily": "启动器界面字体",

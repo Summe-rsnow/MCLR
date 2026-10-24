@@ -148,8 +148,10 @@ export const useThemeStore = defineStore('theme', () => {
     if (typeof document !== 'undefined' && document.documentElement) {
       if (fontFamily.value) {
         document.documentElement.style.fontFamily = fontFamily.value
+        document.documentElement.style.setProperty('--font-user', fontFamily.value)
       } else {
         document.documentElement.style.fontFamily = ''
+        document.documentElement.style.removeProperty('--font-user')
       }
       document.documentElement.style.fontSize = `${scale.value * 16}px`
     }

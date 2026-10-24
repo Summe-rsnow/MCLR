@@ -17,6 +17,7 @@ import {
   MDialog,
   MEmpty,
   MSkeleton,
+  MPageHeader,
   useToast,
   useDialog,
 } from '../../ui'
@@ -140,50 +141,54 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col p-6 space-y-4 overflow-y-auto">
-    <!-- Header Controls -->
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <!-- Instance Selector (if not fixed by props) -->
-      <div v-if="!props.instanceId" class="flex items-center gap-2">
-        <span class="w-4 h-4 i-lucide-layers text-textMuted shrink-0" />
-        <span class="text-xs font-semibold text-textMuted">{{ t('mods.instanceSelect') }}:</span>
-        <div class="w-56">
-          <MSelect
-            v-model="currentInstanceId"
-            :options="instanceOptions"
+  <div class="m-page">
+    <!-- Header -->
+    <MPageHeader
+      :title="t('mods.nav')"
+      icon="i-lucide-puzzle"
+    >
+      <template #actions>
+        <div class="flex items-center space-x-2">
+          <MButton
+            variant="tonal"
             size="sm"
-          />
+            icon="i-lucide-refresh-cw"
+            :loading="modsStore.loading"
+            @click="onCheckUpdates"
+          >
+            {{ t('mods.actions.checkUpdates') }}
+          </MButton>
+          <MButton
+            v-if="updatableCount > 0"
+            variant="primary"
+            size="sm"
+            icon="i-lucide-arrow-up-circle"
+            @click="onUpdateAll"
+          >
+            {{ t('mods.actions.updateAll') }} ({{ updatableCount }})
+          </MButton>
         </div>
-      </div>
+      </template>
+    </MPageHeader>
 
-      <!-- Action Buttons -->
-      <div class="flex items-center space-x-2">
-        <MButton
-          variant="tonal"
+    <!-- Instance Selector (if not fixed by props) -->
+    <div v-if="!props.instanceId" class="flex items-center gap-2 -mt-2">
+      <span class="w-4 h-4 i-lucide-layers text-fg-muted shrink-0" />
+      <span class="text-xs font-semibold text-fg-muted">{{ t('mods.instanceSelect') }}:</span>
+      <div class="w-56">
+        <MSelect
+          v-model="currentInstanceId"
+          :options="instanceOptions"
           size="sm"
-          :loading="modsStore.loading"
-          @click="onCheckUpdates"
-        >
-          <span class="i-lucide-refresh-cw mr-1.5 w-4 h-4" />
-          {{ t('mods.actions.checkUpdates') }}
-        </MButton>
-        <MButton
-          v-if="updatableCount > 0"
-          variant="primary"
-          size="sm"
-          @click="onUpdateAll"
-        >
-          <span class="i-lucide-arrow-up-circle mr-1.5 w-4 h-4" />
-          {{ t('mods.actions.updateAll') }} ({{ updatableCount }})
-        </MButton>
+        />
       </div>
     </div>
-
     <!-- Filter Bar -->
-    <div class="flex flex-wrap items-center gap-3 bg-surface-variant/20 p-3 rounded-xl border border-outline/20">
+    <MCard padding="sm" class="flex flex-wrap items-center gap-3">
       <div class="flex-1 min-w-[200px]">
         <MInput
           v-model="modsStore.searchQuery"
+          icon="i-lucide-search"
           :placeholder="t('mods.searchPlaceholder')"
           size="sm"
           clearable
@@ -195,8 +200,7 @@ onMounted(async () => {
         :options="filterOptions"
         size="sm"
       />
-    </div>
-
+    </MCard>
     <!-- Mod List Content -->
     <div v-if="modsStore.loading && modsStore.mods.length === 0" class="space-y-3">
       <MSkeleton class="h-20 rounded-xl" />
@@ -214,8 +218,10 @@ onMounted(async () => {
       <MCard
         v-for="mod in modsStore.filteredMods"
         :key="mod.fileName"
+        variant="well"
+        hoverable
         class="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all"
-        :class="{ 'opacity-60 bg-surface-variant/10': !mod.enabled }"
+        :class="{ 'opacity-60': !mod.enabled }"
       >
         <!-- Left: Info -->
         <div class="flex items-start space-x-3 min-w-0">
@@ -227,10 +233,10 @@ onMounted(async () => {
           </div>
           <div class="space-y-1 min-w-0">
             <div class="flex flex-wrap items-center gap-2">
-              <span class="font-semibold text-text text-sm truncate" :title="mod.name">
+              <span class="font-semibold text-fg text-sm truncate" :title="mod.name">
                 {{ mod.name }}
               </span>
-              <span class="text-xs text-textMuted font-mono">v{{ mod.version }}</span>
+              <span class="text-xs text-fg-muted font-mono">v{{ mod.version }}</span>
               <MBadge variant="neutral" size="sm">{{ mod.loader }}</MBadge>
               <MBadge
                 :variant="mod.enabled ? 'success' : 'neutral'"
@@ -247,11 +253,11 @@ onMounted(async () => {
               </MBadge>
             </div>
 
-            <div v-if="mod.description" class="text-xs text-textMuted line-clamp-1">
+            <div v-if="mod.description" class="text-xs text-fg-muted line-clamp-1">
               {{ mod.description }}
             </div>
 
-            <div class="flex flex-wrap items-center gap-3 text-[11px] text-textMuted">
+            <div class="flex flex-wrap items-center gap-3 text-[11px] text-fg-muted">
               <span class="font-mono">{{ mod.fileName }}</span>
               <span>•</span>
               <span>{{ formatSize(mod.size) }}</span>
@@ -303,7 +309,7 @@ onMounted(async () => {
       @cancel="modsStore.closeJarInJar"
     >
       <div class="space-y-3 py-2 max-h-[60vh] overflow-y-auto">
-        <div class="text-xs text-textMuted">
+        <div class="text-xs text-fg-muted">
           {{ t('mods.jarInJarDrawer.subtitle', { name: modsStore.jarInJarTarget?.name || '' }) }}
         </div>
 

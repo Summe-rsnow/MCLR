@@ -1,5 +1,7 @@
 {
   "nav": "社区资源",
+  "title": "社区资源",
+  "subtitle": "浏览与下载来自 Modrinth 与 CurseForge 的丰富资源",
   "tabs": {
     "mod": "模组",
     "modpack": "整合包",

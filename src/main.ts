@@ -1,3 +1,4 @@
+import './ui/theme/fonts.css'
 import 'uno.css'
 import './ui/theme/material.css'
 import { createApp } from 'vue'

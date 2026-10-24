@@ -4,7 +4,7 @@ import type { InstanceDetailTab } from '../tabs'
 const tab: InstanceDetailTab = {
   key: 'screenshots',
   titleKey: 'instanceDetail.tabs.screenshots',
-  icon: 'i-lucide-camera',
+  icon: 'i-lucide-image',
   order: 80,
   component: ScreenshotsTab,
 }

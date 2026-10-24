@@ -16,17 +16,17 @@ function formatSize(bytes: number): string {
 <template>
   <div class="space-y-1">
     <div
-      class="flex items-center justify-between p-2 rounded-lg bg-surface-variant/30 hover:bg-surface-variant/50 transition border border-outline/10 text-xs"
+      class="flex items-center justify-between p-2 rounded-lg bg-sunken/30 hover:bg-sunken/50 transition border border-line text-xs"
       :style="{ marginLeft: `${(depth || 0) * 16}px` }"
     >
       <div class="flex items-center space-x-2 min-w-0">
         <span class="i-lucide-package text-primary shrink-0 w-3.5 h-3.5" />
-        <span class="font-medium text-text truncate" :title="node.name">
+        <span class="font-medium text-fg truncate" :title="node.name">
           {{ node.name }}
         </span>
-        <span class="text-text-muted">v{{ node.version }}</span>
+        <span class="text-fg-muted">v{{ node.version }}</span>
       </div>
-      <div class="flex items-center space-x-2 shrink-0 text-text-muted">
+      <div class="flex items-center space-x-2 shrink-0 text-fg-muted">
         <span class="font-mono text-[11px]">{{ node.id }}</span>
         <span>•</span>
         <span>{{ formatSize(node.size) }}</span>

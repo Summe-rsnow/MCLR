@@ -12,8 +12,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       nav: {
         titleKey: 'comp.nav',
-        icon: 'i-lucide-package-search',
+        icon: 'i-lucide-store',
         order: 35,
+        group: 'discover',
       },
     },
   },

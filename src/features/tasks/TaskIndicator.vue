@@ -39,7 +39,7 @@ function navigateToTasks() {
   >
     <span class="w-3.5 h-3.5 i-lucide-loader-2 animate-spin" />
     <span>{{ t('tasks.indicator.activeTasks', { count: activeCount }) }}</span>
-    <span class="text-textMuted font-mono text-[11px]">{{ t('tasks.indicator.speed', { speed: aggregateSpeed }) }}</span>
+    <span class="text-fg-muted font-mono text-[11px]">{{ t('tasks.indicator.speed', { speed: aggregateSpeed }) }}</span>
     <div class="w-12 h-1.5 ml-1">
       <MProgress :value="progressPercent" :max="100" />
     </div>

@@ -120,7 +120,7 @@ function onClose(): void {
     <div class="space-y-4 py-2">
       <!-- File Selector -->
       <div class="space-y-1.5">
-        <label class="text-xs font-semibold text-text-muted block">
+        <label class="text-xs font-semibold text-fg-muted block">
           {{ t('comp.modpackImport.selectFile') }}
         </label>
         <div class="flex items-center space-x-2">
@@ -143,7 +143,7 @@ function onClose(): void {
 
       <!-- Inspect Loading -->
       <div v-if="inspecting" class="py-3 space-y-2">
-        <div class="text-xs text-text-muted flex items-center space-x-2">
+        <div class="text-xs text-fg-muted flex items-center space-x-2">
           <span class="i-lucide-loader-2 animate-spin w-4 h-4 text-primary" />
           <span>{{ t('comp.modpackImport.inspecting') }}</span>
         </div>
@@ -153,14 +153,14 @@ function onClose(): void {
       <!-- Inspect Result -->
       <div
         v-else-if="inspectResult"
-        class="p-3 rounded-xl bg-surface-variant/30 border border-outline/20 space-y-2 text-xs"
+        class="p-3 rounded-xl bg-sunken/30 border border-line space-y-2 text-xs"
       >
         <div class="flex items-center justify-between">
-          <span class="font-semibold text-text text-sm">{{ inspectResult.name }}</span>
+          <span class="font-semibold text-fg text-sm">{{ inspectResult.name }}</span>
           <MBadge variant="primary">{{ inspectResult.format }}</MBadge>
         </div>
 
-        <div class="grid grid-cols-2 gap-2 text-text-muted">
+        <div class="grid grid-cols-2 gap-2 text-fg-muted">
           <div>{{ t('comp.modpackImport.mcVersion', { version: inspectResult.mcVersion }) }}</div>
           <div>
             {{
@@ -178,8 +178,8 @@ function onClose(): void {
       </div>
 
       <!-- Target Instance Name -->
-      <div v-if="inspectResult" class="space-y-1.5 pt-2 border-t border-outline/10">
-        <label class="text-xs font-semibold text-text-muted block">
+      <div v-if="inspectResult" class="space-y-1.5 pt-2 border-t border-line">
+        <label class="text-xs font-semibold text-fg-muted block">
           {{ t('comp.modpackImport.targetName') }}
         </label>
         <MInput

@@ -3,12 +3,14 @@ import { computed } from 'vue'
 
 const props = withDefaults(
   defineProps<{
-    glass?: boolean
+    variant?: 'raised' | 'well' | 'ghost' | 'tinted'
     padding?: 'none' | 'sm' | 'md' | 'lg'
+    hoverable?: boolean
   }>(),
   {
-    glass: undefined,
+    variant: 'raised',
     padding: 'md',
+    hoverable: false,
   },
 )
 
@@ -22,36 +24,34 @@ const paddingClass = computed(() => {
       return 'p-6'
     case 'md':
     default:
-      return 'p-4'
+      return 'p-5'
+  }
+})
+
+const variantClass = computed(() => {
+  switch (props.variant) {
+    case 'well':
+      return 'm-well'
+    case 'ghost':
+      return 'bg-transparent'
+    case 'tinted':
+      return 'bg-primary-soft text-fg border border-primary/15'
+    case 'raised':
+    default:
+      return 'm-card'
   }
 })
 </script>
 
 <template>
   <div
-    class="m-card rounded-xl transition-all"
+    class="rounded-xl transition-all duration-200"
     :class="[
+      variantClass,
       paddingClass,
-      glass === true ? 'm-card--force-glass' : '',
-      glass === false ? 'm-card--force-flat' : '',
+      hoverable ? 'hover:-translate-y-[1px] hover:shadow-2 cursor-pointer' : '',
     ]"
   >
     <slot />
   </div>
 </template>
-
-<style scoped>
-.m-card--force-glass {
-  background-color: rgb(var(--c-surface) / 0.65) !important;
-  border: 1px solid rgb(255 255 255 / 0.25) !important;
-  backdrop-filter: blur(24px) saturate(1.6) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.6) !important;
-}
-
-.m-card--force-flat {
-  background-color: rgb(var(--c-surface)) !important;
-  border: 1px solid rgb(var(--c-outline) / 0.7) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-</style>

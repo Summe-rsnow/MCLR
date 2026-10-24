@@ -8,8 +8,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       nav: {
         titleKey: 'download.nav',
-        icon: 'i-lucide-download',
+        icon: 'i-lucide-cloud-download',
         order: 30,
+        group: 'discover',
       },
     },
   },

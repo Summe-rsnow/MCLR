@@ -34,9 +34,9 @@ function onInput(event: Event) {
       :max="max"
       :step="step"
       :disabled="disabled"
-      class="w-full h-2 bg-surfaceVariant rounded-lg appearance-none cursor-pointer accent-primary disabled:opacity-50 disabled:cursor-not-allowed"
+      class="w-full h-2 bg-sunken rounded-lg appearance-none cursor-pointer accent-primary disabled:opacity-45 disabled:cursor-not-allowed"
       @input="onInput"
     />
-    <span class="text-xs text-textMuted w-8 text-right tabular-nums">{{ modelValue }}</span>
+    <span class="text-xs text-fg-muted w-8 text-right tabular-nums">{{ modelValue }}</span>
   </div>
 </template>

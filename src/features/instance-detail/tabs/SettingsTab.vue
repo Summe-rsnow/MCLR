@@ -5,7 +5,8 @@ import type { InstanceInfo, InstanceConfig } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
 import { useInstancesStore } from '../../instances/store'
 import {
-  MCard,
+  MSection,
+  MSettingRow,
   MButton,
   MInput,
   MSelect,
@@ -61,36 +62,20 @@ watch(
 
 const isolationOptions = [
   { label: t('instanceDetail.settings.isolation.global'), value: 'global' },
-  { label: t('instanceDetail.settings.isolation.on'), value: 'on' },
-  { label: t('instanceDetail.settings.isolation.off'), value: 'off' },
+  { label: t('instanceDetail.settings.isolation.instance'), value: 'instance' },
 ]
 
 const loginRequirementOptions = [
   { label: t('instanceDetail.settings.loginRequirement.any'), value: 'any' },
   { label: t('instanceDetail.settings.loginRequirement.microsoft'), value: 'microsoft' },
-  { label: t('instanceDetail.settings.loginRequirement.thirdParty'), value: 'thirdParty' },
-  {
-    label: t('instanceDetail.settings.loginRequirement.microsoftOrThirdParty'),
-    value: 'microsoftOrThirdParty',
-  },
 ]
 
 async function saveSettings() {
   saving.value = true
   try {
-    const memoryNum = form.value.memory ? Number(form.value.memory) : null
-    const payload: InstanceConfig = {
-      ...form.value,
-      memory: memoryNum && !isNaN(memoryNum) ? memoryNum : null,
-      jvmArgs: form.value.jvmArgs ? form.value.jvmArgs.trim() : null,
-      gameArgs: form.value.gameArgs ? form.value.gameArgs.trim() : null,
-      windowTitle: form.value.windowTitle ? form.value.windowTitle.trim() : null,
-      preLaunchCommand: form.value.preLaunchCommand ? form.value.preLaunchCommand.trim() : null,
-      serverQuickPlay: form.value.serverQuickPlay ? form.value.serverQuickPlay.trim() : null,
-    }
-    await ipcClient.instanceUpdateConfig(props.instance.id, payload)
+    await ipcClient.instanceUpdateConfig(props.instance.id, form.value)
     await instancesStore.fetchInstances()
-    toast.success(t('instanceDetail.settings.saveSuccess'))
+    toast.success(t('common.save'))
   } catch (e: unknown) {
     toast.danger(String(e))
   } finally {
@@ -100,134 +85,131 @@ async function saveSettings() {
 </script>
 
 <template>
-  <div class="max-w-4xl space-y-6">
+  <div class="space-y-6">
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-base font-bold text-text">
+        <h2 class="text-base font-bold text-fg">
           {{ t('instanceDetail.settings.title') }}
         </h2>
-        <p class="text-xs text-textMuted mt-0.5">
+        <p class="text-xs text-fg-muted mt-0.5">
           {{ t('instanceDetail.settings.subtitle') }}
         </p>
       </div>
       <MButton
         variant="primary"
+        size="sm"
+        icon="i-lucide-save"
         :loading="saving"
         @click="saveSettings"
       >
-        <span class="w-4 h-4 i-lucide-save mr-1.5" />
         {{ t('instanceDetail.settings.save') }}
       </MButton>
     </div>
 
-    <!-- Isolation & Login Requirement -->
-    <MCard class="p-6 space-y-5">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div class="space-y-1.5">
-          <label class="text-sm font-semibold text-text">
-            {{ t('instanceDetail.settings.isolation.title') }}
-          </label>
+    <!-- Isolation & Login Requirement Section -->
+    <MSection :title="t('instanceDetail.settings.isolation.title')" icon="i-lucide-shield">
+      <div class="divide-y divide-line">
+        <MSettingRow
+          :label="t('instanceDetail.settings.isolation.title')"
+          :hint="t('instanceDetail.settings.isolation.hint')"
+        >
           <MSelect
             v-model="form.isolation"
             :options="isolationOptions"
+            size="sm"
+            class="w-56"
           />
-          <div class="text-xs text-textMuted">
-            {{ t('instanceDetail.settings.isolation.hint') }}
-          </div>
-        </div>
+        </MSettingRow>
 
-        <div class="space-y-1.5">
-          <label class="text-sm font-semibold text-text">
-            {{ t('instanceDetail.settings.loginRequirement.title') }}
-          </label>
+        <MSettingRow
+          :label="t('instanceDetail.settings.loginRequirement.title')"
+          :hint="t('instanceDetail.settings.loginRequirement.hint')"
+        >
           <MSelect
             v-model="form.loginRequirement"
             :options="loginRequirementOptions"
+            size="sm"
+            class="w-56"
           />
-          <div class="text-xs text-textMuted">
-            {{ t('instanceDetail.settings.loginRequirement.hint') }}
-          </div>
-        </div>
+        </MSettingRow>
       </div>
-    </MCard>
+    </MSection>
 
-    <!-- Memory & Java Args -->
-    <MCard class="p-6 space-y-5">
-      <div class="space-y-1.5">
-        <label class="text-sm font-semibold text-text">
-          {{ t('instanceDetail.settings.memory.title') }}
-        </label>
-        <MInput
-          :model-value="form.memory ? String(form.memory) : ''"
-          type="number"
-          placeholder="4096"
-          @update:model-value="form.memory = $event ? Number($event) : null"
-        />
-        <div class="text-xs text-textMuted">
-          {{ t('instanceDetail.settings.memory.hint') }}
-        </div>
-      </div>
+    <!-- Memory & Java Args Section -->
+    <MSection :title="t('instanceDetail.settings.memory.title')" icon="i-lucide-cpu">
+      <div class="divide-y divide-line">
+        <MSettingRow
+          :label="t('instanceDetail.settings.memory.title')"
+          :hint="t('instanceDetail.settings.memory.hint')"
+        >
+          <MInput
+            :model-value="form.memory ? String(form.memory) : ''"
+            type="number"
+            placeholder="4096"
+            size="sm"
+            class="w-56"
+            @update:model-value="form.memory = $event ? Number($event) : null"
+          />
+        </MSettingRow>
 
-      <div class="space-y-1.5">
-        <label class="text-sm font-semibold text-text">
-          {{ t('instanceDetail.settings.jvmArgs.title') }}
-        </label>
-        <MInput
-          :model-value="form.jvmArgs || ''"
-          :placeholder="t('instanceDetail.settings.jvmArgs.placeholder')"
-          @update:model-value="form.jvmArgs = $event"
-        />
-      </div>
+        <MSettingRow :label="t('instanceDetail.settings.jvmArgs.title')">
+          <MInput
+            :model-value="form.jvmArgs || ''"
+            :placeholder="t('instanceDetail.settings.jvmArgs.placeholder')"
+            size="sm"
+            class="w-72"
+            @update:model-value="form.jvmArgs = $event"
+          />
+        </MSettingRow>
 
-      <div class="space-y-1.5">
-        <label class="text-sm font-semibold text-text">
-          {{ t('instanceDetail.settings.gameArgs.title') }}
-        </label>
-        <MInput
-          :model-value="form.gameArgs || ''"
-          :placeholder="t('instanceDetail.settings.gameArgs.placeholder')"
-          @update:model-value="form.gameArgs = $event"
-        />
+        <MSettingRow :label="t('instanceDetail.settings.gameArgs.title')">
+          <MInput
+            :model-value="form.gameArgs || ''"
+            :placeholder="t('instanceDetail.settings.gameArgs.placeholder')"
+            size="sm"
+            class="w-72"
+            @update:model-value="form.gameArgs = $event"
+          />
+        </MSettingRow>
       </div>
-    </MCard>
+    </MSection>
 
     <!-- Window Title & Pre-launch Command & Quick Play -->
-    <MCard class="p-6 space-y-5">
-      <div class="space-y-1.5">
-        <label class="text-sm font-semibold text-text">
-          {{ t('instanceDetail.settings.windowTitle.title') }}
-        </label>
-        <MInput
-          :model-value="form.windowTitle || ''"
-          :placeholder="t('instanceDetail.settings.windowTitle.placeholder')"
-          @update:model-value="form.windowTitle = $event"
-        />
-      </div>
+    <MSection :title="t('instanceDetail.settings.windowTitle.title')" icon="i-lucide-app-window">
+      <div class="divide-y divide-line">
+        <MSettingRow :label="t('instanceDetail.settings.windowTitle.title')">
+          <MInput
+            :model-value="form.windowTitle || ''"
+            :placeholder="t('instanceDetail.settings.windowTitle.placeholder')"
+            size="sm"
+            class="w-72"
+            @update:model-value="form.windowTitle = $event"
+          />
+        </MSettingRow>
 
-      <div class="space-y-1.5">
-        <label class="text-sm font-semibold text-text">
-          {{ t('instanceDetail.settings.preLaunchCommand.title') }}
-        </label>
-        <MInput
-          :model-value="form.preLaunchCommand || ''"
-          :placeholder="t('instanceDetail.settings.preLaunchCommand.placeholder')"
-          @update:model-value="form.preLaunchCommand = $event"
-        />
-      </div>
+        <MSettingRow :label="t('instanceDetail.settings.preLaunchCommand.title')">
+          <MInput
+            :model-value="form.preLaunchCommand || ''"
+            :placeholder="t('instanceDetail.settings.preLaunchCommand.placeholder')"
+            size="sm"
+            class="w-72"
+            @update:model-value="form.preLaunchCommand = $event"
+          />
+        </MSettingRow>
 
-      <div class="space-y-1.5">
-        <label class="text-sm font-semibold text-text">
-          {{ t('instanceDetail.settings.serverQuickPlay.title') }}
-        </label>
-        <MInput
-          :model-value="form.serverQuickPlay || ''"
-          :placeholder="t('instanceDetail.settings.serverQuickPlay.placeholder')"
-          @update:model-value="form.serverQuickPlay = $event"
-        />
-        <div class="text-xs text-textMuted">
-          {{ t('instanceDetail.settings.serverQuickPlay.hint') }}
-        </div>
+        <MSettingRow
+          :label="t('instanceDetail.settings.serverQuickPlay.title')"
+          :hint="t('instanceDetail.settings.serverQuickPlay.hint')"
+        >
+          <MInput
+            :model-value="form.serverQuickPlay || ''"
+            :placeholder="t('instanceDetail.settings.serverQuickPlay.placeholder')"
+            size="sm"
+            class="w-72"
+            @update:model-value="form.serverQuickPlay = $event"
+          />
+        </MSettingRow>
       </div>
-    </MCard>
+    </MSection>
   </div>
 </template>

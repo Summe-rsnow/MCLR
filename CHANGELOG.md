@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.13] - 2026-10-25
+
+### Added
+- **Tonal Layers Design System**: OKLCH-driven 5-tier surface hierarchy (`canvas`, `panel`, `raised`, `sunken`, `overlay`), WCAG-enforced foreground contrast (`ensureContrast` across 8 `SEED_PRESETS`), `AmbientBackdrop.vue` drifting radial blobs, and `GlassDefs.vue` SVG refraction filter (`#mclr-refract`).
+- **Bundled Typography**: HarmonyOS Sans SC (`Regular 400`, `Medium 500 600`, `Bold 700` woff2) with license notices (`THIRD_PARTY_NOTICES.md`).
+- **UI Component Library & Icons**: `MPageHeader`, `MSection`, `MSettingRow`, `MPopover`, `MBrandIcon` (`@iconify-json/simple-icons`), `MLoaderIcon`, custom teleported `MSelect` listbox, `ResizeObserver`-driven `MSegmented`/`MTabs` indicators, and `scripts/lint-ui-contracts.mjs` regression guard.
+- **Grouped Navigation & Unified Settings**: Collapsible grouped sidebar (`SidebarNav.vue`, `TitleBar.vue`, `QuickSettings.vue`, `MusicMiniPlayer.vue`, `AccountChip.vue`) and merged `/settings` layout (`SettingsLayout.vue`) with vertical sub-navigation.
+
+### Fixed
+- Fixed missing navigation and component icons by scanning `.ts` files in `uno.config.ts` and declaring `icon`/`size`/`block` props across UI components.
+- Fixed `presetWind4` color variable definitions so tonal surface and text utility classes render accurately in both light and dark modes.
+
 ## [0.0.12] - 2026-10-25
 
 ### Added

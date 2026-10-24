@@ -26,6 +26,12 @@ import {
   MSkeleton,
   MBadge,
   MAvatar,
+  MPageHeader,
+  MSection,
+  MSettingRow,
+  MPopover,
+  MBrandIcon,
+  MLoaderIcon,
   useDialog,
   useToast,
   applyTheme,
@@ -37,10 +43,10 @@ describe('Theme Engine', () => {
   it('generates OKLCH tonal palette with rgb values', () => {
     const palette = generatePalette('#3b82f6', 'light')
     expect(palette.primary).toMatch(/^\d+\s+\d+\s+\d+$/)
-    expect(palette.surface).toMatch(/^\d+\s+\d+\s+\d+$/)
-    expect(palette.text).toMatch(/^\d+\s+\d+\s+\d+$/)
+    expect(palette.canvas).toMatch(/^\d+\s+\d+\s+\d+$/)
+    expect(palette.raised).toMatch(/^\d+\s+\d+\s+\d+$/)
+    expect(palette.fg).toMatch(/^\d+\s+\d+\s+\d+$/)
   })
-
   it('applies theme attributes and css variables to documentElement', () => {
     applyTheme({
       seed: '#10b981',
@@ -82,12 +88,12 @@ describe('UI Components', () => {
     expect(wrapper.emitted('click')).toHaveLength(1)
   })
 
-  it('MCard renders flat and glass mode', () => {
+  it('MCard renders variants and hoverable state', () => {
     const wrapper = mount(MCard, {
-      props: { glass: true },
+      props: { variant: 'well', hoverable: true },
       slots: { default: 'Card Content' },
     })
-    expect(wrapper.classes()).toContain('m-card--force-glass')
+    expect(wrapper.classes()).toContain('m-well')
     expect(wrapper.text()).toBe('Card Content')
   })
 
@@ -116,17 +122,23 @@ describe('UI Components', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['new text'])
   })
 
-  it('MSelect handles selection', async () => {
+  it('MSelect handles custom listbox selection and keyboard navigation', async () => {
     const wrapper = mount(MSelect, {
       props: {
         modelValue: 'a',
         options: [
-          { label: 'A', value: 'a' },
-          { label: 'B', value: 'b' },
+          { label: 'Option A', value: 'a' },
+          { label: 'Option B', value: 'b' },
         ],
       },
     })
-    await wrapper.find('select').setValue('b')
+    const trigger = wrapper.find('button[role="combobox"]')
+    await trigger.trigger('click')
+    await nextTick()
+    const options = document.body.querySelectorAll('[role="option"]')
+    expect(options.length).toBeGreaterThanOrEqual(2)
+    ;(options[1] as HTMLButtonElement).click()
+    await nextTick()
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['b'])
   })
 
@@ -300,13 +312,13 @@ describe('UI Components', () => {
     expect(wrapper.attributes('style')).toContain('height: 24px')
   })
 
-  it('MBadge renders slot content', () => {
+  it('MBadge renders slot content and tonal status classes', () => {
     const wrapper = mount(MBadge, {
-      props: { variant: 'success' },
+      props: { variant: 'success', dot: true },
       slots: { default: 'Online' },
     })
     expect(wrapper.text()).toBe('Online')
-    expect(wrapper.classes()).toContain('text-success')
+    expect(wrapper.classes()).toContain('text-success-fg')
   })
 
   it('MAvatar shows image or initials', async () => {
@@ -317,5 +329,38 @@ describe('UI Components', () => {
 
     await wrapper.setProps({ src: 'data:image/png;base64,abc' })
     expect(wrapper.find('img').exists()).toBe(true)
+  })
+
+  it('renders MPageHeader, MSection, MSettingRow, MBrandIcon, MLoaderIcon and MPopover', async () => {
+    const header = mount(MPageHeader, {
+      props: { title: 'Test Page', description: 'Sub', icon: 'i-lucide-house' },
+    })
+    expect(header.text()).toContain('Test Page')
+
+    const section = mount(MSection, {
+      props: { title: 'Sec' },
+      slots: { default: () => 'Body' },
+    })
+    expect(section.text()).toContain('Sec')
+
+    const row = mount(MSettingRow, {
+      props: { label: 'Row Label', hint: 'Row Hint' },
+      slots: { default: () => 'Control' },
+    })
+    expect(row.text()).toContain('Row Label')
+
+    const brand = mount(MBrandIcon, { props: { name: 'modrinth' } })
+    expect(brand.find('span').classes()).toContain('i-simple-icons-modrinth')
+
+    const loader = mount(MLoaderIcon, { props: { kind: 'fabric', size: 40 } })
+    expect(loader.find('span').classes()).toContain('i-lucide-waypoints')
+
+    const pop = mount(MPopover, {
+      props: { open: true },
+      slots: { default: () => 'Popover Body' },
+    })
+    await nextTick()
+    expect(document.body.innerHTML).toContain('Popover Body')
+    pop.unmount()
   })
 })
