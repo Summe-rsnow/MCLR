@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 
 function run(cmd) {
   console.log(`\n> ${cmd}`)
@@ -18,10 +19,13 @@ function hasCommits() {
 run('cargo fmt --all --check')
 run('cargo clippy --workspace --all-targets -- -D warnings')
 run('cargo test --workspace')
+const bindingsPath = 'src/ipc/bindings.ts'
+const beforeBindings = existsSync(bindingsPath) ? readFileSync(bindingsPath, 'utf8') : null
 run('pnpm gen:bindings')
-
-if (hasCommits()) {
-  run('git diff --exit-code src/ipc/bindings.ts')
+const afterBindings = existsSync(bindingsPath) ? readFileSync(bindingsPath, 'utf8') : null
+if (hasCommits() && beforeBindings !== null && beforeBindings !== afterBindings) {
+  console.error('src/ipc/bindings.ts was out of date! Re-run pnpm check now that it is updated.')
+  process.exit(1)
 }
 
 run('pnpm exec vue-tsc --noEmit')

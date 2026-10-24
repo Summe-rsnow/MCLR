@@ -1,13 +1,13 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.1`
-- **Next Milestone**: `v0.0.2`
+- **Current Version**: `0.0.2`
+- **Next Milestone**: `v0.0.3`
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
-| v0.0.1 | Foundation | done | v0.0.1 | v0.0.1 | 2026-10-24 |
-| v0.0.2 | Core runtime + UI shell | doing | - | - | 2026-10-24 |
-| v0.0.3 | Network, task UI, game model, Java | todo | - | - | - |
+| v0.0.1 | Foundation | done | 08bf7f0 | v0.0.1 | 2026-10-24 |
+| v0.0.2 | Core runtime + UI shell | done | v0.0.2 | v0.0.2 | 2026-10-24 |
+| v0.0.3 | Network, task UI, game model, Java | doing | - | - | 2026-10-24 |
 | v0.0.4 | Accounts + vanilla install | todo | - | - | - |
 | v0.0.5 | Launch pipeline (first playable) | todo | - | - | - |
 | v0.0.6 | Mod loaders | todo | - | - | - |

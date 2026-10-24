@@ -1,0 +1,47 @@
+/* Global theme material styling for flat vs glass */
+
+:root {
+  color-scheme: light;
+}
+
+:root[data-mode='dark'] {
+  color-scheme: dark;
+}
+
+/* Base surface styles */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: rgb(var(--c-surface));
+  color: rgb(var(--c-text));
+  user-select: none;
+  overflow: hidden;
+}
+
+/* Material: Flat */
+:root[data-material='flat'] .m-card,
+:root[data-material='flat'] .m-surface {
+  background-color: rgb(var(--c-surface));
+  border: 1px solid rgb(var(--c-outline) / 0.7);
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Material: Glass (liquid glass) */
+:root[data-material='glass'] .m-card,
+:root[data-material='glass'] .m-surface {
+  background-color: rgb(var(--c-surface) / 0.65);
+  border: 1px solid rgb(255 255 255 / 0.25);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: 0 4px 16px 0 rgb(0 0 0 / 0.08), inset 0 1px 1px 0 rgb(255 255 255 / 0.4);
+}
+
+:root[data-mode='dark'][data-material='glass'] .m-card,
+:root[data-mode='dark'][data-material='glass'] .m-surface {
+  background-color: rgb(var(--c-surface) / 0.60);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow: 0 4px 20px 0 rgb(0 0 0 / 0.35), inset 0 1px 1px 0 rgb(255 255 255 / 0.15);
+}

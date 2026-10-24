@@ -13,6 +13,70 @@ async appInfo() : Promise<Result<AppInfo, AppError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async secretsStatus() : Promise<Result<SecretsStatus, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("secrets_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async windowSetMaterial(glass: boolean) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("window_set_material", { glass }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async settingsGet() : Promise<Result<Settings, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("settings_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async settingsPatch(patch: JsonValue) : Promise<Result<Settings, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("settings_patch", { patch }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async tasksList() : Promise<Result<TaskNode[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("tasks_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async taskCancel(id: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("task_cancel", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async taskPause(id: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("task_pause", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async taskResume(id: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("task_resume", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -35,6 +99,28 @@ export type AppError = { code: string; params?: Partial<{ [key in string]: strin
  * Application metadata returned by `app_info`.
  */
 export type AppInfo = { name: string; version: string }
+export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
+export type LanguageSettings = { locale: string; formatCulture: string }
+export type MaterialMode = "flat" | "glass"
+/**
+ * Presence status of optional launcher secrets.
+ */
+export type SecretsStatus = { msClientId: boolean; curseforgeApiKey: boolean; updateEndpoint: boolean; updatePubkey: boolean }
+/**
+ * Complete MCLR user settings.
+ */
+export type Settings = { schemaVersion: number; ui: UiSettings; language: LanguageSettings; system: SystemSettings }
+export type SystemSettings = { logLevel: string; logRetentionDays: number; disableGpu: boolean }
+/**
+ * A node in the hierarchical task tree.
+ */
+export type TaskNode = { id: string; parentId: string | null; titleKey: string; titleParams?: Partial<{ [key in string]: string }>; state: TaskState; progress: number; speedBps: number; error?: AppError | null }
+/**
+ * State of an asynchronous background task.
+ */
+export type TaskState = "waiting" | "running" | "paused" | "success" | "canceled" | "failed"
+export type ThemeMode = "light" | "dark" | "system"
+export type UiSettings = { seed: string; mode: ThemeMode; material: MaterialMode; scale: number; fontFamily: string; backgroundMode: string; backgroundPath: string; backgroundBlur: number; backgroundOpacity: number; musicEnabled: boolean; musicFolder: string; musicVolume: number }
 
 /** tauri-specta globals **/
 

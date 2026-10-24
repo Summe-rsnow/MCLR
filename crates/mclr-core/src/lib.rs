@@ -1,5 +1,23 @@
 //! Core runtime primitives, paths, settings, tasks, and error contract for MCLR.
 
+pub mod error;
+pub mod logging;
+pub mod paths;
+pub mod secrets;
+pub mod settings;
+pub mod tasks;
+#[cfg(test)]
+pub mod test_utils;
+
+pub use error::CoreError;
+pub use logging::{init_logging, prune_old_logs};
+pub use secrets::{SecretsStatus, get_secret, secrets_status};
+pub use settings::{
+    LanguageSettings, MaterialMode, Settings, SettingsStore, SystemSettings, ThemeMode, UiSettings,
+    apply_patch, merge_patch,
+};
+pub use tasks::{TaskCenter, TaskNode, TaskState};
+
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;

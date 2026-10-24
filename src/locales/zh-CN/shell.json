@@ -1,0 +1,14 @@
+{
+  "nav": {
+    "devUi": "UI 组件库",
+    "home": "首页",
+    "instances": "实例",
+    "download": "下载",
+    "settings": "设置"
+  },
+  "titlebar": {
+    "tasks": "任务",
+    "theme": "切换主题",
+    "material": "切换材质"
+  }
+}
