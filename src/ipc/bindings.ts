@@ -141,6 +141,110 @@ async javaDownload(component: string) : Promise<Result<string, AppError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async accountsList() : Promise<Result<AccountView[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accounts_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async accountsSelect(id: string) : Promise<Result<AccountView[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accounts_select", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async accountsRemove(id: string) : Promise<Result<AccountView[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accounts_remove", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async accountsAddOffline(username: string, uuidMode: string, customUuid: string | null) : Promise<Result<AccountView, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accounts_add_offline", { username, uuidMode, customUuid }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async accountsAddMicrosoft() : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accounts_add_microsoft") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async accountsAddAuthlib(server: string, username: string, password: string) : Promise<Result<AuthlibLoginResponse, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accounts_add_authlib", { server, username, password }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async accountsSelectProfile(pendingSessionId: string, profileId: string) : Promise<Result<AccountView, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accounts_select_profile", { pendingSessionId, profileId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async accountsRefresh(id: string) : Promise<Result<AccountView, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accounts_refresh", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async accountsSkinUpload(id: string, variant: string, pngPath: string) : Promise<Result<AccountView, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accounts_skin_upload", { id, variant, pngPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async accountsCapeSet(id: string, capeId: string | null) : Promise<Result<AccountView, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accounts_cape_set", { id, capeId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async installManifest(forceRefresh: boolean) : Promise<Result<VersionManifestList, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_manifest", { forceRefresh }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async installVanilla(version: string, name: string) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_vanilla", { version, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async installRepair(instanceId: string) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_repair", { instanceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -154,6 +258,8 @@ async javaDownload(component: string) : Promise<Result<string, AppError>> {
 
 /** user-defined types **/
 
+export type AccountKind = "microsoft" | "offline" | "authlib" | "yggdrasilConnect"
+export type AccountView = { id: string; kind: AccountKind; username: string; uuid: string; selected: boolean; server: string | null; serverName: string | null; skinHeadDataUrl: string | null; capes: CapeView[]; defaultSkinModel: string }
 /**
  * Cross-crate application error transferred over Tauri IPC.
  * Rust never emits user-facing strings; UI renders `t('error.' + code, params)`.
@@ -163,6 +269,9 @@ export type AppError = { code: string; params?: Partial<{ [key in string]: strin
  * Application metadata returned by `app_info`.
  */
 export type AppInfo = { name: string; version: string }
+export type AuthlibLoginResponse = { account: AccountView | null; pendingSessionId: string | null; profiles: AuthlibProfileView[] }
+export type AuthlibProfileView = { id: string; name: string }
+export type CapeView = { id: string; alias: string; url: string; active: boolean }
 export type GameFolderEntry = { name: string; path: string }
 export type GameSettings = { folders: GameFolderEntry[]; currentFolder: string; defaultIsolation: string; sortBy: string }
 /**
@@ -211,6 +320,14 @@ export type TaskNode = { id: string; parentId: string | null; titleKey: string; 
 export type TaskState = "waiting" | "running" | "paused" | "success" | "canceled" | "failed"
 export type ThemeMode = "light" | "dark" | "system"
 export type UiSettings = { seed: string; mode: ThemeMode; material: MaterialMode; scale: number; fontFamily: string; backgroundMode: string; backgroundPath: string; backgroundBlur: number; backgroundOpacity: number; musicEnabled: boolean; musicFolder: string; musicVolume: number }
+/**
+ * Entry in the official Mojang version manifest.
+ */
+export type VersionManifestEntry = { id: string; type: string; url: string; releaseTime: string }
+/**
+ * Normalized version manifest list.
+ */
+export type VersionManifestList = { latestRelease: string; latestSnapshot: string; versions: VersionManifestEntry[] }
 
 /** tauri-specta globals **/
 

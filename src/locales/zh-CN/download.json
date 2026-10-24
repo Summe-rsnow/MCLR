@@ -1,0 +1,34 @@
+{
+  "nav": "下载中心",
+  "title": "安装 Minecraft 原版",
+  "search": "搜索 Minecraft 版本号...",
+  "empty": "未找到符合条件的 Minecraft 版本",
+  "refresh": "刷新版本清单",
+  "tabs": {
+    "vanilla": "原版安装"
+  },
+  "filter": {
+    "release": "正式版",
+    "snapshot": "快照版",
+    "old": "远古版"
+  },
+  "latestRelease": "最新正式版",
+  "latestSnapshot": "最新快照版",
+  "versionItem": {
+    "release": "正式版",
+    "snapshot": "快照",
+    "oldBeta": "Beta 阶段",
+    "oldAlpha": "Alpha 阶段",
+    "releasedAt": "发布于 {date}"
+  },
+  "dialog": {
+    "installTitle": "安装原版 Minecraft",
+    "version": "游戏版本",
+    "instanceName": "实例名称",
+    "namePlaceholder": "请输入实例名称，例如 1.20.1",
+    "nameError": "名称不能包含特殊字符 \\ / : * ? \" < > | ! ; 且不能为空",
+    "installAction": "开始安装",
+    "repairAction": "修复补全",
+    "installStarted": "已创建安装任务，正在下载资源..."
+  }
+}

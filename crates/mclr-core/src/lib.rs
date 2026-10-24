@@ -1,5 +1,6 @@
 //! Core runtime primitives, paths, settings, tasks, and error contract for MCLR.
 
+pub mod account_session;
 pub mod error;
 pub mod logging;
 pub mod paths;
@@ -9,6 +10,7 @@ pub mod tasks;
 #[cfg(test)]
 pub mod test_utils;
 
+pub use account_session::{AccountKind, AccountSessionProvider, ResolvedAccountSession};
 pub use error::CoreError;
 pub use logging::{init_logging, prune_old_logs};
 pub use secrets::{SecretsStatus, get_secret, secrets_status};

@@ -3,6 +3,7 @@
 pub mod commands;
 pub mod ipc;
 
+use mclr_auth::AccountStore;
 use mclr_core::{SettingsStore, TaskCenter, init_logging, paths};
 use std::sync::Arc;
 use tauri::Emitter;
@@ -14,6 +15,7 @@ pub fn run() {
     // Initialize core settings
     let settings_store = SettingsStore::open().expect("failed to open settings store");
     let task_center = Arc::new(TaskCenter::new());
+    let account_store = Arc::new(AccountStore::open().expect("failed to open account store"));
 
     // Initialize logging according to settings
     let (log_level, log_retention) = {
@@ -37,6 +39,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
         .manage(settings_store)
         .manage(task_center)
+        .manage(account_store)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);

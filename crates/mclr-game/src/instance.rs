@@ -107,8 +107,7 @@ pub fn validate_instance_name(name: &str) -> Result<(), GameError> {
 }
 
 /// Extract Minecraft version from version JSON and string hints.
-fn extract_mc_version(version_json: &VersionJson, fallback_id: &str) -> String {
-    // 1. Check inheritsFrom if present
+pub fn extract_mc_version(version_json: &VersionJson, fallback_id: &str) -> String {
     if let Some(inherits) = &version_json.inherits_from {
         if !inherits.is_empty() {
             return inherits.clone();

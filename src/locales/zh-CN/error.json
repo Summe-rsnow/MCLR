@@ -1,6 +1,6 @@
 {
   "unknown": "发生未知错误",
-  "notConfigured": "未配置所需密钥：{what}",
+  "notConfigured": "未配置所需服务或密钥：{what}",
   "settings": {
     "invalid": "设置格式无效"
   },
@@ -17,5 +17,43 @@
     "notFound": "找不到指定的任务",
     "notPausable": "当前任务不支持暂停",
     "alreadyFinished": "任务已完成或已终止"
+  },
+  "auth": {
+    "notFound": "找不到指定的账号",
+    "offlineInvalidUsername": "离线模式用户名格式无效",
+    "offlineInvalidUuid": "自定义 UUID 格式无效",
+    "ms": {
+      "deviceCodeFailed": "获取微软设备代码失败",
+      "tokenExpired": "微软登录已超时，请重新尝试",
+      "accessDenied": "用户拒绝了登录授权",
+      "noProfile": "该微软账号尚未购买 Minecraft 或未创建角色名",
+      "refreshFailed": "刷新微软登录凭证失败"
+    },
+    "xsts": {
+      "banned": "Xbox 账号已被封禁",
+      "noXboxAccount": "该微软账号尚未开通 Xbox 服务",
+      "regionBlocked": "当前国家或地区不支持 Xbox Live",
+      "minor": "儿童账号需要监护人加入家庭组并授权"
+    },
+    "authlib": {
+      "invalidServer": "第三方验证服务器地址无效",
+      "discoveryFailed": "无法连接第三方服务器或元数据获取失败",
+      "loginFailed": "账号或密码错误",
+      "noProfileSelected": "未选择游戏档案",
+      "profileNotFound": "指定的角色档案不存在"
+    },
+    "skin": {
+      "uploadFailed": "皮肤上传失败",
+      "invalidImage": "皮肤图片格式不符合规范"
+    },
+    "cape": {
+      "setFailed": "披风更新失败"
+    }
+  },
+  "install": {
+    "manifestFailed": "获取版本清单失败",
+    "versionNotFound": "未找到指定的版本",
+    "instanceExists": "已存在同名实例",
+    "invalidName": "实例名称包含非法字符 \\ / : * ? \" < > | ! ;"
   }
 }

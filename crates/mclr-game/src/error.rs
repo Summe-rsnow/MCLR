@@ -1,10 +1,14 @@
 //! Error types for mclr-game.
 
 use mclr_core::AppError;
+use mclr_net::error::NetError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum GameError {
+    #[error("Network error: {0}")]
+    Net(#[from] NetError),
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -25,6 +29,12 @@ pub enum GameError {
 
     #[error("Runtime manifest error: {0}")]
     RuntimeManifest(String),
+
+    #[error("Version not found in manifest: {0}")]
+    VersionNotFound(String),
+
+    #[error("Install failed: {0}")]
+    InstallFailed(String),
 }
 
 impl GameError {
@@ -37,7 +47,16 @@ impl GameError {
             GameError::InvalidInstanceName(_) => "game.invalidInstanceName",
             GameError::JavaNotFound(_) => "game.javaNotFound",
             GameError::RuntimeManifest(_) => "game.runtimeManifest",
+            GameError::Net(e) => e.code(),
+            GameError::VersionNotFound(_) => "install.versionNotFound",
+            GameError::InstallFailed(_) => "install.manifestFailed",
         }
+    }
+}
+
+impl From<reqwest::Error> for GameError {
+    fn from(err: reqwest::Error) -> Self {
+        GameError::Net(NetError::Http(err))
     }
 }
 

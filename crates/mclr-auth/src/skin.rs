@@ -1,0 +1,230 @@
+//! Minecraft skin head cropping, upload, and cape management.
+
+use crate::error::AuthError;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
+use image::imageops::FilterType;
+use image::{GenericImageView, ImageFormat, Rgba, RgbaImage};
+use mclr_core::paths;
+use reqwest::multipart::{Form, Part};
+use serde::{Deserialize, Serialize};
+use specta::Type;
+use std::fs;
+use std::io::Cursor;
+use std::path::Path;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CapeView {
+    pub id: String,
+    pub alias: String,
+    pub url: String,
+    pub active: bool,
+}
+
+/// Crops an 8x8 head with hat overlay from a 64x64 or 64x32 skin PNG,
+/// scales it to 64x64 (nearest-neighbor), saves to `cache/skin/head/<id>.png`,
+/// and returns the `data:image/png;base64,...` data URL.
+pub fn crop_skin_head(skin_png_bytes: &[u8], account_id: &str) -> Result<String, AuthError> {
+    let img = image::load_from_memory(skin_png_bytes)
+        .map_err(|e| AuthError::SkinInvalidImage(format!("failed to load skin image: {e}")))?;
+
+    let (width, height) = img.dimensions();
+    if width != 64 || (height != 64 && height != 32) {
+        return Err(AuthError::SkinInvalidImage(format!(
+            "invalid skin dimensions: {width}x{height}, expected 64x64 or 64x32"
+        )));
+    }
+
+    // 8x8 base face: x: 8..16, y: 8..16
+    // 8x8 hat overlay: x: 40..48, y: 8..16
+    let mut head = RgbaImage::new(8, 8);
+
+    for y in 0..8 {
+        for x in 0..8 {
+            let face_px = img.get_pixel(8 + x, 8 + y);
+            let hat_px = img.get_pixel(40 + x, 8 + y);
+
+            let (rf, gf, bf, af) = (
+                face_px[0] as f32,
+                face_px[1] as f32,
+                face_px[2] as f32,
+                face_px[3] as f32 / 255.0,
+            );
+            let (rh, gh, bh, ah) = (
+                hat_px[0] as f32,
+                hat_px[1] as f32,
+                hat_px[2] as f32,
+                hat_px[3] as f32 / 255.0,
+            );
+
+            // Composite hat over face
+            let a_out = ah + af * (1.0 - ah);
+            let px = if a_out > 0.0 {
+                let r_out = ((rh * ah + rf * af * (1.0 - ah)) / a_out)
+                    .round()
+                    .clamp(0.0, 255.0) as u8;
+                let g_out = ((gh * ah + gf * af * (1.0 - ah)) / a_out)
+                    .round()
+                    .clamp(0.0, 255.0) as u8;
+                let b_out = ((bh * ah + bf * af * (1.0 - ah)) / a_out)
+                    .round()
+                    .clamp(0.0, 255.0) as u8;
+                let a_byte = (a_out * 255.0).round().clamp(0.0, 255.0) as u8;
+                Rgba([r_out, g_out, b_out, a_byte])
+            } else {
+                Rgba([0, 0, 0, 0])
+            };
+
+            head.put_pixel(x, y, px);
+        }
+    }
+
+    // Resize 8x8 to 64x64 using nearest neighbor
+    let scaled = image::imageops::resize(&head, 64, 64, FilterType::Nearest);
+
+    let mut buf = Cursor::new(Vec::new());
+    scaled
+        .write_to(&mut buf, ImageFormat::Png)
+        .map_err(|e| AuthError::SkinInvalidImage(format!("failed to encode head PNG: {e}")))?;
+    let png_bytes = buf.into_inner();
+
+    // Cache to cache/skin/head/<id>.png
+    let head_dir = paths::cache_dir().join("skin").join("head");
+    if let Err(e) = fs::create_dir_all(&head_dir) {
+        tracing::warn!("Failed to create head cache dir {:?}: {e}", head_dir);
+    } else {
+        let dest = head_dir.join(format!("{account_id}.png"));
+        if let Err(e) = fs::write(&dest, &png_bytes) {
+            tracing::warn!("Failed to write head cache {:?}: {e}", dest);
+        }
+    }
+
+    let b64 = BASE64.encode(&png_bytes);
+    Ok(format!("data:image/png;base64,{b64}"))
+}
+
+/// Uploads a custom skin to Minecraft services.
+pub async fn upload_skin(
+    client: &reqwest::Client,
+    access_token: &str,
+    variant: &str,
+    png_path: &Path,
+) -> Result<(), AuthError> {
+    let bytes = fs::read(png_path)?;
+    if bytes.len() > 24 * 1024 {
+        return Err(AuthError::SkinInvalidImage(format!(
+            "skin file too large: {} bytes, max is 24 KB",
+            bytes.len()
+        )));
+    }
+
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| AuthError::SkinInvalidImage(format!("invalid skin image: {e}")))?;
+    let (w, h) = img.dimensions();
+    if w != 64 || (h != 64 && h != 32) {
+        return Err(AuthError::SkinInvalidImage(format!(
+            "invalid skin dimensions: {w}x{h}, expected 64x64 or 64x32"
+        )));
+    }
+
+    let part = Part::bytes(bytes)
+        .file_name("skin.png")
+        .mime_str("image/png")
+        .map_err(|e| AuthError::SkinInvalidImage(e.to_string()))?;
+
+    let form = Form::new()
+        .text("variant", variant.to_string())
+        .part("file", part);
+
+    let res = client
+        .post("https://api.minecraftservices.com/minecraft/profile/skins")
+        .bearer_auth(access_token)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| AuthError::Http(format!("skin upload request failed: {e}")))?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        return Err(AuthError::Http(format!(
+            "skin upload failed with status {status}: {body}"
+        )));
+    }
+
+    Ok(())
+}
+
+/// Activates or clears a cape on Minecraft services.
+pub async fn set_active_cape(
+    client: &reqwest::Client,
+    access_token: &str,
+    cape_id: Option<&str>,
+) -> Result<(), AuthError> {
+    let url = "https://api.minecraftservices.com/minecraft/profile/capes/active";
+    let res = match cape_id {
+        Some(id) => {
+            let body = serde_json::json!({ "capeId": id });
+            client
+                .put(url)
+                .bearer_auth(access_token)
+                .json(&body)
+                .send()
+                .await
+        }
+        None => client.delete(url).bearer_auth(access_token).send().await,
+    }
+    .map_err(|e| AuthError::Http(format!("cape request failed: {e}")))?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        return Err(AuthError::Http(format!(
+            "cape operation failed with status {status}: {body}"
+        )));
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_crop_skin_head_in_memory() {
+        // Create 64x64 RGBA image
+        let mut skin = RgbaImage::new(64, 64);
+        // Paint face region (8..16, 8..16) red
+        for y in 8..16 {
+            for x in 8..16 {
+                skin.put_pixel(x, y, Rgba([255, 0, 0, 255]));
+            }
+        }
+        // Paint hat region (40..48, 8..16) blue with 50% opacity
+        for y in 8..16 {
+            for x in 40..48 {
+                skin.put_pixel(x, y, Rgba([0, 0, 255, 128]));
+            }
+        }
+
+        let mut buf = Cursor::new(Vec::new());
+        skin.write_to(&mut buf, ImageFormat::Png).unwrap();
+        let bytes = buf.into_inner();
+
+        let data_url = crop_skin_head(&bytes, "test-account").unwrap();
+        assert!(data_url.starts_with("data:image/png;base64,"));
+    }
+
+    #[test]
+    fn test_crop_skin_head_invalid_dimensions() {
+        let skin = RgbaImage::new(32, 32);
+        let mut buf = Cursor::new(Vec::new());
+        skin.write_to(&mut buf, ImageFormat::Png).unwrap();
+        let bytes = buf.into_inner();
+
+        let res = crop_skin_head(&bytes, "test-account");
+        assert!(res.is_err());
+    }
+}

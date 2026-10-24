@@ -7,11 +7,17 @@
 )]
 
 pub mod error;
+pub mod install;
 pub mod instance;
 pub mod java;
 pub mod version;
 
 pub use error::GameError;
+pub use install::{
+    VersionManifestEntry, VersionManifestList, collect_version_download_specs,
+    fetch_version_manifest, install_vanilla, load_resolved_version_json, maven_coordinate_to_path,
+    repair_instance,
+};
 pub use instance::{
     InstanceConfig, InstanceInfo, InstanceKind, InstanceState, classify_instance, delete_instance,
     duplicate_instance, rename_instance, save_instance_config, scan_instances,

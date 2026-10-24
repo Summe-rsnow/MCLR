@@ -151,6 +151,58 @@ export interface Settings {
   }
 }
 
+export type AccountKind = 'offline' | 'microsoft' | 'authlib' | 'yggdrasilConnect'
+
+export interface CapeView {
+  id: string
+  alias: string
+  url: string
+  active: boolean
+}
+
+export interface AccountView {
+  id: string
+  kind: AccountKind
+  username: string
+  uuid: string
+  selected: boolean
+  server?: string | null
+  serverName?: string | null
+  skinHeadDataUrl?: string | null
+  capes: CapeView[]
+  defaultSkinModel: string
+}
+
+export interface DeviceCodeEvent {
+  userCode: string
+  verificationUri: string
+  expiresIn: number
+}
+
+export interface AuthlibProfileView {
+  id: string
+  name: string
+}
+
+export interface AuthlibLoginResponse {
+  account?: AccountView | null
+  pendingSessionId?: string | null
+  profiles: AuthlibProfileView[]
+}
+
+export interface VersionManifestEntry {
+  id: string
+  versionType: string
+  url: string
+  releaseTime: string
+}
+
+export interface VersionManifestList {
+  latestRelease: string
+  latestSnapshot: string
+  versions: VersionManifestEntry[]
+}
+
 async function invokeCommand<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return await TAURI_INVOKE<T>(cmd, args)
@@ -187,4 +239,62 @@ export const ipcClient = {
   javaScan: (): Promise<JavaInstallation[]> => invokeCommand<JavaInstallation[]>('java_scan'),
   javaDownload: (component: string): Promise<string> =>
     invokeCommand<string>('java_download', { component }),
+  // Accounts
+  accountsList: (): Promise<AccountView[]> => invokeCommand<AccountView[]>('accounts_list'),
+  accountsSelect: (id: string): Promise<AccountView[]> =>
+    invokeCommand<AccountView[]>('accounts_select', { id }),
+  accountsRemove: (id: string): Promise<AccountView[]> =>
+    invokeCommand<AccountView[]>('accounts_remove', { id }),
+  accountsAddOffline: (
+    username: string,
+    uuidMode: string,
+    customUuid?: string,
+  ): Promise<AccountView> =>
+    invokeCommand<AccountView>('accounts_add_offline', {
+      username,
+      uuidMode,
+      customUuid,
+    }),
+  accountsAddMicrosoft: (): Promise<string> =>
+    invokeCommand<string>('accounts_add_microsoft'),
+  accountsAddAuthlib: (
+    server: string,
+    username: string,
+    password: string,
+  ): Promise<AuthlibLoginResponse> =>
+    invokeCommand<AuthlibLoginResponse>('accounts_add_authlib', {
+      server,
+      username,
+      password,
+    }),
+  accountsSelectProfile: (
+    pendingSessionId: string,
+    profileId: string,
+  ): Promise<AccountView> =>
+    invokeCommand<AccountView>('accounts_select_profile', {
+      pendingSessionId,
+      profileId,
+    }),
+  accountsRefresh: (id: string): Promise<AccountView> =>
+    invokeCommand<AccountView>('accounts_refresh', { id }),
+  accountsSkinUpload: (
+    id: string,
+    variant: string,
+    pngPath: string,
+  ): Promise<AccountView> =>
+    invokeCommand<AccountView>('accounts_skin_upload', {
+      id,
+      variant,
+      pngPath,
+    }),
+  accountsCapeSet: (id: string, capeId: string | null): Promise<AccountView> =>
+    invokeCommand<AccountView>('accounts_cape_set', { id, capeId }),
+
+  // Install
+  installManifest: (forceRefresh?: boolean): Promise<VersionManifestList> =>
+    invokeCommand<VersionManifestList>('install_manifest', { forceRefresh: !!forceRefresh }),
+  installVanilla: (version: string, name: string): Promise<string> =>
+    invokeCommand<string>('install_vanilla', { version, name }),
+  installRepair: (instanceId: string): Promise<string> =>
+    invokeCommand<string>('install_repair', { instanceId }),
 }

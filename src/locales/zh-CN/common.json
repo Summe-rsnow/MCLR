@@ -8,5 +8,8 @@
   "retry": "重试",
   "refresh": "刷新",
   "search": "搜索",
-  "empty": "暂无内容"
+  "empty": "暂无内容",
+  "copy": "复制",
+  "copied": "已复制到剪贴板",
+  "open": "打开"
 }

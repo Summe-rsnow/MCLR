@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 mclr-core.workspace = true
+mclr-net.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
@@ -24,3 +25,4 @@ regex.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+wiremock.workspace = true

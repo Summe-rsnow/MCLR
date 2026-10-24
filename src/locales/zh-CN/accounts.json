@@ -1,0 +1,75 @@
+{
+  "nav": "账号管理",
+  "title": "账号列表",
+  "empty": "尚未添加任何账号",
+  "emptySubtitle": "添加微软、离线或第三方账号即可开始游戏",
+  "addAccount": "添加账号",
+  "types": {
+    "microsoft": "微软",
+    "offline": "离线",
+    "authlib": "第三方 (Authlib)",
+    "yggdrasilConnect": "第三方 (Connect)"
+  },
+  "status": {
+    "current": "当前使用",
+    "use": "切换为当前"
+  },
+  "actions": {
+    "refresh": "刷新凭据",
+    "delete": "删除账号",
+    "deleteConfirmTitle": "删除账号",
+    "deleteConfirmMessage": "确定要移除账号「{name}」吗？如果是离线账号，角色进度与皮肤数据不会被删除。",
+    "selectProfileTitle": "选择角色档案",
+    "selectProfilePrompt": "当前第三方账号拥有多个可用角色档案，请选择要绑定的角色：",
+    "openCloset": "在网页衣柜管理皮肤"
+  },
+  "dialog": {
+    "offlineTitle": "添加离线账号",
+    "authlibTitle": "添加第三方账号",
+    "msDeviceTitle": "微软设备代码登录",
+    "username": "用户名",
+    "usernamePlaceholder": "请输入玩家名称 (支持字母、数字、下划线)",
+    "uuidMode": "UUID 生成算法",
+    "uuidModes": {
+      "standard": "标准模式 (MD5 哈希)",
+      "legacy": "兼容模式 (旧版算法)",
+      "custom": "自定义 UUID (32 位十六进制)"
+    },
+    "customUuid": "自定义 UUID",
+    "customUuidPlaceholder": "例如：c06f8906-3c3e-4fdc-b47b-9fe3d2b27137",
+    "authServer": "验证服务器地址",
+    "authServerPlaceholder": "例如：https://littleskin.cn/api/yggdrasil",
+    "authAccount": "邮箱或用户名",
+    "authAccountPlaceholder": "请输入登录邮箱或账号",
+    "authPassword": "密码",
+    "authPasswordPlaceholder": "请输入密码",
+    "msDevicePrompt": "请在浏览器中打开验证链接，并输入下方的设备代码完成授权：",
+    "msCodeLabel": "验证代码",
+    "msOpenBrowser": "打开验证页面",
+    "msWaiting": "等待网页端授权中，完成后将自动绑定...",
+    "validation": {
+      "usernameRequired": "用户名不能为空",
+      "serverRequired": "验证服务器地址不能为空",
+      "accountRequired": "账号不能为空",
+      "passwordRequired": "密码不能为空",
+      "uuidInvalid": "UUID 格式不正确，需为有效 UUID 或 32 位十六进制字符串"
+    }
+  },
+  "skin": {
+    "title": "皮肤与披风管理",
+    "noAccount": "请先选择一个账号",
+    "unsupportedOffline": "离线模式皮肤由皮肤站或模组提供，此处仅展示默认外观",
+    "headPreview": "头像预览",
+    "model": "皮肤模型",
+    "models": {
+      "classic": "标准 (Classic / 4px 粗手臂)",
+      "slim": "纤细 (Slim / 3px 细手臂)"
+    },
+    "upload": "上传新皮肤",
+    "uploadPathPrompt": "请输入 PNG 皮肤文件绝对路径",
+    "uploadSuccess": "皮肤上传成功",
+    "capes": "披风选择",
+    "noneCape": "不使用披风",
+    "noCapes": "该账号暂无可用披风"
+  }
+}

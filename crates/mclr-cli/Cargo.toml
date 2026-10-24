@@ -8,7 +8,9 @@ license.workspace = true
 [dependencies]
 mclr-core.workspace = true
 mclr-game.workspace = true
+mclr-net.workspace = true
 anyhow.workspace = true
 clap.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
