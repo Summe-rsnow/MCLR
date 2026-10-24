@@ -1,0 +1,7 @@
+{
+  "unknown": "发生未知错误",
+  "notConfigured": "未配置所需密钥：{what}",
+  "settings": {
+    "invalid": "设置格式无效"
+  }
+}
