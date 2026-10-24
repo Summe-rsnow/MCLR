@@ -73,5 +73,14 @@
     "preLaunchFailed": "启动前脚本执行失败",
     "spawnFailed": "启动游戏进程失败",
     "processNotFound": "未找到指定的正在运行的游戏进程"
+  },
+  "comp": {
+    "cf": {
+      "distributionDisabled": "该文件已被作者关闭第三方客户端下载，请在 CurseForge 网页端下载"
+    },
+    "searchFailed": "搜索社区资源失败",
+    "projectFailed": "获取社区项目详情失败",
+    "filesFailed": "获取文件列表失败",
+    "downloadFailed": "下载社区资源失败"
   }
 }

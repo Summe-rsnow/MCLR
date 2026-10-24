@@ -172,6 +172,7 @@ export interface Settings {
     logRetentionDays: number
     disableGpu: boolean
   }
+  comp?: CompSettings
 }
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'debug' | 'fatal'
@@ -197,6 +198,95 @@ export interface LaunchProcessInfo {
 export interface LaunchStartResult {
   taskId: string
   processId?: number | null
+}
+
+export type CompPlatform = 'modrinth' | 'curseforge'
+
+export type CompType = 'mod' | 'modpack' | 'resourcepack' | 'shader' | 'datapack' | 'world'
+
+export type CompReleaseChannel = 'release' | 'beta' | 'alpha'
+
+export type CompDependencyKind = 'required' | 'optional' | 'incompatible' | 'embedded'
+
+export interface CompDependency {
+  projectId: string
+  kind: CompDependencyKind
+}
+
+export interface CompFileHashes {
+  sha1?: string | null
+  sha512?: string | null
+  murmur2?: number | null
+}
+
+export interface CompFile {
+  id: string
+  projectId: string
+  platform: CompPlatform
+  name: string
+  fileName: string
+  mcVersions: string[]
+  loaders: string[]
+  channel: CompReleaseChannel
+  releaseDate: string
+  size: number
+  hashes: CompFileHashes
+  downloadUrls: string[]
+  distributionDisabled: boolean
+  dependencies: CompDependency[]
+}
+
+export interface CompProject {
+  platform: CompPlatform
+  id: string
+  slug: string
+  title: string
+  summary: string
+  description?: string | null
+  iconUrl?: string | null
+  author: string
+  downloads: number
+  follows: number
+  categories: string[]
+  mcVersions: string[]
+  loaders: string[]
+  compType: CompType
+  updatedAt: string
+  websiteUrl?: string | null
+}
+
+export type CompSort = 'relevance' | 'downloads' | 'follows' | 'newest' | 'updated'
+
+export interface CompSearchQuery {
+  platform: CompPlatform
+  compType: CompType
+  query: string
+  mcVersion?: string | null
+  loader?: string | null
+  category?: string | null
+  sort: CompSort
+  offset: number
+  limit: number
+}
+
+export interface CompSearchResult {
+  hits: CompProject[]
+  totalHits: number
+  offset: number
+  limit: number
+}
+
+export interface CompFavoriteEntry {
+  platform: string
+  projectId: string
+  slug: string
+  title: string
+  iconUrl?: string | null
+  compType: string
+}
+
+export interface CompSettings {
+  favorites: CompFavoriteEntry[]
 }
 
 export type AccountKind = 'offline' | 'microsoft' | 'authlib' | 'yggdrasilConnect'
@@ -389,4 +479,24 @@ export const ipcClient = {
     invokeCommand<LaunchProcessInfo[]>('launch_processes'),
   launchKill: (processId: number): Promise<void> =>
     invokeCommand<void>('launch_kill', { processId }),
+
+  // Comp
+  compSearch: (query: CompSearchQuery): Promise<CompSearchResult> =>
+    invokeCommand<CompSearchResult>('comp_search', { query }),
+  compProject: (platform: CompPlatform, projectId: string): Promise<CompProject> =>
+    invokeCommand<CompProject>('comp_project', { platform, projectId }),
+  compFiles: (
+    platform: CompPlatform,
+    projectId: string,
+    mcVersion?: string | null,
+    loader?: string | null,
+  ): Promise<CompFile[]> =>
+    invokeCommand<CompFile[]>('comp_files', {
+      platform,
+      projectId,
+      mcVersion: mcVersion ?? null,
+      loader: loader ?? null,
+    }),
+  compDownload: (file: CompFile, targetInstance: string, kind: CompType): Promise<string> =>
+    invokeCommand<string>('comp_download', { file, targetInstance, kind }),
 }

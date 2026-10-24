@@ -1,5 +1,6 @@
 //! Global application settings model, persistence, and RFC 7386 JSON Merge Patch.
 
+pub mod comp;
 pub mod game;
 pub mod java;
 pub mod language;
@@ -10,6 +11,7 @@ pub mod ui;
 
 use crate::error::CoreError;
 use crate::paths;
+pub use comp::{CompFavoriteEntry, CompSettings};
 pub use game::{GameFolderEntry, GameSettings};
 pub use java::JavaSettings;
 pub use language::LanguageSettings;
@@ -38,6 +40,7 @@ pub struct Settings {
     pub game: GameSettings,
     pub java: JavaSettings,
     pub launch: LaunchSettings,
+    pub comp: CompSettings,
 }
 
 impl Default for Settings {
@@ -51,6 +54,7 @@ impl Default for Settings {
             game: GameSettings::default(),
             java: JavaSettings::default(),
             launch: LaunchSettings::default(),
+            comp: CompSettings::default(),
         }
     }
 }

@@ -1,0 +1,80 @@
+{
+  "nav": "社区资源",
+  "tabs": {
+    "mod": "模组",
+    "modpack": "整合包",
+    "resourcepack": "材质包",
+    "shader": "光影",
+    "datapack": "数据包",
+    "world": "地图存档",
+    "favorites": "收藏夹"
+  },
+  "platform": {
+    "label": "资源平台",
+    "modrinth": "Modrinth",
+    "curseforge": "CurseForge"
+  },
+  "search": {
+    "placeholder": "搜索项目名称、关键词...",
+    "category": "分类",
+    "allCategories": "全部分类",
+    "mcVersion": "游戏版本",
+    "allMcVersions": "全部版本",
+    "loader": "加载器",
+    "allLoaders": "全部加载器",
+    "sort": "排序方式",
+    "sorts": {
+      "relevance": "相关度",
+      "downloads": "下载量",
+      "follows": "关注度",
+      "newest": "最新发布",
+      "updated": "最近更新"
+    },
+    "noResults": "未找到匹配的社区资源",
+    "loadMore": "加载更多",
+    "noMore": "已加载全部内容",
+    "totalHits": "共找到 {count} 个项目"
+  },
+  "project": {
+    "author": "作者：{author}",
+    "downloads": "下载量：{count}",
+    "follows": "关注量：{count}",
+    "updated": "更新于：{date}",
+    "website": "官方主页",
+    "favorite": "收藏",
+    "unfavorite": "取消收藏",
+    "description": "介绍",
+    "files": "文件列表",
+    "noDescription": "暂无介绍内容",
+    "noFiles": "暂无可用的文件"
+  },
+  "files": {
+    "channel": {
+      "release": "正式版",
+      "beta": "测试版",
+      "alpha": "体验版"
+    },
+    "size": "大小：{size}",
+    "date": "发布时间：{date}",
+    "mcVersions": "支持版本：{versions}",
+    "loaders": "支持加载器：{loaders}",
+    "download": "下载",
+    "downloading": "下载中...",
+    "distributionDisabled": "该文件不支持第三方下载",
+    "openWebsite": "网页下载"
+  },
+  "downloadDialog": {
+    "title": "下载并安装文件",
+    "selectInstance": "选择目标实例",
+    "noInstances": "暂无游戏实例，请先在下载页面安装游戏实例",
+    "targetSubfolder": "安装目标目录：{folder}",
+    "confirm": "开始下载",
+    "cancel": "取消",
+    "success": "已创建下载任务",
+    "failed": "创建下载任务失败"
+  },
+  "favorites": {
+    "empty": "暂无收藏的项目",
+    "emptyDesc": "在浏览资源时点击爱心图标即可加入收藏"
+  }
+}

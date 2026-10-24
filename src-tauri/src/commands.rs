@@ -51,6 +51,10 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::loaders::loaders_versions,
         crate::ipc::loaders::loaders_install,
         // [comp]
+        crate::ipc::comp::comp_search,
+        crate::ipc::comp::comp_project,
+        crate::ipc::comp::comp_files,
+        crate::ipc::comp::comp_download,
         // [modpack]
         // [localmods]
         // [saves]

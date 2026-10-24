@@ -293,6 +293,38 @@ async loadersInstall(mcVersion: string, instanceName: string, loader: LoaderKind
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async compSearch(query: CompSearchQuery) : Promise<Result<CompSearchResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("comp_search", { query }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async compProject(platform: CompPlatform, projectId: string) : Promise<Result<CompProject, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("comp_project", { platform, projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async compFiles(platform: CompPlatform, projectId: string, mcVersion: string | null, loader: string | null) : Promise<Result<CompFile[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("comp_files", { platform, projectId, mcVersion, loader }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async compDownload(file: CompFile, targetInstance: string, kind: CompType) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("comp_download", { file, targetInstance, kind }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -320,6 +352,19 @@ export type AppInfo = { name: string; version: string }
 export type AuthlibLoginResponse = { account: AccountView | null; pendingSessionId: string | null; profiles: AuthlibProfileView[] }
 export type AuthlibProfileView = { id: string; name: string }
 export type CapeView = { id: string; alias: string; url: string; active: boolean }
+export type CompDependency = { projectId: string; kind: CompDependencyKind }
+export type CompDependencyKind = "required" | "optional" | "incompatible" | "embedded"
+export type CompFavoriteEntry = { platform: string; projectId: string; slug: string; title: string; iconUrl: string | null; compType: string }
+export type CompFile = { id: string; projectId: string; platform: CompPlatform; name: string; fileName: string; mcVersions: string[]; loaders: string[]; channel: CompReleaseChannel; releaseDate: string; size: number; hashes: CompFileHashes; downloadUrls: string[]; distributionDisabled: boolean; dependencies: CompDependency[] }
+export type CompFileHashes = { sha1: string | null; sha512: string | null; murmur2: number | null }
+export type CompPlatform = "modrinth" | "curseforge"
+export type CompProject = { platform: CompPlatform; id: string; slug: string; title: string; summary: string; description: string | null; iconUrl: string | null; author: string; downloads: number; follows: number; categories: string[]; mcVersions: string[]; loaders: string[]; compType: CompType; updatedAt: string; websiteUrl: string | null }
+export type CompReleaseChannel = "release" | "beta" | "alpha"
+export type CompSearchQuery = { platform: CompPlatform; compType: CompType; query: string; mcVersion: string | null; loader: string | null; category: string | null; sort: CompSort; offset: number; limit: number }
+export type CompSearchResult = { hits: CompProject[]; totalHits: number; offset: number; limit: number }
+export type CompSettings = { favorites: CompFavoriteEntry[] }
+export type CompSort = "relevance" | "downloads" | "follows" | "newest" | "updated"
+export type CompType = "mod" | "modpack" | "resourcepack" | "shader" | "datapack" | "world"
 export type GameFolderEntry = { name: string; path: string }
 export type GameSettings = { folders: GameFolderEntry[]; currentFolder: string; defaultIsolation: string; sortBy: string }
 /**
@@ -374,7 +419,7 @@ export type SecretsStatus = { msClientId: boolean; curseforgeApiKey: boolean; up
 /**
  * Complete MCLR user settings.
  */
-export type Settings = { schemaVersion: number; ui: UiSettings; language: LanguageSettings; system: SystemSettings; net: NetSettings; game: GameSettings; java: JavaSettings; launch: LaunchSettings }
+export type Settings = { schemaVersion: number; ui: UiSettings; language: LanguageSettings; system: SystemSettings; net: NetSettings; game: GameSettings; java: JavaSettings; launch: LaunchSettings; comp: CompSettings }
 export type SourcePriority = "mirrorFirst" | "smart" | "officialFirst"
 export type SystemSettings = { logLevel: string; logRetentionDays: number; disableGpu: boolean }
 /**

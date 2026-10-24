@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.7] - 2026-10-24
+
+### Added
+- `mclr-comp`: Unified community project/file model (`CompProject`, `CompFile`, `CompType`), `ModrinthClient` (search, project, versions, batch projects, `version_files`, `version_files/update` with mirror rewrite), and `CurseForgeClient` (search, project, files, batch mods/files, `fingerprints/432`, null `downloadUrl` edge CDN fallback, and `comp.cf.distributionDisabled` handling).
+- Community Download UI (`src/features/comp`): Mod, Modpack, ResourcePack, Shader, DataPack, World, and Favorites browser pages + Project Detail page with `markdown-it` + `DOMPurify` description rendering and target-instance download dialog.
+
 ## [0.0.6] - 2026-10-24
 
 ### Added
