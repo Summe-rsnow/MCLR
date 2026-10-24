@@ -8,11 +8,23 @@ import { useThemeStore } from '../../stores/theme'
 import { MToast, MDialog, useDialog } from '../../ui'
 import TaskIndicator from '../tasks/TaskIndicator.vue'
 
+import { onMounted, onUnmounted } from 'vue'
+import { useCrashStore } from '../crash/store'
+import CrashDialog from '../crash/CrashDialog.vue'
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const themeStore = useThemeStore()
 const { activeDialog, handleConfirm, handleCancel } = useDialog()
+const crashStore = useCrashStore()
+
+onMounted(() => {
+  crashStore.startListening()
+})
+
+onUnmounted(() => {
+  crashStore.stopListening()
+})
 
 const navItems = computed(() => {
   const items: Array<{ path: string; name: string; meta: NavMeta }> = []
@@ -218,6 +230,9 @@ function toggleMaterial() {
     >
       <p>{{ activeDialog.content }}</p>
     </MDialog>
+
+    <!-- Global Crash Analysis Dialog -->
+    <CrashDialog />
   </div>
 </template>
 

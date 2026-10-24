@@ -1,0 +1,208 @@
+{
+  "dialog": {
+    "title": "Minecraft 崩溃分析",
+    "subtitle": "检测到游戏异常退出，MCLR 诊断引擎已提取以下可能原因与建议",
+    "analyzedAt": "分析时间：{time}",
+    "instance": "崩溃实例：{name}",
+    "noCausesFoundTitle": "未识别到明确的崩溃特征",
+    "noCausesFoundAdvice": "日志中未匹配到已知崩溃模式，建议导出诊断报告或查看详细日志进一步排查。",
+    "confidence": {
+      "high": "高置信度",
+      "medium": "中置信度",
+      "low": "低置信度"
+    },
+    "evidence": {
+      "toggle": "证据日志片段",
+      "lines": "{count} 行日志证据"
+    },
+    "actions": {
+      "exportReport": "导出崩溃报告 (.zip)",
+      "exporting": "正在导出报告...",
+      "exportSuccess": "崩溃报告已成功导出！",
+      "openLogs": "查看完整日志",
+      "close": "关闭"
+    }
+  },
+  "cause": {
+    "extractedModFile": {
+      "title": "检测到已被解压的模组文件",
+      "advice": "删除 mods 文件夹中已被解压的模组文件夹，并放入完整的 .jar 模组文件后再试。"
+    },
+    "missingMixinBootstrap": {
+      "title": "缺少 MixinBootstrap 前置依赖",
+      "advice": "检查 MixinBootstrap、模组加载器和相关前置是否已完整安装。"
+    },
+    "outOfMemory": {
+      "title": "Minecraft 内存不足",
+      "advice": "在启动设置中增加游戏分配内存，并移除配置要求较高的资源包、模组或光影。也可以在启动前关闭其他软件。"
+    },
+    "usingJdk": {
+      "title": "游戏可能正在使用 JDK 或高版本 Java",
+      "advice": "在启动设置中改用常规 JRE 或其他适合该实例的 Java 后再试。"
+    },
+    "unsupportedOpenGl": {
+      "title": "显卡驱动不支持所需的 OpenGL 版本",
+      "advice": "尝试更新或回退显卡驱动；若设备有独立显卡，请切换至独立显卡运行。"
+    },
+    "usingOpenJ9": {
+      "title": "当前正在使用 OpenJ9 Java",
+      "advice": "OpenJ9 与部分游戏及模组不兼容，请在启动设置中改用 HotSpot Java (如 Adoptium、Zulu、Oracle JRE) 后再试。"
+    },
+    "javaTooNew": {
+      "title": "当前 Java 版本对该版本游戏过高",
+      "advice": "在启动设置中改用较低版本的 Java (如 Java 8 或 Java 17) 后再试。"
+    },
+    "javaIncompatible": {
+      "title": "当前 Java 版本与游戏或模组不兼容",
+      "advice": "根据 Minecraft 版本和模组要求，在启动设置中选择合适的大版本 Java。"
+    },
+    "invalidModFileName": {
+      "title": "模组文件名包含非法字符",
+      "advice": "移除或重命名异常的模组文件，使文件名仅包含英文字母、数字、短横线、下划线和小数点。"
+    },
+    "pixelFormatNotSupported": {
+      "title": "像素格式不受支持 (Pixel format not accelerated)",
+      "advice": "显卡驱动可能损坏或未正常工作。请更新或重新安装显卡驱动程序。"
+    },
+    "veryShortOutput": {
+      "title": "游戏输出过短无法获取充分信息",
+      "advice": "游戏在极早阶段异常退出，请点击导出错误报告并提供给社区或作者协助排查。"
+    },
+    "intelDriverAccessViolation": {
+      "title": "Intel 集成显卡驱动内存访问越界",
+      "advice": "Intel 旧版核显驱动存在已知缺陷。请更新驱动或切换到独立显卡运行。"
+    },
+    "amdDriverAccessViolation": {
+      "title": "AMD 显卡驱动发生内存访问异常",
+      "advice": "尝试更新或回退 AMD 显卡驱动版本，并检查光影包配置。"
+    },
+    "nvidiaDriverAccessViolation": {
+      "title": "NVIDIA 显卡驱动发生异常冲突",
+      "advice": "尝试更新 NVIDIA 显卡驱动程序，或在显卡控制面板中重置 3D 渲染设置。"
+    },
+    "manualDebugCrash": {
+      "title": "手动触发的调试崩溃 (F3 + C)",
+      "advice": "这是用户手动触发的调试崩溃，游戏本身文件与环境通常没有问题。"
+    },
+    "openGl1282": {
+      "title": "光影或材质触发 OpenGL 1282 错误",
+      "advice": "关闭光影，并移除最近添加的高清资源包或光影包后再试。"
+    },
+    "fileOrContentValidationFailed": {
+      "title": "部分核心文件或模组校验失败",
+      "advice": "游戏核心或模组文件已损坏，建议在实例概览中执行启动修复，或重新下载模组。"
+    },
+    "confirmedModCrash": {
+      "title": "模组冲突或严重故障导致崩溃",
+      "advice": "尝试禁用或更新引发崩溃的模组，排查其前置依赖是否齐全。"
+    },
+    "suspectedModCrash": {
+      "title": "疑似模组引发游戏崩溃",
+      "advice": "尝试逐个禁用提示的疑似模组，观察游戏是否仍会崩溃。"
+    },
+    "modConfigCrash": {
+      "title": "模组配置文件损坏或解析失败",
+      "advice": "尝试在 config 文件夹中删除该模组的配置文件后重新启动，或恢复备份配置。"
+    },
+    "modMixinFailed": {
+      "title": "模组 Mixin 注入操作失败",
+      "advice": "多个模组修改了同一核心逻辑导致冲突，请检查模组间的兼容版本并逐步禁用定位。"
+    },
+    "modLoaderError": {
+      "title": "模组加载器加载失败",
+      "advice": "模组加载器核心组件加载异常，请尝试重新安装或更新 Mod Loader。"
+    },
+    "modInitializationFailed": {
+      "title": "模组生命周期初始化失败",
+      "advice": "模组在预初始化或初始化阶段抛出异常，请检查该模组的版本是否与当前游戏及其他模组匹配。"
+    },
+    "stackKeywordFound": {
+      "title": "崩溃堆栈中发现关键模组关键词",
+      "advice": "堆栈回溯中包含了特定模组的类名或调用栈，建议检查并更新相关模组。"
+    },
+    "stackModNameFound": {
+      "title": "崩溃堆栈中匹配到已安装模组",
+      "advice": "崩溃很可能由堆栈中出现的模组直接引起，建议暂时移除该模组测试。"
+    },
+    "optiFineWorldLoadCrash": {
+      "title": "OptiFine 导致世界加载异常",
+      "advice": "当前 OptiFine 版本与区块渲染或其他模组冲突，尝试更换 OptiFine 版本或暂时移除。"
+    },
+    "specificBlockCrash": {
+      "title": "世界中的特定方块引起崩溃",
+      "advice": "特定方块渲染或 TileEntity 更新出错。可使用地图编辑器移除该坐标方块或禁用对应模组。"
+    },
+    "specificEntityCrash": {
+      "title": "世界中的特定实体引发崩溃",
+      "advice": "特定实体 Tick 或渲染发生异常。可通过地图工具清除实体或暂时将游戏难度切换为和平。"
+    },
+    "resourcePackTooLarge": {
+      "title": "资源包过大或纹理超出显存限制",
+      "advice": "使用的资源包分辨率过高或贴图过大，请移除高清材质包或降低贴图质量。"
+    },
+    "noAnalyzableFile": {
+      "title": "未找到可分析的崩溃日志文件",
+      "advice": "游戏异常关闭但未生成标准 crash-report 或 latest.log，建议导出诊断报告进行分析。"
+    },
+    "x86JavaMemoryLimit": {
+      "title": "32 位 Java 内存分配上限受限",
+      "advice": "当前使用的是 32 位 Java，无法分配超过 1.5 GB 的内存。请安装并在设置中切换至 64 位 Java。"
+    },
+    "duplicateMods": {
+      "title": "安装了重复的模组文件",
+      "advice": "mods 文件夹中存在相同模组的多个不同版本文件，请删除重复的旧版本文件。"
+    },
+    "incompatibleMods": {
+      "title": "检测到互不兼容的模组组合",
+      "advice": "部分模组已知无法共存，请根据提示移除冲突的模组之一。"
+    },
+    "optiFineForgeIncompatible": {
+      "title": "OptiFine 与当前 Forge 版本不兼容",
+      "advice": "检查 OptiFine 官网说明，安装与当前 Forge 构建版本精准匹配的 OptiFine 版本。"
+    },
+    "fabricError": {
+      "title": "Fabric 加载器抛出错误信息",
+      "advice": "请根据 Fabric 弹窗或错误报告中给出的具体原因进行调整或增补前置。"
+    },
+    "fabricSolutionProvided": {
+      "title": "Fabric 提供了明确的解决方案",
+      "advice": "Fabric 已在日志中给出修复建议，请按照提示下载对应版本的前置模组。"
+    },
+    "forgeError": {
+      "title": "Forge 加载器报告模组加载异常",
+      "advice": "请检查 Forge 错误提示，通常为缺少前置依赖或模组版本不匹配。"
+    },
+    "oldForgeNewJavaIncompatible": {
+      "title": "旧版 Forge 与高版本 Java 不兼容",
+      "advice": "1.16.5 及更早的 Forge 通常需要 Java 8，请在启动设置中改用 Java 8。"
+    },
+    "multipleForgeInInstanceJson": {
+      "title": "实例配置文件中包含冲突的多个 Forge",
+      "advice": "实例版本 JSON 遭到外部启动器破坏，建议在实例概览中重新安装 Forge。"
+    },
+    "tooManyModsIdLimit": {
+      "title": "模组数量超出旧版 Minecraft 的 ID 限制",
+      "advice": "旧版 Minecraft (1.7.10/1.12.2) 方块或物品 ID 达到上限，请减少模组或安装 NotEnoughIDs 等扩展补丁。"
+    },
+    "nightConfigBug": {
+      "title": "Night Config 配置文件解析异常",
+      "advice": "Night Config 库发生并发或语法错误，尝试删除对应的 toml 配置文件或安装 Night Config Fixes。"
+    },
+    "shadersModWithOptiFine": {
+      "title": "同时安装了独立光影模组与 OptiFine",
+      "advice": "OptiFine 内部已自带光影功能，请删除 mods 目录中多余的 ShadersMod。"
+    },
+    "incompleteForgeInstallation": {
+      "title": "Forge 安装不完整，缺失必要支持库",
+      "advice": "Forge 核心库文件缺失，请在网络畅通的情况下在实例概览中执行启动修复或重新安装。"
+    },
+    "modRequiresJava11": {
+      "title": "部分模组需要 Java 11 或更高版本",
+      "advice": "已安装的模组使用了高版本 Java 特性，请在实例启动设置中切换至 Java 11、17 或更高版本。"
+    },
+    "missingDependencyOrWrongMcVersion": {
+      "title": "缺少前置模组或 Minecraft 版本不匹配",
+      "advice": "部分模组缺少必要的前置依赖库，或下载的模组文件适用的 Minecraft 大版本与当前实例不一致。"
+    }
+  }
+}

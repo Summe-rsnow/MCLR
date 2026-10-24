@@ -2,6 +2,7 @@
 
 pub mod curseforge;
 pub mod error;
+pub mod export;
 pub mod jarinjar;
 pub mod local;
 pub mod model;
@@ -11,6 +12,10 @@ pub mod resolver;
 
 pub use curseforge::CurseForgeClient;
 pub use error::CompError;
+pub use export::{
+    ExportCandidateEntry, ModpackExportFormat, ModpackExportOptions, export_modpack,
+    scan_export_candidates,
+};
 pub use jarinjar::{JarInJarNode, scan_jar_in_jar};
 pub use local::{
     LocalModInfo, check_local_mods_updates, compute_curseforge_murmur2, delete_local_mod,

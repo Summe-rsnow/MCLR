@@ -541,6 +541,38 @@ async serverPing(ip: string) : Promise<Result<ServerPingResult, AppError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async exportScanInstance(instanceId: string) : Promise<Result<ExportCandidateEntry[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_scan_instance", { instanceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async exportModpack(options: ModpackExportOptions) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_modpack", { options }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async crashAnalyze(instanceId: string, customLogPath: string | null) : Promise<Result<CrashResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("crash_analyze", { instanceId, customLogPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async crashExportReport(instanceId: string, destZipPath: string) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("crash_export_report", { instanceId, destZipPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -581,7 +613,23 @@ export type CompSearchResult = { hits: CompProject[]; totalHits: number; offset:
 export type CompSettings = { favorites: CompFavoriteEntry[] }
 export type CompSort = "relevance" | "downloads" | "follows" | "newest" | "updated"
 export type CompType = "mod" | "modpack" | "resourcepack" | "shader" | "datapack" | "world"
+/**
+ * A specific crash cause finding returned to IPC callers.
+ */
+export type CrashCauseFinding = { code: string; params: Partial<{ [key in string]: string }>; confidence: CrashConfidence; evidence: string[] }
+/**
+ * Confidence level for a crash analysis finding.
+ */
+export type CrashConfidence = "high" | "medium" | "low"
+/**
+ * Aggregated result of analyzing crash logs for an instance.
+ */
+export type CrashResult = { instanceId: string; analyzedAt: string; causes: CrashCauseFinding[]; summaryLogLines: string[]; reportFiles: string[] }
 export type DatapackInfo = { id: string; fileName: string; description: string; packFormat: number; enabled: boolean; builtIn: boolean }
+/**
+ * Candidate file or folder that can be selected for modpack export.
+ */
+export type ExportCandidateEntry = { relPath: string; isDir: boolean; size: number; defaultSelected: boolean }
 export type GameFolderEntry = { name: string; path: string }
 export type GameSettings = { folders: GameFolderEntry[]; currentFolder: string; defaultIsolation: string; sortBy: string }
 /**
@@ -636,6 +684,14 @@ export type LogLevel = "info" | "warn" | "error" | "debug" | "fatal"
  */
 export type LogLine = { lineId: number; processId: number; instanceId: string; level: LogLevel; text: string; timestamp: string }
 export type MaterialMode = "flat" | "glass"
+/**
+ * Target export format.
+ */
+export type ModpackExportFormat = "modrinth" | "curseforge"
+/**
+ * Options configured by the user for modpack export.
+ */
+export type ModpackExportOptions = { instanceId: string; format: ModpackExportFormat; packName: string; packVersion: string; author: string; summary: string; selectedPaths: string[]; outputPath: string }
 /**
  * Supported modpack archive formats.
  */

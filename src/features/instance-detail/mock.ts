@@ -5,6 +5,8 @@ import type {
   InstanceFileItem,
   ServerEntry,
   ServerPingResult,
+  ExportCandidateEntry,
+  ModpackExportOptions,
 } from '../../ipc/client'
 
 export const mockSaves: Record<string, SaveInfo[]> = {
@@ -153,12 +155,26 @@ let instanceFilesState = JSON.parse(JSON.stringify(mockInstanceFiles)) as Record
 >
 let serversState = JSON.parse(JSON.stringify(mockServers)) as Record<string, ServerEntry[]>
 
+export const mockExportCandidates: ExportCandidateEntry[] = [
+  { relPath: 'mods', isDir: true, size: 10485760, defaultSelected: true },
+  { relPath: 'config', isDir: true, size: 20480, defaultSelected: true },
+  { relPath: 'resourcepacks', isDir: true, size: 5242880, defaultSelected: true },
+  { relPath: 'shaderpacks', isDir: true, size: 8388608, defaultSelected: true },
+  { relPath: 'options.txt', isDir: false, size: 1536, defaultSelected: true },
+  { relPath: 'saves', isDir: true, size: 31457280, defaultSelected: false },
+  { relPath: 'logs', isDir: true, size: 512000, defaultSelected: false },
+  { relPath: 'crash-reports', isDir: true, size: 102400, defaultSelected: false },
+]
+
+export let lastExportedModpackOptions: ModpackExportOptions | null = null
+
 export function resetMockInstanceDetail(): void {
   savesState = JSON.parse(JSON.stringify(mockSaves))
   datapacksState = JSON.parse(JSON.stringify(mockDatapacks))
   screenshotsState = JSON.parse(JSON.stringify(mockScreenshots))
   instanceFilesState = JSON.parse(JSON.stringify(mockInstanceFiles))
   serversState = JSON.parse(JSON.stringify(mockServers))
+  lastExportedModpackOptions = null
 }
 
 const handlers = {
@@ -319,6 +335,14 @@ const handlers = {
       favicon: null,
       latencyMs: 35,
     }
+  },
+  export_scan_instance: (_args: Record<string, unknown>): ExportCandidateEntry[] => {
+    return [...mockExportCandidates]
+  },
+  export_modpack: (args: Record<string, unknown>): string => {
+    const options = (args.options ?? args) as ModpackExportOptions
+    lastExportedModpackOptions = options
+    return 'task-export-1'
   },
 }
 

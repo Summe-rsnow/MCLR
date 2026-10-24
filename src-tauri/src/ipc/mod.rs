@@ -3,6 +3,8 @@
 pub mod accounts;
 pub mod app;
 pub mod comp;
+pub mod crash;
+pub mod export;
 pub mod install;
 pub mod instances;
 pub mod java;

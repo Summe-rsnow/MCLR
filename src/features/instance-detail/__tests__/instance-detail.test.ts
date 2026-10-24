@@ -9,6 +9,8 @@ import SettingsTab from '../tabs/SettingsTab.vue'
 import SavesTab from '../tabs/SavesTab.vue'
 import ServersTab from '../tabs/ServersTab.vue'
 import InstanceFilesTab from '../tabs/InstanceFilesTab.vue'
+import ExportTab from '../tabs/ExportTab.vue'
+import { lastExportedModpackOptions } from '../mock'
 import { setupMockIpc } from '../../../ipc/mock'
 import { resetMockInstances } from '../../instances/mock'
 import { resetMockInstanceDetail } from '../mock'
@@ -64,8 +66,8 @@ describe('Instance Detail feature', () => {
     await router.isReady()
   })
 
-  it('glob tab registry loads all 9 sub-tabs in order', () => {
-    expect(instanceDetailTabs.length).toBe(9)
+  it('glob tab registry loads all 10 sub-tabs in order', () => {
+    expect(instanceDetailTabs.length).toBe(10)
     const keys = instanceDetailTabs.map((t) => t.key)
     expect(keys).toEqual([
       'overview',
@@ -77,6 +79,7 @@ describe('Instance Detail feature', () => {
       'saves',
       'screenshots',
       'servers',
+      'export',
     ])
   })
 
@@ -238,5 +241,55 @@ describe('Instance Detail feature', () => {
     )
     expect(toggled.enabled).toBe(false)
     expect(toggled.fileName).toBe('Faithful_32x.zip.disabled')
+  })
+
+  it('export tab loads candidate files and submits modpack export', async () => {
+    const wrapper = mount(ExportTab, {
+      props: {
+        instanceId: '1.20.1-vanilla',
+        instance: {
+          id: '1.20.1-vanilla',
+          name: 'Vanilla 1.20.1',
+          folder: 'default',
+          path: '/path/to/instance',
+          mcVersion: '1.20.1',
+          kind: 'vanilla',
+          loaders: [],
+          state: 'ok',
+          config: {
+            icon: 'grass_block',
+            category: 'Default',
+            pinned: false,
+            isolation: 'global',
+            loginRequirement: 'any',
+          },
+        },
+      },
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    // Check candidate files rendered
+    expect(wrapper.text()).toContain('mods')
+    expect(wrapper.text()).toContain('config')
+    expect(wrapper.text()).toContain('resourcepacks')
+    expect(wrapper.text()).toContain('options.txt')
+    expect(wrapper.text()).toContain('saves')
+
+    // Start export
+    const exportBtn = wrapper.findAll('button').find((b) => b.text().includes('开始导出'))
+    expect(exportBtn).toBeDefined()
+    if (exportBtn) {
+      await exportBtn.trigger('click')
+      await flushPromises()
+      expect(lastExportedModpackOptions).not.toBeNull()
+      expect(lastExportedModpackOptions?.instanceId).toBe('1.20.1-vanilla')
+      expect(lastExportedModpackOptions?.format).toBe('modrinth')
+      expect(lastExportedModpackOptions?.selectedPaths).toContain('mods')
+      expect(lastExportedModpackOptions?.selectedPaths).toContain('config')
+      expect(lastExportedModpackOptions?.selectedPaths).not.toContain('saves')
+    }
   })
 })

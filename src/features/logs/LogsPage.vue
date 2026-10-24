@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useLogsStore } from './store'
 import { useToast } from '../../ui/useToast'
 import { useDialog } from '../../ui/useDialog'
+import { useCrashStore } from '../crash/store'
 import type { LogLevel } from '../../ipc/client'
 import MButton from '../../ui/MButton.vue'
 import MInput from '../../ui/MInput.vue'
@@ -16,6 +17,12 @@ const { t } = useI18n()
 const toast = useToast()
 const dialog = useDialog()
 const logsStore = useLogsStore()
+const crashStore = useCrashStore()
+
+async function onAnalyzeCrash() {
+  const instanceId = logsStore.selectedInstanceId || '1.20.1-vanilla'
+  await crashStore.analyzeInstance(instanceId, null, true)
+}
 
 const logContainer = ref<HTMLElement | null>(null)
 const isKilling = ref(false)
@@ -238,6 +245,14 @@ function getLineTextColor(level: LogLevel) {
           @click="logsStore.clearLogs"
         >
           {{ t('logs.clear') }}
+        </MButton>
+        <MButton
+          variant="tonal"
+          size="sm"
+          icon="i-lucide-activity"
+          @click="onAnalyzeCrash"
+        >
+          {{ t('logs.crashAnalyze') }}
         </MButton>
         <MButton
           v-if="logsStore.activeProcess"

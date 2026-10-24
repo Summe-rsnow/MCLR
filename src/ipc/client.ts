@@ -406,6 +406,44 @@ export interface ServerPingResult {
   latencyMs: number
 }
 
+export interface ExportCandidateEntry {
+  relPath: string
+  isDir: boolean
+  size: number
+  defaultSelected: boolean
+}
+
+export type ModpackExportFormat = 'modrinth' | 'curseforge'
+
+export interface ModpackExportOptions {
+  instanceId: string
+  format: ModpackExportFormat
+  packName: string
+  packVersion: string
+  author: string
+  summary: string
+  selectedPaths: string[]
+  outputPath: string
+}
+
+export type CrashConfidence = 'high' | 'medium' | 'low'
+
+export interface CrashCauseFinding {
+  code: string
+  params: Record<string, string>
+  confidence: CrashConfidence
+  evidence: string[]
+}
+
+export interface CrashResult {
+  instanceId: string
+  analyzedAt: string
+  causes: CrashCauseFinding[]
+  summaryLogLines: string[]
+  reportFiles: string[]
+}
+
+
 
 export type AccountKind = 'offline' | 'microsoft' | 'authlib' | 'yggdrasilConnect'
 
@@ -753,4 +791,21 @@ export const ipcClient = {
     invokeCommand<ServerEntry[]>('server_remove', { instanceId, index }),
   serverPing: (ip: string): Promise<ServerPingResult> =>
     invokeCommand<ServerPingResult>('server_ping', { ip }),
+  exportScanInstance: (instanceId: string): Promise<ExportCandidateEntry[]> =>
+    invokeCommand<ExportCandidateEntry[]>('export_scan_instance', { instanceId }),
+  exportModpack: (options: ModpackExportOptions): Promise<string> =>
+    invokeCommand<string>('export_modpack', { options }),
+  crashAnalyze: (
+    instanceId: string,
+    customLogPath?: string | null,
+  ): Promise<CrashResult> =>
+    invokeCommand<CrashResult>('crash_analyze', {
+      instanceId,
+      customLogPath: customLogPath ?? null,
+    }),
+  crashExportReport: (
+    instanceId: string,
+    destZipPath: string,
+  ): Promise<string> =>
+    invokeCommand<string>('crash_export_report', { instanceId, destZipPath }),
 }

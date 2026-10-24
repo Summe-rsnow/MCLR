@@ -87,7 +87,11 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::servers::server_remove,
         crate::ipc::servers::server_ping,
         // [export]
+        crate::ipc::export::export_scan_instance,
+        crate::ipc::export::export_modpack,
         // [crash]
+        crate::ipc::crash::crash_analyze,
+        crate::ipc::crash::crash_export_report,
         // [home]
         // [tools]
         // [update]

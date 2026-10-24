@@ -10,6 +10,7 @@
   "exportSuccess": "日志文件已导出",
   "clear": "清空日志",
   "killProcess": "强制结束进程",
+    "crashAnalyze": "分析崩溃日志",
   "killConfirmTitle": "结束游戏进程",
   "killConfirmMessage": "确定要强制结束 PID 为 {pid} 的 Minecraft 进程吗？未保存的游戏进度可能会丢失。",
   "processSelector": "选择运行进程",

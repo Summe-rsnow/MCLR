@@ -98,4 +98,15 @@
     "pingFailed": "无法连接服务器或 Ping 超时",
     "invalidPath": "无效的文件路径或格式"
   }
+  ,
+  "export": {
+    "scanFailed": "扫描实例文件失败",
+    "packFailed": "打包导出整合包失败",
+    "noFiles": "未选择任何要导出的文件"
+  },
+  "crash": {
+    "analyzeFailed": "崩溃日志分析失败",
+    "exportFailed": "导出崩溃诊断报告失败",
+    "logNotFound": "未找到相关的崩溃日志文件"
+  }
 }

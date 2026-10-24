@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.10] - 2026-10-24
+
+### Added
+- `mclr-comp::export`: Modpack exporter producing Modrinth `.mrpack` (`modrinth.index.json` formatVersion 1 with SHA1/SHA512 `version_files` resolution + `overrides/`) and CurseForge `.zip` (`manifest.json` with MurmurHash2 `fingerprints/432` resolution + `overrides/`), plus candidate file tree scanner with sane defaults.
+- `mclr-crash`: 4-phase crash log analysis engine (`fatal`, `primary`, `stack/modindex`, `secondary`) porting all 45 PCL-CE crash causes, log collector/preparer, and diagnostic `.zip` report exporter (`launch-debug.bat`, `environment.json`, `mods.json` with JarInJar trees, `watcher-output.log`, and crash logs).
+- Instance Detail Export sub-tab (`ExportTab.vue`) and global `CrashDialog.vue` auto-popup on `launch://crashed` with localized `zh-CN` titles and advice for all 45 crash causes.
+
 ## [0.0.9] - 2026-10-24
 
 ### Added

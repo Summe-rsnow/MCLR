@@ -190,4 +190,43 @@
     "deleteSuccess": "服务器已删除",
     "saveSuccess": "保存成功"
   }
+  ,
+  "export": {
+    "title": "导出整合包",
+    "description": "将当前实例的模组、配置文件及自定义资源打包为标准整合包格式。",
+    "formatLabel": "整合包格式",
+    "formats": {
+      "modrinth": "Modrinth (.mrpack)",
+      "curseforge": "CurseForge (.zip)"
+    },
+    "packName": "整合包名称",
+    "packNamePlaceholder": "例如：我的冒险整合包",
+    "packVersion": "整合包版本",
+    "packVersionPlaceholder": "例如：1.0.0",
+    "author": "作者",
+    "authorPlaceholder": "例如：MCLR 玩家",
+    "summary": "简介描述",
+    "summaryPlaceholder": "请输入整合包简介说明...",
+    "outputPath": "输出文件路径",
+    "outputPathPlaceholder": "点击浏览或输入导出文件路径",
+    "browse": "浏览",
+    "fileFilter": "整合包文件 (*.mrpack, *.zip)",
+    "filesSelection": "包含文件与目录",
+    "filesSelectionSubtitle": "已智能勾选常规模组、配置与资源，默认排除存档与日志。",
+    "selectAll": "全选",
+    "deselectAll": "全不选",
+    "defaultSelection": "恢复默认",
+    "emptyFiles": "未扫描到可导出的文件或目录",
+    "isDir": "目录",
+    "isFile": "文件",
+    "startExport": "开始导出",
+    "exporting": "正在导出...",
+    "exportSuccess": "整合包导出成功，任务已开始！",
+    "validation": {
+      "nameRequired": "请输入整合包名称",
+      "versionRequired": "请输入整合包版本",
+      "outputPathRequired": "请指定输出文件路径",
+      "filesRequired": "请至少选择一个包含的文件或目录"
+    }
+  }
 }
