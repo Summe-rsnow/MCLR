@@ -8,3 +8,22 @@ license.workspace = true
 [dependencies]
 mclr-core.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+specta.workspace = true
+url.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+md-5.workspace = true
+hex.workspace = true
+hickory-resolver.workspace = true
+futures-util.workspace = true
+tracing.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+wiremock.workspace = true
+tempfile.workspace = true

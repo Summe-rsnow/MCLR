@@ -1,0 +1,50 @@
+{
+  "nav": "游戏实例",
+  "search": "搜索实例名称、版本...",
+  "empty": "未找到匹配的 Minecraft 实例",
+  "emptyFolder": "当前目录暂无实例",
+  "emptyFolderSubtitle": "点击下载或导入安装新版本",
+  "refresh": "刷新列表",
+  "folder": {
+    "current": "游戏目录",
+    "manage": "管理目录",
+    "add": "添加目录",
+    "addDialogTitle": "添加游戏目录",
+    "nameLabel": "目录别名",
+    "namePlaceholder": "例如：默认目录",
+    "pathLabel": "文件夹路径",
+    "pathPlaceholder": "C:\\path\\to\\.minecraft",
+    "pathError": "目录路径不能为空"
+  },
+  "filter": {
+    "all": "全部",
+    "pinned": "置顶",
+    "vanilla": "原版",
+    "modded": "模组"
+  },
+  "card": {
+    "pin": "置顶实例",
+    "unpin": "取消置顶",
+    "more": "更多操作",
+    "state": {
+      "ok": "就绪",
+      "broken": "配置损坏",
+      "incomplete": "文件不完整"
+    }
+  },
+  "actions": {
+    "openFolder": "打开文件夹",
+    "rename": "重命名",
+    "duplicate": "复制实例",
+    "delete": "删除",
+    "deleteConfirmTitle": "删除实例",
+    "deleteConfirmMessage": "确定要将实例「{name}」放入回收站吗？此操作可以从系统回收站恢复。"
+  },
+  "dialog": {
+    "renameTitle": "重命名实例",
+    "duplicateTitle": "复制实例",
+    "nameLabel": "新名称",
+    "namePlaceholder": "请输入新实例名称",
+    "nameError": "名称不能包含特殊字符 \\ / : * ? \" < > | ! ;"
+  }
+}

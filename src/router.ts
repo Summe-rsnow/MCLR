@@ -21,7 +21,7 @@ export const router = createRouter({
     {
       path: '/',
       name: 'root',
-      redirect: '/dev/ui',
+      redirect: '/instances',
     },
     ...featureRoutes,
   ],

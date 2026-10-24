@@ -1,0 +1,204 @@
+<script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useTasksStore } from './store'
+import { MButton, MIconButton, MProgress, MBadge, MCard, MEmpty } from '../../ui'
+
+const { t, te } = useI18n()
+const tasksStore = useTasksStore()
+
+onMounted(async () => {
+  await tasksStore.fetchTasks()
+  await tasksStore.startListening()
+})
+
+onUnmounted(() => {
+  tasksStore.stopListening()
+})
+
+function formatSpeed(bps: number): string {
+  if (bps <= 0) return '0 B/s'
+  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s']
+  let val = bps
+  let u = 0
+  while (val >= 1024 && u < units.length - 1) {
+    val /= 1024
+    u++
+  }
+  return `${val.toFixed(u === 0 ? 0 : 1)} ${units[u]}`
+}
+
+function resolveTaskTitle(key: string, params: Record<string, string>): string {
+  // If key matches task.<section>.<name>, map to tasks.item.<section>.<name>
+  let lookupKey = key
+  if (key.startsWith('task.')) {
+    lookupKey = 'tasks.item.' + key.slice(5)
+  }
+  if (te(lookupKey)) {
+    return t(lookupKey, params)
+  }
+  if (te(key)) {
+    return t(key, params)
+  }
+  return key
+}
+
+function getBadgeVariant(state: string): 'primary' | 'success' | 'danger' | 'neutral' {
+  switch (state) {
+    case 'running':
+      return 'primary'
+    case 'success':
+      return 'success'
+    case 'failed':
+      return 'danger'
+    case 'paused':
+    case 'waiting':
+    default:
+      return 'neutral'
+  }
+}
+</script>
+
+<template>
+  <div class="h-full flex flex-col p-6 max-w-4xl mx-auto overflow-y-auto space-y-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+          <span class="w-5 h-5 i-lucide-list-todo" />
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight text-text">{{ t('tasks.title') }}</h1>
+          <p class="text-xs text-textMuted">
+            {{ t('tasks.indicator.activeTasks', { count: tasksStore.activeTasksCount }) }}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <MButton
+          v-if="tasksStore.tasks.length > 0"
+          variant="tonal"
+          size="sm"
+          @click="tasksStore.clearFinished"
+        >
+          {{ t('tasks.clearFinished') }}
+        </MButton>
+        <MIconButton
+          icon="i-lucide-rotate-cw"
+          size="sm"
+          :title="t('common.refresh')"
+          :loading="tasksStore.loading"
+          @click="tasksStore.fetchTasks"
+        />
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div v-if="tasksStore.tasks.length === 0" class="py-16">
+      <MEmpty
+        :title="t('tasks.empty')"
+        :description="t('tasks.emptySubtitle')"
+      />
+    </div>
+
+    <!-- Task List -->
+    <div v-else class="space-y-3">
+      <template v-for="task in tasksStore.taskTree" :key="task.id">
+        <MCard class="p-4 space-y-3 shadow-sm border border-outline/30">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span
+                class="w-4 h-4 shrink-0"
+                :class="{
+                  'i-lucide-loader-2 animate-spin text-primary': task.state === 'running',
+                  'i-lucide-check-circle-2 text-success': task.state === 'success',
+                  'i-lucide-x-circle text-danger': task.state === 'failed',
+                  'i-lucide-pause-circle text-warning': task.state === 'paused',
+                  'i-lucide-clock text-textMuted': task.state === 'waiting',
+                  'i-lucide-ban text-textMuted': task.state === 'canceled',
+                }"
+              />
+              <span class="text-sm font-semibold text-text truncate">
+                {{ resolveTaskTitle(task.titleKey, task.titleParams) }}
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+              <span v-if="task.state === 'running' && task.speedBps > 0" class="text-xs font-mono text-textMuted">
+                {{ formatSpeed(task.speedBps) }}
+              </span>
+              <MBadge :variant="getBadgeVariant(task.state)">
+                {{ t(`tasks.state.${task.state}`) }}
+              </MBadge>
+
+              <!-- Actions -->
+              <div class="flex items-center gap-1">
+                <MIconButton
+                  v-if="task.state === 'running'"
+                  icon="i-lucide-pause"
+                  size="sm"
+                  :title="t('tasks.actions.pause')"
+                  @click="tasksStore.pause(task.id)"
+                />
+                <MIconButton
+                  v-if="task.state === 'paused'"
+                  icon="i-lucide-play"
+                  size="sm"
+                  :title="t('tasks.actions.resume')"
+                  @click="tasksStore.resume(task.id)"
+                />
+                <MIconButton
+                  v-if="task.state === 'running' || task.state === 'waiting' || task.state === 'paused'"
+                  icon="i-lucide-x"
+                  size="sm"
+                  :title="t('tasks.actions.cancel')"
+                  @click="tasksStore.cancel(task.id)"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div v-if="task.state === 'running' || task.state === 'paused'" class="space-y-1">
+            <MProgress :value="Math.round(task.progress * 100)" :max="100" />
+            <div class="flex justify-between text-[11px] text-textMuted font-mono">
+              <span>{{ Math.round(task.progress * 100) }}%</span>
+              <span v-if="task.speedBps > 0">{{ formatSpeed(task.speedBps) }}</span>
+            </div>
+          </div>
+
+          <!-- Child Tasks -->
+          <div v-if="task.children.length > 0" class="pl-5 pt-2 border-l-2 border-outline/20 space-y-2 mt-2">
+            <div
+              v-for="child in task.children"
+              :key="child.id"
+              class="flex items-center justify-between text-xs py-1"
+            >
+              <div class="flex items-center gap-2 truncate">
+                <span
+                  class="w-3.5 h-3.5 shrink-0"
+                  :class="{
+                    'i-lucide-loader-2 animate-spin text-primary': child.state === 'running',
+                    'i-lucide-check text-success': child.state === 'success',
+                    'i-lucide-x text-danger': child.state === 'failed',
+                    'i-lucide-pause text-warning': child.state === 'paused',
+                    'i-lucide-clock text-textMuted': child.state === 'waiting',
+                    'i-lucide-ban text-textMuted': child.state === 'canceled',
+                  }"
+                />
+                <span class="truncate text-text">{{ resolveTaskTitle(child.titleKey, child.titleParams) }}</span>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <span v-if="child.state === 'running' && child.speedBps > 0" class="font-mono text-textMuted">
+                  {{ formatSpeed(child.speedBps) }}
+                </span>
+                <span class="text-textMuted">{{ Math.round(child.progress * 100) }}%</span>
+              </div>
+            </div>
+          </div>
+        </MCard>
+      </template>
+    </div>
+  </div>
+</template>

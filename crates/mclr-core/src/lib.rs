@@ -13,7 +13,8 @@ pub use error::CoreError;
 pub use logging::{init_logging, prune_old_logs};
 pub use secrets::{SecretsStatus, get_secret, secrets_status};
 pub use settings::{
-    LanguageSettings, MaterialMode, Settings, SettingsStore, SystemSettings, ThemeMode, UiSettings,
+    GameFolderEntry, GameSettings, JavaSettings, LanguageSettings, MaterialMode, NetSettings,
+    ProxyMode, Settings, SettingsStore, SourcePriority, SystemSettings, ThemeMode, UiSettings,
     apply_patch, merge_patch,
 };
 pub use tasks::{TaskCenter, TaskNode, TaskState};

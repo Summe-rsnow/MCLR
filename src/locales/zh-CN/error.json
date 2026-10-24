@@ -3,5 +3,19 @@
   "notConfigured": "未配置所需密钥：{what}",
   "settings": {
     "invalid": "设置格式无效"
+  },
+  "game": {
+    "io": "游戏文件读写失败",
+    "invalidVersionJson": "版本配置文件损坏或无法解析",
+    "instanceNotFound": "找不到指定的实例",
+    "instanceExists": "已存在同名实例",
+    "invalidInstanceName": "实例名称包含非法字符",
+    "javaNotFound": "未找到适合该版本的 Java 运行环境",
+    "runtimeManifest": "下载 Java 运行时清单失败"
+  },
+  "tasks": {
+    "notFound": "找不到指定的任务",
+    "notPausable": "当前任务不支持暂停",
+    "alreadyFinished": "任务已完成或已终止"
   }
 }

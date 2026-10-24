@@ -6,6 +6,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { featureRoutes, type NavMeta } from '../../router'
 import { useThemeStore } from '../../stores/theme'
 import { MToast, MDialog, useDialog } from '../../ui'
+import TaskIndicator from '../tasks/TaskIndicator.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -109,7 +110,7 @@ function toggleMaterial() {
       <!-- Center Titlebar / Task Indicator Slot -->
       <div data-tauri-drag-region class="flex-1 flex items-center justify-center px-4">
         <div id="mclr-task-indicator-slot" class="flex items-center gap-2 text-xs text-textMuted">
-          <!-- Populated by Task Indicator in v0.0.3 -->
+          <TaskIndicator />
         </div>
       </div>
 

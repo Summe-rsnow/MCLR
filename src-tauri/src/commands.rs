@@ -18,7 +18,15 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::tasks::task_pause,
         crate::ipc::tasks::task_resume,
         // [instances]
+        crate::ipc::instances::instances_list,
+        crate::ipc::instances::instance_rename,
+        crate::ipc::instances::instance_duplicate,
+        crate::ipc::instances::instance_delete,
+        crate::ipc::instances::instance_update_config,
+        crate::ipc::instances::instance_open_folder,
         // [java]
+        crate::ipc::java::java_scan,
+        crate::ipc::java::java_download,
         // [accounts]
         // [install]
         // [launch]

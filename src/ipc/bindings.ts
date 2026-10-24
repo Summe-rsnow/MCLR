@@ -77,6 +77,70 @@ async taskResume(id: string) : Promise<Result<null, AppError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async instancesList() : Promise<Result<InstanceInfo[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("instances_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async instanceRename(id: string, newName: string) : Promise<Result<InstanceInfo, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("instance_rename", { id, newName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async instanceDuplicate(id: string, newName: string) : Promise<Result<InstanceInfo, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("instance_duplicate", { id, newName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async instanceDelete(id: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("instance_delete", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async instanceUpdateConfig(id: string, config: InstanceConfig) : Promise<Result<InstanceInfo, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("instance_update_config", { id, config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async instanceOpenFolder(id: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("instance_open_folder", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async javaScan() : Promise<Result<JavaInstallation[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("java_scan") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async javaDownload(component: string) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("java_download", { component }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -99,9 +163,34 @@ export type AppError = { code: string; params?: Partial<{ [key in string]: strin
  * Application metadata returned by `app_info`.
  */
 export type AppInfo = { name: string; version: string }
+export type GameFolderEntry = { name: string; path: string }
+export type GameSettings = { folders: GameFolderEntry[]; currentFolder: string; defaultIsolation: string; sortBy: string }
+/**
+ * Per-instance configuration stored in `<instance_dir>/mclr.instance.json`.
+ */
+export type InstanceConfig = { icon: string; category: string; pinned: boolean; isolation: string; java: string | null; memory: number | null; jvmArgs: string | null; gameArgs: string | null; windowTitle: string | null; preLaunchCommand: string | null; loginRequirement: string; serverQuickPlay: string | null }
+/**
+ * Information describing a Minecraft instance.
+ */
+export type InstanceInfo = { id: string; name: string; folder: string; path: string; mcVersion: string; kind: InstanceKind; loaders: string[]; state: InstanceState; config: InstanceConfig }
+/**
+ * Classification of a Minecraft instance.
+ */
+export type InstanceKind = "vanilla" | "snapshot" | "oldBeta" | "oldAlpha" | "fabric" | "legacyFabric" | "forge" | "neoForge" | "cleanroom" | "optiFine" | "liteLoader" | "labyMod" | "quilt" | "moddedMultiple"
+/**
+ * State of an instance.
+ */
+export type InstanceState = "ok" | "broken" | "incomplete"
+/**
+ * Description of an installed Java runtime on the machine.
+ */
+export type JavaInstallation = { path: string; home: string; version: string; major: number; implementor: string; arch: string; isJdk: boolean; source: string }
+export type JavaSettings = { custom: string[]; select: string; preferJdk: boolean }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type LanguageSettings = { locale: string; formatCulture: string }
 export type MaterialMode = "flat" | "glass"
+export type NetSettings = { proxyMode: ProxyMode; proxyUrl: string; doh: boolean; sourcePriority: SourcePriority; connectionsPerFile: number; maxConcurrentFiles: number }
+export type ProxyMode = "none" | "system" | "custom"
 /**
  * Presence status of optional launcher secrets.
  */
@@ -109,7 +198,8 @@ export type SecretsStatus = { msClientId: boolean; curseforgeApiKey: boolean; up
 /**
  * Complete MCLR user settings.
  */
-export type Settings = { schemaVersion: number; ui: UiSettings; language: LanguageSettings; system: SystemSettings }
+export type Settings = { schemaVersion: number; ui: UiSettings; language: LanguageSettings; system: SystemSettings; net: NetSettings; game: GameSettings; java: JavaSettings }
+export type SourcePriority = "mirrorFirst" | "smart" | "officialFirst"
 export type SystemSettings = { logLevel: string; logRetentionDays: number; disableGpu: boolean }
 /**
  * A node in the hierarchical task tree.

@@ -1,23 +1,28 @@
 //! Global application settings model, persistence, and RFC 7386 JSON Merge Patch.
 
+pub mod game;
+pub mod java;
 pub mod language;
+pub mod net;
 pub mod system;
 pub mod ui;
 
-pub use language::LanguageSettings;
-pub use system::SystemSettings;
-pub use ui::{MaterialMode, ThemeMode, UiSettings};
-
 use crate::error::CoreError;
 use crate::paths;
+pub use game::{GameFolderEntry, GameSettings};
+pub use java::JavaSettings;
+pub use language::LanguageSettings;
+pub use net::{NetSettings, ProxyMode, SourcePriority};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use specta::Type;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+pub use system::SystemSettings;
 use tokio::sync::{Notify, RwLock};
 use tokio::time::{Duration, sleep};
+pub use ui::{MaterialMode, ThemeMode, UiSettings};
 
 /// Complete MCLR user settings.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
@@ -27,6 +32,9 @@ pub struct Settings {
     pub ui: UiSettings,
     pub language: LanguageSettings,
     pub system: SystemSettings,
+    pub net: NetSettings,
+    pub game: GameSettings,
+    pub java: JavaSettings,
 }
 
 impl Default for Settings {
@@ -36,6 +44,9 @@ impl Default for Settings {
             ui: UiSettings::default(),
             language: LanguageSettings::default(),
             system: SystemSettings::default(),
+            net: NetSettings::default(),
+            game: GameSettings::default(),
+            java: JavaSettings::default(),
         }
     }
 }
