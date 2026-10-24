@@ -56,6 +56,13 @@
     "instanceExists": "已存在同名实例",
     "invalidName": "实例名称包含非法字符 \\ / : * ? \" < > | ! ;"
   },
+  "loaders": {
+    "unsupportedMc": "该 Mod 加载器不支持当前选定的 Minecraft 版本",
+    "versionNotFound": "未找到指定的 Mod 加载器版本",
+    "installFailed": "Mod 加载器安装失败",
+    "installerDownload": "下载 Mod 加载器安装包失败",
+    "installerExec": "执行 Mod 加载器安装程序失败"
+  },
   "launch": {
     "pathInvalid": "游戏或实例路径包含非法字符 ! 或 ;",
     "loginRequirementNotMet": "当前实例要求特定的账号登录模式",

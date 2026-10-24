@@ -251,6 +251,24 @@ export interface VersionManifestList {
   versions: VersionManifestEntry[]
 }
 
+export type LoaderKind =
+  | 'fabric'
+  | 'legacyFabric'
+  | 'liteLoader'
+  | 'labyMod'
+  | 'optiFine'
+  | 'forge'
+  | 'neoForge'
+  | 'cleanroom'
+
+export interface LoaderVersionEntry {
+  loader: LoaderKind
+  mcVersion: string
+  version: string
+  stable: boolean
+  releaseTime?: string | null
+}
+
 async function invokeCommand<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return await TAURI_INVOKE<T>(cmd, args)
@@ -346,6 +364,22 @@ export const ipcClient = {
   installRepair: (instanceId: string): Promise<string> =>
     invokeCommand<string>('install_repair', { instanceId }),
 
+  loadersVersions: (loader: LoaderKind, mcVersion: string): Promise<LoaderVersionEntry[]> =>
+    invokeCommand<LoaderVersionEntry[]>('loaders_versions', { loader, mcVersion }),
+  loadersInstall: (
+    mcVersion: string,
+    instanceName: string,
+    loader: LoaderKind,
+    loaderVersion: string,
+    optifineVersion?: string | null,
+  ): Promise<string> =>
+    invokeCommand<string>('loaders_install', {
+      mcVersion,
+      instanceName,
+      loader,
+      loaderVersion,
+      optifineVersion: optifineVersion ?? null,
+    }),
   // Launch & logs
   launchInstance: (instanceId: string, accountId: string): Promise<LaunchStartResult> =>
     invokeCommand<LaunchStartResult>('launch_instance', { instanceId, accountId }),

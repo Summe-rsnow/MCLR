@@ -4,6 +4,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { useInstallStore } from '../store'
 import InstallPage from '../InstallPage.vue'
+import LoaderPage from '../LoaderPage.vue'
 import { setupMockIpc } from '../../../ipc/mock'
 import { resetMockDownload } from '../mock'
 import zhCnDownload from '../../../locales/zh-CN/download.json'
@@ -92,6 +93,9 @@ describe('Download / Install feature', () => {
     const wrapper = mount(InstallPage, {
       global: {
         plugins: [i18n],
+        stubs: {
+          RouterLink: true,
+        },
       },
     })
 
@@ -100,5 +104,81 @@ describe('Download / Install feature', () => {
     expect(wrapper.text()).toContain('安装 Minecraft 原版')
     expect(wrapper.text()).toContain('1.20.4')
     expect(wrapper.text()).toContain('1.20.1')
+    expect(wrapper.text()).toContain('Fabric')
+    expect(wrapper.text()).toContain('NeoForge')
+  })
+
+  it('filters compatible loaders based on chosen MC version', async () => {
+    const store = useInstallStore()
+    await store.fetchManifest()
+
+    // MC 1.20.1
+    const mc1201 = store.manifest.versions.find((v) => v.id === '1.20.1')!
+    store.openInstallDialog(mc1201)
+    expect(store.compatibleLoaders).toContain('fabric')
+    expect(store.compatibleLoaders).toContain('forge')
+    expect(store.compatibleLoaders).toContain('neoForge')
+    // Cleanroom is 1.12.2 only
+    expect(store.compatibleLoaders).not.toContain('cleanroom')
+    // LegacyFabric is <= 1.13.2
+    expect(store.compatibleLoaders).not.toContain('legacyFabric')
+
+    // Old Alpha
+    const oldAlpha = store.manifest.versions.find((v) => v.id === 'a1.2.6')!
+    store.openInstallDialog(oldAlpha)
+    expect(store.compatibleLoaders).toContain('legacyFabric')
+    expect(store.compatibleLoaders).not.toContain('fabric')
+    expect(store.compatibleLoaders).not.toContain('neoForge')
+  })
+
+  it('fetches loader versions and installs Fabric/NeoForge/Forge loader', async () => {
+    const store = useInstallStore()
+    await store.fetchManifest()
+
+    const mc1201 = store.manifest.versions.find((v) => v.id === '1.20.1')!
+    store.openInstallDialog(mc1201)
+    store.instanceName = '1.20.1-Fabric-Instance'
+
+    // Select Fabric
+    await store.selectLoader('fabric')
+    expect(store.loaderVersions.length).toBeGreaterThan(0)
+    expect(store.selectedLoaderVersion).toBe('0.15.11')
+
+    // Install Fabric loader
+    const fabricTaskId = await store.install()
+    expect(fabricTaskId).toContain('task-install-loader')
+    expect(fabricTaskId).toContain('1.20.1-Fabric-Instance')
+    expect(fabricTaskId).toContain('0.15.11')
+
+    // Select NeoForge
+    store.openInstallDialog(mc1201)
+    store.instanceName = '1.20.1-NeoForge-Instance'
+    await store.selectLoader('neoForge')
+    expect(store.loaderVersions.length).toBeGreaterThan(0)
+    expect(store.selectedLoaderVersion).toBe('20.4.80-beta')
+
+    const neoforgeTaskId = await store.install()
+    expect(neoforgeTaskId).toContain('task-install-loader')
+    expect(neoforgeTaskId).toContain('1.20.1-NeoForge-Instance')
+    expect(neoforgeTaskId).toContain('20.4.80-beta')
+  })
+
+  it('renders LoaderPage for dedicated loader route', async () => {
+    const wrapper = mount(LoaderPage, {
+      props: {
+        loader: 'fabric',
+      },
+      global: {
+        plugins: [i18n],
+        stubs: {
+          RouterLink: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Fabric')
+    expect(wrapper.text()).toContain('0.15.11')
   })
 })

@@ -277,6 +277,22 @@ async launchKill(processId: number) : Promise<Result<null, AppError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async loadersVersions(loader: LoaderKind, mcVersion: string) : Promise<Result<LoaderVersionEntry[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("loaders_versions", { loader, mcVersion }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async loadersInstall(mcVersion: string, instanceName: string, loader: LoaderKind, loaderVersion: string, optifineVersion: string | null) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("loaders_install", { mcVersion, instanceName, loader, loaderVersion, optifineVersion }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -338,6 +354,8 @@ export type LaunchSettings = { ramMode: string; ramCustomMb: number; jvmArgs: st
  * Result returned to IPC callers immediately upon launching.
  */
 export type LaunchStartResult = { taskId: string; processId: number | null }
+export type LoaderKind = "fabric" | "legacyFabric" | "liteLoader" | "labyMod" | "optiFine" | "forge" | "neoForge" | "cleanroom"
+export type LoaderVersionEntry = { loader: LoaderKind; mcVersion: string; version: string; stable: boolean; releaseTime: string | null }
 /**
  * Log severity classification.
  */

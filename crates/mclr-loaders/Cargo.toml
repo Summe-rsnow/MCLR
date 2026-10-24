@@ -7,4 +7,21 @@ license.workspace = true
 
 [dependencies]
 mclr-core.workspace = true
+mclr-net.workspace = true
+mclr-game.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+specta.workspace = true
+url.workspace = true
+zip.workspace = true
+sha1.workspace = true
+hex.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+wiremock.workspace = true
+tempfile.workspace = true

@@ -1,7 +1,7 @@
 //! Dev and headless smoke CLI for MCLR.
 
 use clap::{Parser, Subcommand};
-use mclr_core::{AppInfo, NetSettings, paths};
+use mclr_core::{AppInfo, paths};
 use mclr_game::{install_vanilla, repair_instance};
 use mclr_net::build_http_client;
 use serde::Serialize;
@@ -24,12 +24,21 @@ enum Commands {
         subcommand: JavaCommands,
     },
 
-    /// Install vanilla Minecraft instance
+    /// Install vanilla or modded Minecraft instance
     Install {
         /// Minecraft version (e.g. 1.20.1)
         mc: String,
         /// Instance name
         name: String,
+        /// Install Fabric loader (optional version, defaults to latest)
+        #[arg(long, num_args = 0..=1, default_missing_value = "latest")]
+        fabric: Option<String>,
+        /// Install Forge loader (optional version, defaults to latest)
+        #[arg(long, num_args = 0..=1, default_missing_value = "latest")]
+        forge: Option<String>,
+        /// Install NeoForge loader (optional version, defaults to latest)
+        #[arg(long, num_args = 0..=1, default_missing_value = "latest")]
+        neoforge: Option<String>,
     },
 
     /// Launch Minecraft instance
@@ -75,16 +84,62 @@ async fn main() -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string_pretty(&installations)?);
             }
         },
-        Commands::Install { mc, name } => {
+        Commands::Install {
+            mc,
+            name,
+            fabric,
+            forge,
+            neoforge,
+        } => {
             let default_dir = paths::default_minecraft_dir();
-            let net_settings = NetSettings::default();
-            let client = build_http_client(&net_settings)?;
+            let settings = mclr_core::Settings::default();
+            let client = build_http_client(&settings.net)?;
 
-            let instance =
-                install_vanilla(&client, &net_settings, &default_dir, &mc, &name, None).await?;
+            let loader_spec = if let Some(ver) = fabric {
+                Some((mclr_loaders::LoaderKind::Fabric, ver, "Fabric"))
+            } else if let Some(ver) = forge {
+                Some((mclr_loaders::LoaderKind::Forge, ver, "Forge"))
+            } else {
+                neoforge.map(|ver| (mclr_loaders::LoaderKind::NeoForge, ver, "NeoForge"))
+            };
+
+            let instance = if let Some((loader_kind, ver_req, loader_name)) = loader_spec {
+                let loader_version = if ver_req == "latest" || ver_req.is_empty() {
+                    println!(
+                        "Fetching latest {} version for Minecraft {}...",
+                        loader_name, mc
+                    );
+                    let versions =
+                        mclr_loaders::list_loader_versions(&client, loader_kind, &mc).await?;
+                    if versions.is_empty() {
+                        anyhow::bail!("No {} versions found for Minecraft {}", loader_name, mc);
+                    }
+                    let picked = versions[0].version.clone();
+                    println!("Selected {} version {}", loader_name, picked);
+                    picked
+                } else {
+                    ver_req
+                };
+
+                let ctx = mclr_loaders::LoaderInstallContext {
+                    client: &client,
+                    net_settings: &settings.net,
+                    java_settings: &settings.java,
+                    mc_folder: default_dir.clone(),
+                    mc_version: mc.clone(),
+                    instance_name: name.clone(),
+                    loader_version,
+                    optifine_version: None,
+                    task_ctx: None,
+                };
+
+                mclr_loaders::install_with_loader(loader_kind, ctx).await?
+            } else {
+                install_vanilla(&client, &settings.net, &default_dir, &mc, &name, None).await?
+            };
 
             let repaired_count =
-                repair_instance(&client, &net_settings, &default_dir, &name, None).await?;
+                repair_instance(&client, &settings.net, &default_dir, &name, None).await?;
 
             let summary = InstallSummary {
                 instance,

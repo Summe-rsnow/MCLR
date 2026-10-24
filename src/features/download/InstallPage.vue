@@ -1,23 +1,29 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useInstallStore } from './store'
+import {
+  useInstallStore,
+  type SelectedLoader,
+} from './store'
 import type { VersionManifestEntry } from '../../ipc/client'
 import {
   MButton,
   MIconButton,
   MCard,
   MInput,
+  MSelect,
   MSegmented,
   MBadge,
   MDialog,
   MEmpty,
   useToast,
 } from '../../ui'
+import { useRouter } from 'vue-router'
 
 const { t } = useI18n()
 const installStore = useInstallStore()
 const toast = useToast()
+const router = useRouter()
 
 const installing = ref(false)
 const installError = ref('')
@@ -33,6 +39,34 @@ const filterOptions = computed(() => [
   { label: t('download.filter.snapshot'), value: 'snapshot' },
   { label: t('download.filter.old'), value: 'old' },
 ])
+
+
+const loaderPickerOptions = computed(() => {
+  return installStore.compatibleLoaders.map((k) => ({
+    label: t(`download.loaders.${k}`),
+    value: k,
+  }))
+})
+
+const loaderVersionSelectOptions = computed(() => {
+  return installStore.loaderVersions.map((v) => ({
+    label: `${v.version} ${v.stable ? `(${t('download.loaders.stable')})` : `(${t('download.loaders.preview')})`}`,
+    value: v.version,
+  }))
+})
+
+const optifineComboOptions = computed(() => {
+  const base = [{ label: t('download.loaders.optifineNone'), value: '' }]
+  const opts = installStore.optifineComboVersions.map((v) => ({
+    label: `OptiFine ${v.version}`,
+    value: v.version,
+  }))
+  return [...base, ...opts]
+})
+
+async function onLoaderPick(loader: SelectedLoader) {
+  await installStore.selectLoader(loader)
+}
 
 function handleVersionTypeBadge(type: string): { label: string; variant: 'primary' | 'neutral' | 'warning' } {
   if (type === 'release') {
@@ -135,6 +169,69 @@ async function handleConfirmInstall() {
       </div>
     </div>
 
+    <!-- Dedicated Loader Pages Quick Navigation -->
+    <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs text-[rgb(var(--c-text-muted))]">
+      <span class="shrink-0 font-medium text-[rgb(var(--c-text))]">
+        {{ t('download.loaders.title') }}:
+      </span>
+      <button
+        type="button"
+        class="px-2.5 py-1 rounded-md bg-[rgb(var(--c-surface-variant)/0.4)] text-[rgb(var(--c-text))] hover:bg-[rgb(var(--c-primary)/0.15)] hover:text-[rgb(var(--c-primary))] transition-colors shrink-0"
+        @click="router.push('/download/fabric')"
+      >
+        {{ t('download.tabs.fabric') }}
+      </button>
+      <button
+        type="button"
+        class="px-2.5 py-1 rounded-md bg-[rgb(var(--c-surface-variant)/0.4)] text-[rgb(var(--c-text))] hover:bg-[rgb(var(--c-primary)/0.15)] hover:text-[rgb(var(--c-primary))] transition-colors shrink-0"
+        @click="router.push('/download/forge')"
+      >
+        {{ t('download.tabs.forge') }}
+      </button>
+      <button
+        type="button"
+        class="px-2.5 py-1 rounded-md bg-[rgb(var(--c-surface-variant)/0.4)] text-[rgb(var(--c-text))] hover:bg-[rgb(var(--c-primary)/0.15)] hover:text-[rgb(var(--c-primary))] transition-colors shrink-0"
+        @click="router.push('/download/neoforge')"
+      >
+        {{ t('download.tabs.neoforge') }}
+      </button>
+      <button
+        type="button"
+        class="px-2.5 py-1 rounded-md bg-[rgb(var(--c-surface-variant)/0.4)] text-[rgb(var(--c-text))] hover:bg-[rgb(var(--c-primary)/0.15)] hover:text-[rgb(var(--c-primary))] transition-colors shrink-0"
+        @click="router.push('/download/optifine')"
+      >
+        {{ t('download.tabs.optifine') }}
+      </button>
+      <button
+        type="button"
+        class="px-2.5 py-1 rounded-md bg-[rgb(var(--c-surface-variant)/0.4)] text-[rgb(var(--c-text))] hover:bg-[rgb(var(--c-primary)/0.15)] hover:text-[rgb(var(--c-primary))] transition-colors shrink-0"
+        @click="router.push('/download/legacyfabric')"
+      >
+        {{ t('download.tabs.legacyfabric') }}
+      </button>
+      <button
+        type="button"
+        class="px-2.5 py-1 rounded-md bg-[rgb(var(--c-surface-variant)/0.4)] text-[rgb(var(--c-text))] hover:bg-[rgb(var(--c-primary)/0.15)] hover:text-[rgb(var(--c-primary))] transition-colors shrink-0"
+        @click="router.push('/download/liteloader')"
+      >
+        {{ t('download.tabs.liteloader') }}
+      </button>
+      <button
+        type="button"
+        class="px-2.5 py-1 rounded-md bg-[rgb(var(--c-surface-variant)/0.4)] text-[rgb(var(--c-text))] hover:bg-[rgb(var(--c-primary)/0.15)] hover:text-[rgb(var(--c-primary))] transition-colors shrink-0"
+        @click="router.push('/download/labymod')"
+      >
+        {{ t('download.tabs.labymod') }}
+      </button>
+      <button
+        type="button"
+        class="px-2.5 py-1 rounded-md bg-[rgb(var(--c-surface-variant)/0.4)] text-[rgb(var(--c-text))] hover:bg-[rgb(var(--c-primary)/0.15)] hover:text-[rgb(var(--c-primary))] transition-colors shrink-0"
+        @click="router.push('/download/cleanroom')"
+      >
+        {{ t('download.tabs.cleanroom') }}
+      </button>
+    </div>
+
     <!-- Versions List -->
     <div class="flex-1 overflow-y-auto pr-1">
       <MCard v-if="installStore.filteredVersions.length === 0" class="p-8">
@@ -192,6 +289,58 @@ async function handleConfirmInstall() {
           <div class="p-2.5 rounded bg-[rgb(var(--c-surface-variant)/0.4)] font-mono text-sm text-[rgb(var(--c-text))]">
             {{ installStore.selectedVersion.id }} ({{ installStore.selectedVersion.versionType }})
           </div>
+        </div>
+
+        <!-- Loader Selection Chips -->
+        <div>
+          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1.5 block">
+            {{ t('download.loaders.title') }}
+          </label>
+          <div class="flex flex-wrap gap-1.5">
+            <button
+              v-for="opt in loaderPickerOptions"
+              :key="opt.value"
+              type="button"
+              class="px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer border"
+              :class="
+                installStore.selectedLoader === opt.value
+                  ? 'bg-[rgb(var(--c-primary))] text-[rgb(var(--c-on-primary))] border-transparent font-medium'
+                  : 'bg-[rgb(var(--c-surface-variant)/0.4)] text-[rgb(var(--c-text))] border-[rgb(var(--c-outline)/0.3)] hover:border-[rgb(var(--c-primary)/0.6)]'
+              "
+              @click="onLoaderPick(opt.value)"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Loader Version Dropdown -->
+        <div v-if="installStore.selectedLoader !== 'none'">
+          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
+            {{ t('download.loaders.version') }}
+          </label>
+          <div v-if="installStore.loadingLoaderVersions" class="text-xs text-[rgb(var(--c-text-muted))] py-1">
+            {{ t('download.loaders.loadingVersions') }}
+          </div>
+          <div v-else-if="loaderVersionSelectOptions.length === 0" class="text-xs text-[rgb(var(--c-warning))] py-1">
+            {{ t('download.loaders.noVersions') }}
+          </div>
+          <MSelect
+            v-else
+            v-model="installStore.selectedLoaderVersion"
+            :options="loaderVersionSelectOptions"
+          />
+        </div>
+
+        <!-- OptiFine Combo Selector (for Fabric or Forge) -->
+        <div v-if="installStore.selectedLoader === 'fabric' || installStore.selectedLoader === 'forge'">
+          <label class="text-xs font-medium text-[rgb(var(--c-text-muted))] mb-1 block">
+            {{ t('download.loaders.optifineCombo') }}
+          </label>
+          <MSelect
+            v-model="installStore.selectedOptifineVersion"
+            :options="optifineComboOptions"
+          />
         </div>
 
         <div>

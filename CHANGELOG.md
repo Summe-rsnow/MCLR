@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.6] - 2026-10-24
+
+### Added
+- `mclr-loaders`: `LoaderInstaller` trait and implementations for Fabric, LegacyFabric, LiteLoader, LabyMod 4, OptiFine (standalone & Fabric/Forge combo), Forge (legacy `install_profile.json` and modern headless `--installClient`), NeoForge, and Cleanroom.
+- `mclr-cli install` loader flags (`--fabric`, `--forge`, `--neoforge`).
+- Auto-install loader pickers with MC version compatibility filtering (Quilt hidden) and dedicated per-loader pages (`/download/fabric`, `/download/forge`, `/download/neoforge`, `/download/optifine`, etc.).
+
 ## [0.0.5] - 2026-10-24
 
 ### Added

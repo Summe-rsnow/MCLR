@@ -1,11 +1,19 @@
 {
   "nav": "下载中心",
-  "title": "安装 Minecraft 原版",
+  "title": "安装 Minecraft 原版与 Mod 加载器",
   "search": "搜索 Minecraft 版本号...",
   "empty": "未找到符合条件的 Minecraft 版本",
   "refresh": "刷新版本清单",
   "tabs": {
-    "vanilla": "原版安装"
+    "vanilla": "原版安装",
+    "fabric": "Fabric",
+    "forge": "Forge",
+    "neoforge": "NeoForge",
+    "optifine": "OptiFine",
+    "legacyfabric": "LegacyFabric",
+    "liteloader": "LiteLoader",
+    "labymod": "LabyMod",
+    "cleanroom": "Cleanroom"
   },
   "filter": {
     "release": "正式版",
@@ -30,5 +38,37 @@
     "installAction": "开始安装",
     "repairAction": "修复补全",
     "installStarted": "已创建安装任务，正在下载资源..."
+  },
+  "loaders": {
+    "none": "无 (原版纯净)",
+    "fabric": "Fabric",
+    "forge": "Forge",
+    "neoForge": "NeoForge",
+    "optiFine": "OptiFine",
+    "legacyFabric": "LegacyFabric",
+    "liteLoader": "LiteLoader",
+    "labyMod": "LabyMod",
+    "cleanroom": "Cleanroom",
+    "title": "选择 Mod 加载器",
+    "version": "加载器版本",
+    "versionPlaceholder": "选择加载器版本",
+    "optifineCombo": "OptiFine 搭配增强 (可选)",
+    "optifineNone": "不搭载 OptiFine",
+    "loadingVersions": "正在获取加载器版本列表...",
+    "noVersions": "该版本暂无可用加载器构建",
+    "stable": "稳定版",
+    "preview": "测试版"
+  },
+  "loaderPage": {
+    "title": "{name} 加载器安装",
+    "subtitle": "浏览并安装适用于各 Minecraft 版本的 {name} 运行环境",
+    "selectMc": "选择 Minecraft 目标版本",
+    "mcPlaceholder": "请选择或搜索 Minecraft 版本",
+    "refreshVersions": "刷新构建版本",
+    "versionList": "可安装版本列表",
+    "emptyVersions": "所选 Minecraft 版本没有可用的 {name} 构建",
+    "installButton": "安装此版本",
+    "badgeStable": "推荐稳定版",
+    "badgeSnapshot": "快照测试版"
   }
 }

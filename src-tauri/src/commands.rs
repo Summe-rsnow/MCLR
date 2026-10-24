@@ -48,6 +48,8 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::launch::launch_processes,
         crate::ipc::launch::launch_kill,
         // [loaders]
+        crate::ipc::loaders::loaders_versions,
+        crate::ipc::loaders::loaders_install,
         // [comp]
         // [modpack]
         // [localmods]
