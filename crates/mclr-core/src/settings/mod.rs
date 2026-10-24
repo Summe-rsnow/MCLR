@@ -6,8 +6,10 @@ pub mod java;
 pub mod language;
 pub mod launch;
 pub mod net;
+pub mod states;
 pub mod system;
 pub mod ui;
+pub mod update;
 
 use crate::error::CoreError;
 use crate::paths;
@@ -20,6 +22,7 @@ pub use net::{NetSettings, ProxyMode, SourcePriority};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use specta::Type;
+pub use states::StatesSettings;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -27,6 +30,7 @@ pub use system::SystemSettings;
 use tokio::sync::{Notify, RwLock};
 use tokio::time::{Duration, sleep};
 pub use ui::{MaterialMode, ThemeMode, UiSettings};
+pub use update::UpdateSettings;
 
 /// Complete MCLR user settings.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
@@ -41,6 +45,8 @@ pub struct Settings {
     pub java: JavaSettings,
     pub launch: LaunchSettings,
     pub comp: CompSettings,
+    pub update: UpdateSettings,
+    pub states: StatesSettings,
 }
 
 impl Default for Settings {
@@ -55,6 +61,8 @@ impl Default for Settings {
             java: JavaSettings::default(),
             launch: LaunchSettings::default(),
             comp: CompSettings::default(),
+            update: UpdateSettings::default(),
+            states: StatesSettings::default(),
         }
     }
 }

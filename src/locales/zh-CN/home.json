@@ -1,0 +1,33 @@
+{
+  "nav": "首页",
+  "tabs": {
+    "news": "资讯与公告",
+    "help": "帮助中心"
+  },
+  "announcements": {
+    "title": "系统公告",
+    "dismiss": "不再显示",
+    "openLink": "查看详情"
+  },
+  "news": {
+    "title": "官方资讯",
+    "refresh": "刷新",
+    "refreshing": "正在刷新...",
+    "loading": "正在加载资讯...",
+    "empty": "暂无最新资讯",
+    "fetchFailed": "获取资讯失败，请检查网络连接后重试",
+    "readMore": "阅读全文",
+    "pagePrev": "上一页",
+    "pageNext": "下一页",
+    "pageNumber": "第 {page} 页"
+  },
+  "help": {
+    "title": "帮助中心",
+    "searchPlaceholder": "搜索帮助文档（标题、标签、分类）...",
+    "emptyArticles": "未找到匹配的帮助文档",
+    "selectPrompt": "请在左侧选择一篇帮助文档进行阅读",
+    "categories": {
+      "all": "全部"
+    }
+  }
+}

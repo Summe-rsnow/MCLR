@@ -2714,8 +2714,11 @@ dependencies = [
 
 [[package]]
 name = "mclr-app"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "dirs 6.0.0",
  "mclr-auth",
  "mclr-comp",
  "mclr-core",
@@ -2728,6 +2731,7 @@ dependencies = [
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "sha2",
  "specta",
  "specta-typescript",
  "tauri",
@@ -2742,11 +2746,12 @@ dependencies = [
  "tracing",
  "url",
  "window-vibrancy 0.5.3",
+ "windows 0.58.0",
 ]
 
 [[package]]
 name = "mclr-auth"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "aes-gcm",
  "async-trait",
@@ -2777,7 +2782,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-cli"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "anyhow",
  "clap",
@@ -2793,7 +2798,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-comp"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "hex",
  "mclr-core",
@@ -2819,7 +2824,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-core"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2839,7 +2844,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-crash"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "chrono",
  "mclr-comp",
@@ -2858,7 +2863,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-game"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -2887,7 +2892,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-loaders"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "async-trait",
  "hex",
@@ -2910,7 +2915,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-net"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "futures-util",
  "hex",
@@ -2935,7 +2940,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-saves"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "base64 0.22.1",
  "fastnbt",
@@ -2955,7 +2960,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-update"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "mclr-core",
  "thiserror 2.0.21",

@@ -108,5 +108,24 @@
     "analyzeFailed": "崩溃日志分析失败",
     "exportFailed": "导出崩溃诊断报告失败",
     "logNotFound": "未找到相关的崩溃日志文件"
+  },
+  "tools": {
+    "skin": {
+      "invalidUsername": "请输入有效的玩家用户名",
+      "userNotFound": "未找到名为“{username}”的玩家或档案不存在",
+      "noSkinFound": "该玩家未设置皮肤或官方服务器未返回皮肤信息",
+      "networkError": "连接 Mojang 皮肤服务失败",
+      "parseError": "解析皮肤数据失败",
+      "downloadFailed": "下载皮肤图片数据失败"
+    },
+    "download": {
+      "invalidUrl": "输入的下载链接无效"
+    },
+    "shortcut": {
+      "failed": "创建桌面快捷方式失败"
+    },
+    "media": {
+      "invalidKind": "不支持的媒体文件类型: {kind}"
+    }
   }
 }

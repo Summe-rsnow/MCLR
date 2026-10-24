@@ -18,6 +18,7 @@ export const featureRoutes: RouteRecordRaw[] = Object.values(routeModules).flatM
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
+    ...featureRoutes,
     {
       path: '/',
       name: 'root',

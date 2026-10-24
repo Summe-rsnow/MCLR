@@ -1,0 +1,70 @@
+{
+  "nav": "工具箱",
+  "title": "实用工具",
+  "subtitle": "提供皮肤提取、缓存清理、快捷下载、快捷方式创建与每日人品",
+  "skin": {
+    "title": "皮肤与头像提取",
+    "desc": "输入正版 Minecraft 玩家名称，获取其 2D 头像与完整皮肤贴图",
+    "usernamePlaceholder": "输入正版用户名，例如 Notch",
+    "fetch": "提取皮肤",
+    "loading": "正在获取皮肤...",
+    "headPreview": "头像预览",
+    "skinPreview": "皮肤贴图",
+    "uuid": "玩家 UUID",
+    "model": "皮肤模型",
+    "modelClassic": "经典 (Steve 4px)",
+    "modelSlim": "纤细 (Alex 3px)",
+    "downloadSkin": "保存皮肤 PNG",
+    "downloadSuccess": "皮肤已成功保存"
+  },
+  "cache": {
+    "title": "存储与缓存清理",
+    "desc": "清理启动器运行产生的网络缓存、日志文件以及皮肤缓存，释放磁盘空间",
+    "cleanNow": "立即清理",
+    "cleaning": "正在清理...",
+    "cleaned": "清理完成，已释放空间",
+    "itemCache": "网络与资源缓存",
+    "itemLogs": "启动器与游戏日志",
+    "itemSkins": "玩家皮肤与头像缓存",
+    "totalSize": "占用总空间",
+    "noneSelected": "请至少选择一项要清理的内容"
+  },
+  "download": {
+    "title": "自定义文件下载",
+    "desc": "将指定网络链接加入下载任务中心，支持断点续传与多线程加速",
+    "urlLabel": "下载链接",
+    "urlPlaceholder": "https://example.com/file.zip",
+    "destLabel": "保存路径",
+    "destPlaceholder": "点击右侧浏览选择保存路径",
+    "browse": "浏览",
+    "start": "开始下载",
+    "started": "下载任务已提交到任务中心",
+    "emptyUrl": "请输入下载链接",
+    "emptyDest": "请选择或输入保存路径"
+  },
+  "shortcut": {
+    "title": "桌面快捷方式",
+    "desc": "为选定的游戏实例创建桌面启动图标，支持双击直接进入游戏",
+    "selectInstance": "选择目标实例",
+    "selectPlaceholder": "请选择游戏实例",
+    "nameLabel": "快捷方式名称（可选）",
+    "namePlaceholder": "留空默认使用：Minecraft - 实例名称",
+    "create": "创建桌面快捷方式",
+    "created": "已成功在桌面创建快捷方式",
+    "noInstance": "请选择要创建快捷方式的实例"
+  },
+  "luck": {
+    "title": "每日人品",
+    "desc": "测试你今天在 Minecraft 中的运势，相同玩家同日结果恒定",
+    "usernamePlaceholder": "输入玩家名称",
+    "query": "测算运势",
+    "scoreLabel": "今日人品指数",
+    "levels": {
+      "greatBlessing": "大吉！挖矿必出远古残骸，附魔直接全满属性！",
+      "blessing": "吉！探索下界一路顺风，刷怪笼惊喜连连！",
+      "middleBlessing": "中吉！平稳的一天，适合安居种田与修筑城堡！",
+      "smallBlessing": "小吉！出门小心苦力怕，带好火把防迷路！",
+      "misfortune": "凶！小心脚下岩浆，回家前记得将贵重物品存箱！"
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "nav": "个性化",
+  "title": "外观与个性化设置",
+  "subtitle": "自定义启动器的主题颜色、背景样式、字体及背景音乐",
+  "sections": {
+    "theme": "主题与材质",
+    "typography": "字体与缩放",
+    "background": "背景设置",
+    "music": "背景音乐"
+  },
+  "theme": {
+    "seedColor": "强调色 (种子颜色)",
+    "mode": "色彩模式",
+    "modeLight": "浅色模式",
+    "modeDark": "深色模式",
+    "modeSystem": "跟随系统",
+    "material": "高级材质效果",
+    "materialFlat": "扁平纯色 (高性能)",
+    "materialGlass": "流光玻璃 (液态亚克力/云母效果)",
+    "materialDesc": "开启流光玻璃将启用高斯模糊、折射光晕与系统级云母磨砂材质"
+  },
+  "typography": {
+    "fontFamily": "启动器界面字体",
+    "fontFamilyPlaceholder": "输入自定义字体名称，例如：Microsoft YaHei, Segoe UI",
+    "systemFonts": "已检测系统字体",
+    "loadSystemFonts": "扫描系统字体",
+    "defaultFont": "系统默认字体",
+    "scale": "界面缩放比例",
+    "scaleValue": "{val}%"
+  },
+  "background": {
+    "mode": "背景显示模式",
+    "modeNone": "无背景 (纯色)",
+    "modeImage": "静态图片",
+    "modeSlideshow": "多图轮播",
+    "modeVideo": "动态视频",
+    "path": "媒体文件或目录路径",
+    "pathPlaceholder": "请选择图片、视频文件或轮播文件夹",
+    "browse": "浏览文件...",
+    "blur": "高斯模糊度",
+    "blurValue": "{val}px",
+    "opacity": "背景不透明度",
+    "opacityValue": "{val}%",
+    "preview": "实时预览效果",
+    "previewEmpty": "未选择背景媒体或模式为无"
+  },
+  "music": {
+    "enable": "启用背景音乐播放",
+    "folder": "音乐文件夹路径",
+    "folderPlaceholder": "选择存放 mp3/wav/aac/flac 音乐文件的文件夹",
+    "browse": "浏览文件夹...",
+    "playMode": "播放顺序",
+    "modeLoop": "列表循环",
+    "modeShuffle": "随机播放",
+    "volume": "音乐音量",
+    "volumeValue": "{val}%",
+    "controls": "音乐控制",
+    "play": "播放",
+    "pause": "暂停",
+    "next": "下一首",
+    "prev": "上一首",
+    "noTrack": "暂无播放曲目",
+    "playlistEmpty": "指定文件夹中未找到音频文件"
+  }
+}

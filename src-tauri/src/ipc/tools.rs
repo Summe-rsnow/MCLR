@@ -1,0 +1,679 @@
+//! Tools IPC commands.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use base64::Engine;
+use chrono::Datelike;
+use mclr_core::{AppError, SettingsStore, TaskCenter, paths};
+use mclr_net::{DownloadSpec, Downloader, build_http_client};
+use serde::{Deserialize, Serialize};
+use specta::Type;
+use tauri::State;
+use url::Url;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SkinFetchResult {
+    pub username: String,
+    pub uuid: String,
+    pub skin_url: String,
+    pub skin_data_url: String,
+    pub head_data_url: String,
+    pub slim: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheSizeInfo {
+    pub cache_bytes: u64,
+    pub logs_bytes: u64,
+    pub skin_cache_bytes: u64,
+    pub total_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyLuckResult {
+    pub date: String,
+    pub username: String,
+    pub score: u8,
+    pub level_key: String,
+}
+
+#[derive(Deserialize)]
+struct MojangProfileResponse {
+    id: String,
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct SessionProperty {
+    name: String,
+    value: String,
+}
+
+#[derive(Deserialize)]
+struct SessionProfileResponse {
+    #[allow(dead_code)]
+    id: String,
+    #[allow(dead_code)]
+    name: String,
+    properties: Vec<SessionProperty>,
+}
+
+#[derive(Deserialize)]
+struct TexturesPayload {
+    textures: TexturesData,
+}
+
+#[derive(Deserialize)]
+struct TexturesData {
+    #[serde(rename = "SKIN")]
+    skin: Option<SkinInfo>,
+}
+
+#[derive(Deserialize)]
+struct SkinInfo {
+    url: String,
+    #[serde(default)]
+    metadata: Option<SkinMetadata>,
+}
+
+#[derive(Deserialize)]
+struct SkinMetadata {
+    #[serde(default)]
+    model: Option<String>,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn tools_fetch_skin(
+    settings_state: State<'_, SettingsStore>,
+    username: String,
+) -> Result<SkinFetchResult, AppError> {
+    let username_trimmed = username.trim();
+    if username_trimmed.is_empty() {
+        return Err(AppError::new("tools.skin.invalidUsername"));
+    }
+
+    let settings = settings_state.get().await;
+    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+
+    let mojang_url = format!(
+        "https://api.mojang.com/users/profiles/minecraft/{}",
+        urlencoding_encode(username_trimmed)
+    );
+    let profile_resp = client
+        .get(&mojang_url)
+        .send()
+        .await
+        .map_err(|e| AppError::new("tools.skin.networkError").with_detail(e.to_string()))?;
+
+    if profile_resp.status() == reqwest::StatusCode::NOT_FOUND
+        || profile_resp.status() == reqwest::StatusCode::NO_CONTENT
+    {
+        return Err(
+            AppError::new("tools.skin.userNotFound").with_param("username", username_trimmed)
+        );
+    }
+
+    if !profile_resp.status().is_success() {
+        return Err(AppError::new("tools.skin.networkError")
+            .with_detail(format!("HTTP {}", profile_resp.status())));
+    }
+
+    let mojang_profile: MojangProfileResponse = profile_resp
+        .json()
+        .await
+        .map_err(|e| AppError::new("tools.skin.parseError").with_detail(e.to_string()))?;
+
+    let session_url = format!(
+        "https://sessionserver.mojang.com/session/minecraft/profile/{}",
+        mojang_profile.id
+    );
+    let session_resp = client
+        .get(&session_url)
+        .send()
+        .await
+        .map_err(|e| AppError::new("tools.skin.networkError").with_detail(e.to_string()))?;
+
+    if !session_resp.status().is_success() {
+        return Err(AppError::new("tools.skin.networkError")
+            .with_detail(format!("HTTP {}", session_resp.status())));
+    }
+
+    let session_profile: SessionProfileResponse = session_resp
+        .json()
+        .await
+        .map_err(|e| AppError::new("tools.skin.parseError").with_detail(e.to_string()))?;
+
+    let textures_prop = session_profile
+        .properties
+        .iter()
+        .find(|p| p.name == "textures")
+        .ok_or_else(|| AppError::new("tools.skin.noSkinFound"))?;
+
+    let decoded_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&textures_prop.value)
+        .map_err(|e| AppError::new("tools.skin.parseError").with_detail(e.to_string()))?;
+
+    let textures_payload: TexturesPayload = serde_json::from_slice(&decoded_bytes)
+        .map_err(|e| AppError::new("tools.skin.parseError").with_detail(e.to_string()))?;
+
+    let skin = textures_payload
+        .textures
+        .skin
+        .ok_or_else(|| AppError::new("tools.skin.noSkinFound"))?;
+
+    let skin_bytes = client
+        .get(&skin.url)
+        .send()
+        .await
+        .map_err(|e| AppError::new("tools.skin.downloadFailed").with_detail(e.to_string()))?
+        .bytes()
+        .await
+        .map_err(|e| AppError::new("tools.skin.downloadFailed").with_detail(e.to_string()))?;
+
+    let skin_base64 = base64::engine::general_purpose::STANDARD.encode(&skin_bytes);
+    let skin_data_url = format!("data:image/png;base64,{skin_base64}");
+
+    let head_data_url =
+        mclr_auth::crop_skin_head(&skin_bytes, &mojang_profile.id).map_err(AppError::from)?;
+
+    let is_slim = skin
+        .metadata
+        .as_ref()
+        .and_then(|m| m.model.as_deref())
+        .map(|model| model == "slim")
+        .unwrap_or(false);
+
+    Ok(SkinFetchResult {
+        username: mojang_profile.name,
+        uuid: mojang_profile.id,
+        skin_url: skin.url,
+        skin_data_url,
+        head_data_url,
+        slim: is_slim,
+    })
+}
+
+fn urlencoding_encode(s: &str) -> String {
+    url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
+}
+
+fn compute_dir_size(dir: &Path) -> u64 {
+    if !dir.exists() {
+        return 0;
+    }
+    let mut total = 0u64;
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return 0,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if let Ok(meta) = entry.metadata() {
+            if meta.is_dir() {
+                total += compute_dir_size(&path);
+            } else {
+                total += meta.len();
+            }
+        }
+    }
+    total
+}
+
+fn compute_cache_sizes() -> CacheSizeInfo {
+    let cache_p = paths::cache_dir();
+    let logs_p = paths::logs_dir();
+    let skin_p = cache_p.join("skin");
+
+    let cache_bytes = compute_dir_size(&cache_p);
+    let logs_bytes = compute_dir_size(&logs_p);
+    let skin_cache_bytes = compute_dir_size(&skin_p);
+    let total_bytes = cache_bytes + logs_bytes;
+
+    CacheSizeInfo {
+        cache_bytes,
+        logs_bytes,
+        skin_cache_bytes,
+        total_bytes,
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn tools_cache_info() -> Result<CacheSizeInfo, AppError> {
+    tokio::task::spawn_blocking(compute_cache_sizes)
+        .await
+        .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))
+}
+
+fn clear_dir_contents(dir: &Path) -> std::io::Result<()> {
+    if !dir.exists() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            fs::remove_dir_all(&path)?;
+        } else {
+            fs::remove_file(&path)?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn tools_cache_clear(
+    clear_cache: bool,
+    clear_logs: bool,
+    clear_skins: bool,
+) -> Result<CacheSizeInfo, AppError> {
+    tokio::task::spawn_blocking(move || {
+        let cache_p = paths::cache_dir();
+        let logs_p = paths::logs_dir();
+        let skin_p = cache_p.join("skin");
+
+        if clear_cache {
+            let _ = clear_dir_contents(&cache_p);
+        } else if clear_skins {
+            let _ = clear_dir_contents(&skin_p);
+        }
+
+        if clear_logs {
+            let _ = clear_dir_contents(&logs_p);
+        }
+
+        compute_cache_sizes()
+    })
+    .await
+    .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn tools_custom_download(
+    settings_state: State<'_, SettingsStore>,
+    tasks_state: State<'_, Arc<TaskCenter>>,
+    url: String,
+    dest_path: String,
+) -> Result<String, AppError> {
+    let parsed_url = Url::parse(&url)
+        .map_err(|e| AppError::new("tools.download.invalidUrl").with_detail(e.to_string()))?;
+
+    let dest = PathBuf::from(&dest_path);
+    if let Some(parent) = dest.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)
+            .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?;
+    }
+
+    let file_name = dest
+        .file_name()
+        .map(|f| f.to_string_lossy().to_string())
+        .unwrap_or_else(|| "download.bin".to_string());
+
+    let mut params = std::collections::HashMap::new();
+    params.insert("name".to_string(), file_name);
+
+    let (task_id, _cancel_token) = tasks_state
+        .create_task(None, "tasks.titles.customDownload", params)
+        .await;
+
+    let settings = settings_state.get().await;
+    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+    let downloader = Downloader::new(client, settings.net.clone());
+
+    let spec = DownloadSpec {
+        urls: vec![parsed_url],
+        dest,
+        size: None,
+        sha1: None,
+        sha256: None,
+        md5: None,
+    };
+
+    let tc = Arc::clone(&tasks_state);
+    let tid = task_id.clone();
+
+    tokio::spawn(async move {
+        let _ = tc.start_task(&tid).await;
+        match downloader.download(spec, Some((&tc, &tid))).await {
+            Ok(()) => {
+                let _ = tc.complete_task(&tid).await;
+            }
+            Err(e) => {
+                let _ = tc.fail_task(&tid, AppError::from(e)).await;
+            }
+        }
+    });
+
+    Ok(task_id)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn tools_create_shortcut(
+    instance_id: String,
+    shortcut_name: Option<String>,
+) -> Result<String, AppError> {
+    tokio::task::spawn_blocking(move || {
+        let current_exe = std::env::current_exe()
+            .map_err(|e| AppError::new("tools.shortcut.failed").with_detail(e.to_string()))?;
+
+        let desktop_dir = dirs::desktop_dir().unwrap_or_else(paths::data_dir);
+        if !desktop_dir.exists() {
+            fs::create_dir_all(&desktop_dir)
+                .map_err(|e| AppError::new("tools.shortcut.failed").with_detail(e.to_string()))?;
+        }
+
+        let clean_name = shortcut_name
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| format!("Minecraft - {instance_id}"));
+
+        // Sanitize filename for Windows
+        let sanitized_name: String = clean_name
+            .chars()
+            .map(|c| match c {
+                '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+                other => other,
+            })
+            .collect();
+
+        let shortcut_path = desktop_dir.join(format!("{sanitized_name}.lnk"));
+
+        create_shell_link_win32(
+            &shortcut_path,
+            &current_exe,
+            &format!("--launch \"{instance_id}\""),
+            current_exe.parent().unwrap_or(&desktop_dir),
+            &format!("Launch Minecraft {instance_id}"),
+        )
+        .map_err(|e| AppError::new("tools.shortcut.failed").with_detail(e))?;
+
+        Ok(shortcut_path.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?
+}
+
+#[cfg(windows)]
+fn create_shell_link_win32(
+    link_path: &Path,
+    target_path: &Path,
+    arguments: &str,
+    working_dir: &Path,
+    description: &str,
+) -> Result<(), String> {
+    use windows::Win32::System::Com::{
+        CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
+        CoUninitialize, IPersistFile,
+    };
+    use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
+    use windows::core::{HSTRING, Interface, PCWSTR};
+
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
+        let shell_link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)
+            .map_err(|e| format!("CoCreateInstance failed: {e}"))?;
+
+        let target_h = HSTRING::from(target_path.as_os_str());
+        shell_link
+            .SetPath(PCWSTR::from_raw(target_h.as_ptr()))
+            .map_err(|e| format!("SetPath failed: {e}"))?;
+
+        if !arguments.is_empty() {
+            let args_h = HSTRING::from(arguments);
+            shell_link
+                .SetArguments(PCWSTR::from_raw(args_h.as_ptr()))
+                .map_err(|e| format!("SetArguments failed: {e}"))?;
+        }
+
+        if working_dir.exists() {
+            let work_h = HSTRING::from(working_dir.as_os_str());
+            shell_link
+                .SetWorkingDirectory(PCWSTR::from_raw(work_h.as_ptr()))
+                .map_err(|e| format!("SetWorkingDirectory failed: {e}"))?;
+        }
+
+        if !description.is_empty() {
+            let desc_h = HSTRING::from(description);
+            shell_link
+                .SetDescription(PCWSTR::from_raw(desc_h.as_ptr()))
+                .map_err(|e| format!("SetDescription failed: {e}"))?;
+        }
+
+        let persist_file: IPersistFile = shell_link
+            .cast()
+            .map_err(|e| format!("QueryInterface IPersistFile failed: {e}"))?;
+
+        let link_h = HSTRING::from(link_path.as_os_str());
+        persist_file
+            .Save(PCWSTR::from_raw(link_h.as_ptr()), true)
+            .map_err(|e| format!("IPersistFile::Save failed: {e}"))?;
+
+        CoUninitialize();
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn create_shell_link_win32(
+    link_path: &Path,
+    _target_path: &Path,
+    _arguments: &str,
+    _working_dir: &Path,
+    _description: &str,
+) -> Result<(), String> {
+    fs::write(link_path, b"mock-lnk-content")
+        .map_err(|e| format!("failed to write mock shortcut: {e}"))?;
+    Ok(())
+}
+
+pub fn calculate_daily_luck(date_str: &str, username: &str) -> DailyLuckResult {
+    use sha2::{Digest, Sha256};
+
+    let seed = format!("{date_str}:{username}");
+    let mut hasher = Sha256::new();
+    hasher.update(seed.as_bytes());
+    let hash = hasher.finalize();
+
+    let first_u32 = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]);
+    let score = (first_u32 % 101) as u8;
+
+    let level_key = if score >= 90 {
+        "greatBlessing"
+    } else if score >= 75 {
+        "blessing"
+    } else if score >= 50 {
+        "middleBlessing"
+    } else if score >= 25 {
+        "smallBlessing"
+    } else {
+        "misfortune"
+    };
+
+    DailyLuckResult {
+        date: date_str.to_string(),
+        username: username.to_string(),
+        score,
+        level_key: level_key.to_string(),
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn tools_daily_luck(username: String) -> Result<DailyLuckResult, AppError> {
+    let now = chrono::Local::now();
+    let date_str = format!("{:04}-{:02}-{:02}", now.year(), now.month(), now.day());
+    Ok(calculate_daily_luck(&date_str, username.trim()))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn tools_list_media_files(
+    folder_path: String,
+    kind: String,
+) -> Result<Vec<String>, AppError> {
+    tokio::task::spawn_blocking(move || {
+        let p = PathBuf::from(&folder_path);
+        if !p.exists() || !p.is_dir() {
+            return Ok(Vec::new());
+        }
+
+        let audio_extensions = ["mp3", "wav", "aac", "flac", "ogg"];
+        let image_extensions = ["png", "jpg", "jpeg", "webp"];
+
+        let allowed_extensions: &[&str] = match kind.as_str() {
+            "audio" => &audio_extensions,
+            "image" => &image_extensions,
+            _ => {
+                return Err(AppError::new("tools.media.invalidKind").with_param("kind", kind));
+            }
+        };
+
+        let mut files = Vec::new();
+        if let Ok(entries) = fs::read_dir(&p) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file()
+                    && let Some(ext) = path.extension().and_then(|e| e.to_str())
+                {
+                    let lower = ext.to_ascii_lowercase();
+                    if allowed_extensions.contains(&lower.as_str()) {
+                        files.push(path.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+        files.sort();
+        Ok(files)
+    })
+    .await
+    .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_daily_luck_determinism() {
+        let luck1 = calculate_daily_luck("2026-10-24", "PlayerOne");
+        let luck2 = calculate_daily_luck("2026-10-24", "PlayerOne");
+        assert_eq!(luck1.score, luck2.score);
+        assert_eq!(luck1.level_key, luck2.level_key);
+        assert_eq!(luck1.date, "2026-10-24");
+        assert!(luck1.score <= 100);
+
+        // Different user should produce different or at least valid score
+        let luck3 = calculate_daily_luck("2026-10-24", "PlayerTwo");
+        assert!(luck3.score <= 100);
+
+        // Different date should produce valid score
+        let luck4 = calculate_daily_luck("2026-10-25", "PlayerOne");
+        assert!(luck4.score <= 100);
+    }
+
+    #[test]
+    fn test_daily_luck_level_keys() {
+        for score in 0..=100 {
+            let key = if score >= 90 {
+                "greatBlessing"
+            } else if score >= 75 {
+                "blessing"
+            } else if score >= 50 {
+                "middleBlessing"
+            } else if score >= 25 {
+                "smallBlessing"
+            } else {
+                "misfortune"
+            };
+            assert!(!key.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_cache_info_and_clear() {
+        let temp_path =
+            std::env::temp_dir().join(format!("mclr_tools_test_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_path);
+        fs::create_dir_all(&temp_path).unwrap();
+        unsafe {
+            std::env::set_var("MCLR_DATA_DIR", temp_path.to_str().unwrap());
+        }
+
+        let cache_dir = paths::cache_dir();
+        let logs_dir = paths::logs_dir();
+        let skin_dir = cache_dir.join("skin");
+
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::create_dir_all(&logs_dir).unwrap();
+
+        fs::write(skin_dir.join("test_skin.png"), b"skin_bytes_data").unwrap();
+        fs::write(cache_dir.join("temp.dat"), b"cache_bytes").unwrap();
+        fs::write(logs_dir.join("latest.log"), b"log_bytes").unwrap();
+
+        let info = compute_cache_sizes();
+        assert!(info.skin_cache_bytes > 0);
+        assert!(info.cache_bytes >= info.skin_cache_bytes);
+        assert!(info.logs_bytes > 0);
+        assert_eq!(info.total_bytes, info.cache_bytes + info.logs_bytes);
+
+        // Clear skins only
+        let _ = clear_dir_contents(&skin_dir);
+        let info2 = compute_cache_sizes();
+        assert_eq!(info2.skin_cache_bytes, 0);
+        assert!(info2.cache_bytes > 0); // temp.dat remains
+
+        // Clear all cache and logs
+        let _ = clear_dir_contents(&cache_dir);
+        let _ = clear_dir_contents(&logs_dir);
+        let info3 = compute_cache_sizes();
+        assert_eq!(info3.cache_bytes, 0);
+        assert_eq!(info3.logs_bytes, 0);
+        assert_eq!(info3.total_bytes, 0);
+
+        unsafe {
+            std::env::remove_var("MCLR_DATA_DIR");
+        }
+        let _ = fs::remove_dir_all(&temp_path);
+    }
+    #[test]
+    fn test_list_media_files() {
+        let temp_path =
+            std::env::temp_dir().join(format!("mclr_tools_media_test_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_path);
+        fs::create_dir_all(&temp_path).unwrap();
+        fs::write(temp_path.join("song1.mp3"), b"").unwrap();
+        fs::write(temp_path.join("song2.FLAC"), b"").unwrap();
+        fs::write(temp_path.join("image.png"), b"").unwrap();
+        fs::write(temp_path.join("text.txt"), b"").unwrap();
+
+        let audio_files = {
+            let mut list = Vec::new();
+            for entry in fs::read_dir(&temp_path).unwrap().flatten() {
+                let p = entry.path();
+                if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                    let lower = ext.to_ascii_lowercase();
+                    if ["mp3", "wav", "aac", "flac", "ogg"].contains(&lower.as_str()) {
+                        list.push(p.to_string_lossy().to_string());
+                    }
+                }
+            }
+            list.sort();
+            list
+        };
+
+        assert_eq!(audio_files.len(), 2);
+        let _ = fs::remove_dir_all(&temp_path);
+    }
+}

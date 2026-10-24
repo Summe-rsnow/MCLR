@@ -38,7 +38,13 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
-        .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if let Some(pos) = args.iter().position(|a| a == "--launch")
+                && let Some(inst_id) = args.get(pos + 1)
+            {
+                let _ = app.emit("cli://launch", inst_id.clone());
+            }
+        }))
         .manage(settings_store)
         .manage(task_center)
         .manage(account_store)
@@ -55,7 +61,16 @@ pub fn run() {
                     let _ = app_handle.emit("tasks://update", diff);
                 }
             });
-
+            let startup_args: Vec<String> = std::env::args().collect();
+            if let Some(pos) = startup_args.iter().position(|a| a == "--launch")
+                && let Some(inst_id) = startup_args.get(pos + 1).cloned()
+            {
+                let app_handle2 = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    let _ = app_handle2.emit("cli://launch", inst_id);
+                });
+            }
             Ok(())
         })
         .run(tauri::generate_context!())

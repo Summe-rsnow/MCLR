@@ -35,6 +35,7 @@ pub struct UiSettings {
     pub music_enabled: bool,
     pub music_folder: String,
     pub music_volume: u8,
+    pub music_play_mode: String, // "loop" | "shuffle"
 }
 
 impl Default for UiSettings {
@@ -52,6 +53,7 @@ impl Default for UiSettings {
             music_enabled: false,
             music_folder: String::new(),
             music_volume: 50,
+            music_play_mode: "loop".to_string(),
         }
     }
 }

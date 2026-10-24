@@ -93,7 +93,16 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::crash::crash_analyze,
         crate::ipc::crash::crash_export_report,
         // [home]
+        crate::ipc::home::news_fetch,
+        crate::ipc::home::announcements_fetch,
         // [tools]
+        crate::ipc::tools::tools_fetch_skin,
+        crate::ipc::tools::tools_cache_info,
+        crate::ipc::tools::tools_cache_clear,
+        crate::ipc::tools::tools_custom_download,
+        crate::ipc::tools::tools_create_shortcut,
+        crate::ipc::tools::tools_daily_luck,
+        crate::ipc::tools::tools_list_media_files,
         // [update]
     ])
 }

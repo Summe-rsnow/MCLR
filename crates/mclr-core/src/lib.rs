@@ -17,7 +17,8 @@ pub use secrets::{SecretsStatus, get_secret, secrets_status};
 pub use settings::{
     CompFavoriteEntry, CompSettings, GameFolderEntry, GameSettings, JavaSettings, LanguageSettings,
     LaunchSettings, MaterialMode, NetSettings, ProxyMode, Settings, SettingsStore, SourcePriority,
-    SystemSettings, ThemeMode, UiSettings, apply_patch, merge_patch,
+    StatesSettings, SystemSettings, ThemeMode, UiSettings, UpdateSettings, apply_patch,
+    merge_patch,
 };
 pub use tasks::{TaskCenter, TaskNode, TaskState};
 

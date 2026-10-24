@@ -8,7 +8,10 @@ import { router } from './router'
 import { setupMockIpc } from './ipc/mock'
 import { useThemeStore } from './stores/theme'
 
-if (import.meta.env.VITE_MOCK_IPC === '1') {
+if (
+  import.meta.env.VITE_MOCK_IPC?.trim() === '1' ||
+  (typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window))
+) {
   setupMockIpc()
 }
 

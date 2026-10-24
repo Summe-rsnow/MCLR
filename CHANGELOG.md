@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.11] - 2026-10-24
+
+### Added
+- Appearance & Personalisation (`src/features/settings-appearance` & `AppShell.vue`): Seed colour picker + presets, theme mode, flat/glass material switch, image/slideshow/video (`<video muted loop>`) background with blur and opacity, Local Font Access API (`queryLocalFonts()`) + custom font input, UI scale slider, and `HTMLAudioElement` background music playlist (`mp3`/`wav`/`aac`/`flac`, loop/shuffle, volume, auto-pause on `launch://started`, auto-resume on `launch://exit`).
+- Home & Help (`src-tauri/src/ipc/home.rs`, `src/features/home`, `src/help/zh-CN/`): Minecraft news fetcher with 30-minute disk cache and domain whitelist (`minecraft.net`, `minecraft-services.net`, `microsoft.com`), remote announcement banner with dismiss state persistence, and bundled Markdown Help Center.
+- Tools (`src-tauri/src/ipc/tools.rs`, `src/features/tools`): Mojang player skin/avatar fetcher, cache/logs/skin cleaner, custom multi-connection downloader, Windows `.lnk` desktop shortcut creator (`IShellLinkW` launching `mclr.exe --launch <instance>`), and deterministic Daily Luck (0–100).
+
 ## [0.0.10] - 2026-10-24
 
 ### Added

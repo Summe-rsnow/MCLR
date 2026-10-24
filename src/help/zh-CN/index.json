@@ -1,0 +1,32 @@
+[
+  {
+    "id": "getting-started",
+    "title": "新手起步指南",
+    "category": "基础指引",
+    "tags": ["新手", "安装", "启动", "快速开始"]
+  },
+  {
+    "id": "java-guide",
+    "title": "Java 配置与选择",
+    "category": "运行环境",
+    "tags": ["Java", "JDK", "内存", "环境配置"]
+  },
+  {
+    "id": "modloaders-guide",
+    "title": "模组加载器详解",
+    "category": "进阶玩法",
+    "tags": ["模组", "Forge", "Fabric", "NeoForge"]
+  },
+  {
+    "id": "troubleshooting-crashes",
+    "title": "游戏崩溃与排查分析",
+    "category": "故障排除",
+    "tags": ["崩溃", "日志", "排查", "修复"]
+  },
+  {
+    "id": "multi-account",
+    "title": "多账号与登录模式管理",
+    "category": "账号管理",
+    "tags": ["账号", "微软", "离线", "皮肤"]
+  }
+]

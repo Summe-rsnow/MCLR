@@ -173,6 +173,64 @@ export interface Settings {
     disableGpu: boolean
   }
   comp?: CompSettings
+  update?: UpdateSettings
+  states?: StatesSettings
+}
+
+export interface UpdateSettings {
+  channel: string
+  autoCheck: boolean
+  announcementUrl: string
+}
+
+export interface StatesSettings {
+  dismissedAnnouncements: string[]
+}
+
+export interface NewsItem {
+  id: string
+  title: string
+  summary: string
+  date: string
+  category: string
+  imageUrl?: string | null
+  articleUrl: string
+}
+
+export interface AnnouncementButton {
+  text: string
+  url?: string | null
+}
+
+export interface AnnouncementItem {
+  id: string
+  title: string
+  detail: string
+  btn1?: AnnouncementButton | null
+  btn2?: AnnouncementButton | null
+}
+
+export interface SkinFetchResult {
+  username: string
+  uuid: string
+  skinUrl: string
+  skinDataUrl: string
+  headDataUrl: string
+  slim: boolean
+}
+
+export interface CacheSizeInfo {
+  cacheBytes: number
+  logsBytes: number
+  skinCacheBytes: number
+  totalBytes: number
+}
+
+export interface DailyLuckResult {
+  date: string
+  username: string
+  score: number
+  levelKey: string
 }
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'debug' | 'fatal'
@@ -442,6 +500,29 @@ export interface CrashResult {
   summaryLogLines: string[]
   reportFiles: string[]
 }
+export interface NewsItem {
+  id: string
+  title: string
+  summary: string
+  date: string
+  category: string
+  imageUrl?: string | null
+  articleUrl: string
+}
+
+export interface AnnouncementButton {
+  text: string
+  url?: string | null
+}
+
+export interface AnnouncementItem {
+  id: string
+  title: string
+  detail: string
+  btn1?: AnnouncementButton | null
+  btn2?: AnnouncementButton | null
+}
+
 
 
 
@@ -808,4 +889,41 @@ export const ipcClient = {
     destZipPath: string,
   ): Promise<string> =>
     invokeCommand<string>('crash_export_report', { instanceId, destZipPath }),
+  // Home
+  newsFetch: (page?: number, forceRefresh?: boolean): Promise<NewsItem[]> =>
+    invokeCommand<NewsItem[]>('news_fetch', {
+      page: page ?? 0,
+      forceRefresh: forceRefresh ?? false,
+    }),
+  announcementsFetch: (): Promise<AnnouncementItem[]> =>
+    invokeCommand<AnnouncementItem[]>('announcements_fetch'),
+  // Tools
+  toolsFetchSkin: (username: string): Promise<SkinFetchResult> =>
+    invokeCommand<SkinFetchResult>('tools_fetch_skin', { username }),
+  toolsCacheInfo: (): Promise<CacheSizeInfo> =>
+    invokeCommand<CacheSizeInfo>('tools_cache_info'),
+  toolsCacheClear: (
+    clearCache: boolean,
+    clearLogs: boolean,
+    clearSkins: boolean,
+  ): Promise<CacheSizeInfo> =>
+    invokeCommand<CacheSizeInfo>('tools_cache_clear', {
+      clearCache,
+      clearLogs,
+      clearSkins,
+    }),
+  toolsCustomDownload: (url: string, destPath: string): Promise<string> =>
+    invokeCommand<string>('tools_custom_download', { url, destPath }),
+  toolsCreateShortcut: (
+    instanceId: string,
+    shortcutName?: string | null,
+  ): Promise<string> =>
+    invokeCommand<string>('tools_create_shortcut', {
+      instanceId,
+      shortcutName: shortcutName ?? null,
+    }),
+  toolsDailyLuck: (username: string): Promise<DailyLuckResult> =>
+    invokeCommand<DailyLuckResult>('tools_daily_luck', { username }),
+  toolsListMediaFiles: (folderPath: string, kind: string): Promise<string[]> =>
+    invokeCommand<string[]>('tools_list_media_files', { folderPath, kind }),
 }

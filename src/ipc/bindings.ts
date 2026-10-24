@@ -573,6 +573,78 @@ async crashExportReport(instanceId: string, destZipPath: string) : Promise<Resul
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async newsFetch(page: number, forceRefresh: boolean) : Promise<Result<NewsItem[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("news_fetch", { page, forceRefresh }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async announcementsFetch() : Promise<Result<AnnouncementItem[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("announcements_fetch") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async toolsFetchSkin(username: string) : Promise<Result<SkinFetchResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("tools_fetch_skin", { username }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async toolsCacheInfo() : Promise<Result<CacheSizeInfo, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("tools_cache_info") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async toolsCacheClear(clearCache: boolean, clearLogs: boolean, clearSkins: boolean) : Promise<Result<CacheSizeInfo, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("tools_cache_clear", { clearCache, clearLogs, clearSkins }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async toolsCustomDownload(url: string, destPath: string) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("tools_custom_download", { url, destPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async toolsCreateShortcut(instanceId: string, shortcutName: string | null) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("tools_create_shortcut", { instanceId, shortcutName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async toolsDailyLuck(username: string) : Promise<Result<DailyLuckResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("tools_daily_luck", { username }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async toolsListMediaFiles(folderPath: string, kind: string) : Promise<Result<string[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("tools_list_media_files", { folderPath, kind }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -589,6 +661,14 @@ async crashExportReport(instanceId: string, destZipPath: string) : Promise<Resul
 export type AccountKind = "microsoft" | "offline" | "authlib" | "yggdrasilConnect"
 export type AccountView = { id: string; kind: AccountKind; username: string; uuid: string; selected: boolean; server: string | null; serverName: string | null; skinHeadDataUrl: string | null; capes: CapeView[]; defaultSkinModel: string }
 /**
+ * Optional action button for an announcement card.
+ */
+export type AnnouncementButton = { text: string; url: string | null }
+/**
+ * Announcement item displayed in the launcher announcement banner.
+ */
+export type AnnouncementItem = { id: string; title: string; detail: string; btn1: AnnouncementButton | null; btn2: AnnouncementButton | null }
+/**
  * Cross-crate application error transferred over Tauri IPC.
  * Rust never emits user-facing strings; UI renders `t('error.' + code, params)`.
  */
@@ -599,6 +679,7 @@ export type AppError = { code: string; params?: Partial<{ [key in string]: strin
 export type AppInfo = { name: string; version: string }
 export type AuthlibLoginResponse = { account: AccountView | null; pendingSessionId: string | null; profiles: AuthlibProfileView[] }
 export type AuthlibProfileView = { id: string; name: string }
+export type CacheSizeInfo = { cacheBytes: number; logsBytes: number; skinCacheBytes: number; totalBytes: number }
 export type CapeView = { id: string; alias: string; url: string; active: boolean }
 export type CompDependency = { projectId: string; kind: CompDependencyKind }
 export type CompDependencyKind = "required" | "optional" | "incompatible" | "embedded"
@@ -625,6 +706,7 @@ export type CrashConfidence = "high" | "medium" | "low"
  * Aggregated result of analyzing crash logs for an instance.
  */
 export type CrashResult = { instanceId: string; analyzedAt: string; causes: CrashCauseFinding[]; summaryLogLines: string[]; reportFiles: string[] }
+export type DailyLuckResult = { date: string; username: string; score: number; levelKey: string }
 export type DatapackInfo = { id: string; fileName: string; description: string; packFormat: number; enabled: boolean; builtIn: boolean }
 /**
  * Candidate file or folder that can be selected for modpack export.
@@ -701,6 +783,10 @@ export type ModpackFormat = "curseforge" | "modrinth" | "prism" | "mcbbs" | "hmc
  */
 export type ModpackInspectResult = { format: ModpackFormat; name: string; version: string; author: string | null; mcVersion: string; loader: string | null; loaderVersion: string | null; fileCount: number }
 export type NetSettings = { proxyMode: ProxyMode; proxyUrl: string; doh: boolean; sourcePriority: SourcePriority; connectionsPerFile: number; maxConcurrentFiles: number }
+/**
+ * Minecraft news item surfaced on the launcher homepage.
+ */
+export type NewsItem = { id: string; title: string; summary: string; date: string; category: string; imageUrl: string | null; articleUrl: string }
 export type ProxyMode = "none" | "system" | "custom"
 /**
  * A resolved dependency item containing project metadata, the chosen file, and whether it is already installed.
@@ -718,8 +804,10 @@ export type ServerPingResult = { ip: string; resolvedAddr: string; online: boole
 /**
  * Complete MCLR user settings.
  */
-export type Settings = { schemaVersion: number; ui: UiSettings; language: LanguageSettings; system: SystemSettings; net: NetSettings; game: GameSettings; java: JavaSettings; launch: LaunchSettings; comp: CompSettings }
+export type Settings = { schemaVersion: number; ui: UiSettings; language: LanguageSettings; system: SystemSettings; net: NetSettings; game: GameSettings; java: JavaSettings; launch: LaunchSettings; comp: CompSettings; update: UpdateSettings; states: StatesSettings }
+export type SkinFetchResult = { username: string; uuid: string; skinUrl: string; skinDataUrl: string; headDataUrl: string; slim: boolean }
 export type SourcePriority = "mirrorFirst" | "smart" | "officialFirst"
+export type StatesSettings = { dismissedAnnouncements: string[] }
 export type SystemSettings = { logLevel: string; logRetentionDays: number; disableGpu: boolean }
 /**
  * A node in the hierarchical task tree.
@@ -730,7 +818,8 @@ export type TaskNode = { id: string; parentId: string | null; titleKey: string; 
  */
 export type TaskState = "waiting" | "running" | "paused" | "success" | "canceled" | "failed"
 export type ThemeMode = "light" | "dark" | "system"
-export type UiSettings = { seed: string; mode: ThemeMode; material: MaterialMode; scale: number; fontFamily: string; backgroundMode: string; backgroundPath: string; backgroundBlur: number; backgroundOpacity: number; musicEnabled: boolean; musicFolder: string; musicVolume: number }
+export type UiSettings = { seed: string; mode: ThemeMode; material: MaterialMode; scale: number; fontFamily: string; backgroundMode: string; backgroundPath: string; backgroundBlur: number; backgroundOpacity: number; musicEnabled: boolean; musicFolder: string; musicVolume: number; musicPlayMode: string }
+export type UpdateSettings = { channel: string; autoCheck: boolean; announcementUrl: string }
 /**
  * Entry in the official Mojang version manifest.
  */
