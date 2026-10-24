@@ -1,0 +1,39 @@
+{
+  "nav": "启动",
+  "title": "游戏启动",
+  "selectInstance": "选择实例",
+  "selectAccount": "选择账号",
+  "noInstance": "尚未创建或选择实例",
+  "noAccount": "尚未添加或选择账号",
+  "createInstance": "安装新版本",
+  "addAccount": "添加账号",
+  "repairInstance": "检查与修复",
+  "repairing": "正在修复游戏文件...",
+  "repairSuccess": "实例文件检查完成",
+  "launchButton": "启动游戏",
+  "launching": "正在启动...",
+  "running": "游戏运行中",
+  "processCount": "{count} 个游戏进程运行中",
+  "stage": {
+    "idle": "准备就绪",
+    "precheck": "检查环境与路径...",
+    "java": "选择 Java 运行环境...",
+    "account": "刷新登录凭证...",
+    "repair": "补全核心文件与资源...",
+    "natives": "解压原生依赖库...",
+    "args": "构建启动参数与类路径...",
+    "prelaunch": "执行启动前脚本...",
+    "spawn": "启动游戏主程序...",
+    "running": "游戏进程已启动"
+  },
+  "javaMissing": {
+    "title": "未检测到可用的 Java 运行环境",
+    "message": "启动此游戏版本需要 Java {major}。您可以前往设置手动指定，或点击下方按钮直接下载 Mojang 官方运行时。",
+    "downloadAction": "自动下载 Java"
+  },
+  "runningCard": {
+    "title": "正在运行",
+    "viewLogs": "查看日志",
+    "killProcess": "强制结束"
+  }
+}

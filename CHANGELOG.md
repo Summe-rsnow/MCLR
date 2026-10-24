@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5] - 2026-10-24
+
+### Added
+- `mclr-game::launch`: Full 9-stage launch pipeline (path & login-requirement precheck, Java constraint selection, account session resolution, incremental repair, `.dll` natives extraction, JVM/game argument substitution with `@argfile` over 8000 chars for Java ≥ 9, `authlib-injector.jar` `-javaagent` setup, pre-launch command runner, `javaw.exe` spawn + `LaunchWatcher` with token/username masking, log severity classification, and Win32 `SetWindowTextW` custom window title).
+- `mclr-cli launch <instance> --offline <name>` subcommand.
+- Launch page (`src/features/launch`), virtualized Game Log viewer (`src/features/logs`), and Game/Launch & Java settings pages (`src/features/settings-game`).
+
 ## [0.0.4] - 2026-10-24
 
 ### Added

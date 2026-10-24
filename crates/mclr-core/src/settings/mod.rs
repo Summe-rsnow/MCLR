@@ -3,6 +3,7 @@
 pub mod game;
 pub mod java;
 pub mod language;
+pub mod launch;
 pub mod net;
 pub mod system;
 pub mod ui;
@@ -12,6 +13,7 @@ use crate::paths;
 pub use game::{GameFolderEntry, GameSettings};
 pub use java::JavaSettings;
 pub use language::LanguageSettings;
+pub use launch::LaunchSettings;
 pub use net::{NetSettings, ProxyMode, SourcePriority};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -35,6 +37,7 @@ pub struct Settings {
     pub net: NetSettings,
     pub game: GameSettings,
     pub java: JavaSettings,
+    pub launch: LaunchSettings,
 }
 
 impl Default for Settings {
@@ -47,6 +50,7 @@ impl Default for Settings {
             net: NetSettings::default(),
             game: GameSettings::default(),
             java: JavaSettings::default(),
+            launch: LaunchSettings::default(),
         }
     }
 }

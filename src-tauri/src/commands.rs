@@ -43,6 +43,10 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::install::install_vanilla,
         crate::ipc::install::install_repair,
         // [launch]
+        crate::ipc::launch::launch_instance,
+        crate::ipc::launch::launch_logs,
+        crate::ipc::launch::launch_processes,
+        crate::ipc::launch::launch_kill,
         // [loaders]
         // [comp]
         // [modpack]

@@ -35,6 +35,24 @@ pub enum GameError {
 
     #[error("Install failed: {0}")]
     InstallFailed(String),
+
+    #[error("Invalid path contains '!' or ';': {0}")]
+    LaunchInvalidPath(String),
+
+    #[error("Login requirement not satisfied: required '{required}', but got '{actual}'")]
+    LaunchLoginRequirement { required: String, actual: String },
+
+    #[error("Matching Java installation not found for major version {major}")]
+    LaunchJavaNotFound { major: u32 },
+
+    #[error("Failed to extract natives: {0}")]
+    LaunchNativesFailed(String),
+
+    #[error("Process launch failed: {0}")]
+    LaunchProcessFailed(String),
+
+    #[error("Process {0} not found")]
+    LaunchProcessNotFound(u32),
 }
 
 impl GameError {
@@ -50,6 +68,12 @@ impl GameError {
             GameError::Net(e) => e.code(),
             GameError::VersionNotFound(_) => "install.versionNotFound",
             GameError::InstallFailed(_) => "install.manifestFailed",
+            GameError::LaunchInvalidPath(_) => "launch.invalidPath",
+            GameError::LaunchLoginRequirement { .. } => "launch.loginRequirement",
+            GameError::LaunchJavaNotFound { .. } => "launch.java.notFound",
+            GameError::LaunchNativesFailed(_) => "launch.nativesFailed",
+            GameError::LaunchProcessFailed(_) => "launch.processFailed",
+            GameError::LaunchProcessNotFound(_) => "launch.processNotFound",
         }
     }
 }
@@ -60,10 +84,25 @@ impl From<reqwest::Error> for GameError {
     }
 }
 
+impl From<zip::result::ZipError> for GameError {
+    fn from(err: zip::result::ZipError) -> Self {
+        GameError::LaunchNativesFailed(err.to_string())
+    }
+}
+
 impl From<GameError> for AppError {
     fn from(err: GameError) -> Self {
         let code = err.code();
         let detail = err.to_string();
-        AppError::new(code).with_detail(detail)
+        let app_err = AppError::new(code).with_detail(detail);
+        match err {
+            GameError::LaunchJavaNotFound { major } => {
+                app_err.with_param("major", major.to_string())
+            }
+            GameError::LaunchLoginRequirement { required, actual } => app_err
+                .with_param("required", required)
+                .with_param("actual", actual),
+            _ => app_err,
+        }
     }
 }

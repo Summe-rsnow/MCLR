@@ -55,5 +55,16 @@
     "versionNotFound": "未找到指定的版本",
     "instanceExists": "已存在同名实例",
     "invalidName": "实例名称包含非法字符 \\ / : * ? \" < > | ! ;"
+  },
+  "launch": {
+    "pathInvalid": "游戏或实例路径包含非法字符 ! 或 ;",
+    "loginRequirementNotMet": "当前实例要求特定的账号登录模式",
+    "accountRequired": "请先选择或添加游戏账号",
+    "javaNotFound": "未找到适合当前游戏版本的 Java 运行环境（需要 Java {major}）",
+    "repairFailed": "启动前修复缺失文件失败",
+    "nativesExtractFailed": "解压运行依赖原生库失败",
+    "preLaunchFailed": "启动前脚本执行失败",
+    "spawnFailed": "启动游戏进程失败",
+    "processNotFound": "未找到指定的正在运行的游戏进程"
   }
 }

@@ -123,9 +123,32 @@ export interface GameSettings {
   sortBy: string
 }
 
+export interface LaunchSettings {
+  ramMode: 'auto' | 'custom'
+  ramCustomMb: number
+  jvmArgs: string
+  gameArgs: string
+  windowTitle: string
+  fullscreen: boolean
+  width: number
+  height: number
+  preferredIpStack: 'auto' | 'ipv4' | 'ipv6'
+  processPriority: 'normal' | 'aboveNormal' | 'high'
+  closeLauncherOnStart: 'keep' | 'hide' | 'exit'
+  disableCrashAnalysis: boolean
+}
+
+export interface JavaSettings {
+  custom: string[]
+  select: string
+  preferJdk: boolean
+}
+
 export interface Settings {
   schemaVersion: number
   game?: GameSettings
+  launch?: LaunchSettings
+  java?: JavaSettings
   ui: {
     seed: string
     mode: 'light' | 'dark' | 'system'
@@ -149,6 +172,31 @@ export interface Settings {
     logRetentionDays: number
     disableGpu: boolean
   }
+}
+
+export type LogLevel = 'info' | 'warn' | 'error' | 'debug' | 'fatal'
+
+export interface LogLine {
+  lineId: number
+  processId: number
+  instanceId: string
+  level: LogLevel
+  text: string
+  timestamp: string
+}
+
+export interface LaunchProcessInfo {
+  processId: number
+  instanceId: string
+  accountName: string
+  startedAt: string
+  running: boolean
+  exitCode?: number | null
+}
+
+export interface LaunchStartResult {
+  taskId: string
+  processId?: number | null
 }
 
 export type AccountKind = 'offline' | 'microsoft' | 'authlib' | 'yggdrasilConnect'
@@ -297,4 +345,14 @@ export const ipcClient = {
     invokeCommand<string>('install_vanilla', { version, name }),
   installRepair: (instanceId: string): Promise<string> =>
     invokeCommand<string>('install_repair', { instanceId }),
+
+  // Launch & logs
+  launchInstance: (instanceId: string, accountId: string): Promise<LaunchStartResult> =>
+    invokeCommand<LaunchStartResult>('launch_instance', { instanceId, accountId }),
+  launchLogs: (instanceId?: string): Promise<LogLine[]> =>
+    invokeCommand<LogLine[]>('launch_logs', { instanceId }),
+  launchProcesses: (): Promise<LaunchProcessInfo[]> =>
+    invokeCommand<LaunchProcessInfo[]>('launch_processes'),
+  launchKill: (processId: number): Promise<void> =>
+    invokeCommand<void>('launch_kill', { processId }),
 }

@@ -10,6 +10,7 @@ pub mod error;
 pub mod install;
 pub mod instance;
 pub mod java;
+pub mod launch;
 pub mod version;
 
 pub use error::GameError;
@@ -26,6 +27,14 @@ pub use instance::{
 pub use java::{
     JavaConstraint, JavaInstallation, RuntimeFileSpec, parse_major_version, parse_release_content,
     resolve_mojang_runtime_downloads, scan_java, select_java,
+};
+pub use launch::{
+    LaunchCommandSpec, LaunchExitPayload, LaunchProcessInfo, LaunchStartResult, LaunchWatcher,
+    LogLevel, LogLine, WatcherEvent, build_launch_command, check_launch_paths,
+    check_login_requirement, classify_log_level, compute_ram_mb, compute_ram_mb_auto,
+    ensure_authlib_injector, execute_pre_launch_command, extract_natives, find_window_for_pid,
+    get_free_physical_memory_mb, launch, resolve_java_installation, sanitize_log_line,
+    set_window_title_for_pid, version_java_constraint,
 };
 pub use version::{
     ArgumentEntry, ArgumentValue, Arguments, Artifact, AssetIndexInfo, ConditionalArgument,

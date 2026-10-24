@@ -5,6 +5,7 @@ pub mod ipc;
 
 use mclr_auth::AccountStore;
 use mclr_core::{SettingsStore, TaskCenter, init_logging, paths};
+use mclr_game::LaunchWatcher;
 use std::sync::Arc;
 use tauri::Emitter;
 
@@ -16,6 +17,7 @@ pub fn run() {
     let settings_store = SettingsStore::open().expect("failed to open settings store");
     let task_center = Arc::new(TaskCenter::new());
     let account_store = Arc::new(AccountStore::open().expect("failed to open account store"));
+    let launch_watcher = Arc::new(LaunchWatcher::new());
 
     // Initialize logging according to settings
     let (log_level, log_retention) = {
@@ -40,6 +42,7 @@ pub fn run() {
         .manage(settings_store)
         .manage(task_center)
         .manage(account_store)
+        .manage(launch_watcher)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);

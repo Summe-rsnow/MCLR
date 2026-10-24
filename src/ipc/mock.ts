@@ -33,6 +33,25 @@ export function setupMockIpc(): void {
       logRetentionDays: 7,
       disableGpu: false,
     },
+    launch: {
+      ramMode: 'auto',
+      ramCustomMb: 4096,
+      jvmArgs: '',
+      gameArgs: '',
+      windowTitle: '',
+      fullscreen: false,
+      width: 854,
+      height: 480,
+      preferredIpStack: 'auto',
+      processPriority: 'normal',
+      closeLauncherOnStart: 'keep',
+      disableCrashAnalysis: false,
+    },
+    java: {
+      custom: [],
+      select: 'auto',
+      preferJdk: false,
+    },
   }
 
   const handlers: MockHandlers = {

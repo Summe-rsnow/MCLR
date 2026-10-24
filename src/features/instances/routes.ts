@@ -3,7 +3,6 @@ import type { RouteRecordRaw } from 'vue-router'
 const routes: RouteRecordRaw[] = [
   {
     path: '/instances',
-    alias: '/',
     name: 'instances',
     component: () => import('./InstancesPage.vue'),
     meta: {

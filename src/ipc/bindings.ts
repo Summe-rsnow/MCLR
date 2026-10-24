@@ -245,6 +245,38 @@ async installRepair(instanceId: string) : Promise<Result<string, AppError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async launchInstance(instanceId: string, accountId: string) : Promise<Result<LaunchStartResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("launch_instance", { instanceId, accountId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async launchLogs(instanceId: string | null) : Promise<Result<LogLine[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("launch_logs", { instanceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async launchProcesses() : Promise<Result<LaunchProcessInfo[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("launch_processes") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async launchKill(processId: number) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("launch_kill", { processId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -297,6 +329,23 @@ export type JavaInstallation = { path: string; home: string; version: string; ma
 export type JavaSettings = { custom: string[]; select: string; preferJdk: boolean }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type LanguageSettings = { locale: string; formatCulture: string }
+/**
+ * Runtime metadata for a launched Minecraft process.
+ */
+export type LaunchProcessInfo = { processId: number; instanceId: string; accountName: string; startedAt: string; running: boolean; exitCode: number | null }
+export type LaunchSettings = { ramMode: string; ramCustomMb: number; jvmArgs: string; gameArgs: string; windowTitle: string; fullscreen: boolean; width: number; height: number; preferredIpStack: string; processPriority: string; closeLauncherOnStart: string; disableCrashAnalysis: boolean }
+/**
+ * Result returned to IPC callers immediately upon launching.
+ */
+export type LaunchStartResult = { taskId: string; processId: number | null }
+/**
+ * Log severity classification.
+ */
+export type LogLevel = "info" | "warn" | "error" | "debug" | "fatal"
+/**
+ * A single line of Minecraft stdout or stderr log.
+ */
+export type LogLine = { lineId: number; processId: number; instanceId: string; level: LogLevel; text: string; timestamp: string }
 export type MaterialMode = "flat" | "glass"
 export type NetSettings = { proxyMode: ProxyMode; proxyUrl: string; doh: boolean; sourcePriority: SourcePriority; connectionsPerFile: number; maxConcurrentFiles: number }
 export type ProxyMode = "none" | "system" | "custom"
@@ -307,7 +356,7 @@ export type SecretsStatus = { msClientId: boolean; curseforgeApiKey: boolean; up
 /**
  * Complete MCLR user settings.
  */
-export type Settings = { schemaVersion: number; ui: UiSettings; language: LanguageSettings; system: SystemSettings; net: NetSettings; game: GameSettings; java: JavaSettings }
+export type Settings = { schemaVersion: number; ui: UiSettings; language: LanguageSettings; system: SystemSettings; net: NetSettings; game: GameSettings; java: JavaSettings; launch: LaunchSettings }
 export type SourcePriority = "mirrorFirst" | "smart" | "officialFirst"
 export type SystemSettings = { logLevel: string; logRetentionDays: number; disableGpu: boolean }
 /**
