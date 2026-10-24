@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useInstancesStore } from './store'
 import type { InstanceInfo } from '../../ipc/client'
 import {
@@ -21,6 +22,7 @@ import ModpackImportDialog from '../comp/ModpackImportDialog.vue'
 
 const showImportModpackDialog = ref(false)
 const { t } = useI18n()
+const router = useRouter()
 const instancesStore = useInstancesStore()
 const { confirm } = useDialog()
 
@@ -141,6 +143,11 @@ function onContextMenu(e: MouseEvent, inst: InstanceInfo) {
   contextMenuY.value = e.clientY
   activeContextItems.value = [
     {
+      key: 'manage',
+      label: t('instances.actions.manage'),
+      icon: 'i-lucide-settings-2',
+    },
+    {
       key: 'pin',
       label: inst.config?.pinned ? t('instances.card.unpin') : t('instances.card.pin'),
       icon: inst.config?.pinned ? 'i-lucide-pin-off' : 'i-lucide-pin',
@@ -175,6 +182,9 @@ function handleContextMenuSelect(key: string) {
   if (!targetInstance.value) return
   const inst = targetInstance.value
   switch (key) {
+    case 'manage':
+      navigateToDetail(inst.id)
+      break
     case 'pin':
       instancesStore.togglePin(inst.id)
       break
@@ -205,6 +215,10 @@ function getLoaderBadgeVariant(kind: string): 'primary' | 'warning' | 'neutral' 
     default:
       return 'neutral'
   }
+}
+
+function navigateToDetail(id: string) {
+  router.push(`/instances/${encodeURIComponent(id)}`)
 }
 </script>
 
@@ -291,6 +305,7 @@ function getLoaderBadgeVariant(kind: string): 'primary' | 'warning' | 'neutral' 
           <template v-for="inst in instancesStore.groupedInstances.pinned" :key="inst.id">
             <MCard
               class="relative p-4 flex flex-col justify-between h-36 hover:border-primary/50 transition-all duration-200 cursor-pointer group shadow-sm"
+              @click="navigateToDetail(inst.id)"
               @contextmenu="onContextMenu($event, inst)"
             >
               <!-- Top Card Info -->
@@ -349,6 +364,12 @@ function getLoaderBadgeVariant(kind: string): 'primary' | 'warning' | 'neutral' 
 
                 <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <MIconButton
+                    icon="i-lucide-settings-2"
+                    size="sm"
+                    :title="t('instances.actions.manage')"
+                    @click.stop="navigateToDetail(inst.id)"
+                  />
+                  <MIconButton
                     icon="i-lucide-folder-open"
                     size="sm"
                     :title="t('instances.actions.openFolder')"
@@ -380,6 +401,7 @@ function getLoaderBadgeVariant(kind: string): 'primary' | 'warning' | 'neutral' 
           <template v-for="inst in cat.items" :key="inst.id">
             <MCard
               class="relative p-4 flex flex-col justify-between h-36 hover:border-primary/50 transition-all duration-200 cursor-pointer group shadow-sm"
+              @click="navigateToDetail(inst.id)"
               @contextmenu="onContextMenu($event, inst)"
             >
               <!-- Top Card Info -->
@@ -437,6 +459,12 @@ function getLoaderBadgeVariant(kind: string): 'primary' | 'warning' | 'neutral' 
                 </div>
 
                 <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <MIconButton
+                    icon="i-lucide-settings-2"
+                    size="sm"
+                    :title="t('instances.actions.manage')"
+                    @click.stop="navigateToDetail(inst.id)"
+                  />
                   <MIconButton
                     icon="i-lucide-folder-open"
                     size="sm"

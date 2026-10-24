@@ -1,0 +1,193 @@
+{
+  "nav": "实例详情",
+  "back": "返回实例列表",
+  "notFound": "未找到指定的实例",
+  "tabs": {
+    "overview": "概览",
+    "settings": "配置",
+    "mods": "模组",
+    "resourcepacks": "材质包",
+    "shaders": "光影包",
+    "schematics": "投影建筑",
+    "saves": "世界存档",
+    "screenshots": "游戏截图",
+    "servers": "多人服务器",
+    "export": "导出"
+  },
+  "overview": {
+    "title": "实例信息",
+    "name": "实例名称",
+    "mcVersion": "Minecraft 版本",
+    "kind": "实例类型",
+    "loaders": "Mod 加载器",
+    "state": "状态",
+    "path": "安装路径",
+    "icon": "图标设置",
+    "actions": "实例操作",
+    "openFolder": "打开文件夹",
+    "rename": "重命名",
+    "repair": "启动前修复",
+    "repairConfirm": "确定要检查并补齐缺失的核心文件与依赖库吗？",
+    "repairStarted": "修复任务已启动",
+    "delete": "删除实例",
+    "deleteConfirmTitle": "删除实例",
+    "deleteConfirm": "确定要将实例「{name}」放入回收站吗？",
+    "deleteSuccess": "实例已移入回收站",
+    "renameTitle": "修改实例名称",
+    "renameSuccess": "重命名成功",
+    "iconGrass": "草方块",
+    "iconChest": "箱子",
+    "iconDiamond": "钻石",
+    "iconSword": "剑",
+    "iconFurnace": "熔炉"
+  },
+  "settings": {
+    "title": "实例独立配置",
+    "subtitle": "此处配置仅对当前实例生效，可覆盖全局启动设置",
+    "save": "保存配置",
+    "saveSuccess": "配置已更新",
+    "isolation": {
+      "title": "版本隔离",
+      "hint": "开启后，当前实例将使用自身独立的 mods、saves、config 等文件夹",
+      "global": "遵循全局默认",
+      "on": "启用独立隔离",
+      "off": "共用主目录"
+    },
+    "loginRequirement": {
+      "title": "登录账号要求",
+      "hint": "启动该实例时限制可使用的账号类型",
+      "any": "不限制",
+      "microsoft": "仅限微软正版账号",
+      "thirdParty": "仅限第三方验证账号",
+      "microsoftOrThirdParty": "仅限微软或第三方正版"
+    },
+    "memory": {
+      "title": "最大内存分配 (MB)",
+      "hint": "留空或填 0 表示使用全局自动计算内存"
+    },
+    "jvmArgs": {
+      "title": "JVM 虚拟机参数",
+      "placeholder": "例如：-XX:+UseG1GC -XX:+ParallelRefProcEnabled"
+    },
+    "gameArgs": {
+      "title": "游戏运行参数",
+      "placeholder": "例如：--demo"
+    },
+    "windowTitle": {
+      "title": "自定义游戏窗口标题",
+      "placeholder": "例如：我的冒险世界"
+    },
+    "preLaunchCommand": {
+      "title": "启动前运行脚本",
+      "placeholder": "例如：echo Starting Minecraft..."
+    },
+    "serverQuickPlay": {
+      "title": "启动直连服务器地址",
+      "placeholder": "例如：mc.hypixel.net",
+      "hint": "启动游戏后直接跳过主菜单进入指定服务器"
+    }
+  },
+  "files": {
+    "empty": "暂无文件",
+    "emptyHint": "将文件放入对应文件夹即可在此管理",
+    "openFolder": "打开文件夹",
+    "refresh": "刷新",
+    "fileName": "文件名",
+    "size": "大小",
+    "modified": "修改时间",
+    "status": "状态",
+    "actions": "操作",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "enable": "启用",
+    "disable": "禁用",
+    "delete": "删除",
+    "deleteConfirmTitle": "删除文件",
+    "deleteConfirm": "确定要删除「{name}」吗？",
+    "deleteSuccess": "文件已删除",
+    "toggleSuccess": "状态已更新"
+  },
+  "saves": {
+    "empty": "暂无世界存档",
+    "importZip": "导入存档 Zip",
+    "refresh": "刷新列表",
+    "openFolder": "打开存档目录",
+    "gameMode": "模式",
+    "difficulty": "难度",
+    "seed": "种子",
+    "spawn": "出生点",
+    "playTime": "游玩时长",
+    "lastPlayed": "最后游玩",
+    "dataVersion": "数据版本",
+    "modes": {
+      "survival": "生存",
+      "creative": "创造",
+      "adventure": "冒险",
+      "spectator": "旁观"
+    },
+    "difficulties": {
+      "peaceful": "和平",
+      "easy": "简单",
+      "normal": "普通",
+      "hard": "困难"
+    },
+    "actions": {
+      "datapacks": "数据包",
+      "backup": "快速备份",
+      "export": "导出压缩包",
+      "delete": "删除存档"
+    },
+    "backupSuccess": "备份已生成：{path}",
+    "deleteConfirmTitle": "删除世界存档",
+    "deleteConfirm": "确定要永久删除世界「{name}」吗？此操作无法撤销！",
+    "deleteSuccess": "世界存档已删除",
+    "importDialogTitle": "导入世界存档",
+    "importPath": "Zip 压缩包路径",
+    "importSuccess": "世界「{name}」导入成功",
+    "exportDialogTitle": "导出世界存档",
+    "exportSuccess": "世界已成功导出",
+    "datapackModalTitle": "「{name}」数据包管理",
+    "datapackEmpty": "未检测到数据包",
+    "datapackFormat": "格式版本",
+    "builtIn": "内置"
+  },
+  "screenshots": {
+    "empty": "暂无游戏截图",
+    "openFolder": "打开截图文件夹",
+    "refresh": "刷新",
+    "delete": "删除截图",
+    "deleteConfirmTitle": "删除截图",
+    "deleteConfirm": "确定要删除截图「{name}」吗？",
+    "deleteSuccess": "截图已删除",
+    "preview": "查看大图"
+  },
+  "servers": {
+    "empty": "暂无保存的多人服务器",
+    "add": "添加服务器",
+    "refresh": "刷新",
+    "pingAll": "全部测速",
+    "name": "服务器名称",
+    "ip": "服务器地址",
+    "motd": "今日消息",
+    "players": "在线人数",
+    "latency": "延迟",
+    "version": "版本",
+    "offline": "离线或无法连接",
+    "launchDirect": "直连启动",
+    "launchDirectHint": "将启动直连参数写入配置并前往启动页",
+    "edit": "编辑",
+    "delete": "删除",
+    "addTitle": "添加服务器",
+    "editTitle": "编辑服务器",
+    "namePlaceholder": "例如：官方生存服",
+    "ipPlaceholder": "例如：play.example.com",
+    "acceptTextures": "服务器资源包提示",
+    "acceptTexturesPrompt": "询问",
+    "acceptTexturesEnabled": "自动启用",
+    "acceptTexturesDisabled": "拒绝",
+    "deleteConfirmTitle": "删除服务器",
+    "deleteConfirm": "确定要删除服务器「{name}」吗？",
+    "deleteSuccess": "服务器已删除",
+    "saveSuccess": "保存成功"
+  }
+}

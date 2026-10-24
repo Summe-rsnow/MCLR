@@ -1,0 +1,242 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { setActivePinia, createPinia } from 'pinia'
+import { mount, flushPromises } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import { createRouter, createWebHistory, type Router } from 'vue-router'
+import { instanceDetailTabs } from '../tabs'
+import InstanceDetailPage from '../InstanceDetailPage.vue'
+import SettingsTab from '../tabs/SettingsTab.vue'
+import SavesTab from '../tabs/SavesTab.vue'
+import ServersTab from '../tabs/ServersTab.vue'
+import InstanceFilesTab from '../tabs/InstanceFilesTab.vue'
+import { setupMockIpc } from '../../../ipc/mock'
+import { resetMockInstances } from '../../instances/mock'
+import { resetMockInstanceDetail } from '../mock'
+import { useInstancesStore } from '../../instances/store'
+import { ipcClient } from '../../../ipc/client'
+
+import zhCnInstanceDetail from '../../../locales/zh-CN/instanceDetail.json'
+import zhCnInstances from '../../../locales/zh-CN/instances.json'
+import zhCnCommon from '../../../locales/zh-CN/common.json'
+import zhCnError from '../../../locales/zh-CN/error.json'
+import zhCnComp from '../../../locales/zh-CN/comp.json'
+
+const i18n = createI18n({
+  legacy: false,
+  locale: 'zh-CN',
+  messages: {
+    'zh-CN': {
+      instanceDetail: zhCnInstanceDetail,
+      instances: zhCnInstances,
+      common: zhCnCommon,
+      error: zhCnError,
+      comp: zhCnComp,
+    },
+  },
+})
+
+describe('Instance Detail feature', () => {
+  let router: Router
+
+  beforeEach(async () => {
+    setActivePinia(createPinia())
+    resetMockInstances()
+    resetMockInstanceDetail()
+    setupMockIpc()
+
+    router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        {
+          path: '/instances/:id',
+          name: 'instance-detail',
+          component: InstanceDetailPage,
+          props: true,
+        },
+        {
+          path: '/launch',
+          name: 'launch',
+          component: { template: '<div>Launch Page</div>' },
+        },
+      ],
+    })
+    await router.push('/instances/1.20.1-vanilla')
+    await router.isReady()
+  })
+
+  it('glob tab registry loads all 9 sub-tabs in order', () => {
+    expect(instanceDetailTabs.length).toBe(9)
+    const keys = instanceDetailTabs.map((t) => t.key)
+    expect(keys).toEqual([
+      'overview',
+      'settings',
+      'mods',
+      'resourcepacks',
+      'shaders',
+      'schematics',
+      'saves',
+      'screenshots',
+      'servers',
+    ])
+  })
+
+  it('renders InstanceDetailPage and switches tabs', async () => {
+    const store = useInstancesStore()
+    await store.fetchInstances()
+
+    const wrapper = mount(InstanceDetailPage, {
+      props: { id: '1.20.1-vanilla' },
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Vanilla 1.20.1')
+    expect(wrapper.text()).toContain('1.20.1')
+
+    // Find tabs and click on Settings tab
+    const tabs = wrapper.findAll('button')
+    const settingsButton = tabs.find((b) => b.text().includes('配置'))
+    expect(settingsButton).toBeDefined()
+    if (settingsButton) {
+      await settingsButton.trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain('实例独立配置')
+    }
+  })
+
+  it('saves tab lists worlds and toggles datapack state', async () => {
+    const wrapper = mount(SavesTab, {
+      props: { instanceId: '1.20.1-vanilla' },
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('New World')
+    expect(wrapper.text()).toContain('Survival Test')
+
+    // Open Datapacks modal for New World
+    const datapacksBtn = wrapper.findAll('button').find((b) => b.text().includes('数据包'))
+    expect(datapacksBtn).toBeDefined()
+    if (datapacksBtn) {
+      await datapacksBtn.trigger('click')
+      await flushPromises()
+
+      expect(document.body.textContent).toContain('Vanilla data pack')
+      expect(document.body.textContent).toContain('custom_pack.zip')
+
+      // Toggle datapack via ipcClient
+      const updated = await ipcClient.saveDatapackToggle(
+        '1.20.1-vanilla',
+        'NewWorld',
+        'custom_pack.zip',
+        false,
+      )
+      const target = updated.find((p) => p.id === 'custom_pack.zip')
+      expect(target?.enabled).toBe(false)
+    }
+  })
+
+  it('servers tab performs CRUD, ping and launch into server', async () => {
+    const store = useInstancesStore()
+    await store.fetchInstances()
+
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(ServersTab, {
+      props: { instanceId: '1.20.1-vanilla' },
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Hypixel Network')
+    expect(wrapper.text()).toContain('mc.hypixel.net')
+
+    // Verify live ping result displays ms badge
+    expect(wrapper.text()).toContain('35 ms')
+
+    // Test server ping via client
+    const pingRes = await ipcClient.serverPing('mc.hypixel.net')
+    expect(pingRes.online).toBe(true)
+    expect(pingRes.playersOnline).toBe(42)
+
+    // Test server add
+    const addedList = await ipcClient.serverAdd(
+      '1.20.1-vanilla',
+      'Mineplex Revival',
+      'mineplex.com',
+      null,
+    )
+    expect(addedList.some((s) => s.name === 'Mineplex Revival')).toBe(true)
+
+    // Click "Launch into Server" (直连启动)
+    const launchDirectBtn = wrapper.findAll('button').find((b) => b.text().includes('直连启动'))
+    expect(launchDirectBtn).toBeDefined()
+    if (launchDirectBtn) {
+      await launchDirectBtn.trigger('click')
+      await flushPromises()
+
+      // Should update config with serverQuickPlay
+      const inst = store.instances.find((i) => i.id === '1.20.1-vanilla')
+      expect(inst?.config?.serverQuickPlay).toBe('mc.hypixel.net')
+      expect(pushSpy).toHaveBeenCalledWith('/launch')
+    }
+  })
+
+  it('settings tab updates and saves per-instance configuration', async () => {
+    const store = useInstancesStore()
+    await store.fetchInstances()
+    const inst = store.instances.find((i) => i.id === '1.20.1-vanilla')!
+
+    const wrapper = mount(SettingsTab, {
+      props: { instance: inst },
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('版本隔离')
+    expect(wrapper.text()).toContain('登录账号要求')
+
+    // Update settings via ipcClient
+    const updated = await ipcClient.instanceUpdateConfig('1.20.1-vanilla', {
+      ...inst.config,
+      jvmArgs: '-Xmx8G -XX:+UseG1GC',
+      windowTitle: 'Custom Title',
+    })
+    expect(updated.config?.jvmArgs).toBe('-Xmx8G -XX:+UseG1GC')
+    expect(updated.config?.windowTitle).toBe('Custom Title')
+  })
+
+  it('instance files tab displays files and supports toggle and delete', async () => {
+    const wrapper = mount(InstanceFilesTab, {
+      props: {
+        instanceId: '1.20.1-vanilla',
+        folderKind: 'resourcepacks',
+        title: '材质包',
+      },
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Faithful_32x.zip')
+
+    // Test toggle via client
+    const toggled = await ipcClient.instanceFileToggle(
+      '1.20.1-vanilla',
+      'resourcepacks',
+      'Faithful_32x.zip',
+      false,
+    )
+    expect(toggled.enabled).toBe(false)
+    expect(toggled.fileName).toBe('Faithful_32x.zip.disabled')
+  })
+})

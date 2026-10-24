@@ -405,6 +405,142 @@ async compResolveDependencies(file: CompFile, instanceId: string, mcVersion: str
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async savesList(instanceId: string) : Promise<Result<SaveInfo[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("saves_list", { instanceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveDelete(instanceId: string, folderName: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_delete", { instanceId, folderName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveBackup(instanceId: string, folderName: string) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_backup", { instanceId, folderName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveExport(instanceId: string, folderName: string, destZipPath: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_export", { instanceId, folderName, destZipPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveImport(instanceId: string, zipPath: string) : Promise<Result<SaveInfo, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_import", { instanceId, zipPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveDatapacksList(instanceId: string, folderName: string) : Promise<Result<DatapackInfo[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_datapacks_list", { instanceId, folderName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveDatapackToggle(instanceId: string, folderName: string, packId: string, enabled: boolean) : Promise<Result<DatapackInfo[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_datapack_toggle", { instanceId, folderName, packId, enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async screenshotsList(instanceId: string) : Promise<Result<ScreenshotInfo[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("screenshots_list", { instanceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async screenshotDelete(instanceId: string, fileName: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("screenshot_delete", { instanceId, fileName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async instanceFilesList(instanceId: string, folderKind: string) : Promise<Result<InstanceFileItem[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("instance_files_list", { instanceId, folderKind }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async instanceFileToggle(instanceId: string, folderKind: string, fileName: string, enabled: boolean) : Promise<Result<InstanceFileItem, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("instance_file_toggle", { instanceId, folderKind, fileName, enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async instanceFileDelete(instanceId: string, folderKind: string, fileName: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("instance_file_delete", { instanceId, folderKind, fileName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async serversList(instanceId: string) : Promise<Result<ServerEntry[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("servers_list", { instanceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async serverAdd(instanceId: string, name: string, ip: string, acceptTextures: number | null) : Promise<Result<ServerEntry[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("server_add", { instanceId, name, ip, acceptTextures }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async serverUpdate(instanceId: string, index: number, name: string, ip: string, acceptTextures: number | null) : Promise<Result<ServerEntry[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("server_update", { instanceId, index, name, ip, acceptTextures }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async serverRemove(instanceId: string, index: number) : Promise<Result<ServerEntry[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("server_remove", { instanceId, index }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async serverPing(ip: string) : Promise<Result<ServerPingResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("server_ping", { ip }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -445,12 +581,14 @@ export type CompSearchResult = { hits: CompProject[]; totalHits: number; offset:
 export type CompSettings = { favorites: CompFavoriteEntry[] }
 export type CompSort = "relevance" | "downloads" | "follows" | "newest" | "updated"
 export type CompType = "mod" | "modpack" | "resourcepack" | "shader" | "datapack" | "world"
+export type DatapackInfo = { id: string; fileName: string; description: string; packFormat: number; enabled: boolean; builtIn: boolean }
 export type GameFolderEntry = { name: string; path: string }
 export type GameSettings = { folders: GameFolderEntry[]; currentFolder: string; defaultIsolation: string; sortBy: string }
 /**
  * Per-instance configuration stored in `<instance_dir>/mclr.instance.json`.
  */
 export type InstanceConfig = { icon: string; category: string; pinned: boolean; isolation: string; java: string | null; memory: number | null; jvmArgs: string | null; gameArgs: string | null; windowTitle: string | null; preLaunchCommand: string | null; loginRequirement: string; serverQuickPlay: string | null }
+export type InstanceFileItem = { fileName: string; path: string; enabled: boolean; size: number; modifiedAt: string }
 /**
  * Information describing a Minecraft instance.
  */
@@ -512,10 +650,15 @@ export type ProxyMode = "none" | "system" | "custom"
  * A resolved dependency item containing project metadata, the chosen file, and whether it is already installed.
  */
 export type ResolvedDependencyItem = { project: CompProject; file: CompFile; installed: boolean }
+export type SaveInfo = { folderName: string; path: string; name: string; seed: string; spawn: SaveSpawn; gameMode: number; difficulty: number; playTime: number; lastPlayed: number; dataVersion: number | null; iconDataUrl: string | null }
+export type SaveSpawn = { x: number; y: number; z: number }
+export type ScreenshotInfo = { fileName: string; path: string; size: number; modifiedAt: string; dataUrl: string | null }
 /**
  * Presence status of optional launcher secrets.
  */
 export type SecretsStatus = { msClientId: boolean; curseforgeApiKey: boolean; updateEndpoint: boolean; updatePubkey: boolean }
+export type ServerEntry = { index: number; name: string; ip: string; icon: string | null; acceptTextures: number | null }
+export type ServerPingResult = { ip: string; resolvedAddr: string; online: boolean; motd: string; versionName: string; protocol: number; playersOnline: number; playersMax: number; favicon: string | null; latencyMs: number }
 /**
  * Complete MCLR user settings.
  */

@@ -1306,6 +1306,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastnbt"
+version = "2.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9dcc36fee27b17c9c183294d6e739cf218b01ce0fc545c31d8be3913d961731"
+dependencies = [
+ "byteorder",
+ "cesu8",
+ "serde",
+ "serde_bytes",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2702,7 +2714,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-app"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "mclr-auth",
  "mclr-comp",
@@ -2734,7 +2746,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-auth"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "aes-gcm",
  "async-trait",
@@ -2765,7 +2777,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-cli"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "clap",
@@ -2781,7 +2793,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-comp"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "hex",
  "mclr-core",
@@ -2807,7 +2819,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-core"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2827,7 +2839,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-crash"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "mclr-core",
  "thiserror 2.0.21",
@@ -2835,7 +2847,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-game"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -2864,7 +2876,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-loaders"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "async-trait",
  "hex",
@@ -2887,7 +2899,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-net"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "futures-util",
  "hex",
@@ -2912,15 +2924,27 @@ dependencies = [
 
 [[package]]
 name = "mclr-saves"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
+ "base64 0.22.1",
+ "fastnbt",
+ "flate2",
+ "hickory-resolver",
  "mclr-core",
+ "serde",
+ "serde_json",
+ "specta",
+ "tempfile",
  "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "trash",
+ "zip 2.6.1",
 ]
 
 [[package]]
 name = "mclr-update"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "mclr-core",
  "thiserror 2.0.21",
@@ -4483,6 +4507,16 @@ dependencies = [
  "serde",
  "serde_core",
  "typeid",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
+dependencies = [
+ "serde",
+ "serde_core",
 ]
 
 [[package]]

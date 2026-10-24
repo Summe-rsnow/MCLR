@@ -88,5 +88,14 @@
     "unsupported": "未能识别该整合包格式或压缩包损坏",
     "importFailed": "整合包导入失败",
     "inspectFailed": "解析整合包失败"
+  },
+  "saves": {
+    "io": "世界或文件读写失败",
+    "nbt": "NBT 数据解析失败",
+    "zip": "压缩包处理失败",
+    "json": "JSON 数据解析失败",
+    "notFound": "找不到指定的世界存档",
+    "pingFailed": "无法连接服务器或 Ping 超时",
+    "invalidPath": "无效的文件路径或格式"
   }
 }

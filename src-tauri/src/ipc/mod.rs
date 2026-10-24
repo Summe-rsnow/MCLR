@@ -10,5 +10,7 @@ pub mod launch;
 pub mod loaders;
 pub mod localmods;
 pub mod modpack;
+pub mod saves;
+pub mod servers;
 pub mod settings;
 pub mod tasks;

@@ -340,6 +340,72 @@ export interface ResolvedDependencyItem {
   installed: boolean
 }
 
+export interface SaveSpawn {
+  x: number
+  y: number
+  z: number
+}
+
+export interface SaveInfo {
+  folderName: string
+  path: string
+  name: string
+  seed: string
+  spawn: SaveSpawn
+  gameMode: number
+  difficulty: number
+  playTime: number
+  lastPlayed: number
+  dataVersion?: number | null
+  iconDataUrl?: string | null
+}
+
+export interface DatapackInfo {
+  id: string
+  fileName: string
+  description: string
+  packFormat: number
+  enabled: boolean
+  builtIn: boolean
+}
+
+export interface ScreenshotInfo {
+  fileName: string
+  path: string
+  size: number
+  modifiedAt: string
+  dataUrl?: string | null
+}
+
+export interface InstanceFileItem {
+  fileName: string
+  path: string
+  enabled: boolean
+  size: number
+  modifiedAt: string
+}
+
+export interface ServerEntry {
+  index: number
+  name: string
+  ip: string
+  icon?: string | null
+  acceptTextures?: number | null
+}
+
+export interface ServerPingResult {
+  ip: string
+  resolvedAddr: string
+  online: boolean
+  motd: string
+  versionName: string
+  protocol: number
+  playersOnline: number
+  playersMax: number
+  favicon?: string | null
+  latencyMs: number
+}
+
 
 export type AccountKind = 'offline' | 'microsoft' | 'authlib' | 'yggdrasilConnect'
 
@@ -604,4 +670,87 @@ export const ipcClient = {
       mcVersion,
       loader,
     }),
+  // Saves & Datapacks
+  savesList: (instanceId: string): Promise<SaveInfo[]> =>
+    invokeCommand<SaveInfo[]>('saves_list', { instanceId }),
+  saveDelete: (instanceId: string, folderName: string): Promise<void> =>
+    invokeCommand<void>('save_delete', { instanceId, folderName }),
+  saveBackup: (instanceId: string, folderName: string): Promise<string> =>
+    invokeCommand<string>('save_backup', { instanceId, folderName }),
+  saveExport: (instanceId: string, folderName: string, destZipPath: string): Promise<void> =>
+    invokeCommand<void>('save_export', { instanceId, folderName, destZipPath }),
+  saveImport: (instanceId: string, zipPath: string): Promise<SaveInfo> =>
+    invokeCommand<SaveInfo>('save_import', { instanceId, zipPath }),
+  saveDatapacksList: (instanceId: string, folderName: string): Promise<DatapackInfo[]> =>
+    invokeCommand<DatapackInfo[]>('save_datapacks_list', { instanceId, folderName }),
+  saveDatapackToggle: (
+    instanceId: string,
+    folderName: string,
+    packId: string,
+    enabled: boolean,
+  ): Promise<DatapackInfo[]> =>
+    invokeCommand<DatapackInfo[]>('save_datapack_toggle', {
+      instanceId,
+      folderName,
+      packId,
+      enabled,
+    }),
+  // Screenshots & Instance Files
+  screenshotsList: (instanceId: string): Promise<ScreenshotInfo[]> =>
+    invokeCommand<ScreenshotInfo[]>('screenshots_list', { instanceId }),
+  screenshotDelete: (instanceId: string, fileName: string): Promise<void> =>
+    invokeCommand<void>('screenshot_delete', { instanceId, fileName }),
+  instanceFilesList: (instanceId: string, folderKind: string): Promise<InstanceFileItem[]> =>
+    invokeCommand<InstanceFileItem[]>('instance_files_list', { instanceId, folderKind }),
+  instanceFileToggle: (
+    instanceId: string,
+    folderKind: string,
+    fileName: string,
+    enabled: boolean,
+  ): Promise<InstanceFileItem> =>
+    invokeCommand<InstanceFileItem>('instance_file_toggle', {
+      instanceId,
+      folderKind,
+      fileName,
+      enabled,
+    }),
+  instanceFileDelete: (
+    instanceId: string,
+    folderKind: string,
+    fileName: string,
+  ): Promise<void> =>
+    invokeCommand<void>('instance_file_delete', { instanceId, folderKind, fileName }),
+  // Servers
+  serversList: (instanceId: string): Promise<ServerEntry[]> =>
+    invokeCommand<ServerEntry[]>('servers_list', { instanceId }),
+  serverAdd: (
+    instanceId: string,
+    name: string,
+    ip: string,
+    acceptTextures?: number | null,
+  ): Promise<ServerEntry[]> =>
+    invokeCommand<ServerEntry[]>('server_add', {
+      instanceId,
+      name,
+      ip,
+      acceptTextures: acceptTextures ?? null,
+    }),
+  serverUpdate: (
+    instanceId: string,
+    index: number,
+    name: string,
+    ip: string,
+    acceptTextures?: number | null,
+  ): Promise<ServerEntry[]> =>
+    invokeCommand<ServerEntry[]>('server_update', {
+      instanceId,
+      index,
+      name,
+      ip,
+      acceptTextures: acceptTextures ?? null,
+    }),
+  serverRemove: (instanceId: string, index: number): Promise<ServerEntry[]> =>
+    invokeCommand<ServerEntry[]>('server_remove', { instanceId, index }),
+  serverPing: (ip: string): Promise<ServerPingResult> =>
+    invokeCommand<ServerPingResult>('server_ping', { ip }),
 }

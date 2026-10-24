@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.9] - 2026-10-24
+
+### Added
+- `mclr-saves`: NBT `level.dat` reader/writer (`fastnbt` + `flate2`) supporting all DataVersion boundaries (`100`, `1443`, `2536`, `4774`), world save import/export/backup/delete, datapack scanner + toggle, screenshot and instance file (`resourcepacks`, `shaderpacks`, `schematics`) managers.
+- `mclr-saves::servers`: `servers.dat` NBT CRUD, `_minecraft._tcp.<host>` SRV lookup + RFC 8305 Happy Eyeballs (250 ms stagger), and Minecraft Server List Ping (SLP `0x00` status + `0x01` RTT ping).
+- Instance Detail page (`/instances/:id`) with glob-collected sub-tab registry (`src/features/instance-detail/tabs.ts`) and 9 sub-tabs: Overview, Settings, Mods, Resource Packs, Shaders, Schematics, Saves, Screenshots, and Servers (with "Launch into Server" quick-play).
+
 ## [0.0.8] - 2026-10-24
 
 ### Added

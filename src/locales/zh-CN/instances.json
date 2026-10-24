@@ -33,6 +33,7 @@
     }
   },
   "actions": {
+    "manage": "管理实例",
     "openFolder": "打开文件夹",
     "rename": "重命名",
     "duplicate": "复制实例",

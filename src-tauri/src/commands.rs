@@ -68,7 +68,24 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::localmods::local_mod_jar_in_jar,
         crate::ipc::localmods::comp_resolve_dependencies,
         // [saves]
+        crate::ipc::saves::saves_list,
+        crate::ipc::saves::save_delete,
+        crate::ipc::saves::save_backup,
+        crate::ipc::saves::save_export,
+        crate::ipc::saves::save_import,
+        crate::ipc::saves::save_datapacks_list,
+        crate::ipc::saves::save_datapack_toggle,
+        crate::ipc::saves::screenshots_list,
+        crate::ipc::saves::screenshot_delete,
+        crate::ipc::saves::instance_files_list,
+        crate::ipc::saves::instance_file_toggle,
+        crate::ipc::saves::instance_file_delete,
         // [servers]
+        crate::ipc::servers::servers_list,
+        crate::ipc::servers::server_add,
+        crate::ipc::servers::server_update,
+        crate::ipc::servers::server_remove,
+        crate::ipc::servers::server_ping,
         // [export]
         // [crash]
         // [home]
