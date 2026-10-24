@@ -52,8 +52,31 @@ export function setupMockIpc(): void {
       select: 'auto',
       preferJdk: false,
     },
+    game: {
+      folders: [
+        { name: 'Default', path: 'C:\\Users\\User\\AppData\\Roaming\\MCLR\\.minecraft' },
+      ],
+      currentFolder: 'C:\\Users\\User\\AppData\\Roaming\\MCLR\\.minecraft',
+      defaultIsolation: 'on',
+      sortBy: 'name',
+    },
+    net: {
+      proxyMode: 'none',
+      proxyUrl: '',
+      doh: false,
+      sourcePriority: 'mirrorFirst',
+      connectionsPerFile: 8,
+      maxConcurrentFiles: 16,
+    },
+    update: {
+      channel: 'stable',
+      autoCheck: true,
+      announcementUrl: '',
+    },
+    states: {
+      dismissedAnnouncements: [],
+    },
   }
-
   const handlers: MockHandlers = {
     app_info: () => ({ name: 'MCLR', version: '0.0.1' }),
     secrets_status: () => ({

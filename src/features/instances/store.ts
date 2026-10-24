@@ -15,7 +15,7 @@ export const useInstancesStore = defineStore('instances', () => {
   const loading = ref(false)
   const searchQuery = ref('')
   const filterType = ref<'all' | 'pinned' | 'vanilla' | 'modded'>('all')
-
+  const sortBy = ref<'name' | 'version' | 'category'>('name')
   const filteredInstances = computed(() => {
     let result = instances.value
 
@@ -41,11 +41,20 @@ export const useInstancesStore = defineStore('instances', () => {
       result = result.filter((i) => i.kind !== 'vanilla' && i.kind !== 'snapshot' && i.kind !== 'oldBeta' && i.kind !== 'oldAlpha')
     }
 
-    // Sort: pinned first, then alphabetical by name
+    // Sort: pinned first, then according to sortBy
     return [...result].sort((a, b) => {
       const pinA = a.config?.pinned ? 1 : 0
       const pinB = b.config?.pinned ? 1 : 0
       if (pinA !== pinB) return pinB - pinA
+      if (sortBy.value === 'version') {
+        return b.mcVersion.localeCompare(a.mcVersion, undefined, { numeric: true })
+      }
+      if (sortBy.value === 'category') {
+        const catA = a.config?.category || 'Default'
+        const catB = b.config?.category || 'Default'
+        const catCmp = catA.localeCompare(catB)
+        if (catCmp !== 0) return catCmp
+      }
       return a.name.localeCompare(b.name)
     })
   })
@@ -84,6 +93,9 @@ export const useInstancesStore = defineStore('instances', () => {
       }
       if (settings.game?.currentFolder) {
         currentFolder.value = settings.game.currentFolder
+      }
+      if (settings.game?.sortBy && ['name', 'version', 'category'].includes(settings.game.sortBy)) {
+        sortBy.value = settings.game.sortBy as 'name' | 'version' | 'category'
       }
     } catch {
       // Fallback
@@ -175,6 +187,7 @@ export const useInstancesStore = defineStore('instances', () => {
     loading,
     searchQuery,
     filterType,
+    sortBy,
     filteredInstances,
     groupedInstances,
     loadSettings,

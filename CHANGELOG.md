@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.12] - 2026-10-25
+
+### Added
+- `mclr-update`: Runtime self-updater wrapping `tauri-plugin-updater` v2 (`MCLR_UPDATE_ENDPOINT?channel=stable|beta` and `MCLR_UPDATE_PUBKEY` with `notConfigured` fallback), `mclr-cli update check` subcommand, and `--disable-gpu` WebView2 startup flag handling in `src-tauri/src/main.rs`.
+- System Settings page (`src/features/settings-system`) with 7 tabs: Game Manage, Launcher Misc, Language (dynamic locale switcher), Update, Launcher Logs, Feedback, and About.
+- Full i18n audit (`lint-i18n.mjs` + dynamic `zz-TEST` locale test), `README.md`, and NSIS installer packaging (`MCLR_0.0.12_x64-setup.exe`).
+
 ## [0.0.11] - 2026-10-24
 
 ### Added

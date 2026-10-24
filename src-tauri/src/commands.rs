@@ -104,5 +104,9 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::tools::tools_daily_luck,
         crate::ipc::tools::tools_list_media_files,
         // [update]
+        crate::ipc::update::update_check,
+        crate::ipc::update::update_install,
+        crate::ipc::update::launcher_logs_list,
+        crate::ipc::update::launcher_log_read,
     ])
 }

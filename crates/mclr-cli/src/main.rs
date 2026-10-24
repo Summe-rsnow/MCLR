@@ -55,6 +55,22 @@ enum Commands {
         #[arg(long, default_value = "45")]
         timeout_secs: u64,
     },
+
+    /// Update management commands
+    Update {
+        #[command(subcommand)]
+        subcommand: UpdateCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum UpdateCommands {
+    /// Check for launcher updates
+    Check {
+        /// Channel override (stable or beta)
+        #[arg(long, default_value = "stable")]
+        channel: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -249,6 +265,33 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        Commands::Update { subcommand } => match subcommand {
+            UpdateCommands::Check { channel } => {
+                match mclr_update::UpdateConfig::from_runtime(&channel) {
+                    Ok(config) => {
+                        let client = reqwest::Client::builder()
+                            .timeout(std::time::Duration::from_secs(15))
+                            .build()?;
+                        let current_version = env!("CARGO_PKG_VERSION");
+                        match mclr_update::check_update_manifest(&client, &config, current_version)
+                            .await
+                        {
+                            Ok(result) => {
+                                println!("{}", serde_json::to_string_pretty(&result)?);
+                            }
+                            Err(e) => {
+                                let app_error: mclr_core::AppError = e.into();
+                                println!("{}", serde_json::to_string_pretty(&app_error)?);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let app_error: mclr_core::AppError = e.into();
+                        println!("{}", serde_json::to_string_pretty(&app_error)?);
+                    }
+                }
+            }
+        },
     }
     Ok(())
 }

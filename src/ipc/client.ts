@@ -172,6 +172,7 @@ export interface Settings {
     logRetentionDays: number
     disableGpu: boolean
   }
+  net?: NetSettings
   comp?: CompSettings
   update?: UpdateSettings
   states?: StatesSettings
@@ -182,9 +183,37 @@ export interface UpdateSettings {
   autoCheck: boolean
   announcementUrl: string
 }
-
 export interface StatesSettings {
   dismissedAnnouncements: string[]
+}
+
+export type ProxyMode = 'none' | 'system' | 'custom'
+export type SourcePriority = 'mirrorFirst' | 'smart' | 'officialFirst'
+
+export interface NetSettings {
+  proxyMode: ProxyMode
+  proxyUrl: string
+  doh: boolean
+  sourcePriority: SourcePriority
+  connectionsPerFile: number
+  maxConcurrentFiles: number
+}
+
+export interface UpdateCheckResult {
+  available: boolean
+  currentVersion: string
+  version?: string | null
+  date?: string | null
+  body?: string | null
+  downloadUrl?: string | null
+  signature?: string | null
+}
+
+export interface LauncherLogFile {
+  fileName: string
+  path: string
+  size: number
+  modifiedAt: string
 }
 
 export interface NewsItem {
@@ -926,4 +955,17 @@ export const ipcClient = {
     invokeCommand<DailyLuckResult>('tools_daily_luck', { username }),
   toolsListMediaFiles: (folderPath: string, kind: string): Promise<string[]> =>
     invokeCommand<string[]>('tools_list_media_files', { folderPath, kind }),
+  // Update & Launcher Logs
+  updateCheck: (channelOverride?: string | null): Promise<UpdateCheckResult> =>
+    invokeCommand<UpdateCheckResult>('update_check', {
+      channelOverride: channelOverride ?? null,
+    }),
+  updateInstall: (channelOverride?: string | null): Promise<string> =>
+    invokeCommand<string>('update_install', {
+      channelOverride: channelOverride ?? null,
+    }),
+  launcherLogsList: (): Promise<LauncherLogFile[]> =>
+    invokeCommand<LauncherLogFile[]>('launcher_logs_list'),
+  launcherLogRead: (fileName: string): Promise<string> =>
+    invokeCommand<string>('launcher_log_read', { fileName }),
 }

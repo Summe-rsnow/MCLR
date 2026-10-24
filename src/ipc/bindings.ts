@@ -645,6 +645,38 @@ async toolsListMediaFiles(folderPath: string, kind: string) : Promise<Result<str
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async updateCheck(channelOverride: string | null) : Promise<Result<UpdateCheckResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_check", { channelOverride }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateInstall(channelOverride: string | null) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_install", { channelOverride }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async launcherLogsList() : Promise<Result<LauncherLogFile[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("launcher_logs_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async launcherLogRead(fileName: string) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("launcher_log_read", { fileName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -751,6 +783,10 @@ export type LaunchSettings = { ramMode: string; ramCustomMb: number; jvmArgs: st
  * Result returned to IPC callers immediately upon launching.
  */
 export type LaunchStartResult = { taskId: string; processId: number | null }
+/**
+ * Information about a launcher log file.
+ */
+export type LauncherLogFile = { fileName: string; path: string; size: number; modifiedAt: string }
 export type LoaderKind = "fabric" | "legacyFabric" | "liteLoader" | "labyMod" | "optiFine" | "forge" | "neoForge" | "cleanroom"
 export type LoaderVersionEntry = { loader: LoaderKind; mcVersion: string; version: string; stable: boolean; releaseTime: string | null }
 /**
@@ -819,6 +855,10 @@ export type TaskNode = { id: string; parentId: string | null; titleKey: string; 
 export type TaskState = "waiting" | "running" | "paused" | "success" | "canceled" | "failed"
 export type ThemeMode = "light" | "dark" | "system"
 export type UiSettings = { seed: string; mode: ThemeMode; material: MaterialMode; scale: number; fontFamily: string; backgroundMode: string; backgroundPath: string; backgroundBlur: number; backgroundOpacity: number; musicEnabled: boolean; musicFolder: string; musicVolume: number; musicPlayMode: string }
+/**
+ * Result of an update check.
+ */
+export type UpdateCheckResult = { available: boolean; currentVersion: string; version: string | null; date: string | null; body: string | null; downloadUrl: string | null; signature: string | null }
 export type UpdateSettings = { channel: string; autoCheck: boolean; announcementUrl: string }
 /**
  * Entry in the official Mojang version manifest.

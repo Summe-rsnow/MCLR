@@ -127,5 +127,11 @@
     "media": {
       "invalidKind": "不支持的媒体文件类型: {kind}"
     }
+  },
+  "update": {
+    "invalidUrl": "更新检查地址格式无效",
+    "http": "更新服务器网络请求异常: {detail}",
+    "signatureInvalid": "更新包签名校验失败",
+    "json": "更新元数据解析失败"
   }
 }

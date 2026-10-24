@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.11`
-- **Next Milestone**: `v0.0.12`
+- **Current Version**: `0.0.12`
+- **Next Milestone**: `None (Complete)`
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -15,5 +15,5 @@
 | v0.0.8 | Modpacks + local mod management | done | 0c21da7 | v0.0.8 | 2026-10-24 |
 | v0.0.9 | Instance management pages | done | 09d9755 | v0.0.9 | 2026-10-24 |
 | v0.0.10 | Modpack export + crash analysis | done | 93cacea | v0.0.10 | 2026-10-24 |
-| v0.0.11 | Personalisation, home, tools | done | v0.0.11 | v0.0.11 | 2026-10-24 |
-| v0.0.12 | Updates, remaining settings, i18n audit, packaging | doing | - | - | 2026-10-24 |
+| v0.0.11 | Personalisation, home, tools | done | a952780 | v0.0.11 | 2026-10-24 |
+| v0.0.12 | Updates, remaining settings, i18n audit, packaging | done | v0.0.12 | v0.0.12 | 2026-10-25 |

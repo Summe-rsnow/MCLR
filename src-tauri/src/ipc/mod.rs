@@ -18,3 +18,4 @@ pub mod servers;
 pub mod settings;
 pub mod tasks;
 pub mod tools;
+pub mod update;
