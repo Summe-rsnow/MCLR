@@ -75,8 +75,9 @@ const allNavItems = computed(() => {
   const items: NavItem[] = []
   for (const r of featureRoutes) {
     if (r.meta && 'nav' in r.meta && r.meta.nav) {
+      const cleanPath = r.path.replace(/\/:\w+\??.*/, '') || '/'
       items.push({
-        path: r.path,
+        path: cleanPath,
         name: String(r.name ?? r.path),
         meta: r.meta.nav as NavMeta,
       })
@@ -99,6 +100,14 @@ const groupedNav = computed(() => {
 
 function isItemActive(itemPath: string): boolean {
   if (!route?.path) return false
+  // Special case for comp items: any /comp/* subroute activates /comp
+  if ((itemPath === '/comp' || itemPath === '/comp/mod') && route.path.startsWith('/comp')) {
+    return true
+  }
+  // Special case for settings items: any /settings/* activates /settings
+  if (itemPath === '/settings' && route.path.startsWith('/settings')) {
+    return true
+  }
   return route.path === itemPath || route.path.startsWith(itemPath + '/')
 }
 
@@ -122,8 +131,10 @@ function updatePill() {
     }
     const el = itemRefs.value[activeItem.path]
     if (el) {
-      pillTop.value = el.offsetTop
-      pillHeight.value = el.offsetHeight || 36
+      const containerRect = container.getBoundingClientRect()
+      const elRect = el.getBoundingClientRect()
+      pillTop.value = elRect.top - containerRect.top + container.scrollTop
+      pillHeight.value = elRect.height || 36
       pillVisible.value = true
     } else {
       pillVisible.value = false
@@ -152,8 +163,7 @@ function setItemRef(path: string, el: unknown) {
     :class="collapsed ? 'w-[68px] p-2' : 'w-[232px] px-2.5 py-2'"
   >
     <!-- Nav Groups -->
-    <div ref="navContainerRef" class="relative flex-1 overflow-y-auto flex flex-col gap-0.5">
-      <!-- Active Sliding Background Pill -->
+    <div ref="navContainerRef" class="relative flex-1 overflow-y-auto flex flex-col gap-2">
       <div
         v-if="pillVisible"
         class="absolute left-0 right-0 rounded-xl bg-primary-soft pointer-events-none transition-all duration-240"
@@ -167,8 +177,7 @@ function setItemRef(path: string, el: unknown) {
         <span class="absolute left-1 top-2.5 bottom-2.5 w-[3px] bg-primary rounded-full" />
       </div>
 
-      <div v-for="(group, gIdx) in groupedNav" :key="group.key" class="flex flex-col relative z-10">
-        <!-- Group Header or Divider -->
+      <div v-for="(group, gIdx) in groupedNav" :key="group.key" class="flex flex-col gap-1.5 relative z-10">
         <div v-if="!collapsed" class="text-[11px] font-medium tracking-wide text-fg-subtle px-3 pt-2 pb-0.5">
           {{ t(group.titleKey) }}
         </div>

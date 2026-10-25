@@ -101,4 +101,68 @@ describe('Launch feature', () => {
     expect(wrapper.text()).toContain('未找到可用实例')
     expect(wrapper.text()).toContain('下载游戏')
   })
+
+  it('defaults showNews to false, renders compact disabled card and does not fetch news', async () => {
+    const newsFetchSpy = vi.spyOn(ipcClient, 'newsFetch')
+    const announcementsFetchSpy = vi.spyOn(ipcClient, 'announcementsFetch')
+
+    try {
+      localStorage.clear()
+    } catch {
+      // ignore
+    }
+
+    const wrapper = mount(LaunchPage, {
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="news-compact-off-card"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('新闻资讯已关闭，点击开关以加载官方公告与更新动态')
+    expect(wrapper.find('[data-testid="news-container-on"]').exists()).toBe(false)
+    expect(newsFetchSpy).not.toHaveBeenCalled()
+    expect(announcementsFetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('enables news when toggle switch is clicked, persisting to localStorage and fetching', async () => {
+    const newsFetchSpy = vi.spyOn(ipcClient, 'newsFetch').mockResolvedValue([
+      {
+        id: 'news-item-1',
+        title: 'New Snapshot Available',
+        summary: 'Try the newest Minecraft snapshot features',
+        date: '2026-03-02',
+        category: 'Snapshot',
+        imageUrl: null,
+        articleUrl: 'https://minecraft.net',
+      },
+    ])
+    const announcementsFetchSpy = vi.spyOn(ipcClient, 'announcementsFetch').mockResolvedValue([])
+
+    try {
+      localStorage.clear()
+    } catch {
+      // ignore
+    }
+
+    const wrapper = mount(LaunchPage, {
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+
+    await flushPromises()
+
+    const enableBtn = wrapper.find('[data-testid="news-enable-btn"]')
+    expect(enableBtn.exists()).toBe(true)
+    await enableBtn.trigger('click')
+    await flushPromises()
+
+    expect(newsFetchSpy).toHaveBeenCalled()
+    expect(announcementsFetchSpy).toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="news-container-on"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('New Snapshot Available')
+  })
 })

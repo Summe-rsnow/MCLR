@@ -294,28 +294,28 @@ export function applyTheme(config: ThemeConfig): void {
   if (isDark) {
     root.style.setProperty(
       '--shadow-1',
-      '0 1px 2px rgb(var(--shadow) / 0.15), 0 1px 3px rgb(var(--shadow) / 0.125)',
+      '0 1px 3px 0 rgb(var(--shadow) / 0.2), 0 1px 2px -1px rgb(var(--shadow) / 0.15)',
     )
     root.style.setProperty(
       '--shadow-2',
-      '0 4px 12px rgb(var(--shadow) / 0.20), 0 1px 3px rgb(var(--shadow) / 0.125)',
+      '0 4px 14px -2px rgb(var(--shadow) / 0.28), 0 2px 6px -1px rgb(var(--shadow) / 0.18)',
     )
     root.style.setProperty(
       '--shadow-3',
-      '0 12px 32px rgb(var(--shadow) / 0.35), 0 2px 6px rgb(var(--shadow) / 0.15)',
+      '0 16px 32px -4px rgb(var(--shadow) / 0.4), 0 4px 12px -2px rgb(var(--shadow) / 0.2)',
     )
   } else {
     root.style.setProperty(
       '--shadow-1',
-      '0 1px 2px rgb(var(--shadow) / 0.06), 0 1px 3px rgb(var(--shadow) / 0.05)',
+      '0 1px 3px 0 rgb(var(--shadow) / 0.06), 0 1px 2px -1px rgb(var(--shadow) / 0.04)',
     )
     root.style.setProperty(
       '--shadow-2',
-      '0 4px 12px rgb(var(--shadow) / 0.08), 0 1px 3px rgb(var(--shadow) / 0.05)',
+      '0 4px 14px -2px rgb(var(--shadow) / 0.08), 0 2px 6px -1px rgb(var(--shadow) / 0.04)',
     )
     root.style.setProperty(
       '--shadow-3',
-      '0 12px 32px rgb(var(--shadow) / 0.14), 0 2px 6px rgb(var(--shadow) / 0.06)',
+      '0 16px 32px -4px rgb(var(--shadow) / 0.12), 0 4px 12px -2px rgb(var(--shadow) / 0.06)',
     )
   }
 }

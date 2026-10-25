@@ -4,10 +4,10 @@ import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCompStore } from './store'
 import { useInstancesStore } from '../instances/store'
+import { useLaunchStore } from '../launch/store'
 import type { CompType, CompPlatform, CompSort } from '../../ipc/client'
 import {
   MTabs,
-  MSegmented,
   MInput,
   MSelect,
   MButton,
@@ -20,26 +20,18 @@ import {
   MBrandIcon,
   compTypeMeta,
   type CompTypeKey,
+  useToast,
 } from '../../ui'
-import ModpackImportDialog from './ModpackImportDialog.vue'
+import type { CompFavoriteEntry, CompProject } from '../../ipc/client'
 
-const showImportDialog = ref(false)
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
+const toast = useToast()
 const compStore = useCompStore()
-
 const instancesStore = useInstancesStore()
-
+const launchStore = useLaunchStore()
 const targetInstanceId = ref<string>('')
-const targetInstance = computed(() => {
-  if (!targetInstanceId.value) return null
-  return (
-    instancesStore.instances.find(
-      (i) => i.id === targetInstanceId.value || i.name === targetInstanceId.value,
-    ) || null
-  )
-})
 
 function isForgeUnder114(mcVer: string): boolean {
   const parts = mcVer.split('.').map((p) => parseInt(p, 10))
@@ -48,13 +40,63 @@ function isForgeUnder114(mcVer: string): boolean {
   }
   return false
 }
+function applyTargetInstance(inst: { kind?: string; mcVersion?: string; loaders?: string[] } | null, triggerSearch = true) {
+  if (inst) {
+    compStore.mcVersion = inst.mcVersion || null
+    let primaryLoader: string | null = null
+    const raw = (inst.kind && inst.kind.toLowerCase() !== 'vanilla' ? inst.kind : inst.loaders?.[0])?.toLowerCase()
+    if (raw) {
+      for (const known of ['fabric', 'forge', 'neoforge', 'quilt', 'optifine', 'iris']) {
+        if (raw.includes(known)) {
+          primaryLoader = known
+          break
+        }
+      }
+      if (!primaryLoader) {
+        primaryLoader = raw.split(/\s+/)[0] || null
+      }
+    }
+    if (primaryLoader === 'forge' && inst.mcVersion && isForgeUnder114(inst.mcVersion)) {
+      compStore.loader = null
+    } else {
+      compStore.loader = primaryLoader
+    }
+  }
+  if (triggerSearch && compStore.activeTab !== 'favorites') {
+    compStore.search(true)
+  }
+}
+
+function onTargetInstanceChange(val: string | number) {
+  const id = String(val || '')
+  targetInstanceId.value = id
+  if (id) {
+    const inst = instancesStore.instances.find((i) => i.id === id || i.name === id) || null
+    applyTargetInstance(inst, true)
+    if (router && route) {
+      router.replace({ query: { ...route.query, instance: id } }).catch(() => {})
+    }
+  } else {
+    clearTargetInstance()
+  }
+}
 
 function clearTargetInstance() {
   targetInstanceId.value = ''
-  const q = { ...route.query }
-  delete q.instance
-  router.replace({ query: q }).catch(() => {})
+  if (router && route) {
+    const q = { ...route.query }
+    delete q.instance
+    router.replace({ query: q }).catch(() => {})
+  }
 }
+
+const targetInstanceOptions = computed(() => [
+  { label: t('comp.search.noTargetInstance'), value: '' },
+  ...instancesStore.instances.map((i) => ({
+    label: `${i.name} (${i.mcVersion})`,
+    value: i.id,
+  })),
+])
 const tabs = computed(() => [
   { key: 'mod', label: t('comp.tabs.mod') },
   { key: 'modpack', label: t('comp.tabs.modpack') },
@@ -66,11 +108,29 @@ const tabs = computed(() => [
 ])
 
 const platformOptions = computed(() => [
+  { label: t('comp.platform.all'), value: 'all' },
   { label: t('comp.platform.modrinth'), value: 'modrinth' },
   { label: t('comp.platform.curseforge'), value: 'curseforge' },
 ])
+const categoryOptions = computed(() => [
+  { label: t('comp.search.categories.all'), value: '' },
+  { label: t('comp.search.categories.technology'), value: 'technology' },
+  { label: t('comp.search.categories.magic'), value: 'magic' },
+  { label: t('comp.search.categories.adventure'), value: 'adventure' },
+  { label: t('comp.search.categories.optimization'), value: 'optimization' },
+  { label: t('comp.search.categories.utility'), value: 'utility' },
+  { label: t('comp.search.categories.decoration'), value: 'decoration' },
+  { label: t('comp.search.categories.storage'), value: 'storage' },
+  { label: t('comp.search.categories.equipment'), value: 'equipment' },
+  { label: t('comp.search.categories.food'), value: 'food' },
+  { label: t('comp.search.categories.worldgen'), value: 'worldgen' },
+  { label: t('comp.search.categories.library'), value: 'library' },
+  { label: t('comp.search.categories.shaderpacks'), value: 'shaderpacks' },
+  { label: t('comp.search.categories.quests'), value: 'quests' },
+])
 
 const sortOptions = computed(() => [
+  { label: t('comp.search.sorts.default'), value: 'relevance' },
   { label: t('comp.search.sorts.relevance'), value: 'relevance' },
   { label: t('comp.search.sorts.downloads'), value: 'downloads' },
   { label: t('comp.search.sorts.follows'), value: 'follows' },
@@ -78,18 +138,46 @@ const sortOptions = computed(() => [
   { label: t('comp.search.sorts.updated'), value: 'updated' },
 ])
 
-const mcVersionOptions = computed(() => [
-  { label: t('comp.search.allMcVersions'), value: '' },
-  { label: '1.21', value: '1.21' },
-  { label: '1.20.4', value: '1.20.4' },
-  { label: '1.20.2', value: '1.20.2' },
-  { label: '1.20.1', value: '1.20.1' },
-  { label: '1.19.4', value: '1.19.4' },
-  { label: '1.18.2', value: '1.18.2' },
-  { label: '1.16.5', value: '1.16.5' },
-  { label: '1.12.2', value: '1.12.2' },
-  { label: '1.7.10', value: '1.7.10' },
-])
+const searchPlaceholder = computed(() => t('comp.search.placeholder'))
+const standardMcVersions = [
+  '1.21',
+  '1.20.4',
+  '1.20.2',
+  '1.20.1',
+  '1.19.4',
+  '1.18.2',
+  '1.16.5',
+  '1.12.2',
+  '1.7.10',
+]
+
+const mcVersionOptions = computed(() => {
+  const versions = new Set<string>()
+  for (const inst of instancesStore.instances) {
+    if (inst.mcVersion?.trim()) {
+      versions.add(inst.mcVersion.trim())
+    }
+  }
+  for (const v of standardMcVersions) {
+    versions.add(v)
+  }
+
+  const sorted = Array.from(versions).sort((a, b) => {
+    const pa = a.split('.').map((n) => parseInt(n, 10) || 0)
+    const pb = b.split('.').map((n) => parseInt(n, 10) || 0)
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const na = pa[i] ?? 0
+      const nb = pb[i] ?? 0
+      if (na !== nb) return nb - na
+    }
+    return b.localeCompare(a)
+  })
+
+  return [
+    { label: t('comp.search.allMcVersions'), value: '' },
+    ...sorted.map((v) => ({ label: v, value: v })),
+  ]
+})
 
 const loaderOptions = computed(() => [
   { label: t('comp.search.allLoaders'), value: '' },
@@ -101,40 +189,54 @@ const loaderOptions = computed(() => [
   { label: 'Iris', value: 'iris' },
 ])
 
-const searchDebounceTimer = ref<ReturnType<typeof setTimeout> | null>(null)
-
-function onSearchInput(val: string): void {
-  compStore.query = val
-  if (searchDebounceTimer.value) {
-    clearTimeout(searchDebounceTimer.value)
-  }
-  searchDebounceTimer.value = setTimeout(() => {
-    if (compStore.activeTab !== 'favorites') {
-      compStore.search(true)
-    }
-  }, 350)
-}
 
 function onTabChange(tabValue: string): void {
   compStore.activeTab = tabValue as CompType | 'favorites'
+  const query = route?.query ? { ...route.query } : {}
   if (tabValue === 'favorites') {
-    if (router) router.replace('/comp/favorites').catch(() => {})
+    if (router) router.replace({ path: '/comp/favorites', query }).catch(() => {})
   } else {
     compStore.compType = tabValue as CompType
-    if (router) router.replace(`/comp/${tabValue}`).catch(() => {})
+    if (router) router.replace({ path: `/comp/${tabValue}`, query }).catch(() => {})
     compStore.search(true)
   }
 }
 
-function onPlatformChange(val: string): void {
-  compStore.platform = val as CompPlatform
+function onPlatformChange(val: string | number): void {
+  compStore.platform = String(val) as CompPlatform | 'all'
   if (compStore.activeTab !== 'favorites') {
     compStore.search(true)
   }
 }
 
+async function handleToggleFavorite(project: CompProject | CompFavoriteEntry) {
+  const isFav = compStore.isFavorite(
+    project.platform,
+    'downloads' in project ? project.id : project.projectId,
+  )
+  await compStore.toggleFavorite(project)
+  if (!isFav) {
+    toast.success(t('comp.favorite.added'))
+  } else {
+    toast.info(t('comp.favorite.removed'))
+  }
+}
+
 function onSortChange(val: string | number): void {
   compStore.sort = String(val) as CompSort
+  if (compStore.activeTab !== 'favorites') {
+    compStore.search(true)
+  }
+}
+function onCategoryChange(val: string | number): void {
+  const s = String(val)
+  compStore.category = s || null
+  if (compStore.activeTab !== 'favorites') {
+    compStore.search(true)
+  }
+}
+
+function onRefresh(): void {
   if (compStore.activeTab !== 'favorites') {
     compStore.search(true)
   }
@@ -177,55 +279,56 @@ onMounted(async () => {
     await instancesStore.fetchInstances()
   }
 
+
+  let defaultInstId = ''
   if (route?.query?.instance) {
-    targetInstanceId.value = String(route.query.instance)
-    const inst = targetInstance.value
-    if (inst) {
-      compStore.mcVersion = inst.mcVersion || null
-      const primaryLoader = inst.loaders[0]?.toLowerCase()
-      if (primaryLoader === 'forge' && isForgeUnder114(inst.mcVersion)) {
-        compStore.loader = null
-      } else {
-        compStore.loader = primaryLoader || null
-      }
-    }
+    defaultInstId = String(route.query.instance)
+  } else if (launchStore.selectedInstance?.id) {
+    defaultInstId = launchStore.selectedInstance.id
+  } else if (instancesStore.instances.length > 0 && instancesStore.instances[0]?.id) {
+    defaultInstId = instancesStore.instances[0].id
+  }
+
+  if (defaultInstId) {
+    targetInstanceId.value = defaultInstId
+    const inst = instancesStore.instances.find((i) => i.id === defaultInstId || i.name === defaultInstId) || null
+    applyTargetInstance(inst, false)
   }
 
   if (route?.query?.q) {
     compStore.query = String(route.query.q)
   }
   await compStore.loadFavorites()
-  const path = route?.path || '/comp/mod'
-  if (path === '/comp/favorites') {
+  const path = route?.path || ''
+  const routeType = (route?.params?.type as string) || (path.match(/^\/comp\/(mod|modpack|resourcepack|shader|datapack|world)/)?.[1])
+  if (path === '/comp/favorites' || routeType === 'favorites') {
     compStore.activeTab = 'favorites'
+  } else if (routeType) {
+    compStore.activeTab = routeType as CompType
+    compStore.compType = routeType as CompType
+    await compStore.search(true)
   } else {
-    const match = path.match(/^\/comp\/(mod|modpack|resourcepack|shader|datapack|world)/)
-    if (match && match[1]) {
-      compStore.activeTab = match[1] as CompType
-      compStore.compType = match[1] as CompType
-    } else {
-      compStore.activeTab = 'mod'
-      compStore.compType = 'mod'
-    }
+    compStore.activeTab = 'mod'
+    compStore.compType = 'mod'
     await compStore.search(true)
   }
 })
 
 watch(
-  () => route?.path,
-  (newPath) => {
-    if (!newPath) return
-    if (newPath === '/comp/favorites') {
-      compStore.activeTab = 'favorites'
-    } else {
-      const match = newPath.match(/^\/comp\/(mod|modpack|resourcepack|shader|datapack|world)/)
-      if (match && match[1]) {
-        const nextType = match[1] as CompType
-        if (compStore.activeTab !== nextType || compStore.compType !== nextType) {
-          compStore.activeTab = nextType
-          compStore.compType = nextType
-          compStore.search(true)
-        }
+  () => route?.params?.type || route?.path,
+  () => {
+    const path = route?.path || ''
+    const routeType = (route?.params?.type as string) || (path.match(/^\/comp\/(mod|modpack|resourcepack|shader|datapack|world)/)?.[1])
+    if (path === '/comp/favorites' || routeType === 'favorites') {
+      if (compStore.activeTab !== 'favorites') {
+        compStore.activeTab = 'favorites'
+      }
+    } else if (routeType) {
+      const nextType = routeType as CompType
+      if (compStore.activeTab !== nextType || compStore.compType !== nextType) {
+        compStore.activeTab = nextType
+        compStore.compType = nextType
+        compStore.search(true)
       }
     }
   },
@@ -238,85 +341,100 @@ watch(
       :title="t('comp.title')"
       :description="t('comp.subtitle')"
       icon="i-lucide-store"
-    >
-      <template #actions>
-        <div v-if="compStore.activeTab === 'modpack'">
-          <MButton
-            variant="primary"
-            size="sm"
-            icon="i-lucide-file-up"
-            @click="showImportDialog = true"
-          >
-            {{ t('comp.modpackImport.button') }}
-          </MButton>
-        </div>
-      </template>
-    </MPageHeader>
+    />
 
     <!-- Tabs Bar -->
-    <div class="border-b border-line pb-2">
-      <MTabs
-        :model-value="compStore.activeTab"
-        :tabs="tabs"
-        @update:model-value="onTabChange"
-      />
-    </div>
+    <MTabs
+      :model-value="compStore.activeTab"
+      :tabs="tabs"
+      @update:model-value="onTabChange"
+    />
 
     <!-- Filter Bar (visible when not in favorites tab) -->
     <MCard
       v-if="compStore.activeTab !== 'favorites'"
       padding="sm"
-      class="flex flex-wrap items-center gap-3 sticky top-0 z-10"
+      class="flex flex-col gap-2.5 sticky top-0 z-10"
     >
-      <div
-        v-if="targetInstance"
-        class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/30 text-xs text-primary font-medium shrink-0"
-      >
-        <span class="i-lucide-download w-3.5 h-3.5" />
-        <span>{{ t('comp.downloadForInstance', { instance: targetInstance.name }) }}</span>
-        <button
-          class="hover:opacity-75 transition ml-1"
-          @click="clearTargetInstance"
-        >
-          <span class="i-lucide-x w-3.5 h-3.5" />
-        </button>
-      </div>
-      <MSegmented
-        :model-value="compStore.platform"
-        :options="platformOptions"
-        @update:model-value="onPlatformChange"
-      />
+      <!-- Row 1: Filters -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        <!-- 来源 (Platform) -->
+        <div class="w-32 shrink-0">
+          <MSelect
+            :model-value="compStore.platform"
+            :options="platformOptions"
+            size="sm"
+            @update:model-value="onPlatformChange"
+          />
+        </div>
 
-      <div class="flex-1 min-w-[200px]">
+        <!-- 标签/分类 (Category) -->
+        <div class="w-36 shrink-0">
+          <MSelect
+            :model-value="compStore.category || ''"
+            :options="categoryOptions"
+            size="sm"
+            @update:model-value="onCategoryChange"
+          />
+        </div>
+
+        <!-- 排序方式 (Sort) + 刷新按钮 -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <div class="w-36">
+            <MSelect
+              :model-value="compStore.sort"
+              :options="sortOptions"
+              size="sm"
+              @update:model-value="onSortChange"
+            />
+          </div>
+          <MIconButton
+            icon="i-lucide-rotate-cw"
+            size="sm"
+            variant="tonal"
+            :loading="compStore.loading"
+            :title="t('common.refresh')"
+            @click="onRefresh"
+          />
+        </div>
+
+        <!-- 目标实例/版本 (Target Instance / Version) -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <MSelect
+            :model-value="targetInstanceId"
+            :options="targetInstanceOptions"
+            size="sm"
+            class="w-48"
+            @update:model-value="onTargetInstanceChange"
+          />
+          <MSelect
+            :model-value="compStore.mcVersion || ''"
+            :options="mcVersionOptions"
+            size="sm"
+            class="w-36"
+            @update:model-value="onMcVersionChange"
+          />
+        </div>
+
+        <!-- 加载器 (Loader) -->
+        <div class="w-36 shrink-0">
+          <MSelect
+            :model-value="compStore.loader || ''"
+            :options="loaderOptions"
+            size="sm"
+            @update:model-value="onLoaderChange"
+          />
+        </div>
+      </div>
+
+      <!-- Row 2: Search Bar -->
+      <div class="w-full">
         <MInput
-          :model-value="compStore.query"
-          :placeholder="t('comp.search.placeholder')"
+          v-model="compStore.query"
+          :placeholder="searchPlaceholder"
+          icon="i-lucide-search"
           clearable
-          @update:model-value="onSearchInput"
-        />
-      </div>
-
-      <div class="w-36">
-        <MSelect
-          :model-value="compStore.mcVersion || ''"
-          :options="mcVersionOptions"
-          @update:model-value="onMcVersionChange"
-        />
-      </div>
-
-      <div class="w-36">
-        <MSelect
-          :model-value="compStore.loader || ''"
-          :options="loaderOptions"
-          @update:model-value="onLoaderChange"
-        />
-      </div>
-
-      <div class="w-36">
-        <MSelect
-          :model-value="compStore.sort"
-          :options="sortOptions"
-          @update:model-value="onSortChange"
+          @keydown.enter="compStore.search(true)"
         />
       </div>
     </MCard>
@@ -356,7 +474,7 @@ watch(
                   icon="i-lucide-heart-crack"
                   size="sm"
                   class="text-danger hover:opacity-80"
-                  @click.stop="compStore.toggleFavorite(fav)"
+                  @click.stop="handleToggleFavorite(fav)"
                 />
               </div>
               <div class="flex items-center space-x-2 mt-1">
@@ -423,14 +541,18 @@ watch(
                   <div class="flex items-center justify-between">
                     <h3 class="font-bold text-base text-fg truncate">{{ project.title }}</h3>
                     <MIconButton
-                      icon="i-lucide-heart"
+                      :icon="
+                        compStore.isFavorite(project.platform, project.id)
+                          ? 'i-lucide-heart fill-current text-rose-500'
+                          : 'i-lucide-heart text-fg-muted hover:text-rose-500'
+                      "
                       size="sm"
                       :class="
                         compStore.isFavorite(project.platform, project.id)
-                          ? 'text-danger hover:opacity-80'
-                          : 'text-fg-muted hover:text-fg'
+                          ? 'i-lucide-heart fill-current text-rose-500'
+                          : 'i-lucide-heart text-fg-muted hover:text-rose-500'
                       "
-                      @click.stop="compStore.toggleFavorite(project)"
+                      @click.stop="handleToggleFavorite(project)"
                     />
                   </div>
                   <div class="text-xs text-fg-muted mt-0.5 truncate flex items-center gap-1.5">
@@ -485,10 +607,5 @@ watch(
       </div>
     </div>
 
-    <!-- Modpack Import Dialog -->
-    <ModpackImportDialog
-      :open="showImportDialog"
-      @update:open="showImportDialog = $event"
-    />
   </div>
 </template>

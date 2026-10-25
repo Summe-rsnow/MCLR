@@ -50,7 +50,12 @@ const rowCount = computed(() => Math.ceil(props.items.length / columns.value))
 function measure() {
   const outer = outerRef.value
   if (!outer) return
-  width.value = outer.clientWidth
+  const computedPad =
+    typeof window !== 'undefined'
+      ? (parseFloat(getComputedStyle(outer).paddingLeft) || 0) +
+        (parseFloat(getComputedStyle(outer).paddingRight) || 0)
+      : 0
+  width.value = Math.max(0, outer.clientWidth - computedPad)
   if (!virtual.value) return
   const target = props.scrollEl ?? findScrollParent(outer)
   selfScroll.value = target === null
@@ -106,6 +111,7 @@ const gridStyle = computed(() => ({
 <template>
   <div
     ref="outerRef"
+    class="px-1 -mx-1"
     :class="virtual && selfScroll ? 'overflow-y-auto' : ''"
     :style="virtual && selfScroll ? { maxHeight } : undefined"
   >

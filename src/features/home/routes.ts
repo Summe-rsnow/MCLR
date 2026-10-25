@@ -4,20 +4,12 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/home',
     name: 'home',
-    component: () => import('./HomePage.vue'),
-    meta: {
-      nav: {
-        titleKey: 'home.nav',
-        icon: 'i-lucide-house',
-        order: 1,
-        group: 'start',
-      },
-    },
+    redirect: '/launch',
   },
   {
     path: '/help',
     name: 'help',
-    redirect: { path: '/home', query: { tab: 'help' } },
+    redirect: '/settings/about',
   },
 ]
 

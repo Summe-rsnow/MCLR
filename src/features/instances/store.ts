@@ -5,6 +5,7 @@ import {
   type InstanceInfo,
   type GameFolderEntry,
   type CardKind,
+  type InstanceConfig,
 } from '../../ipc/client'
 import { createResource } from '../../composables/useResource'
 
@@ -149,12 +150,8 @@ export const useInstancesStore = defineStore('instances', () => {
   async function loadSettings() {
     try {
       const settings = await ipcClient.settingsGet()
-      if (settings.game?.folders && settings.game.folders.length > 0) {
-        folders.value = settings.game.folders
-      }
-      if (settings.game?.currentFolder) {
-        currentFolder.value = settings.game.currentFolder
-      }
+      folders.value = settings.game?.folders ?? []
+      currentFolder.value = settings.game?.currentFolder ?? ''
       if (settings.game?.sortBy && ['name', 'version', 'category'].includes(settings.game.sortBy)) {
         sortBy.value = settings.game.sortBy as 'name' | 'version' | 'category'
       }
@@ -229,6 +226,21 @@ export const useInstancesStore = defineStore('instances', () => {
     resource.set([...instances.value])
     return updated
   }
+  async function updateConfig(id: string, patch: Partial<InstanceConfig>) {
+    const inst = instances.value.find((i) => i.id === id)
+    if (!inst) return
+    const updated = await ipcClient.instanceUpdateConfig(id, {
+      ...inst.config,
+      ...patch,
+    })
+    const idx = instances.value.findIndex((i) => i.id === id)
+    if (idx >= 0) {
+      instances.value[idx] = updated
+    }
+    resource.set([...instances.value])
+    return updated
+  }
+
 
   async function openFolder(id: string, sub = '') {
     await ipcClient.instanceOpenPath(id, sub)
@@ -290,5 +302,6 @@ export const useInstancesStore = defineStore('instances', () => {
     openFolder,
     switchFolder,
     addFolder,
+    updateConfig,
   }
 })

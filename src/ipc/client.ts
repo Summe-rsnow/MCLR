@@ -361,7 +361,7 @@ export interface CompProject {
 export type CompSort = 'relevance' | 'downloads' | 'follows' | 'newest' | 'updated'
 
 export interface CompSearchQuery {
-  platform: CompPlatform
+  platform: CompPlatform | 'all'
   compType: CompType
   query: string
   mcVersion?: string | null

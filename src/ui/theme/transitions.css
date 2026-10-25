@@ -133,6 +133,20 @@
     transform: none;
   }
 }
+/* Spinner keyframes for buttons, loaders, and indicators */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+}
+
 
 /* Motion preference: html[data-motion='full'|'reduced'|'off'] */
 html[data-motion='off'] *,
@@ -163,5 +177,8 @@ html[data-motion='reduced'] .m-list-move {
   transition: none;
 }
 html[data-motion='reduced'] .ambient-blob {
+  animation: none !important;
+}
+html[data-motion='reduced'] .animate-spin {
   animation: none !important;
 }

@@ -25,7 +25,7 @@ describe('Settings Game feature', () => {
     setupMockIpc()
   })
 
-  it('renders SettingsGamePage with launch and java tabs', async () => {
+  it('renders SettingsGamePage with launch settings without java tab', async () => {
     const wrapper = mount(SettingsGamePage, {
       global: {
         plugins: [i18n],
@@ -37,15 +37,8 @@ describe('Settings Game feature', () => {
     expect(wrapper.text()).toContain('游戏运行与环境设置')
     expect(wrapper.text()).toContain('内存分配')
     expect(wrapper.text()).toContain('游戏窗口与显示')
-  })
-
-  it('allows scanning Java installations and downloading Mojang runtimes', async () => {
-    const javas = await ipcClient.javaScan()
-    expect(javas.length).toBeGreaterThan(0)
-    expect(javas.some((j) => j.major === 17)).toBe(true)
-
-    const taskId = await ipcClient.javaDownload('java-runtime-delta')
-    expect(taskId).toContain('task-java-java-runtime-delta')
+    expect(wrapper.find('[data-testid="tab-launch"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="tab-java"]').exists()).toBe(false)
   })
 
   it('patches launch settings correctly', async () => {

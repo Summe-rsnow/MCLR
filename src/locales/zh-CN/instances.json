@@ -1,6 +1,11 @@
 {
-  "nav": "游戏实例",
+  "nav": "实例管理",
   "search": "搜索实例名称、版本...",
+  "noFolder": {
+    "title": "尚未设置 Minecraft 游戏主目录",
+    "desc": "请先添加游戏目录以管理或创建实例",
+    "action": "选择游戏目录"
+  },
   "empty": {
     "title": "未找到可用实例",
     "subtitle": "请点击下方按钮前往下载和配置您的第一个 Minecraft 游戏版本",

@@ -175,7 +175,7 @@ export default {
     const query = (args.query as CompSearchQuery) || {}
     let list = [...mockProjects]
 
-    if (query.platform) {
+    if (query.platform && (query.platform as string) !== 'all') {
       list = list.filter((p) => p.platform === query.platform)
     }
     if (query.compType) {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { i18n } from '../../../i18n'
@@ -7,6 +7,17 @@ import { setupMockIpc } from '../../../ipc/mock'
 import zhCnSettingsSystem from '../../../locales/zh-CN/settingsSystem.json'
 import SettingsSystemPage from '../SettingsSystemPage.vue'
 import { resetSettingsSystemMock, setMockUpdateState } from '../mock'
+
+vi.mock('@tauri-apps/plugin-dialog', () => ({
+  open: vi.fn(),
+}))
+vi.mock('@tauri-apps/plugin-opener', () => ({
+  openPath: vi.fn(),
+  openUrl: vi.fn(),
+}))
+
+import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
+
 describe('SettingsSystemPage (v0.0.12)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -15,7 +26,9 @@ describe('SettingsSystemPage (v0.0.12)', () => {
     i18n.global.locale.value = 'zh-CN'
   })
 
-  it('renders Game Manage tab and adds a new game folder', async () => {
+  it('renders Game Manage tab and adds a new game folder via select-to-add with remark editing', async () => {
+    vi.mocked(openFileDialog).mockResolvedValue('D:\\Games\\.minecraft')
+
     const wrapper = mount(SettingsSystemPage, {
       global: {
         plugins: [createPinia(), i18n, router],
@@ -24,14 +37,24 @@ describe('SettingsSystemPage (v0.0.12)', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="tab-gameManage"]').exists()).toBe(true)
-    const inputs = wrapper.findAll('input')
-    await inputs[0].setValue('Secondary MC')
-    await inputs[1].setValue('D:\\Games\\.minecraft')
     await wrapper.find('[data-testid="add-folder-btn"]').trigger('click')
     await flushPromises()
 
+    expect(wrapper.text()).toContain('.minecraft')
+
+    // Edit remark name
+    const editBtn = wrapper.find('[data-testid="edit-remark-btn"]')
+    expect(editBtn.exists()).toBe(true)
+    await editBtn.trigger('click')
+    await flushPromises()
+
+    const input = wrapper.find('[data-testid="edit-remark-input"] input')
+    expect(input.exists()).toBe(true)
+    await input.setValue('Secondary MC')
+    await wrapper.find('[data-testid="save-remark-btn"]').trigger('click')
+    await flushPromises()
+
     expect(wrapper.text()).toContain('Secondary MC')
-    expect(wrapper.text()).toContain('D:\\Games\\.minecraft')
   })
 
   it('switches to Language tab and dynamically switches to throw-away zz-TEST locale', async () => {

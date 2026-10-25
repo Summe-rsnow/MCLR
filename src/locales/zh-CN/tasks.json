@@ -29,6 +29,14 @@
       "libraries": "下载运行依赖库 ({current}/{total})",
       "assets": "下载资源文件 ({count} 个资源)",
       "java": "下载 Java 运行时 ({component})"
+    },
+    "install": {
+      "create": "正在创建实例 {name} ({mcVersion})",
+      "extras": "正在安装附加组件",
+      "repair": "正在检查与修复实例文件"
+    },
+    "comp": {
+      "download": "正在下载社区资源"
     }
   }
 }

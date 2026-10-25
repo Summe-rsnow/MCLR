@@ -1,34 +1,29 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   useThemeStore,
-  type BackgroundMode,
-  type MusicPlayMode,
   type MotionMode,
 } from '../../stores/theme'
 import { type ThemeMode, type MaterialMode } from '../../ui/theme'
 import {
   MCard,
   MButton,
-  MInput,
-  MSelect,
   MSlider,
-  MSwitch,
   MSegmented,
   MColorPicker,
   MSection,
   MSettingRow,
+  MHelpTooltip,
 } from '../../ui'
 import { ipcClient } from '../../ipc/client'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
 const { t } = useI18n()
+const router = useRouter()
 const themeStore = useThemeStore()
 
-// System fonts detection via Local Font Access API
-const systemFonts = ref<string[]>([])
-const isScanningFonts = ref(false)
 
 const modeOptions = computed(() => [
   { label: t('settingsAppearance.theme.modeLight'), value: 'light', icon: 'i-lucide-sun' },
@@ -47,25 +42,6 @@ const motionOptions = computed(() => [
 ])
 
 
-const bgModeOptions = computed(() => [
-  { label: t('settingsAppearance.background.modeNone'), value: 'none' },
-  { label: t('settingsAppearance.background.modeImage'), value: 'image' },
-  { label: t('settingsAppearance.background.modeSlideshow'), value: 'slideshow' },
-  { label: t('settingsAppearance.background.modeVideo'), value: 'video' },
-])
-
-const musicPlayModeOptions = computed(() => [
-  { label: t('settingsAppearance.music.modeLoop'), value: 'loop', icon: 'i-lucide-repeat' },
-  { label: t('settingsAppearance.music.modeShuffle'), value: 'shuffle', icon: 'i-lucide-shuffle' },
-])
-
-const fontSelectOptions = computed(() => {
-  const options = [{ label: t('settingsAppearance.typography.defaultFont'), value: '' }]
-  for (const f of systemFonts.value) {
-    options.push({ label: f, value: f })
-  }
-  return options
-})
 
 const previewMediaSrc = computed(() => {
   if (!themeStore.backgroundPath) return ''
@@ -79,97 +55,62 @@ const previewMediaSrc = computed(() => {
     return p
   }
 })
+const localScale = ref(themeStore.scale)
+watch(
+  () => themeStore.scale,
+  (val) => {
+    localScale.value = val
+  },
+)
 
-async function querySystemFonts() {
-  isScanningFonts.value = true
-  try {
-    const windowWithFonts = window as unknown as {
-      queryLocalFonts?: () => Promise<Array<{ family: string }>>
-    }
-    if (typeof windowWithFonts.queryLocalFonts === 'function') {
-      const fonts = await windowWithFonts.queryLocalFonts()
-      const families = Array.from(new Set(fonts.map((f) => f.family))).sort()
-      systemFonts.value = families
-    }
-  } catch {
-    // If permission denied or unsupported in environment
-  } finally {
-    isScanningFonts.value = false
-  }
+function onScaleInput(val: number) {
+  localScale.value = val
 }
 
-async function browseBackground() {
-  try {
-    let selected: string | null = null
-    if (themeStore.backgroundMode === 'slideshow') {
-      const res = await openFileDialog({
-        directory: true,
-        multiple: false,
-      })
-      if (typeof res === 'string') selected = res
-    } else if (themeStore.backgroundMode === 'video') {
-      const res = await openFileDialog({
-        multiple: false,
-        filters: [{ name: 'Video', extensions: ['mp4', 'webm', 'mkv', 'avi'] }],
-      })
-      if (typeof res === 'string') selected = res
-    } else {
-      const res = await openFileDialog({
-        multiple: false,
-        filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }],
-      })
-      if (typeof res === 'string') selected = res
-    }
-    if (selected) {
-      themeStore.setBackgroundPath(selected)
-      try {
-        await ipcClient.assetsAllow(selected)
-      } catch {
-        // ignore in mock/test
-      }
-    }
-  } catch {
-    // Handled in browser / mock mode
-  }
+function onScaleCommit(val: number) {
+  themeStore.setScale(val)
 }
 
-async function browseMusicFolder() {
+function getFileName(p: string): string {
+  if (!p) return ''
+  const parts = p.replace(/\\/g, '/').split('/').filter(Boolean)
+  return parts[parts.length - 1] || p
+}
+
+async function onPickBackgroundImage() {
   try {
     const selected = await openFileDialog({
-      directory: true,
       multiple: false,
+      filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }],
     })
-    if (typeof selected === 'string' && selected) {
-      themeStore.setMusicFolder(selected)
-      try {
-        await ipcClient.assetsAllow(selected)
-      } catch {
-        // ignore in mock/test
-      }
+    if (!selected) return
+    const path = Array.isArray(selected) ? selected[0] : selected
+    if (path) {
+      await onBackgroundPathChange(path)
     }
-  } catch {
-    // Handled in browser / mock mode
+  } catch (err) {
+    console.warn('Failed to pick background image:', err)
   }
 }
 
-function togglePlayback() {
-  themeStore.isPlaying = !themeStore.isPlaying
+async function onBackgroundPathChange(val: string) {
+  themeStore.setBackgroundPath(val)
+  if (val.trim()) {
+    themeStore.setBackgroundMode('image')
+    try {
+      await ipcClient.assetsAllow(val)
+    } catch {
+      // ignore in mock/test
+    }
+  } else {
+    themeStore.setBackgroundMode('none')
+  }
 }
 
-function playNextTrack() {
-  if (themeStore.playlist.length === 0) return
-  themeStore.currentTrackIndex = (themeStore.currentTrackIndex + 1) % themeStore.playlist.length
+function clearBackground() {
+  themeStore.setBackgroundPath('')
+  themeStore.setBackgroundMode('none')
 }
-
-function playPrevTrack() {
-  if (themeStore.playlist.length === 0) return
-  themeStore.currentTrackIndex =
-    (themeStore.currentTrackIndex - 1 + themeStore.playlist.length) % themeStore.playlist.length
-}
-
-onMounted(() => {
-  querySystemFonts()
-})
 </script>
 
 <template>
@@ -210,8 +151,11 @@ onMounted(() => {
         <!-- Material -->
         <MSettingRow
           :label="t('settingsAppearance.theme.material')"
-          :hint="t('settingsAppearance.theme.materialDesc')"
         >
+          <template #label>
+            <span>{{ t('settingsAppearance.theme.material') }}</span>
+            <MHelpTooltip :text="t('settingsAppearance.theme.materialDesc')" />
+          </template>
           <MSegmented
             :model-value="themeStore.material"
             :options="materialOptions"
@@ -222,8 +166,11 @@ onMounted(() => {
         <!-- Motion -->
         <MSettingRow
           :label="t('settingsAppearance.motion.label')"
-          :hint="t('settingsAppearance.motion.desc')"
         >
+          <template #label>
+            <span>{{ t('settingsAppearance.motion.label') }}</span>
+            <MHelpTooltip :text="t('settingsAppearance.motion.desc')" />
+          </template>
           <MSegmented
             :model-value="themeStore.motion"
             :options="motionOptions"
@@ -233,7 +180,17 @@ onMounted(() => {
 
         <!-- Live Preview Box -->
         <div class="pt-4 border-t border-line mt-2">
-          <div class="text-xs font-medium text-fg-muted mb-2.5">{{ t('settingsAppearance.theme.livePreview') }}</div>
+          <div class="flex items-center justify-between mb-2.5">
+            <div class="text-xs font-medium text-fg-muted">{{ t('settingsAppearance.theme.livePreview') }}</div>
+            <MButton
+              variant="text"
+              size="xs"
+              icon-right="i-lucide-arrow-right"
+              @click="router.push('/dev/ui')"
+            >
+              {{ t('settingsAppearance.theme.viewComponents') || '查看完整组件库' }}
+            </MButton>
+          </div>
           <div class="p-4 rounded-xl bg-sunken border border-line flex flex-wrap items-center gap-4">
             <MCard variant="raised" padding="sm" class="flex items-center gap-2">
               <span class="i-lucide-layers w-4 h-4 text-primary" />
@@ -250,46 +207,12 @@ onMounted(() => {
       </div>
     </MSection>
 
-    <!-- 2. Typography & Scale Section -->
+    <!-- 2. UI Scale Section -->
     <MSection
-      :title="t('settingsAppearance.sections.typography')"
-      icon="i-lucide-type"
+      :title="t('settingsAppearance.sections.scale')"
+      icon="i-lucide-maximize"
     >
       <div class="flex flex-col">
-        <!-- Font Family -->
-        <MSettingRow
-          :label="t('settingsAppearance.typography.fontFamily')"
-          :hint="t('settingsAppearance.typography.fontFamilyPlaceholder')"
-        >
-          <div class="flex items-center gap-2 flex-wrap justify-end">
-            <MSelect
-              v-if="systemFonts.length > 0"
-              :model-value="themeStore.fontFamily"
-              :options="fontSelectOptions"
-              size="sm"
-              class="w-44"
-              @update:model-value="themeStore.setFontFamily(String($event))"
-            />
-            <div class="w-48">
-              <MInput
-                :model-value="themeStore.fontFamily"
-                size="sm"
-                :placeholder="t('settingsAppearance.typography.fontFamilyPlaceholder')"
-                @update:model-value="themeStore.setFontFamily($event)"
-              />
-            </div>
-            <MButton
-              variant="tonal"
-              size="sm"
-              icon="i-lucide-refresh-cw"
-              :loading="isScanningFonts"
-              @click="querySystemFonts"
-            >
-              {{ t('settingsAppearance.typography.loadSystemFonts') }}
-            </MButton>
-          </div>
-        </MSettingRow>
-
         <!-- UI Scale Slider -->
         <MSettingRow
           :label="t('settingsAppearance.typography.scale')"
@@ -297,15 +220,16 @@ onMounted(() => {
           <div class="flex items-center gap-3 w-64">
             <div class="flex-1">
               <MSlider
-                :model-value="themeStore.scale"
+                :model-value="localScale"
                 :min="0.8"
                 :max="1.25"
                 :step="0.05"
-                @update:model-value="themeStore.setScale($event)"
+                @update:model-value="onScaleInput"
+                @change="onScaleCommit"
               />
             </div>
             <span class="text-xs font-mono font-semibold text-primary w-12 text-right">
-              {{ t('settingsAppearance.typography.scaleValue', { val: Math.round(themeStore.scale * 100) }) }}
+              {{ t('settingsAppearance.typography.scaleValue', { val: Math.round(localScale * 100) }) }}
             </span>
           </div>
         </MSettingRow>
@@ -318,35 +242,43 @@ onMounted(() => {
       icon="i-lucide-image"
     >
       <div class="flex flex-col">
-        <!-- Background Mode -->
-        <MSettingRow
-          :label="t('settingsAppearance.background.mode')"
-        >
-          <MSegmented
-            :model-value="themeStore.backgroundMode"
-            :options="bgModeOptions"
-            @update:model-value="themeStore.setBackgroundMode($event as BackgroundMode)"
-          />
-        </MSettingRow>
-
         <!-- Background Path & Browse -->
         <MSettingRow
-          v-if="themeStore.backgroundMode !== 'none'"
           :label="t('settingsAppearance.background.path')"
         >
-          <div class="flex items-center gap-2 w-full sm:w-80">
-            <div class="flex-1">
-              <MInput
-                :model-value="themeStore.backgroundPath"
-                size="sm"
-                :placeholder="t('settingsAppearance.background.pathPlaceholder')"
-                @update:model-value="themeStore.setBackgroundPath($event)"
-              />
+          <div v-if="themeStore.backgroundPath" class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sunken border border-line text-xs font-mono text-fg max-w-[200px] truncate">
+              <span class="i-lucide-image w-3.5 h-3.5 text-primary shrink-0" />
+              <span class="truncate">{{ getFileName(themeStore.backgroundPath) }}</span>
+              <MHelpTooltip :text="themeStore.backgroundPath" />
             </div>
-            <MButton variant="tonal" size="sm" icon="i-lucide-folder-open" @click="browseBackground">
-              {{ t('settingsAppearance.background.browse') }}
+            <MButton
+              variant="tonal"
+              size="sm"
+              icon="i-lucide-refresh-cw"
+              @click="onPickBackgroundImage"
+            >
+              {{ t('settingsAppearance.background.change') || '更换' }}
             </MButton>
+            <MButton
+              variant="text"
+              size="sm"
+              icon="i-lucide-x"
+              class="text-danger hover:bg-danger-soft p-1.5"
+              :title="t('common.clear')"
+              @click="clearBackground"
+            />
           </div>
+          <MButton
+            v-else
+            variant="primary"
+            size="sm"
+            icon="i-lucide-image-plus"
+            data-testid="pick-bg-btn"
+            @click="onPickBackgroundImage"
+          >
+            {{ t('settingsAppearance.background.browse') }}
+          </MButton>
         </MSettingRow>
 
         <!-- Blur Slider -->
@@ -434,8 +366,9 @@ onMounted(() => {
               <span>{{ t('settingsAppearance.background.previewEmpty') }}</span>
             </div>
 
-            <!-- Foreground Card Sample for Contrast -->
+            <!-- Foreground Card Sample for Contrast (Only show when background media is loaded) -->
             <div
+              v-if="previewMediaSrc && themeStore.backgroundMode !== 'none'"
               class="relative z-10 px-4 py-2.5 rounded-lg border border-line bg-raised/80 backdrop-blur-md shadow-md text-center"
             >
               <p class="text-xs font-semibold text-fg">MCLR Preview</p>
@@ -443,117 +376,6 @@ onMounted(() => {
             </div>
           </div>
         </div>
-      </div>
-    </MSection>
-
-    <!-- 4. Background Music Section -->
-    <MSection
-      :title="t('settingsAppearance.sections.music')"
-      icon="i-lucide-music"
-    >
-      <div class="flex flex-col">
-        <!-- Enable Music Switch -->
-        <MSettingRow
-          :label="t('settingsAppearance.music.enable')"
-        >
-          <MSwitch
-            :model-value="themeStore.musicEnabled"
-            @update:model-value="themeStore.setMusicEnabled($event)"
-          />
-        </MSettingRow>
-
-        <template v-if="themeStore.musicEnabled">
-          <!-- Music Folder Input & Browse -->
-          <MSettingRow
-            :label="t('settingsAppearance.music.folder')"
-          >
-            <div class="flex items-center gap-2 w-full sm:w-80">
-              <div class="flex-1">
-                <MInput
-                  :model-value="themeStore.musicFolder"
-                  size="sm"
-                  :placeholder="t('settingsAppearance.music.folderPlaceholder')"
-                  @update:model-value="themeStore.setMusicFolder($event)"
-                />
-              </div>
-              <MButton variant="tonal" size="sm" icon="i-lucide-folder-open" @click="browseMusicFolder">
-                {{ t('settingsAppearance.music.browse') }}
-              </MButton>
-            </div>
-          </MSettingRow>
-
-          <!-- Play Mode -->
-          <MSettingRow
-            :label="t('settingsAppearance.music.playMode')"
-          >
-            <MSegmented
-              :model-value="themeStore.musicPlayMode"
-              :options="musicPlayModeOptions"
-              @update:model-value="themeStore.setMusicPlayMode($event as MusicPlayMode)"
-            />
-          </MSettingRow>
-
-          <!-- Volume -->
-          <MSettingRow
-            :label="t('settingsAppearance.music.volume')"
-          >
-            <div class="flex items-center gap-3 w-64">
-              <div class="flex-1">
-                <MSlider
-                  :model-value="themeStore.musicVolume"
-                  :min="0"
-                  :max="100"
-                  :step="1"
-                  @update:model-value="themeStore.setMusicVolume($event)"
-                />
-              </div>
-              <span class="text-xs font-mono font-semibold text-primary w-12 text-right">
-                {{ t('settingsAppearance.music.volumeValue', { val: themeStore.musicVolume }) }}
-              </span>
-            </div>
-          </MSettingRow>
-
-          <!-- Music Controls Preview -->
-          <div class="p-3 rounded-xl border border-line bg-sunken/30 flex items-center justify-between mt-2">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center">
-                <span class="i-lucide-disc w-4 h-4 animate-spin" :class="{ 'animate-none': !themeStore.isPlaying }" />
-              </div>
-              <div>
-                <p class="text-xs font-semibold text-fg truncate max-w-48">
-                  {{ themeStore.playlist[themeStore.currentTrackIndex] || t('settingsAppearance.music.noTrack') }}
-                </p>
-                <p class="text-[11px] text-fg-muted">
-                  {{ themeStore.playlist.length }} tracks
-                </p>
-              </div>
-            </div>
-
-            <!-- Controls -->
-            <div class="flex items-center gap-1.5" data-testid="music-page-controls">
-              <MButton
-                variant="tonal"
-                size="sm"
-                icon="i-lucide-skip-back"
-                @click="playPrevTrack"
-              />
-              <MButton
-                variant="primary"
-                size="sm"
-                :icon="themeStore.isPlaying ? 'i-lucide-pause' : 'i-lucide-play'"
-                @click="togglePlayback"
-              >
-                {{ themeStore.isPlaying ? t('settingsAppearance.music.pause') : t('settingsAppearance.music.play') }}
-              </MButton>
-              <MButton
-                variant="tonal"
-                size="sm"
-                icon="i-lucide-skip-forward"
-                @click="playNextTrack"
-              />
-            </div>
-          </div>
-        </template>
       </div>
     </MSection>
   </div>

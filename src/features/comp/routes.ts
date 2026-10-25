@@ -2,12 +2,13 @@ import type { RouteRecordRaw } from 'vue-router'
 
 const routes: RouteRecordRaw[] = [
   {
-    path: '/comp',
-    redirect: '/comp/mod',
+    path: '/comp/project/:platform/:id',
+    name: 'comp-project-detail',
+    component: () => import('./CompDetailPage.vue'),
   },
   {
-    path: '/comp/mod',
-    name: 'comp-mod',
+    path: '/comp/:type?',
+    name: 'comp',
     component: () => import('./CompBrowserPage.vue'),
     meta: {
       nav: {
@@ -17,41 +18,6 @@ const routes: RouteRecordRaw[] = [
         group: 'discover',
       },
     },
-  },
-  {
-    path: '/comp/modpack',
-    name: 'comp-modpack',
-    component: () => import('./CompBrowserPage.vue'),
-  },
-  {
-    path: '/comp/resourcepack',
-    name: 'comp-resourcepack',
-    component: () => import('./CompBrowserPage.vue'),
-  },
-  {
-    path: '/comp/shader',
-    name: 'comp-shader',
-    component: () => import('./CompBrowserPage.vue'),
-  },
-  {
-    path: '/comp/datapack',
-    name: 'comp-datapack',
-    component: () => import('./CompBrowserPage.vue'),
-  },
-  {
-    path: '/comp/world',
-    name: 'comp-world',
-    component: () => import('./CompBrowserPage.vue'),
-  },
-  {
-    path: '/comp/favorites',
-    name: 'comp-favorites',
-    component: () => import('./CompBrowserPage.vue'),
-  },
-  {
-    path: '/comp/project/:platform/:id',
-    name: 'comp-project-detail',
-    component: () => import('./CompDetailPage.vue'),
   },
 ]
 

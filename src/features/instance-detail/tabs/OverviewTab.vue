@@ -15,6 +15,7 @@ import {
   MSelect,
   useToast,
   useDialog,
+  minecraftIconList,
 } from '../../../ui'
 
 const props = defineProps<{
@@ -157,27 +158,25 @@ async function setCardType(val: string) {
 }
 async function setIcon(iconKey: string) {
   try {
-    const updated = await ipcClient.instanceUpdateConfig(props.instance.id, {
-      ...props.instance.config,
+    if (props.instance.config) {
+      props.instance.config.icon = iconKey
+    }
+    await instancesStore.updateConfig(props.instance.id, {
       icon: iconKey,
     })
-    const idx = instancesStore.instances.findIndex((i) => i.id === props.instance.id)
-    if (idx >= 0) {
-      instancesStore.instances[idx] = updated
-    }
     toast.success(t('common.save'))
   } catch (e: unknown) {
     toast.danger(String(e))
   }
 }
 
-const presetIcons = [
-  { key: 'grass', labelKey: 'instanceDetail.overview.iconGrass', icon: 'i-lucide-box' },
-  { key: 'chest', labelKey: 'instanceDetail.overview.iconChest', icon: 'i-lucide-archive' },
-  { key: 'diamond', labelKey: 'instanceDetail.overview.iconDiamond', icon: 'i-lucide-gem' },
-  { key: 'sword', labelKey: 'instanceDetail.overview.iconSword', icon: 'i-lucide-sword' },
-  { key: 'furnace', labelKey: 'instanceDetail.overview.iconFurnace', icon: 'i-lucide-flame' },
-]
+function isCurrentIcon(key: string): boolean {
+  const current = props.instance.config?.icon
+  if (!current && (key === 'grass_block' || key === 'grass')) return true
+  if (current === key) return true
+  if ((current === 'grass' || current === 'grass_block') && (key === 'grass' || key === 'grass_block')) return true
+  return false
+}
 </script>
 
 <template>
@@ -238,13 +237,13 @@ const presetIcons = [
     <MSection :title="t('instanceDetail.overview.icon')" icon="i-lucide-smile">
       <div class="flex flex-wrap gap-3">
         <button
-          v-for="item in presetIcons"
+          v-for="item in minecraftIconList"
           :key="item.key"
           type="button"
           class="flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition-all cursor-pointer"
           :class="[
-            instance.config?.icon === item.key
-              ? 'border-primary bg-primary-soft text-primary-soft-fg'
+            isCurrentIcon(item.key)
+              ? 'border-primary bg-primary-soft text-primary-soft-fg ring-2 ring-primary/20'
               : 'border-line hover:border-line-strong text-fg-muted hover:text-fg bg-sunken/40',
           ]"
           @click="setIcon(item.key)"

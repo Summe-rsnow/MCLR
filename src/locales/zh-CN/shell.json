@@ -39,13 +39,6 @@
   "titlebar": {
     "tasks": "任务",
     "theme": "切换主题",
-    "material": "切换材质",
-    "music": "背景音乐控制",
-    "musicPlay": "播放",
-    "musicPause": "暂停",
-    "musicNext": "下一首",
-    "musicPrev": "上一首",
-    "musicLoop": "列表循环",
-    "musicShuffle": "随机播放"
+    "material": "切换材质"
   }
 }

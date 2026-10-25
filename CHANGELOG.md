@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.17] - 2026-10-25
+
+### Added
+- **UVMC Unlisted Version Manifest Merging**: Integrated UVMC unlisted versions (`https://alist.8mi.tech/...`) in `mclr-game::install::fetch_version_manifest` with local caching (`cache/uvmc_manifest.json`), achieving exact PCL version parity (112 releases, 825 snapshots, 165 ancient, 12 april fools, 1,114 total).
+- **PCL-Styled Community Search Layout**: Reorganized `CompBrowserPage` with filter controls on top (platform 'all'/Modrinth/CurseForge, categories, sorts, target instance/MC version, loader) and full-width search input underneath; triggers search on Enter without dedicated button.
+- **Interactive Favorites Feedback**: Updated favorite button with instant heart fill (`text-rose-500 fill-current`) and toast confirmations.
+- **Reusable `MHelpTooltip` & Teleported Tooltips**: Created `MHelpTooltip` question-mark info badge; rewrote `MTooltip` with `<Teleport to="body">`, fixed coordinates, `z-[9999]`, and smart vertical flipping when near top edges to prevent clipping in headers.
+- **Unified `MPathPicker` Component**: Created strictly non-editable path/file selection component with browse dialog trigger across settings, tools, java, and export flows.
+
+### Changed
+- **Select-to-Add Flow for Java and Game Folders**: Eliminated manual input and "+ 添加" button; selecting a file or folder in system dialog immediately adds and validates it.
+- **In-List Folder Remarking & Management**: Folders in settings can be remarked inline, set active, opened, or deleted directly in the list.
+- **Zero Default Game Directory & Guided Setup**: `folders` defaults to empty; prominent guidance banners and buttons appear in Launch, Instances, and Install when no folder is configured.
+- **ToolsPage Masonry Packing**: Arranged tools into two vertical columns to eliminate empty gaps below Card 1.
+- **UI Scale Dragging Decoupling**: Updated `MSlider` to commit font scaling on drag release (`@change`), eliminating screen jitter during adjustment.
+- **Dynamic Segmented Content Sizing**: Updated `MSegmented` and `QuickSettings` so mode and material control backgrounds fit their content width instead of stretching into oversized capsules.
+
+### Removed
+- **Removed Daily Luck**: Completely deleted daily luck feature, methods, and UI cards from Tools.
+- **Removed Official Java Downloads**: Removed Mojang Java runtime download section and RPCs from Java management page.
+- **QuickSettings Cleanup**: Removed bottom divider and settings jump button from quick appearance popover.
+
+## [0.0.16] - 2026-10-25
+
+### Added
+- **Unified Home & Launch with Fast News Toggle**: Integrated news & announcements directly below the launch view with an instant toggle switch (`mclr.launch.showNews`, default OFF). Skips background network requests when disabled.
+- **Standalone Java Management Page**: Extracted Java settings from Settings into a dedicated first-class page (`/java`), positioned directly below Account Management in the navigation sidebar. Supports one-click scanning, Mojang official runtime downloads (Java 8, 17, 21), custom path validation, and architecture/type badges.
+- **Simplified Help Center in Settings About**: Moved Help Center into Settings About & Help (`/settings/about`) with concise, collapsible FAQ accordions (Account login, Mod loaders, Java version selection, Crash diagnosis) and direct GitHub action links.
+- **I18N Coverage & Dynamic Task Names**: Localized all Dev UI preview components, completed dynamic task identifiers in `tasks.json`, and standardized `*.nav` keys across all language bundles.
+
+### Changed
+- **Natural Card Heights in Grid Layouts**: Added `items-start` to `ToolsPage` and `AccountsPage` grids and eliminated forced `justify-between` / `h-full` stretching so cards size naturally to their own content.
+- **Typography Streamlining**: Removed custom font family settings and scanner; standardizes on bundled HarmonyOS Sans SC while retaining UI scale adjustments.
+
+### Removed
+- **Removed Background Music**: Completely excised background music player, `useMusicPlayer`, `MusicMiniPlayer`, and audio elements from the UI shell and theme store.
+
+## [0.0.15] - 2026-10-25
+
+### Added
+- **PCL-Parity Version Groups & Mock Manifest**: Reordered version accordions to match PCL (`最新版本` → `正式版` → `预览版` → `远古版` → `愚人节版`), populated comprehensive version list (112 releases, 825 snapshots, 165 old, 12 april fools), added Minecraft block-styled tiles for latest release/snapshot, and enhanced April Fools detection with Chinese lore descriptions.
+- **Minecraft Block/Item Instance Icons**: Supported customizable Minecraft block and item icons (`grass_block`, `crafting_table`, `chest`, `furnace`, `diamond`, `sword`, `pickaxe`, `book`, `tnt`, `redstone`, `apple`, `command_block`, `ender_pearl`) rendered across Instances, Launch hero card, and Instance Detail views.
+- **Base MC Version Badges & Mod Download Auto-Select**: Prominently displayed Minecraft base version on every instance card; auto-selected current instance and synchronized target MC version and loader filters in community mod downloads.
+- **Custom Number Stepper**: Added custom theme-styled increment/decrement micro-buttons on `MInput` when `type="number"`, replacing unstyled browser spin buttons.
+
+### Fixed
+- **Sidebar Active Highlight Alignment**: Fixed sliding pill vertical offset calculation relative to `navContainerRef` to prevent offset misalignment from nested relative group wrappers; fixed route active matching for `/comp` subroutes.
+- **Input Focus Highlight Outline**: Removed sharp rectangular browser `:focus-visible` outlines on inner `<input>` elements so focus states cleanly adhere to the rounded outer container.
+- **Select & Checkbox Empty/Disabled States**: Provided clean placeholder text (`无可用选项` / `未选择`) and disabled styling for empty selections; prevented opening empty listbox popups.
+- **Dropdown Scrollbar Corner Clipping**: Wrapped `MSelect` listbox in an outer `overflow-hidden` rounded container, eliminating scrollbar tracks sticking out of rounded corners.
+- **Background Setting Preview Overlap**: Removed overlapping sample card when no background media is loaded; simplified background settings to single-image mode with direct clear ("X") button.
+- **Component Width Adaptation & Shadow Truncation**: Protected `MSettingRow` labels with `min-w-[140px]` flex protection; eliminated harsh shadow cuts by adding margin/padding clearance around `MScroll` and virtual lists.
+- **Dev UI Navigation Cleanup**: Moved UI component library viewer from sidebar navigation to a direct jump link in Settings Appearance live preview.
+
 ## [0.0.14] - 2026-10-25
 
 ### Added

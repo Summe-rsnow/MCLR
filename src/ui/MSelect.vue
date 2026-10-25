@@ -55,7 +55,7 @@ function updatePopupPosition() {
 }
 
 async function openListbox() {
-  if (props.disabled) return
+  if (props.disabled || props.options.length === 0) return
   isOpen.value = true
   const idx = props.options.findIndex((o) => String(o.value) === String(props.modelValue))
   activeIndex.value = idx >= 0 ? idx : props.options.findIndex((o) => !o.disabled)
@@ -68,6 +68,7 @@ function closeListbox() {
 }
 
 function toggleListbox() {
+  if (props.disabled || props.options.length === 0) return
   if (isOpen.value) {
     closeListbox()
   } else {
@@ -96,7 +97,7 @@ function moveActive(delta: number) {
 }
 
 function handleKeyDown(event: KeyboardEvent) {
-  if (props.disabled) return
+  if (props.disabled || props.options.length === 0) return
   if (event.key === 'ArrowDown') {
     event.preventDefault()
     if (!isOpen.value) {
@@ -168,9 +169,14 @@ onUnmounted(() => {
       type="button"
       role="combobox"
       :aria-expanded="isOpen"
-      :disabled="disabled"
-      class="w-full px-3 inline-flex items-center justify-between gap-2 rounded-lg bg-sunken text-fg border border-line-strong outline-none cursor-pointer transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-50 select-none text-left"
-      :class="size === 'sm' ? 'h-8 text-xs' : 'h-10 text-sm'"
+      :disabled="disabled || options.length === 0"
+      class="w-full px-3 inline-flex items-center justify-between gap-2 rounded-lg text-fg border outline-none select-none text-left transition-colors"
+      :class="[
+        size === 'sm' ? 'h-8 text-xs' : 'h-10 text-sm',
+        disabled || options.length === 0
+          ? 'opacity-60 bg-sunken/40 border-line text-fg-subtle cursor-not-allowed'
+          : 'bg-sunken border-line-strong cursor-pointer focus:border-primary focus:ring-2 focus:ring-primary/25',
+      ]"
       @click="toggleListbox"
       @keydown="handleKeyDown"
     >
@@ -181,7 +187,7 @@ onUnmounted(() => {
           class="w-4 h-4 text-fg-muted shrink-0"
         />
         <span v-if="selectedOption" class="truncate">{{ selectedOption.label }}</span>
-        <span v-else class="truncate text-fg-subtle">{{ placeholder }}</span>
+        <span v-else class="truncate text-fg-subtle">{{ placeholder || (options.length === 0 ? '无可用选项' : '未选择') }}</span>
       </span>
       <span
         class="i-lucide-chevron-down w-4 h-4 text-fg-muted shrink-0 transition-transform duration-150"
@@ -205,12 +211,15 @@ onUnmounted(() => {
       <Transition name="m-pop">
       <div
         v-if="isOpen"
-        ref="listRef"
-        role="listbox"
-        data-testid="m-select-listbox"
-        class="fixed z-50 m-overlay m-refract rounded-xl p-1 max-h-[280px] overflow-y-auto flex flex-col gap-0.5 select-none"
+        class="fixed z-50 m-overlay m-refract rounded-xl overflow-hidden select-none"
         :style="popupStyle"
       >
+        <div
+          ref="listRef"
+          role="listbox"
+          data-testid="m-select-listbox"
+          class="max-h-[280px] overflow-y-auto p-1 flex flex-col gap-0.5"
+        >
         <button
           v-for="(opt, idx) in options"
           :key="String(opt.value)"
@@ -238,6 +247,7 @@ onUnmounted(() => {
             class="i-lucide-check w-4 h-4 shrink-0"
           />
         </button>
+        </div>
       </div>
       </Transition>
     </Teleport>

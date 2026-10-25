@@ -81,7 +81,7 @@ describe('Instances feature', () => {
     expect(store.instances.some((i) => i.id === target.id)).toBe(false)
   })
 
-  it('renders InstancesPage correctly', async () => {
+  it('renders guide card when no game folder is set, and shows instances once folder is configured', async () => {
     const wrapper = mount(InstancesPage, {
       global: {
         plugins: [i18n, router],
@@ -90,8 +90,24 @@ describe('Instances feature', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('游戏目录')
+    expect(wrapper.find('[data-testid="no-folder-guide"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('尚未设置 Minecraft 游戏主目录')
+    expect(wrapper.text()).toContain('选择游戏目录')
+
+    const store = useInstancesStore()
+    await store.addFolder('Default', 'C:\\mock\\.minecraft')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="no-folder-guide"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Vanilla 1.20.1')
     expect(wrapper.text()).toContain('Fabric 1.20.4')
+  })
+
+  it('updates instance config via updateConfig action', async () => {
+    const store = useInstancesStore()
+    await store.fetchInstances()
+    const target = store.instances[0]
+    await store.updateConfig(target.id, { icon: 'furnace' })
+    expect(store.instances.find((i) => i.id === target.id)?.config?.icon).toBe('furnace')
   })
 })

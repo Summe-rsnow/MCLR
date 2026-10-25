@@ -196,11 +196,11 @@ const segmentedOptions = [
 ]
 
 const activeTab = ref('general')
-const tabsList = [
-  { key: 'general', label: 'General', icon: 'i-lucide-settings' },
-  { key: 'advanced', label: 'Advanced', icon: 'i-lucide-sliders-horizontal' },
-  { key: 'about', label: 'About', icon: 'i-lucide-info' },
-]
+const tabsList = computed(() => [
+  { key: 'general', label: t('devUi.tabGeneral'), icon: 'i-lucide-settings' },
+  { key: 'advanced', label: t('devUi.tabAdvanced'), icon: 'i-lucide-sliders-horizontal' },
+  { key: 'about', label: t('devUi.tabAbout'), icon: 'i-lucide-info' },
+])
 
 const progressVal = ref(0.68)
 const dialogVisible = ref(false)
@@ -284,7 +284,7 @@ async function triggerConfirmDialog() {
           @update:model-value="themeStore.setMaterial($event as any)"
         />
       </MSettingRow>
-      <MSettingRow label="Seed Presets">
+      <MSettingRow :label="t('devUi.seedPresets')">
         <div class="flex items-center gap-2 flex-wrap">
           <button
             v-for="preset in SEED_PRESETS"
@@ -301,7 +301,7 @@ async function triggerConfirmDialog() {
     </MSection>
 
     <!-- 2. Token Swatch Grid -->
-    <MSection title="Tonal Palette & WCAG Contrast" icon="i-lucide-pipette">
+    <MSection :title="t('devUi.paletteTitle')" icon="i-lucide-pipette">
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div
           v-for="sw in tokenSwatches"
@@ -319,27 +319,27 @@ async function triggerConfirmDialog() {
     </MSection>
 
     <!-- 3. Surface Tiers -->
-    <MSection title="Surface Tiers (Panel / Card / Well / Overlay / Refract)" icon="i-lucide-layers">
+    <MSection :title="t('devUi.surfaceTiers')" icon="i-lucide-layers">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div class="m-panel p-4 rounded-xl border border-line">
           <div class="text-sm font-medium text-fg">.m-panel</div>
-          <div class="text-xs text-fg-muted mt-1">Sidebar & chrome tier</div>
+          <div class="text-xs text-fg-muted mt-1">{{ t('devUi.surfacePanelDesc') }}</div>
         </div>
         <MCard variant="raised">
           <div class="text-sm font-medium text-fg">MCard raised</div>
-          <div class="text-xs text-fg-muted mt-1">Primary card tier</div>
+          <div class="text-xs text-fg-muted mt-1">{{ t('devUi.surfaceRaisedDesc') }}</div>
         </MCard>
         <MCard variant="well">
           <div class="text-sm font-medium text-fg">MCard well</div>
-          <div class="text-xs text-fg-muted mt-1">Sunken container</div>
+          <div class="text-xs text-fg-muted mt-1">{{ t('devUi.surfaceWellDesc') }}</div>
         </MCard>
         <MCard variant="tinted" hoverable>
           <div class="text-sm font-medium text-primary-soft-fg">MCard tinted</div>
-          <div class="text-xs text-fg-muted mt-1">Hoverable hero tier</div>
+          <div class="text-xs text-fg-muted mt-1">{{ t('devUi.surfaceTintedDesc') }}</div>
         </MCard>
         <div class="m-overlay m-refract p-4 rounded-xl">
           <div class="text-sm font-medium text-fg">.m-overlay.m-refract</div>
-          <div class="text-xs text-fg-muted mt-1">Liquid glass refraction</div>
+          <div class="text-xs text-fg-muted mt-1">{{ t('devUi.surfaceRefractDesc') }}</div>
         </div>
       </div>
     </MSection>
@@ -350,7 +350,7 @@ async function triggerConfirmDialog() {
         <div class="flex flex-wrap items-center gap-3">
           <MButton variant="primary" icon="i-lucide-play">{{ t('devUi.btnPrimary') }}</MButton>
           <MButton variant="tonal" icon="i-lucide-sparkles">{{ t('devUi.btnTonal') }}</MButton>
-          <MButton variant="outline" icon="i-lucide-folder">Outline</MButton>
+          <MButton variant="outline" icon="i-lucide-folder">{{ t('devUi.btnOutline') }}</MButton>
           <MButton variant="text">{{ t('devUi.btnText') }}</MButton>
           <MButton variant="danger" icon="i-lucide-trash-2">{{ t('devUi.btnDanger') }}</MButton>
           <MButton variant="primary" loading>{{ t('devUi.btnLoading') }}</MButton>
@@ -383,26 +383,26 @@ async function triggerConfirmDialog() {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <MInput
           v-model="inputText"
-          label="Search Input"
-          hint="Supports leading icon & clearable"
+          :label="t('devUi.searchInput')"
+          :hint="t('devUi.searchHint')"
           icon="i-lucide-search"
           :placeholder="t('devUi.inputPlaceholder')"
           clearable
         />
         <MInput
           v-model="errorInputText"
-          label="Validated Input"
-          error="Invalid folder path specified"
+          :label="t('devUi.validatedInput')"
+          :error="t('devUi.validatedError')"
           icon="i-lucide-folder-x"
         />
         <div class="flex flex-col gap-1">
-          <label class="text-xs font-medium text-fg">Custom Listbox Select</label>
+          <label class="text-xs font-medium text-fg">{{ t('devUi.selectLabel') }}</label>
           <MSelect v-model="selectVal" :options="selectOptions" />
         </div>
         <MTextarea
           v-model="textareaText"
-          label="Notes"
-          hint="Multi-line input"
+          :label="t('devUi.notesLabel')"
+          :hint="t('devUi.notesHint')"
           :placeholder="t('devUi.textareaPlaceholder')"
           :rows="2"
         />
@@ -421,7 +421,7 @@ async function triggerConfirmDialog() {
     </MSection>
 
     <!-- 6. Icon Grids (Loaders / Brands / Comp Types) -->
-    <MSection title="Loader, Brand & Content Icons" icon="i-lucide-grid-2x2">
+    <MSection :title="t('devUi.iconGrids')" icon="i-lucide-grid-2x2">
       <div class="space-y-4">
         <div class="flex flex-wrap items-center gap-3">
           <div
@@ -484,7 +484,7 @@ async function triggerConfirmDialog() {
             </div>
           </div>
           <MEmpty :title="t('devUi.emptyTitle')" :description="t('devUi.emptyDesc')">
-            <MButton size="sm" variant="tonal" icon="i-lucide-refresh-cw">Retry</MButton>
+            <MButton size="sm" variant="tonal" icon="i-lucide-refresh-cw">{{ t('common.retry') }}</MButton>
           </MEmpty>
         </div>
         <div class="flex items-center gap-4">

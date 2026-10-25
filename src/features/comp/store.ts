@@ -10,11 +10,12 @@ import {
   type CompFavoriteEntry,
 } from '../../ipc/client'
 
+export type CompPlatformFilter = CompPlatform | 'all'
+
 export const useCompStore = defineStore('comp', () => {
-  const platform = ref<CompPlatform>('modrinth')
+  const platform = ref<CompPlatform | 'all'>('all')
   const compType = ref<CompType>('mod')
   const activeTab = ref<CompType | 'favorites'>('mod')
-
   const query = ref('')
   const mcVersion = ref<string | null>(null)
   const loader = ref<string | null>(null)
@@ -55,7 +56,7 @@ export const useCompStore = defineStore('comp', () => {
     )
   }
 
-  async function toggleFavorite(project: CompProject | CompFavoriteEntry): Promise<void> {
+  async function toggleFavorite(project: CompProject | CompFavoriteEntry): Promise<boolean> {
     const isProject = 'downloads' in project
     const pPlatform = project.platform
     const projectId = isProject ? (project as CompProject).id : project.projectId
@@ -71,8 +72,10 @@ export const useCompStore = defineStore('comp', () => {
     )
 
     let updated: CompFavoriteEntry[] = []
+    let added = false
     if (existingIndex >= 0) {
       updated = favorites.value.filter((_, idx) => idx !== existingIndex)
+      added = false
     } else {
       updated = [
         ...favorites.value,
@@ -85,8 +88,8 @@ export const useCompStore = defineStore('comp', () => {
           compType: cType,
         },
       ]
+      added = true
     }
-
     favorites.value = updated
     try {
       await ipcClient.settingsPatch({
@@ -97,6 +100,7 @@ export const useCompStore = defineStore('comp', () => {
     } catch (e) {
       console.error('Failed to patch favorites settings', e)
     }
+    return added
   }
 
   async function search(resetOffset = true): Promise<void> {
@@ -107,23 +111,71 @@ export const useCompStore = defineStore('comp', () => {
     error.value = null
 
     try {
-      const res = await ipcClient.compSearch({
-        platform: platform.value,
-        compType: compType.value,
-        query: query.value,
-        mcVersion: mcVersion.value || null,
-        loader: loader.value || null,
-        category: category.value || null,
-        sort: sort.value,
-        offset: offset.value,
-        limit: limit.value,
-      })
-      if (resetOffset) {
-        hits.value = res.hits
+      if (platform.value === 'all') {
+        const queryLimit = Math.max(10, Math.ceil(limit.value / 2))
+        const queryOffset = Math.floor(offset.value / 2)
+        const [mrRes, cfRes] = await Promise.allSettled([
+          ipcClient.compSearch({
+            platform: 'modrinth',
+            compType: compType.value,
+            query: query.value,
+            mcVersion: mcVersion.value || null,
+            loader: loader.value || null,
+            category: category.value || null,
+            sort: sort.value,
+            offset: queryOffset,
+            limit: queryLimit,
+          }),
+          ipcClient.compSearch({
+            platform: 'curseforge',
+            compType: compType.value,
+            query: query.value,
+            mcVersion: mcVersion.value || null,
+            loader: loader.value || null,
+            category: category.value || null,
+            sort: sort.value,
+            offset: queryOffset,
+            limit: queryLimit,
+          }),
+        ])
+
+        const mrHits = mrRes.status === 'fulfilled' ? mrRes.value.hits : []
+        const cfHits = cfRes.status === 'fulfilled' ? cfRes.value.hits : []
+        const mrTotal = mrRes.status === 'fulfilled' ? mrRes.value.totalHits : 0
+        const cfTotal = cfRes.status === 'fulfilled' ? cfRes.value.totalHits : 0
+
+        const combinedHits: CompProject[] = []
+        const maxLen = Math.max(mrHits.length, cfHits.length)
+        for (let i = 0; i < maxLen; i++) {
+          if (i < mrHits.length) combinedHits.push(mrHits[i])
+          if (i < cfHits.length) combinedHits.push(cfHits[i])
+        }
+
+        if (resetOffset) {
+          hits.value = combinedHits
+        } else {
+          hits.value = [...hits.value, ...combinedHits]
+        }
+        totalHits.value = mrTotal + cfTotal
       } else {
-        hits.value = [...hits.value, ...res.hits]
+        const res = await ipcClient.compSearch({
+          platform: platform.value,
+          compType: compType.value,
+          query: query.value,
+          mcVersion: mcVersion.value || null,
+          loader: loader.value || null,
+          category: category.value || null,
+          sort: sort.value,
+          offset: offset.value,
+          limit: limit.value,
+        })
+        if (resetOffset) {
+          hits.value = res.hits
+        } else {
+          hits.value = [...hits.value, ...res.hits]
+        }
+        totalHits.value = res.totalHits
       }
-      totalHits.value = res.totalHits
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : String(err)
     } finally {

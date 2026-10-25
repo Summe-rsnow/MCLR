@@ -7,7 +7,6 @@ import CrashDialog from '../crash/CrashDialog.vue'
 import TitleBar from './TitleBar.vue'
 import SidebarNav from './SidebarNav.vue'
 import { useBackgroundMedia } from './useBackgroundMedia'
-import { useMusicPlayer } from './useMusicPlayer'
 
 const themeStore = useThemeStore()
 const { activeDialog, handleConfirm, handleCancel } = useDialog()
@@ -16,16 +15,6 @@ const crashStore = useCrashStore()
 // Background composable
 const { backgroundMediaSrc, cleanup: cleanupBackground } = useBackgroundMedia()
 
-// Music composable
-const {
-  audioElementRef,
-  currentTrackSrc,
-  handleAudioEnded,
-  togglePlay,
-  nextTrack,
-  prevTrack,
-  togglePlayMode,
-} = useMusicPlayer()
 
 onMounted(() => {
   crashStore.startListening()
@@ -78,24 +67,8 @@ onUnmounted(() => {
        loading="lazy" decoding="async"/>
     </div>
 
-    <!-- Hidden HTMLAudioElement for Background Music -->
-    <audio
-      v-if="themeStore.musicEnabled"
-      ref="audioElementRef"
-      data-testid="bg-audio"
-      class="hidden"
-      :src="currentTrackSrc"
-      @ended="handleAudioEnded"
-    />
-
     <!-- Custom Frameless Titlebar -->
-    <TitleBar
-      :music-enabled="themeStore.musicEnabled"
-      :toggle-play="togglePlay"
-      :next-track="nextTrack"
-      :prev-track="prevTrack"
-      :toggle-play-mode="togglePlayMode"
-    />
+    <TitleBar />
 
     <!-- Main Body: Sidebar + Content (Relative z-10 over background) -->
     <div class="relative z-10 flex-1 flex overflow-hidden">

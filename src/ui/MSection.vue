@@ -24,8 +24,12 @@ withDefaults(
       <div class="flex items-center gap-2.5 min-w-0">
         <span v-if="icon" :class="icon" class="w-4 h-4 text-primary shrink-0" />
         <div class="min-w-0">
-          <h2 v-if="title" class="text-base font-medium text-fg truncate">{{ title }}</h2>
-          <p v-if="description" class="text-xs text-fg-muted mt-0.5">{{ description }}</p>
+          <h2 v-if="title || $slots.title" class="text-base font-medium text-fg flex items-center gap-1.5 truncate">
+            <slot name="title">{{ title }}</slot>
+          </h2>
+          <p v-if="description || $slots.description" class="text-xs text-fg-muted mt-0.5">
+            <slot name="description">{{ description }}</slot>
+          </p>
         </div>
       </div>
       <div v-if="$slots.actions" class="flex items-center gap-2 shrink-0">

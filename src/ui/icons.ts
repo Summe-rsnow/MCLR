@@ -40,6 +40,158 @@ export function getLoaderMeta(kind?: string | null): LoaderMetaItem {
   return loaderMeta.unknown
 }
 
+export interface MinecraftIconMetaItem {
+  key: string
+  icon: string
+  hue: number
+  labelKey: string
+  label: string
+}
+
+export const minecraftIconPresets: Record<string, MinecraftIconMetaItem> = {
+  grass_block: {
+    key: 'grass_block',
+    icon: 'i-lucide-box',
+    hue: 145,
+    labelKey: 'instanceDetail.overview.iconGrass',
+    label: '草方块',
+  },
+  grass: {
+    key: 'grass',
+    icon: 'i-lucide-box',
+    hue: 145,
+    labelKey: 'instanceDetail.overview.iconGrass',
+    label: '草方块',
+  },
+  crafting_table: {
+    key: 'crafting_table',
+    icon: 'i-lucide-hammer',
+    hue: 75,
+    labelKey: 'instanceDetail.overview.iconCraftingTable',
+    label: '工作台',
+  },
+  chest: {
+    key: 'chest',
+    icon: 'i-lucide-archive',
+    hue: 60,
+    labelKey: 'instanceDetail.overview.iconChest',
+    label: '箱子',
+  },
+  furnace: {
+    key: 'furnace',
+    icon: 'i-lucide-flame',
+    hue: 40,
+    labelKey: 'instanceDetail.overview.iconFurnace',
+    label: '熔炉',
+  },
+  diamond: {
+    key: 'diamond',
+    icon: 'i-lucide-gem',
+    hue: 200,
+    labelKey: 'instanceDetail.overview.iconDiamond',
+    label: '钻石',
+  },
+  sword: {
+    key: 'sword',
+    icon: 'i-lucide-sword',
+    hue: 200,
+    labelKey: 'instanceDetail.overview.iconSword',
+    label: '剑',
+  },
+  pickaxe: {
+    key: 'pickaxe',
+    icon: 'i-lucide-pickaxe',
+    hue: 240,
+    labelKey: 'instanceDetail.overview.iconPickaxe',
+    label: '镐',
+  },
+  book: {
+    key: 'book',
+    icon: 'i-lucide-book-open',
+    hue: 50,
+    labelKey: 'instanceDetail.overview.iconBook',
+    label: '书架',
+  },
+  tnt: {
+    key: 'tnt',
+    icon: 'i-lucide-bomb',
+    hue: 25,
+    labelKey: 'instanceDetail.overview.iconTnt',
+    label: 'TNT',
+  },
+  redstone: {
+    key: 'redstone',
+    icon: 'i-lucide-zap',
+    hue: 25,
+    labelKey: 'instanceDetail.overview.iconRedstone',
+    label: '红石',
+  },
+  apple: {
+    key: 'apple',
+    icon: 'i-lucide-apple',
+    hue: 90,
+    labelKey: 'instanceDetail.overview.iconApple',
+    label: '金苹果',
+  },
+  command_block: {
+    key: 'command_block',
+    icon: 'i-lucide-terminal',
+    hue: 310,
+    labelKey: 'instanceDetail.overview.iconCommandBlock',
+    label: '命令方块',
+  },
+  ender_pearl: {
+    key: 'ender_pearl',
+    icon: 'i-lucide-circle-dot',
+    hue: 180,
+    labelKey: 'instanceDetail.overview.iconEnderPearl',
+    label: '末影珍珠',
+  },
+}
+
+export const minecraftIconList: MinecraftIconMetaItem[] = [
+  minecraftIconPresets.grass_block,
+  minecraftIconPresets.crafting_table,
+  minecraftIconPresets.chest,
+  minecraftIconPresets.furnace,
+  minecraftIconPresets.diamond,
+  minecraftIconPresets.sword,
+  minecraftIconPresets.pickaxe,
+  minecraftIconPresets.book,
+  minecraftIconPresets.tnt,
+  minecraftIconPresets.redstone,
+  minecraftIconPresets.apple,
+  minecraftIconPresets.command_block,
+  minecraftIconPresets.ender_pearl,
+]
+
+export function getMinecraftIconMeta(icon?: string | null): MinecraftIconMetaItem | null {
+  if (!icon) return null
+  const norm = icon.toLowerCase().trim().replace(/[\s-]/g, '_')
+  return minecraftIconPresets[norm] || minecraftIconPresets[icon.toLowerCase().trim()] || null
+}
+
+export function getInstanceIconMeta(icon?: string | null, kind?: string | null): LoaderMetaItem {
+  if (icon) {
+    const mc = getMinecraftIconMeta(icon)
+    if (mc) {
+      return {
+        icon: mc.icon,
+        hue: mc.hue,
+        label: mc.label,
+      }
+    }
+    if (icon.startsWith('i-')) {
+      return {
+        icon,
+        hue: 145,
+        label: 'Custom Icon',
+      }
+    }
+  }
+  return getLoaderMeta(kind)
+}
+
 export type BrandName =
   | 'microsoft'
   | 'modrinth'

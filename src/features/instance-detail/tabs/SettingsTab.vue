@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { InstanceInfo, InstanceConfig } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
@@ -12,6 +12,8 @@ import {
   MSelect,
   MSegmented,
   useToast,
+  MLoaderIcon,
+  minecraftIconList,
 } from '../../../ui'
 
 const props = defineProps<{
@@ -96,10 +98,21 @@ const loginRequirementOptions = [
   { label: t('instanceDetail.settings.loginRequirement.thirdParty'), value: 'thirdParty' },
   { label: t('instanceDetail.settings.loginRequirement.microsoftOrThirdParty'), value: 'microsoftOrThirdParty' },
 ]
+const iconOptions = computed(() =>
+  minecraftIconList.map((item) => ({
+    label: t(item.labelKey),
+    value: item.key,
+  })),
+)
+
 async function saveSettings() {
   saving.value = true
   try {
-    await ipcClient.instanceUpdateConfig(props.instance.id, form.value)
+    const updated = await ipcClient.instanceUpdateConfig(props.instance.id, form.value)
+    const idx = instancesStore.instances.findIndex((i) => i.id === props.instance.id)
+    if (idx >= 0) {
+      instancesStore.instances[idx] = updated
+    }
     await instancesStore.fetchInstances()
     toast.success(t('common.save'))
   } catch (e: unknown) {
@@ -131,6 +144,52 @@ async function saveSettings() {
         {{ t('instanceDetail.settings.save') }}
       </MButton>
     </div>
+
+    <!-- Icon & Appearance Section -->
+    <MSection :title="t('instanceDetail.overview.icon')" icon="i-lucide-smile">
+      <div class="divide-y divide-line">
+        <MSettingRow
+          :label="t('instanceDetail.overview.icon')"
+          :hint="t('instanceDetail.settings.iconHint')"
+        >
+          <div class="flex flex-col gap-2.5">
+            <div class="flex items-center gap-3">
+              <MLoaderIcon
+                :kind="instance.kind || (instance.loaders?.[0]?.toLowerCase() ?? 'vanilla')"
+                :icon="form.icon"
+                :size="40"
+                class="shrink-0"
+              />
+              <MSelect
+                :model-value="form.icon || 'grass_block'"
+                :options="iconOptions"
+                size="sm"
+                class="w-56"
+                @update:model-value="form.icon = String($event)"
+              />
+            </div>
+            <div class="flex flex-wrap gap-1.5 pt-1">
+              <button
+                v-for="item in minecraftIconList"
+                :key="item.key"
+                type="button"
+                class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer"
+                :class="[
+                  (form.icon === item.key || (!form.icon && (item.key === 'grass_block' || item.key === 'grass')) || (form.icon === 'grass' && item.key === 'grass_block'))
+                    ? 'border-primary bg-primary-soft text-primary-soft-fg ring-1 ring-primary/30'
+                    : 'border-line hover:border-line-strong text-fg-muted hover:text-fg bg-sunken/40',
+                ]"
+                :title="t(item.labelKey)"
+                @click="form.icon = item.key"
+              >
+                <span class="w-3.5 h-3.5 block" :class="item.icon" />
+                <span>{{ t(item.labelKey) }}</span>
+              </button>
+            </div>
+          </div>
+        </MSettingRow>
+      </div>
+    </MSection>
 
     <!-- Isolation & Login Requirement Section -->
     <MSection :title="t('instanceDetail.settings.isolation.title')" icon="i-lucide-shield">

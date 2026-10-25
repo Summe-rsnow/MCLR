@@ -63,7 +63,7 @@ onUnmounted(() => {
 <template>
   <div
     ref="containerRef"
-    class="relative inline-flex items-center p-1 rounded-xl bg-sunken border border-line select-none"
+    class="relative inline-flex items-center p-1 rounded-xl bg-sunken border border-line select-none w-fit max-w-full"
   >
     <div
       class="pointer-events-none absolute top-1 bottom-1 left-1 rounded-lg bg-raised shadow-1 transition-all duration-200"
@@ -75,17 +75,17 @@ onUnmounted(() => {
       data-seg-btn
       type="button"
       :disabled="disabled"
-      class="relative z-1 inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-45"
+      class="relative z-1 inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 shrink-0"
       :class="[
         size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-xs',
         modelValue === opt.value
-          ? 'bg-raised text-fg shadow-1'
+          ? 'text-fg font-semibold'
           : 'text-fg-muted hover:text-fg',
       ]"
       @click="emit('update:modelValue', opt.value)"
     >
       <span v-if="opt.icon" :class="opt.icon" class="w-3.5 h-3.5 shrink-0" />
-      <span v-if="opt.label">{{ opt.label }}</span>
+      <span v-if="opt.label" class="whitespace-nowrap">{{ opt.label }}</span>
     </button>
   </div>
 </template>

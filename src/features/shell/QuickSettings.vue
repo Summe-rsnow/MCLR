@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '../../stores/theme'
 import type { ThemeMode, MaterialMode } from '../../ui/theme'
-import { MPopover, MSegmented, SEED_PRESETS, MButton } from '../../ui'
+import { MPopover, MSegmented, SEED_PRESETS } from '../../ui'
 
 const { t } = useI18n()
-const router = useRouter()
 const themeStore = useThemeStore()
 const open = ref(false)
 
@@ -22,12 +20,6 @@ const materialOptions = computed(() => [
   { label: t('shell.material.glass'), value: 'glass', icon: 'i-lucide-sparkles' },
 ])
 
-function navigateToAppearance() {
-  open.value = false
-  if (router?.push) {
-    router.push('/settings/appearance')
-  }
-}
 </script>
 
 <template>
@@ -50,7 +42,7 @@ function navigateToAppearance() {
       </div>
 
       <!-- Mode -->
-      <div class="flex flex-col gap-1.5">
+      <div class="flex flex-col gap-1.5 items-start">
         <span class="text-xs text-fg-muted">{{ t('shell.quick.mode') }}</span>
         <MSegmented
           size="sm"
@@ -61,7 +53,7 @@ function navigateToAppearance() {
       </div>
 
       <!-- Material -->
-      <div class="flex flex-col gap-1.5">
+      <div class="flex flex-col gap-1.5 items-start">
         <span class="text-xs text-fg-muted">{{ t('shell.quick.material') }}</span>
         <MSegmented
           size="sm"
@@ -92,18 +84,6 @@ function navigateToAppearance() {
         </div>
       </div>
 
-      <!-- More appearance settings button -->
-      <div class="pt-1 border-t border-line">
-        <MButton
-          variant="outline"
-          size="xs"
-          block
-          icon="i-lucide-settings"
-          @click="navigateToAppearance"
-        >
-          {{ t('shell.quick.moreAppearance') }}
-        </MButton>
-      </div>
     </div>
   </MPopover>
 </template>

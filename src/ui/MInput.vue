@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 
 const props = withDefaults(
   defineProps<{
-    modelValue: string
+    modelValue: string | number
     placeholder?: string
     type?: string
     label?: string
@@ -14,6 +14,9 @@ const props = withDefaults(
     autofocus?: boolean
     disabled?: boolean
     clearable?: boolean
+    min?: number
+    max?: number
+    step?: number
   }>(),
   {
     placeholder: '',
@@ -26,6 +29,9 @@ const props = withDefaults(
     autofocus: false,
     disabled: false,
     clearable: false,
+    min: undefined,
+    max: undefined,
+    step: undefined,
   },
 )
 
@@ -33,6 +39,28 @@ const emit = defineEmits<{
   (e: 'update:modelValue', val: string): void
   (e: 'clear'): void
 }>()
+
+function stepUp() {
+  if (props.disabled) return
+  const stepVal = props.step ?? 1
+  const current = Number(props.modelValue) || 0
+  let next = current + stepVal
+  if (props.max !== undefined && next > props.max) {
+    next = props.max
+  }
+  emit('update:modelValue', String(next))
+}
+
+function stepDown() {
+  if (props.disabled) return
+  const stepVal = props.step ?? 1
+  const current = Number(props.modelValue) || 0
+  let next = current - stepVal
+  if (props.min !== undefined && next < props.min) {
+    next = props.min
+  }
+  emit('update:modelValue', String(next))
+}
 
 const inputRef = ref<HTMLInputElement | null>(null)
 
@@ -80,13 +108,37 @@ function onClear() {
         :value="modelValue"
         :placeholder="placeholder"
         :disabled="disabled"
-        class="w-full h-full bg-transparent text-fg placeholder:text-fg-subtle outline-none px-3 disabled:cursor-not-allowed"
+        :min="min"
+        :max="max"
+        :step="step"
+        class="w-full h-full bg-transparent text-fg placeholder:text-fg-subtle outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 px-3 disabled:cursor-not-allowed m-input-inner"
         :class="[
           $slots.prefix || icon ? 'pl-2' : '',
-          (clearable && modelValue) || $slots.suffix ? 'pr-8' : '',
+          (clearable && modelValue) || $slots.suffix || type === 'number' ? 'pr-1' : '',
         ]"
         @input="onInput"
       />
+      <div
+        v-if="type === 'number' && !disabled"
+        class="flex flex-col justify-center items-center h-full mr-1.5 shrink-0 select-none py-0.5"
+      >
+        <button
+          type="button"
+          tabindex="-1"
+          class="flex items-center justify-center w-4.5 h-3.5 text-fg-subtle hover:text-fg hover:bg-fg/10 active:bg-fg/15 rounded cursor-pointer transition-colors"
+          @click="stepUp"
+        >
+          <span class="i-lucide-chevron-up w-3.5 h-3.5 block" />
+        </button>
+        <button
+          type="button"
+          tabindex="-1"
+          class="flex items-center justify-center w-4.5 h-3.5 text-fg-subtle hover:text-fg hover:bg-fg/10 active:bg-fg/15 rounded cursor-pointer transition-colors"
+          @click="stepDown"
+        >
+          <span class="i-lucide-chevron-down w-3.5 h-3.5 block" />
+        </button>
+      </div>
       <button
         v-if="clearable && modelValue && !disabled"
         type="button"
@@ -103,3 +155,14 @@ function onClear() {
     <p v-else-if="hint" class="text-xs text-fg-muted">{{ hint }}</p>
   </div>
 </template>
+
+<style scoped>
+.m-input-inner[type='number']::-webkit-inner-spin-button,
+.m-input-inner[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.m-input-inner[type='number'] {
+  -moz-appearance: textfield;
+}
+</style>

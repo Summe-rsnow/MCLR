@@ -137,6 +137,7 @@ function handleLaunch() {
       <div class="flex items-center gap-4 min-w-0">
         <MLoaderIcon
           :kind="instance.kind || (instance.loaders?.[0]?.toLowerCase() ?? 'vanilla')"
+          :icon="instance.config?.icon"
           :size="56"
           class="shrink-0"
         />

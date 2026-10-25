@@ -15,5 +15,9 @@
   "add": "添加",
   "saved": "已保存",
   "error": "操作失败",
-  "openFolder": "打开文件夹"
+  "openFolder": "打开文件夹",
+  "clear": "清除",
+  "browse": "浏览",
+  "chooseFile": "选择文件",
+  "chooseDirectory": "选择文件夹"
 }

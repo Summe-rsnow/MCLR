@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { save as saveFileDialog } from '@tauri-apps/plugin-dialog'
 import type {
   InstanceInfo,
   ExportCandidateEntry,
@@ -15,6 +14,7 @@ import {
   MCard,
   MButton,
   MInput,
+  MPathPicker,
   MTextarea,
   MSegmented,
   MCheckbox,
@@ -24,7 +24,6 @@ import {
   MVirtualList,
   useToast,
 } from '../../../ui'
-
 const props = defineProps<{
   instanceId: string
   instance?: InstanceInfo
@@ -50,6 +49,12 @@ const formatOptions = computed(() => [
   { label: t('instanceDetail.export.formats.curseforge'), value: 'curseforge' },
 ])
 
+const exportFilters = computed(() => [
+  {
+    name: format.value === 'modrinth' ? 'Modrinth Modpack (*.mrpack)' : 'CurseForge Modpack (*.zip)',
+    extensions: format.value === 'modrinth' ? ['mrpack'] : ['zip'],
+  },
+])
 watch(
   () => props.instance,
   (inst) => {
@@ -85,25 +90,7 @@ async function fetchCandidates() {
   }
 }
 
-async function browseOutputFile() {
-  try {
-    const ext = format.value === 'modrinth' ? 'mrpack' : 'zip'
-    const chosen = await saveFileDialog({
-      defaultPath: outputPath.value,
-      filters: [
-        {
-          name: format.value === 'modrinth' ? 'Modrinth Modpack (*.mrpack)' : 'CurseForge Modpack (*.zip)',
-          extensions: [ext],
-        },
-      ],
-    })
-    if (chosen && typeof chosen === 'string') {
-      outputPath.value = chosen
-    }
-  } catch {
-    // Non-tauri browser mode fallback
-  }
-}
+
 
 function selectAll() {
   selectedPaths.value = candidates.value.map((c) => c.relPath)
@@ -220,21 +207,16 @@ onMounted(() => {
         </MSettingRow>
 
         <MSettingRow :label="t('instanceDetail.export.outputPath')">
-          <div class="flex items-center gap-2">
-            <MInput
+          <div class="w-80">
+            <MPathPicker
               v-model="outputPath"
+              type="saveFile"
+              size="sm"
               :placeholder="t('instanceDetail.export.outputPathPlaceholder')"
-              size="sm"
-              class="w-72"
+              :button-text="t('instanceDetail.export.browse')"
+              :filters="exportFilters"
+              :default-path="outputPath"
             />
-            <MButton
-              variant="tonal"
-              size="sm"
-              icon="i-lucide-folder-open"
-              @click="browseOutputFile"
-            >
-              {{ t('instanceDetail.export.browse') }}
-            </MButton>
           </div>
         </MSettingRow>
 

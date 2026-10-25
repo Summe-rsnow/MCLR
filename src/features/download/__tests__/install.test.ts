@@ -51,12 +51,17 @@ describe('Download / Install feature', () => {
     })
 
     await flushPromises()
-
     expect(wrapper.text()).toContain('选择 Minecraft 版本')
+    expect(wrapper.text()).toContain('最新版本')
+    expect(wrapper.text()).toContain('正式版 (112)')
+    expect(wrapper.text()).toContain('预览版 (825)')
+    expect(wrapper.text()).toContain('远古版 (165)')
+    expect(wrapper.text()).toContain('愚人节版 (12)')
     expect(wrapper.text()).toContain('1.20.4')
     expect(wrapper.text()).toContain('1.20.1')
+    expect(wrapper.text()).toContain('最新正式版, 发布于')
+    expect(wrapper.text()).toContain('最新预览版, 发布于')
   })
-
   it('renders InstallConfigurator in create mode with default naming', async () => {
     const wrapper = mount(InstallConfigurator, {
       props: {

@@ -45,13 +45,9 @@ pub struct GameSettings {
 
 impl Default for GameSettings {
     fn default() -> Self {
-        let default_path = paths::default_minecraft_dir().to_string_lossy().to_string();
         Self {
-            folders: vec![GameFolderEntry {
-                name: "Default".to_string(),
-                path: default_path.clone(),
-            }],
-            current_folder: default_path,
+            folders: vec![],
+            current_folder: "".to_string(),
             default_isolation: DefaultIsolation::All,
             sort_by: "name".to_string(),
         }

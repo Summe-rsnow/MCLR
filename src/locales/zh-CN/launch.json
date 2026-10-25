@@ -10,6 +10,8 @@
   "repairInstance": "检查与修复",
   "repairing": "正在修复游戏文件...",
   "repairSuccess": "实例文件检查完成",
+  "noFolderWarning": "尚未配置游戏目录，无法启动游戏",
+  "selectFolder": "选择游戏目录",
   "launchButton": "启动游戏",
   "button": {
     "download": "下载游戏"
@@ -38,5 +40,23 @@
     "title": "正在运行",
     "viewLogs": "查看日志",
     "killProcess": "强制结束"
+  },
+  "news": {
+    "title": "官方动态与资讯",
+    "toggleLabel": "显示官方新闻与公告",
+    "disabledHint": "新闻资讯已关闭，点击开关以加载官方公告与更新动态",
+    "enableAction": "开启资讯",
+    "refresh": "刷新",
+    "refreshing": "正在刷新...",
+    "empty": "暂无最新资讯",
+    "fetchFailed": "获取资讯失败，请检查网络连接后重试",
+    "readMore": "阅读全文",
+    "pagePrev": "上一页",
+    "pageNext": "下一页",
+    "pageNumber": "第 {page} 页"
+  },
+  "announcements": {
+    "title": "系统公告",
+    "dismiss": "不再显示"
   }
 }

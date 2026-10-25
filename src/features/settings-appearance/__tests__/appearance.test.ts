@@ -9,6 +9,7 @@ import { setupMockIpc } from '../../../ipc/mock'
 import zhCnSettingsAppearance from '../../../locales/zh-CN/settingsAppearance.json'
 import zhCnShell from '../../../locales/zh-CN/shell.json'
 import zhCnApp from '../../../locales/zh-CN/app.json'
+import zhCnCommon from '../../../locales/zh-CN/common.json'
 
 const i18n = createI18n({
   legacy: false,
@@ -18,6 +19,7 @@ const i18n = createI18n({
       settingsAppearance: zhCnSettingsAppearance,
       shell: zhCnShell,
       app: zhCnApp,
+      common: zhCnCommon,
     },
   },
 })
@@ -27,11 +29,10 @@ describe('Appearance and Personalisation feature', () => {
     setActivePinia(createPinia())
     setupMockIpc()
     // Reset document styles
-    document.documentElement.style.fontFamily = ''
     document.documentElement.style.fontSize = ''
   })
 
-  it('renders SettingsAppearancePage with theme, typography, background and music sections', async () => {
+  it('renders SettingsAppearancePage with theme, scale, and background sections cleanly', async () => {
     const wrapper = mount(SettingsAppearancePage, {
       global: {
         plugins: [i18n],
@@ -42,9 +43,10 @@ describe('Appearance and Personalisation feature', () => {
     expect(wrapper.text()).toContain('外观与个性化设置')
     expect(wrapper.text()).toContain('主题与材质')
     expect(wrapper.text()).toContain('强调色 (种子颜色)')
-    expect(wrapper.text()).toContain('字体与缩放')
+    expect(wrapper.text()).toContain('界面缩放')
     expect(wrapper.text()).toContain('背景设置')
-    expect(wrapper.text()).toContain('背景音乐')
+    expect(wrapper.text()).not.toContain('背景音乐')
+    expect(wrapper.text()).toContain('查看完整组件库')
   })
 
   it('updates seed color and mode in useThemeStore', async () => {
@@ -81,14 +83,38 @@ describe('Appearance and Personalisation feature', () => {
   })
 
 
-  it('applies fontFamily and UI scale to document.documentElement', async () => {
+  it('applies UI scale to document.documentElement', async () => {
     const store = useThemeStore()
-
-    store.setFontFamily('Consolas, monospace')
-    expect(document.documentElement.style.fontFamily).toBe('Consolas, monospace')
 
     store.setScale(1.2)
     expect(document.documentElement.style.fontSize).toBe(`${1.2 * 16}px`)
+  })
+
+  it('renders single-image background preview and handles clear button', async () => {
+    const store = useThemeStore()
+    store.setBackgroundMode('image')
+    store.setBackgroundPath('C:/images/background.png')
+    store.setBackgroundBlur(10)
+    store.setBackgroundOpacity(0.5)
+
+    const pageWrapper = mount(SettingsAppearancePage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+    await flushPromises()
+
+    const previewImg = pageWrapper.find('[data-testid="bg-preview-img"]')
+    expect(previewImg.exists()).toBe(true)
+
+    // Find clear button (with icon i-lucide-x)
+    const clearBtn = pageWrapper.find('button[class*="i-lucide-x"], button .i-lucide-x')
+    expect(clearBtn.exists()).toBe(true)
+    await clearBtn.trigger('click')
+    await flushPromises()
+
+    expect(store.backgroundPath).toBe('')
+    expect(store.backgroundMode).toBe('none')
   })
 
   it('renders video element when backgroundMode is video in SettingsAppearancePage preview and AppShell', async () => {
@@ -127,53 +153,22 @@ describe('Appearance and Personalisation feature', () => {
     expect(bgVideo.attributes('loop')).toBeDefined()
   })
 
-  it('handles music controller in AppShell and supports auto-pause on launch and resume on exit', async () => {
+  it('renders empty state without contrast sample card when backgroundMode is none or no media path', async () => {
     const store = useThemeStore()
-    store.setMusicEnabled(true)
-    store.playlist = ['C:/music/track1.mp3', 'C:/music/track2.mp3']
-    store.currentTrackIndex = 0
+    store.setBackgroundMode('none')
+    store.setBackgroundPath('')
 
-    const shellWrapper = mount(AppShell, {
+    const pageWrapper = mount(SettingsAppearancePage, {
       global: {
         plugins: [i18n],
-        stubs: {
-          RouterView: true,
-          TaskIndicator: true,
-          CrashDialog: true,
-        },
       },
     })
     await flushPromises()
 
-    const controls = shellWrapper.find('[data-testid="music-controls"]')
-    expect(controls.exists()).toBe(true)
-
-    const playBtn = shellWrapper.find('[data-testid="music-play-btn"]')
-    expect(playBtn.exists()).toBe(true)
-    await playBtn.trigger('click')
-    expect(store.isPlaying).toBe(true)
-
-    const nextBtn = shellWrapper.find('[data-testid="music-next-btn"]')
-    await nextBtn.trigger('click')
-    expect(store.currentTrackIndex).toBe(1)
-
-    // Simulate game launch auto-pause logic
-    store.isPlaying = true
-    if (store.isPlaying) {
-      store.pausedByGame = true
-      store.isPlaying = false
-    }
-    expect(store.isPlaying).toBe(false)
-    expect(store.pausedByGame).toBe(true)
-
-    // Simulate game exit auto-resume logic
-    if (store.pausedByGame) {
-      store.pausedByGame = false
-      if (store.musicEnabled) {
-        store.isPlaying = true
-      }
-    }
-    expect(store.isPlaying).toBe(true)
-    expect(store.pausedByGame).toBe(false)
+    expect(pageWrapper.find('[data-testid="bg-preview-video"]').exists()).toBe(false)
+    expect(pageWrapper.find('[data-testid="bg-preview-img"]').exists()).toBe(false)
+    expect(pageWrapper.text()).toContain('未选择背景媒体或模式为无')
+    expect(pageWrapper.text()).not.toContain('Sample UI Foreground Content')
   })
+
 })

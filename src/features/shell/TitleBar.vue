@@ -6,15 +6,8 @@ import type { UnlistenFn } from '@tauri-apps/api/event'
 import { MLogo } from '../../ui'
 import TaskIndicator from '../tasks/TaskIndicator.vue'
 import QuickSettings from './QuickSettings.vue'
-import MusicMiniPlayer from './MusicMiniPlayer.vue'
 
-defineProps<{
-  musicEnabled: boolean
-  togglePlay: () => void
-  nextTrack: () => void
-  prevTrack: () => void
-  togglePlayMode: () => void
-}>()
+defineProps<{}>()
 
 const { t } = useI18n()
 const isMaximized = ref(false)
@@ -97,17 +90,8 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Right Controls: MusicMiniPlayer, QuickSettings, Window Buttons -->
+    <!-- Right Controls: QuickSettings, Window Buttons -->
     <div class="flex items-center">
-      <!-- Music Player -->
-      <MusicMiniPlayer
-        v-if="musicEnabled"
-        :toggle-play="togglePlay"
-        :next-track="nextTrack"
-        :prev-track="prevTrack"
-        :toggle-play-mode="togglePlayMode"
-      />
-
       <!-- Quick Settings Popover -->
       <div class="mr-2">
         <QuickSettings />

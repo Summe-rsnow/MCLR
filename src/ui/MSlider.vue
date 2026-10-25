@@ -17,11 +17,17 @@ withDefaults(
 
 const emit = defineEmits<{
   (e: 'update:modelValue', val: number): void
+  (e: 'change', val: number): void
 }>()
 
 function onInput(event: Event) {
   const target = event.target as HTMLInputElement
   emit('update:modelValue', parseFloat(target.value))
+}
+
+function onChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  emit('change', parseFloat(target.value))
 }
 </script>
 
@@ -36,6 +42,7 @@ function onInput(event: Event) {
       :disabled="disabled"
       class="w-full h-2 bg-sunken rounded-lg appearance-none cursor-pointer accent-primary disabled:opacity-45 disabled:cursor-not-allowed"
       @input="onInput"
+      @change="onChange"
     />
     <span class="text-xs text-fg-muted w-8 text-right tabular-nums">{{ modelValue }}</span>
   </div>

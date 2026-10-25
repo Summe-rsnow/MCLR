@@ -296,7 +296,7 @@ async function openCloset(serverUrl?: string | null) {
     </MCard>
 
     <!-- Main Grid: Accounts List & Skin Panel -->
-    <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       <!-- Accounts List (Left 7 Cols) -->
       <TransitionGroup name="m-list" tag="div" class="lg:col-span-7 flex flex-col gap-3">
         <MCard
@@ -461,44 +461,48 @@ async function openCloset(serverUrl?: string | null) {
       v-model:open="showAddTypeDialog"
       :title="t('accounts.addAccount')"
     >
-      <div class="flex flex-col gap-3 py-2">
-        <MButton
-          variant="tonal"
-          class="justify-start py-3"
+      <div class="flex flex-col gap-2.5 py-2">
+        <button
+          type="button"
+          class="w-full flex items-center px-4 py-3 rounded-xl border border-line/60 bg-surface hover:bg-sunken/60 active:scale-[0.99] transition-all cursor-pointer text-left select-none outline-none group"
           @click="startAddMicrosoft"
         >
-          <template #icon>
-            <MBrandIcon name="microsoft" class="w-5 h-5 mr-2" />
-          </template>
-          <div class="text-left">
-            <div class="font-medium">{{ t('accounts.types.microsoft') }}</div>
-            <div class="text-xs text-fg-muted">OAuth 2.0 / Xbox Live</div>
+          <div class="w-10 h-10 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 text-primary">
+            <MBrandIcon name="microsoft" class="w-5 h-5" />
           </div>
-        </MButton>
+          <div class="flex flex-col text-left min-w-0 ml-3.5">
+            <span class="text-sm font-semibold text-fg">{{ t('accounts.types.microsoft') }}</span>
+            <span class="text-xs text-fg-muted mt-0.5">OAuth 2.0 / Xbox Live</span>
+          </div>
+        </button>
 
-        <MButton
-          variant="tonal"
-          icon="i-lucide-user-round"
-          class="justify-start py-3"
+        <button
+          type="button"
+          class="w-full flex items-center px-4 py-3 rounded-xl border border-line/60 bg-surface hover:bg-sunken/60 active:scale-[0.99] transition-all cursor-pointer text-left select-none outline-none group"
           @click="startAddOffline"
         >
-          <div class="text-left ml-2">
-            <div class="font-medium">{{ t('accounts.types.offline') }}</div>
-            <div class="text-xs text-fg-muted">Standard MD5 / Custom UUID</div>
+          <div class="w-10 h-10 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 text-fg-muted group-hover:text-fg transition-colors">
+            <span class="i-lucide-user-round w-5 h-5 inline-block" />
           </div>
-        </MButton>
+          <div class="flex flex-col text-left min-w-0 ml-3.5">
+            <span class="text-sm font-semibold text-fg">{{ t('accounts.types.offline') }}</span>
+            <span class="text-xs text-fg-muted mt-0.5">Standard MD5 / Custom UUID</span>
+          </div>
+        </button>
 
-        <MButton
-          variant="tonal"
-          icon="i-lucide-shield-check"
-          class="justify-start py-3"
+        <button
+          type="button"
+          class="w-full flex items-center px-4 py-3 rounded-xl border border-line/60 bg-surface hover:bg-sunken/60 active:scale-[0.99] transition-all cursor-pointer text-left select-none outline-none group"
           @click="startAddAuthlib"
         >
-          <div class="text-left ml-2">
-            <div class="font-medium">{{ t('accounts.types.authlib') }}</div>
-            <div class="text-xs text-fg-muted">Authlib-Injector / LittleSkin</div>
+          <div class="w-10 h-10 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 text-fg-muted group-hover:text-fg transition-colors">
+            <span class="i-lucide-shield-check w-5 h-5 inline-block" />
           </div>
-        </MButton>
+          <div class="flex flex-col text-left min-w-0 ml-3.5">
+            <span class="text-sm font-semibold text-fg">{{ t('accounts.types.authlib') }}</span>
+            <span class="text-xs text-fg-muted mt-0.5">Authlib-Injector / LittleSkin</span>
+          </div>
+        </button>
       </div>
       <template #footer>
         <MButton variant="text" @click="showAddTypeDialog = false">

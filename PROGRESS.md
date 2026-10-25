@@ -1,6 +1,6 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.14`
+- **Current Version**: `0.0.17`
 - **Next Milestone**: `None (Complete)`
 
 | Milestone | Title | Status | Commit | Tag | Date |
@@ -19,3 +19,6 @@
 | v0.0.12 | Updates, remaining settings, i18n audit, packaging | done | v0.0.12 | v0.0.12 | 2026-10-25 |
 | v0.0.13 | UI redesign: Tonal Layers | done | v0.0.13 | v0.0.13 | 2026-10-25 |
 | v0.0.14 | Instance-first flow and fluidity | done | v0.0.14 | v0.0.14 | 2026-10-25 |
+| v0.0.15 | UI alignment, PCL version parity, Minecraft icons & component polish | done | v0.0.15 | v0.0.15 | 2026-10-25 |
+| v0.0.16 | Home & Launch consolidation, standalone Java page, Help in About & cleanups | done | v0.0.16 | v0.0.16 | 2026-10-25 |
+| v0.0.17 | UVMC parity, select-to-add flows, MHelpTooltip, compact UI & polish | done | v0.0.17 | v0.0.17 | 2026-10-25 |

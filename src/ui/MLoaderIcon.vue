@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { getLoaderMeta } from './icons'
+import { getInstanceIconMeta } from './icons'
 
 const props = withDefaults(
   defineProps<{
     kind?: string | null
+    icon?: string | null
     size?: 24 | 32 | 40 | 56
   }>(),
   {
     kind: 'vanilla',
+    icon: null,
     size: 32,
   },
 )
 
-const meta = computed(() => getLoaderMeta(props.kind))
+const meta = computed(() => getInstanceIconMeta(props.icon, props.kind))
 
 const sizeClasses = computed(() => {
   switch (props.size) {

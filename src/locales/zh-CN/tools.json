@@ -1,7 +1,7 @@
 {
-  "nav": "工具箱",
+  "nav": "实用工具",
   "title": "实用工具",
-  "subtitle": "提供皮肤提取、缓存清理、快捷下载、快捷方式创建与每日人品",
+  "subtitle": "提供皮肤提取、缓存清理、快捷下载与快捷方式创建",
   "skin": {
     "title": "皮肤与头像提取",
     "desc": "输入正版 Minecraft 玩家名称，获取其 2D 头像与完整皮肤贴图",
@@ -52,19 +52,5 @@
     "create": "创建桌面快捷方式",
     "created": "已成功在桌面创建快捷方式",
     "noInstance": "请选择要创建快捷方式的实例"
-  },
-  "luck": {
-    "title": "每日人品",
-    "desc": "测试你今天在 Minecraft 中的运势，相同玩家同日结果恒定",
-    "usernamePlaceholder": "输入玩家名称",
-    "query": "测算运势",
-    "scoreLabel": "今日人品指数",
-    "levels": {
-      "greatBlessing": "大吉！挖矿必出远古残骸，附魔直接全满属性！",
-      "blessing": "吉！探索下界一路顺风，刷怪笼惊喜连连！",
-      "middleBlessing": "中吉！平稳的一天，适合安居种田与修筑城堡！",
-      "smallBlessing": "小吉！出门小心苦力怕，带好火把防迷路！",
-      "misfortune": "凶！小心脚下岩浆，回家前记得将贵重物品存箱！"
-    }
   }
 }

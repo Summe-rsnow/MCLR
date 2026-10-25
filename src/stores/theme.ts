@@ -9,7 +9,6 @@ import {
 import { ipcClient } from '../ipc/client'
 
 export type BackgroundMode = 'none' | 'image' | 'slideshow' | 'video'
-export type MusicPlayMode = 'loop' | 'shuffle'
 export type MotionMode = 'full' | 'reduced' | 'off'
 const MOTION_KEY = 'mclr.motion'
 
@@ -36,27 +35,13 @@ export const useThemeStore = defineStore('theme', () => {
     return 'full'
   }
 
-  // Typography & Scale
+  // Scale
   const scale = ref<number>(1.0)
-  const fontFamily = ref<string>('')
-
   // Background
   const backgroundMode = ref<BackgroundMode>('none')
   const backgroundPath = ref<string>('')
   const backgroundBlur = ref<number>(0)
   const backgroundOpacity = ref<number>(0.3)
-
-  // Music
-  const musicEnabled = ref<boolean>(false)
-  const musicFolder = ref<string>('')
-  const musicVolume = ref<number>(50)
-  const musicPlayMode = ref<MusicPlayMode>('loop')
-
-  // Playback state (ephemeral, not persisted)
-  const isPlaying = ref<boolean>(false)
-  const currentTrackIndex = ref<number>(0)
-  const playlist = ref<string[]>([])
-  const pausedByGame = ref<boolean>(false)
   let saveTimer: ReturnType<typeof setTimeout> | undefined = undefined
   function schedulePersist() {
     clearTimeout(saveTimer)
@@ -68,15 +53,10 @@ export const useThemeStore = defineStore('theme', () => {
             mode: mode.value,
             material: material.value,
             scale: scale.value,
-            fontFamily: fontFamily.value,
             backgroundMode: backgroundMode.value,
             backgroundPath: backgroundPath.value,
             backgroundBlur: backgroundBlur.value,
             backgroundOpacity: backgroundOpacity.value,
-            musicEnabled: musicEnabled.value,
-            musicFolder: musicFolder.value,
-            musicVolume: musicVolume.value,
-            musicPlayMode: musicPlayMode.value,
           },
         })
       } catch {
@@ -114,11 +94,6 @@ export const useThemeStore = defineStore('theme', () => {
     schedulePersist()
   }
 
-  function setFontFamily(newFont: string) {
-    fontFamily.value = newFont
-    applyTypography()
-    schedulePersist()
-  }
 
   function setBackgroundMode(newMode: BackgroundMode) {
     backgroundMode.value = newMode
@@ -140,38 +115,8 @@ export const useThemeStore = defineStore('theme', () => {
     schedulePersist()
   }
 
-  function setMusicEnabled(enabled: boolean) {
-    musicEnabled.value = enabled
-    if (!enabled) {
-      isPlaying.value = false
-    }
-    schedulePersist()
-  }
-
-  function setMusicFolder(folder: string) {
-    musicFolder.value = folder
-    schedulePersist()
-  }
-
-  function setMusicVolume(vol: number) {
-    musicVolume.value = Math.max(0, Math.min(100, Math.round(vol)))
-    schedulePersist()
-  }
-
-  function setMusicPlayMode(playMode: MusicPlayMode) {
-    musicPlayMode.value = playMode
-    schedulePersist()
-  }
-
   function applyTypography() {
     if (typeof document !== 'undefined' && document.documentElement) {
-      if (fontFamily.value) {
-        document.documentElement.style.fontFamily = fontFamily.value
-        document.documentElement.style.setProperty('--font-user', fontFamily.value)
-      } else {
-        document.documentElement.style.fontFamily = ''
-        document.documentElement.style.removeProperty('--font-user')
-      }
       document.documentElement.style.fontSize = `${scale.value * 16}px`
     }
   }
@@ -211,18 +156,10 @@ export const useThemeStore = defineStore('theme', () => {
         if (s.ui.mode) mode.value = s.ui.mode
         if (s.ui.material) material.value = s.ui.material
         if (typeof s.ui.scale === 'number') scale.value = s.ui.scale
-        if (typeof s.ui.fontFamily === 'string') fontFamily.value = s.ui.fontFamily
         if (s.ui.backgroundMode) backgroundMode.value = s.ui.backgroundMode as BackgroundMode
         if (typeof s.ui.backgroundPath === 'string') backgroundPath.value = s.ui.backgroundPath
         if (typeof s.ui.backgroundBlur === 'number') backgroundBlur.value = s.ui.backgroundBlur
         if (typeof s.ui.backgroundOpacity === 'number') backgroundOpacity.value = s.ui.backgroundOpacity
-        if (typeof s.ui.musicEnabled === 'boolean') musicEnabled.value = s.ui.musicEnabled
-        if (typeof s.ui.musicFolder === 'string') musicFolder.value = s.ui.musicFolder
-        if (typeof s.ui.musicVolume === 'number') musicVolume.value = s.ui.musicVolume
-        const uiRecord = s.ui as Record<string, unknown>
-        if (typeof uiRecord.musicPlayMode === 'string') {
-          musicPlayMode.value = uiRecord.musicPlayMode as MusicPlayMode
-        }
       }
     } catch {
       // In tests/mock
@@ -244,33 +181,19 @@ export const useThemeStore = defineStore('theme', () => {
     material,
     motion,
     scale,
-    fontFamily,
     backgroundMode,
     backgroundPath,
     backgroundBlur,
     backgroundOpacity,
-    musicEnabled,
-    musicFolder,
-    musicVolume,
-    musicPlayMode,
-    isPlaying,
-    currentTrackIndex,
-    playlist,
-    pausedByGame,
     setSeed,
     setMode,
     setMaterial,
     setMotion,
     setScale,
-    setFontFamily,
     setBackgroundMode,
     setBackgroundPath,
     setBackgroundBlur,
     setBackgroundOpacity,
-    setMusicEnabled,
-    setMusicFolder,
-    setMusicVolume,
-    setMusicPlayMode,
     applyTypography,
     apply,
     init,

@@ -22,12 +22,16 @@ import {
   MSwitch,
   MSection,
   MSettingRow,
+  MHelpTooltip,
   useToast,
+  useDialog,
 } from '../../ui'
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
+import { openPath } from '@tauri-apps/plugin-opener'
 const { t } = useI18n()
 const { formatError } = useErrorText()
 const toast = useToast()
+const { confirm } = useDialog()
 const route = useRoute()
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
@@ -55,8 +59,8 @@ const folders = ref<GameFolderEntry[]>([])
 const currentFolder = ref('')
 const defaultIsolation = ref('all')
 const sortBy = ref('name')
-const newFolderName = ref('')
-const newFolderPath = ref('')
+const editingFolderPath = ref<string | null>(null)
+const editingRemarkName = ref('')
 
 // Misc state
 const proxyMode = ref<'none' | 'system' | 'custom'>('none')
@@ -178,55 +182,93 @@ async function saveGameSettings() {
   })
 }
 
-async function browseGameFolder() {
+function formatFolderPath(path: string): string {
+  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean)
+  if (parts.length <= 2) return path
+  return `.../${parts.slice(-2).join('/')}`
+}
+
+function startEditRemark(folder: GameFolderEntry) {
+  editingFolderPath.value = folder.path
+  editingRemarkName.value = folder.name
+}
+
+function cancelEditRemark() {
+  editingFolderPath.value = null
+  editingRemarkName.value = ''
+}
+
+async function saveRemark(path: string) {
+  const name = editingRemarkName.value.trim()
+  if (!name) return
+  const folder = folders.value.find((f) => f.path === path)
+  if (folder) {
+    folder.name = name
+    await saveGameSettings()
+    toast.success(t('common.saved'))
+  }
+  editingFolderPath.value = null
+  editingRemarkName.value = ''
+}
+
+async function onPickAndAddGameFolder() {
   try {
-    const selected = await openFileDialog({
-      directory: true,
-      multiple: false,
-    })
-    if (typeof selected === 'string' && selected) {
-      newFolderPath.value = selected
-      if (!newFolderName.value.trim()) {
-        const parts = selected.replace(/\\/g, '/').split('/').filter(Boolean)
-        newFolderName.value = parts[parts.length - 1] || 'Minecraft'
-      }
-      try {
-        await ipcClient.assetsAllow(selected)
-      } catch {
-        // ignore in mock/test
-      }
+    const selected = await openFileDialog({ directory: true })
+    if (!selected) return
+    const path = Array.isArray(selected) ? selected[0] : selected
+    if (!path) return
+
+    if (folders.value.some((f) => f.path === path)) {
+      toast.warning(t('settingsSystem.gameManage.alreadyExists'))
+      return
     }
-  } catch {
-    // ignore
+
+    try {
+      await ipcClient.assetsAllow(path)
+    } catch {
+      // ignore in mock/test
+    }
+
+    const parts = path.replace(/\\/g, '/').split('/').filter(Boolean)
+    const name = parts[parts.length - 1] || '.minecraft'
+
+    folders.value.push({ name, path })
+    currentFolder.value = path
+    await saveGameSettings()
+    toast.success(t('common.saved'))
+  } catch (err) {
+    toast.danger(`${t('common.error')}: ${String(err)}`)
   }
 }
 
-async function addGameFolder() {
-  const name = newFolderName.value.trim()
-  const path = newFolderPath.value.trim()
-  if (!name || !path) return
-  try {
-    await ipcClient.assetsAllow(path)
-  } catch {
-    // ignore in mock/test
-  }
-  folders.value.push({ name, path })
-  currentFolder.value = path
-  newFolderName.value = ''
-  newFolderPath.value = ''
-  await saveGameSettings()
-}
 async function switchGameFolder(path: string) {
   currentFolder.value = path
   await saveGameSettings()
 }
 
+async function openGameFolderInOs(path: string) {
+  try {
+    await openPath(path)
+  } catch (err) {
+    toast.danger(`${t('common.error')}: ${String(err)}`)
+  }
+}
+
 async function removeGameFolder(path: string) {
+  const ok = await confirm({
+    title: t('settingsSystem.gameManage.removeConfirmTitle'),
+    content: t('settingsSystem.gameManage.removeConfirmDesc', { path }),
+    confirmText: t('common.delete'),
+    cancelText: t('common.cancel'),
+  })
+  if (!ok) return
+
   folders.value = folders.value.filter((f) => f.path !== path)
-  if (currentFolder.value === path && folders.value.length > 0) {
-    currentFolder.value = folders.value[0].path
+  if (currentFolder.value === path) {
+    currentFolder.value = folders.value.length > 0 ? folders.value[0].path : ''
   }
   await saveGameSettings()
+  toast.success(t('common.saved'))
 }
 
 async function saveMiscSettings() {
@@ -373,35 +415,98 @@ onMounted(async () => {
         :description="t('settingsSystem.gameManage.foldersDesc')"
         icon="i-lucide-folder-cog"
       >
+        <template #actions>
+          <MButton
+            variant="primary"
+            size="sm"
+            icon="i-lucide-folder-plus"
+            data-testid="add-folder-btn"
+            @click="onPickAndAddGameFolder"
+          >
+            {{ t('settingsSystem.gameManage.addFolder') }}
+          </MButton>
+        </template>
+
         <div class="flex flex-col gap-4">
-          <div class="space-y-2">
+          <div v-if="folders.length === 0" class="text-sm text-fg-muted py-6 text-center">
+            {{ t('settingsSystem.gameManage.emptyFolders') }}
+          </div>
+          <div v-else class="space-y-2">
             <div
               v-for="folder in folders"
               :key="folder.path"
-              class="flex items-center justify-between p-3 rounded-xl border border-line bg-sunken/40"
+              class="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl border border-line bg-sunken/40 gap-3"
             >
-              <div>
-                <div class="flex items-center gap-2">
+              <div class="min-w-0 flex-1">
+                <div v-if="editingFolderPath === folder.path" class="flex items-center gap-2">
+                  <MInput
+                    v-model="editingRemarkName"
+                    size="sm"
+                    class="w-48"
+                    data-testid="edit-remark-input"
+                    @keydown.enter="saveRemark(folder.path)"
+                    @keydown.esc="cancelEditRemark"
+                  />
+                  <MButton
+                    variant="primary"
+                    size="xs"
+                    icon="i-lucide-check"
+                    data-testid="save-remark-btn"
+                    @click="saveRemark(folder.path)"
+                  >
+                    {{ t('common.confirm') }}
+                  </MButton>
+                  <MButton
+                    variant="text"
+                    size="xs"
+                    icon="i-lucide-x"
+                    @click="cancelEditRemark"
+                  >
+                    {{ t('common.cancel') }}
+                  </MButton>
+                </div>
+                <div v-else class="flex items-center gap-2">
                   <span class="font-medium text-sm text-fg">{{ folder.name }}</span>
                   <MBadge v-if="folder.path === currentFolder" variant="primary">
                     {{ t('settingsSystem.gameManage.currentBadge') }}
                   </MBadge>
                 </div>
-                <div class="text-xs text-fg-muted font-mono mt-0.5">{{ folder.path }}</div>
+                <div class="flex items-center gap-1.5 text-xs text-fg-muted font-mono mt-1 min-w-0">
+                  <span class="truncate">{{ formatFolderPath(folder.path) }}</span>
+                  <MHelpTooltip :text="folder.path" size="xs" />
+                </div>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 shrink-0 flex-wrap">
                 <MButton
                   v-if="folder.path !== currentFolder"
                   variant="tonal"
-                  size="sm"
+                  size="xs"
                   @click="switchGameFolder(folder.path)"
                 >
                   {{ t('settingsSystem.gameManage.switchFolder') }}
                 </MButton>
                 <MButton
-                  v-if="folders.length > 1"
-                  variant="danger"
-                  size="sm"
+                  variant="text"
+                  size="xs"
+                  icon="i-lucide-pencil"
+                  data-testid="edit-remark-btn"
+                  @click="startEditRemark(folder)"
+                >
+                  {{ t('settingsSystem.gameManage.editRemark') }}
+                </MButton>
+                <MButton
+                  variant="text"
+                  size="xs"
+                  icon="i-lucide-folder-open"
+                  @click="openGameFolderInOs(folder.path)"
+                >
+                  {{ t('settingsSystem.gameManage.openFolder') }}
+                </MButton>
+                <MButton
+                  variant="text"
+                  size="xs"
+                  icon="i-lucide-trash-2"
+                  class="text-danger"
                   @click="removeGameFolder(folder.path)"
                 >
                   {{ t('settingsSystem.gameManage.removeFolder') }}
@@ -409,36 +514,17 @@ onMounted(async () => {
               </div>
             </div>
           </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t border-line">
-            <MInput
-              v-model="newFolderName"
-              size="sm"
-              :placeholder="t('settingsSystem.gameManage.folderNamePlaceholder')"
-            />
-            <div class="flex items-center gap-1.5 md:col-span-2">
-              <MInput
-                v-model="newFolderPath"
-                size="sm"
-                :placeholder="t('settingsSystem.gameManage.folderPathPlaceholder')"
-                class="flex-1"
-              />
-              <MButton variant="tonal" size="sm" icon="i-lucide-folder-open" @click="browseGameFolder">
-                {{ t('settingsSystem.gameManage.browseFolder') }}
-              </MButton>
-            </div>
-            <MButton variant="primary" size="sm" data-testid="add-folder-btn" @click="addGameFolder">
-              {{ t('settingsSystem.gameManage.addFolder') }}
-            </MButton>
-          </div>
         </div>
       </MSection>
 
       <MSection
         :title="t('settingsSystem.gameManage.isolationTitle')"
-        :description="t('settingsSystem.gameManage.isolationDesc')"
         icon="i-lucide-layers"
       >
+        <template #title>
+          <span>{{ t('settingsSystem.gameManage.isolationTitle') }}</span>
+          <MHelpTooltip :text="t('settingsSystem.gameManage.isolationDesc')" />
+        </template>
         <div class="flex flex-col">
           <MSettingRow
             :label="t('settingsSystem.gameManage.defaultIsolation')"
@@ -547,10 +633,13 @@ onMounted(async () => {
               "
             />
           </MSettingRow>
-
           <MSettingRow
             :label="t('settingsSystem.misc.doh')"
           >
+            <template #label>
+              <span>{{ t('settingsSystem.misc.doh') }}</span>
+              <MHelpTooltip :text="t('settingsSystem.misc.dohDesc')" />
+            </template>
             <MSwitch
               :model-value="doh"
               @update:model-value="
@@ -632,8 +721,11 @@ onMounted(async () => {
 
           <MSettingRow
             :label="t('settingsSystem.misc.disableGpu')"
-            :hint="t('settingsSystem.misc.disableGpuDesc')"
           >
+            <template #label>
+              <span>{{ t('settingsSystem.misc.disableGpu') }}</span>
+              <MHelpTooltip :text="t('settingsSystem.misc.disableGpuDesc')" />
+            </template>
             <div class="flex flex-col items-end gap-1">
               <MSwitch
                 data-testid="toggle-hw-accel"

@@ -46,7 +46,7 @@ describe('Tools Feature', () => {
     await router.isReady()
   })
 
-  it('renders ToolsPage with all 5 tool cards', async () => {
+  it('renders ToolsPage with all 4 tool cards', async () => {
     const wrapper = mount(ToolsPage, {
       global: {
         plugins: [i18n, router],
@@ -59,9 +59,7 @@ describe('Tools Feature', () => {
     expect(wrapper.text()).toContain(zhCnTools.cache.title)
     expect(wrapper.text()).toContain(zhCnTools.download.title)
     expect(wrapper.text()).toContain(zhCnTools.shortcut.title)
-    expect(wrapper.text()).toContain(zhCnTools.luck.title)
   })
-
   it('tool 1: skin fetcher fetches player skin and displays preview', async () => {
     const wrapper = mount(ToolsPage, {
       global: {
@@ -158,27 +156,4 @@ describe('Tools Feature', () => {
     })
   })
 
-  it('tool 5: daily luck displays calculated score and level message', async () => {
-    const wrapper = mount(ToolsPage, {
-      global: {
-        plugins: [i18n, router],
-      },
-    })
-    await flushPromises()
-
-    expect(wrapper.text()).toContain(zhCnTools.luck.scoreLabel)
-    expect(wrapper.text()).toContain('88%')
-    expect(wrapper.text()).toContain(zhCnTools.luck.levels.blessing)
-
-    const input = wrapper.find('input[placeholder*="玩家名称"]')
-    expect(input.exists()).toBe(true)
-    await input.setValue('Alex')
-
-    const queryBtn = wrapper.find('[data-testid="query-luck-btn"]')
-    expect(queryBtn.exists()).toBe(true)
-    await queryBtn.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Alex')
-  })
 })

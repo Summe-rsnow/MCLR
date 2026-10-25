@@ -3,7 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useInstancesStore } from './store'
-import type { InstanceInfo, CardKind } from '../../ipc/client'
+import { ipcClient, type InstanceInfo, type CardKind } from '../../ipc/client'
+import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
 import {
   MPageHeader,
   MInput,
@@ -66,29 +67,24 @@ function toggleGroupCollapse(key: CardKind) {
   collapsedGroups.value[key] = !isGroupCollapsed(key)
 }
 
-// Add Folder Dialog State
-const showAddFolderDialog = ref(false)
-const newFolderName = ref('')
-const newFolderPath = ref('')
-const folderPathError = ref('')
-
-function openAddFolderDialog() {
-  newFolderName.value = ''
-  newFolderPath.value = ''
-  folderPathError.value = ''
-  showAddFolderDialog.value = true
-}
-
-async function handleAddFolder() {
-  if (!newFolderPath.value.trim()) {
-    folderPathError.value = t('instances.folder.pathError')
-    return
+async function onPickAndAddFolder() {
+  try {
+    const selected = await openFileDialog({ directory: true })
+    if (!selected) return
+    const path = Array.isArray(selected) ? selected[0] : selected
+    if (!path) return
+    try {
+      await ipcClient.assetsAllow(path)
+    } catch {
+      // ignore
+    }
+    const parts = path.replace(/\\/g, '/').split('/').filter(Boolean)
+    const name = parts[parts.length - 1] || '.minecraft'
+    await instancesStore.addFolder(name, path)
+  } catch (err) {
+    console.error('Failed to add folder:', err)
   }
-  const name = newFolderName.value.trim() || newFolderPath.value.split(/[\\/]/).pop() || 'Folder'
-  await instancesStore.addFolder(name, newFolderPath.value.trim())
-  showAddFolderDialog.value = false
 }
-
 // Rename Dialog State
 const showRenameDialog = ref(false)
 const targetInstance = ref<InstanceInfo | null>(null)
@@ -323,7 +319,7 @@ function navigateToDetail(id: string, tab?: string) {
           icon="i-lucide-folder-plus"
           size="sm"
           :title="t('instances.folder.add')"
-          @click="openAddFolderDialog"
+          @click="onPickAndAddFolder"
         />
       </div>
 
@@ -354,8 +350,30 @@ function navigateToDetail(id: string, tab?: string) {
       </div>
     </MCard>
 
+    <!-- Guide: No game folder configured -->
+    <div v-if="!instancesStore.currentFolder" class="py-12" data-testid="no-folder-guide">
+      <MCard padding="lg" class="max-w-md mx-auto text-center flex flex-col items-center gap-4">
+        <div class="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+          <span class="w-8 h-8 i-lucide-folder-plus" />
+        </div>
+        <div class="space-y-1">
+          <h3 class="text-base font-semibold text-fg">{{ t('instances.noFolder.title') }}</h3>
+          <p class="text-sm text-fg-muted">{{ t('instances.noFolder.desc') }}</p>
+        </div>
+        <MButton
+          variant="primary"
+          size="md"
+          icon="i-lucide-folder-open"
+          data-testid="pick-game-folder-btn"
+          @click="onPickAndAddFolder"
+        >
+          {{ t('instances.noFolder.action') }}
+        </MButton>
+      </MCard>
+    </div>
+
     <!-- Skeleton Loading while initializing -->
-    <div v-if="!instancesStore.initialized" class="py-6">
+    <div v-else-if="!instancesStore.initialized" class="py-6">
       <MSkeletonList variant="card" :rows="6" />
     </div>
 
@@ -424,6 +442,7 @@ function navigateToDetail(id: string, tab?: string) {
                 <div class="flex items-center gap-3 min-w-0">
                   <MLoaderIcon
                     :kind="inst.kind || (inst.loaders?.[0]?.toLowerCase() ?? 'vanilla')"
+                    :icon="inst.config?.icon"
                     :size="40"
                     class="shrink-0"
                   />
@@ -466,14 +485,13 @@ function navigateToDetail(id: string, tab?: string) {
               <!-- Badges / Loaders Row -->
               <div class="flex flex-wrap items-center gap-1.5 my-2">
                 <MBadge
-                  v-if="inst.state !== 'ok'"
-                  variant="danger"
+                  variant="primary"
                   size="sm"
                 >
-                  {{ t(`instances.card.state.${inst.state}`) }}
+                  Minecraft {{ inst.mcVersion }}
                 </MBadge>
                 <MBadge
-                  v-else-if="inst.loaders && inst.loaders.length > 0"
+                  v-if="inst.loaders && inst.loaders.length > 0"
                   v-for="loader in inst.loaders"
                   :key="loader"
                   :variant="getLoaderBadgeVariant(inst.kind)"
@@ -482,11 +500,18 @@ function navigateToDetail(id: string, tab?: string) {
                   {{ loader }}
                 </MBadge>
                 <MBadge
-                  v-else
+                  v-else-if="inst.kind && inst.kind !== 'vanilla'"
                   variant="neutral"
                   size="sm"
                 >
                   {{ inst.kind }}
+                </MBadge>
+                <MBadge
+                  v-if="inst.state !== 'ok'"
+                  variant="danger"
+                  size="sm"
+                >
+                  {{ t(`instances.card.state.${inst.state}`) }}
                 </MBadge>
                 <MBadge
                   v-if="inst.config?.isolation === 'on'"
@@ -594,37 +619,6 @@ function navigateToDetail(id: string, tab?: string) {
       </template>
     </MDialog>
 
-    <!-- Add Folder Dialog -->
-    <MDialog
-      :open="showAddFolderDialog"
-      :title="t('instances.folder.addDialogTitle')"
-      @update:open="showAddFolderDialog = $event"
-    >
-      <div class="space-y-4 py-2">
-        <MInput
-          v-model="newFolderName"
-          :label="t('instances.folder.nameLabel')"
-          :placeholder="t('instances.folder.namePlaceholder')"
-        />
-        <MInput
-          v-model="newFolderPath"
-          :label="t('instances.folder.pathLabel')"
-          :placeholder="t('instances.folder.pathPlaceholder')"
-          :error="folderPathError"
-          @keyup.enter="handleAddFolder"
-        />
-      </div>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <MButton variant="tonal" @click="showAddFolderDialog = false">
-            {{ t('common.cancel') }}
-          </MButton>
-          <MButton variant="primary" @click="handleAddFolder">
-            {{ t('common.confirm') }}
-          </MButton>
-        </div>
-      </template>
-    </MDialog>
 
     <!-- Context Menu Component -->
     <MContextMenu

@@ -9,6 +9,7 @@ import { useInstancesStore } from '../instances/store'
 import {
   ipcClient,
   type CompPlatform,
+  type CompProject,
   type CompFile,
   type CompType,
   type ResolvedDependencyItem,
@@ -36,6 +37,15 @@ const { t } = useI18n()
 const toast = useToast()
 const compStore = useCompStore()
 const instancesStore = useInstancesStore()
+async function handleToggleFavorite(project: CompProject) {
+  const isFav = compStore.isFavorite(project.platform, project.id)
+  await compStore.toggleFavorite(project)
+  if (!isFav) {
+    toast.success(t('comp.favorite.added'))
+  } else {
+    toast.info(t('comp.favorite.removed'))
+  }
+}
 
 const md = new MarkdownIt({
   html: false,
@@ -477,13 +487,17 @@ onMounted(async () => {
             </MButton>
 
             <MIconButton
-              :icon="compStore.isFavorite(compStore.currentProject.platform, compStore.currentProject.id) ? 'i-lucide-heart' : 'i-lucide-heart'"
+              :icon="
+                compStore.isFavorite(compStore.currentProject.platform, compStore.currentProject.id)
+                  ? 'i-lucide-heart fill-current text-rose-500'
+                  : 'i-lucide-heart text-fg-muted hover:text-rose-500'
+              "
               :class="
                 compStore.isFavorite(compStore.currentProject.platform, compStore.currentProject.id)
-                  ? 'text-danger hover:opacity-80'
-                  : 'text-fg-muted hover:text-fg'
+                  ? 'i-lucide-heart fill-current text-rose-500'
+                  : 'i-lucide-heart text-fg-muted hover:text-rose-500'
               "
-              @click="compStore.toggleFavorite(compStore.currentProject)"
+              @click="handleToggleFavorite(compStore.currentProject)"
             />
           </div>
         </div>

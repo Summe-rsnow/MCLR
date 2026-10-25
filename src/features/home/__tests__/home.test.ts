@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import { createRouter, createWebHistory, type Router } from 'vue-router'
@@ -7,7 +7,12 @@ import type { Settings } from '../../../ipc/client'
 import HomePage from '../HomePage.vue'
 import { useHomeStore } from '../store'
 import { ipcClient } from '../../../ipc/client'
+import { setupMockIpc } from '../../../ipc/mock'
 import homeLocale from '../../../locales/zh-CN/home.json'
+import launchLocale from '../../../locales/zh-CN/launch.json'
+import commonLocale from '../../../locales/zh-CN/common.json'
+import settingsGameLocale from '../../../locales/zh-CN/settingsGame.json'
+import instancesLocale from '../../../locales/zh-CN/instances.json'
 
 const i18n = createI18n({
   legacy: false,
@@ -15,6 +20,10 @@ const i18n = createI18n({
   messages: {
     'zh-CN': {
       home: homeLocale,
+      launch: launchLocale,
+      common: commonLocale,
+      settingsGame: settingsGameLocale,
+      instances: instancesLocale,
     },
   },
 })
@@ -24,16 +33,47 @@ describe('HomePage & Home Feature', () => {
 
   beforeEach(() => {
     setActivePinia(createPinia())
+    setupMockIpc()
+    try {
+      localStorage.clear()
+    } catch {
+      // ignore
+    }
     router = createRouter({
       history: createWebHistory(),
       routes: [
         { path: '/home', component: HomePage },
-        { path: '/', redirect: '/home' },
+        { path: '/launch', component: HomePage },
+        { path: '/', redirect: '/launch' },
+        { path: '/download', component: { template: '<div>download</div>' } },
+        { path: '/settings/game', component: { template: '<div>settings</div>' } },
+        { path: '/logs', component: { template: '<div>logs</div>' } },
       ],
     })
   })
 
-  it('renders news items and fetches announcements', async () => {
+  it('renders unified launch view with news toggle default OFF', async () => {
+    const wrapper = mount(HomePage, {
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+
+    await flushPromises()
+    await router.isReady()
+
+    // Top section: Launch hero and selectors
+    expect(wrapper.text()).toContain('游戏启动')
+    expect(wrapper.text()).toContain('选择实例')
+
+    // Below: News section with toggle switch and compact disabled card by default
+    expect(wrapper.text()).toContain('官方动态与资讯')
+    expect(wrapper.text()).toContain('显示官方新闻与公告')
+    expect(wrapper.text()).toContain('新闻资讯已关闭，点击开关以加载官方公告与更新动态')
+    expect(wrapper.find('[data-testid="news-compact-off-card"]').exists()).toBe(true)
+  })
+
+  it('renders news items and announcements when showNews is enabled', async () => {
     const mockNewsList = [
       {
         id: 'news-test-1',
@@ -68,8 +108,13 @@ describe('HomePage & Home Feature', () => {
         plugins: [i18n, router],
       },
     })
+    const enableBtn = wrapper.find('[data-testid="news-enable-btn"]')
+    if (enableBtn.exists()) {
+      await enableBtn.trigger('click')
+      await flushPromises()
+    }
 
-    await router.isReady()
+    expect(wrapper.find('[data-testid="news-container-on"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Minecraft Test Update')
     expect(wrapper.text()).toContain('Important System Announcement')
   })
@@ -103,41 +148,5 @@ describe('HomePage & Home Feature', () => {
         dismissedAnnouncements: ['ann-to-dismiss'],
       },
     })
-  })
-
-  it('filters help center articles and renders markdown content', async () => {
-    const wrapper = mount(HomePage, {
-      global: {
-        plugins: [i18n, router],
-      },
-    })
-
-    await router.isReady()
-
-    // Switch to Help tab
-    const tabs = wrapper.findAll('button')
-    const helpTabBtn = tabs.find((btn) => btn.text().includes('帮助中心'))
-    expect(helpTabBtn).toBeDefined()
-    await helpTabBtn!.trigger('click')
-
-    const homeStore = useHomeStore()
-    expect(wrapper.text()).toContain('新手起步指南')
-
-    // Search query filter
-    homeStore.helpQuery = 'Java'
-    await wrapper.vm.$nextTick()
-
-    // Left sidebar list
-    const sidebarButtons = wrapper.findAll('[data-test="help-article-item"]')
-    const sidebarText = sidebarButtons.map((b) => b.text()).join(' ')
-    expect(sidebarText).toContain('Java 配置与选择')
-    expect(sidebarText).not.toContain('新手起步指南')
-    // Select article and verify markdown renders into prose HTML container
-    homeStore.selectedHelpId = 'java-guide'
-    await wrapper.vm.$nextTick()
-    const proseDiv = wrapper.find('.prose')
-    expect(proseDiv.exists()).toBe(true)
-    expect(proseDiv.text()).toContain('Minecraft 运行于 Java 虚拟机之上')
-    expect(proseDiv.html()).toContain('<h2>版本对应关系推荐</h2>')
   })
 })

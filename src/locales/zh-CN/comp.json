@@ -13,6 +13,7 @@
   },
   "platform": {
     "label": "资源平台",
+    "all": "全部",
     "modrinth": "Modrinth",
     "curseforge": "CurseForge"
   },
@@ -20,17 +21,36 @@
     "placeholder": "搜索项目名称、关键词...",
     "category": "分类",
     "allCategories": "全部分类",
+    "categories": {
+      "all": "全部分类",
+      "technology": "科技",
+      "magic": "魔法",
+      "adventure": "冒险",
+      "optimization": "性能优化",
+      "utility": "实用功能",
+      "decoration": "建筑装饰",
+      "storage": "存储",
+      "equipment": "装备",
+      "food": "农业与食物",
+      "worldgen": "世界生成",
+      "library": "运行库",
+      "shaderpacks": "光影包",
+      "quests": "任务"
+    },
     "mcVersion": "游戏版本",
     "allMcVersions": "全部版本",
     "loader": "加载器",
     "allLoaders": "全部加载器",
     "sort": "排序方式",
+    "targetInstanceLabel": "目标实例",
+    "noTargetInstance": "不指定实例",
     "sorts": {
-      "relevance": "相关度",
+      "default": "默认",
+      "relevance": "最相关",
       "downloads": "下载量",
       "follows": "关注度",
       "newest": "最新发布",
-      "updated": "最近更新"
+      "updated": "最新更新"
     },
     "noResults": "未找到匹配的社区资源",
     "loadMore": "加载更多",
@@ -110,6 +130,10 @@
   "favorites": {
     "empty": "暂无收藏的项目",
     "emptyDesc": "在浏览资源时点击爱心图标即可加入收藏"
+  },
+  "favorite": {
+    "added": "已添加至收藏夹",
+    "removed": "已从收藏夹移除"
   },
   "downloadForInstance": "为 {instance} 下载",
   "detail": {

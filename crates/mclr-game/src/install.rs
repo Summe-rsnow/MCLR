@@ -12,7 +12,7 @@ use mclr_net::{DownloadSpec, Downloader, SourceKind, race_get_bytes, rewrite_url
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use specta::Type;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 use tracing::{debug, info};
@@ -66,11 +66,33 @@ struct AssetIndexFile {
 }
 
 const MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
+const UVMC_MANIFEST_URL: &str =
+    "https://alist.8mi.tech/d/mirror/unlisted-versions-of-minecraft/Auto/version_manifest.json";
 const MANIFEST_CACHE_DURATION: Duration = Duration::from_secs(10 * 60);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UvmcEntry {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub version_type: String,
+    pub url: String,
+    #[serde(default)]
+    pub release_time: Option<String>,
+    #[serde(default)]
+    pub time: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct UvmcManifest {
+    #[serde(default)]
+    pub versions: Vec<UvmcEntry>,
+}
 
 /// Fetches the version manifest list.
 ///
 /// Uses cache at `<data_dir>/cache/version_manifest_v2.json` if `< 10 minutes` old and `!force_refresh`.
+/// Merges unlisted versions from UVMC (cached at `<data_dir>/cache/uvmc_manifest.json`).
 pub async fn fetch_version_manifest(
     client: &reqwest::Client,
     priority: SourcePriority,
@@ -78,6 +100,7 @@ pub async fn fetch_version_manifest(
 ) -> Result<VersionManifestList, GameError> {
     let cache_dir = paths::cache_dir();
     let cache_file = cache_dir.join("version_manifest_v2.json");
+    let uvmc_cache_file = cache_dir.join("uvmc_manifest.json");
 
     if !force_refresh && cache_file.exists() {
         if let Ok(metadata) = std::fs::metadata(&cache_file) {
@@ -102,13 +125,84 @@ pub async fn fetch_version_manifest(
     let manifest_url = Url::parse(MANIFEST_URL)
         .map_err(|e| GameError::InstallFailed(format!("Invalid manifest URL: {e}")))?;
 
-    let bytes = race_get_bytes(client, &manifest_url, SourceKind::VersionMeta, priority).await?;
+    let bytes_res = race_get_bytes(client, &manifest_url, SourceKind::VersionMeta, priority).await;
 
-    let raw: RawVersionManifest = serde_json::from_slice(&bytes)
-        .map_err(|e| GameError::InstallFailed(format!("Failed to parse version manifest: {e}")))?;
+    let mut raw: RawVersionManifest = match bytes_res {
+        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| {
+            GameError::InstallFailed(format!("Failed to parse version manifest: {e}"))
+        })?,
+        Err(e) => {
+            // Offline fallback to existing cached version_manifest_v2.json if available
+            if cache_file.exists() {
+                if let Ok(content) = std::fs::read_to_string(&cache_file) {
+                    if let Ok(cached_raw) = serde_json::from_str::<RawVersionManifest>(&content) {
+                        return Ok(VersionManifestList {
+                            latest_release: cached_raw.latest.release,
+                            latest_snapshot: cached_raw.latest.snapshot,
+                            versions: cached_raw.versions,
+                        });
+                    }
+                }
+            }
+            return Err(e.into());
+        }
+    };
+
+    // Attempt to fetch UVMC unlisted versions or fallback to cache
+    let uvmc_bytes = match client
+        .get(UVMC_MANIFEST_URL)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => match resp.bytes().await {
+            Ok(b) => {
+                let _ = std::fs::create_dir_all(&cache_dir);
+                let _ = std::fs::write(&uvmc_cache_file, &b);
+                Some(b.to_vec())
+            }
+            Err(_) => None,
+        },
+        _ => None,
+    };
+
+    let uvmc_content = match uvmc_bytes {
+        Some(b) => Some(b),
+        None => {
+            if uvmc_cache_file.exists() {
+                std::fs::read(&uvmc_cache_file).ok()
+            } else {
+                let legacy_cache = cache_dir.join("uvmc-download.json");
+                if legacy_cache.exists() {
+                    std::fs::read(&legacy_cache).ok()
+                } else {
+                    None
+                }
+            }
+        }
+    };
+
+    if let Some(content) = uvmc_content {
+        if let Ok(uvmc) = serde_json::from_slice::<UvmcManifest>(&content) {
+            let existing_ids: HashSet<String> =
+                raw.versions.iter().map(|v| v.id.clone()).collect();
+            for u in uvmc.versions {
+                if !existing_ids.contains(&u.id) {
+                    raw.versions.push(VersionManifestEntry {
+                        id: u.id,
+                        version_type: u.version_type,
+                        url: u.url,
+                        release_time: u.release_time.or(u.time).unwrap_or_default(),
+                    });
+                }
+            }
+        }
+    }
 
     let _ = std::fs::create_dir_all(&cache_dir);
-    let _ = std::fs::write(&cache_file, &bytes);
+    if let Ok(merged_bytes) = serde_json::to_vec(&raw) {
+        let _ = std::fs::write(&cache_file, &merged_bytes);
+    }
 
     Ok(VersionManifestList {
         latest_release: raw.latest.release,
@@ -1053,5 +1147,45 @@ mod tests {
         assert!(!incomplete.exists());
         assert!(complete.exists());
         assert!(!staging.exists());
+    }
+    #[test]
+    fn test_uvmc_manifest_merge() {
+        let raw_json = r#"{
+            "latest": { "release": "1.20.1", "snapshot": "24w14a" },
+            "versions": [
+                { "id": "1.20.1", "type": "release", "url": "https://example.com/1.20.1.json", "releaseTime": "2023-06-12T10:00:00+00:00" }
+            ]
+        }"#;
+        let uvmc_json = r#"{
+            "versions": [
+                { "id": "1.20.1", "type": "release", "url": "https://dup.com/1.20.1.json", "releaseTime": "2023-06-12T10:00:00+00:00" },
+                { "id": "1.19_deep_dark_experimental_snapshot-1", "type": "pending", "url": "https://example.com/deep_dark.json", "time": "2022-02-17T13:55:59+00:00" }
+            ]
+        }"#;
+
+        let mut raw: RawVersionManifest = serde_json::from_str(raw_json).unwrap();
+        let uvmc: UvmcManifest = serde_json::from_str(uvmc_json).unwrap();
+
+        let existing_ids: HashSet<String> = raw.versions.iter().map(|v| v.id.clone()).collect();
+        for u in uvmc.versions {
+            if !existing_ids.contains(&u.id) {
+                raw.versions.push(VersionManifestEntry {
+                    id: u.id,
+                    version_type: u.version_type,
+                    url: u.url,
+                    release_time: u.release_time.or(u.time).unwrap_or_default(),
+                });
+            }
+        }
+
+        assert_eq!(raw.versions.len(), 2);
+        assert_eq!(raw.versions[0].id, "1.20.1");
+        assert_eq!(raw.versions[1].id, "1.19_deep_dark_experimental_snapshot-1");
+        assert_eq!(raw.versions[1].version_type, "pending");
+        assert_eq!(raw.versions[1].release_time, "2022-02-17T13:55:59+00:00");
+
+        let serialized = serde_json::to_vec(&raw).unwrap();
+        let deserialized: RawVersionManifest = serde_json::from_slice(&serialized).unwrap();
+        assert_eq!(deserialized.versions.len(), 2);
     }
 }

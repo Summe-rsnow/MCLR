@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  classifyVersion,
   defaultName,
+  getMcFoolName,
   isAprilFools,
   loaderIncompatibilities,
   loaderVisibility,
   validateInstanceNameLocal,
 } from '../compat'
+import { mockVersionManifest } from '../mock'
 
 describe('compat loaderVisibility', () => {
   it('Forge hidden for 1.5.1, shown for 1.5.2', () => {
@@ -125,8 +128,78 @@ describe('compat validateInstanceNameLocal', () => {
 describe('compat isAprilFools', () => {
   it('detects 2.0 and known joke snapshot IDs', () => {
     expect(isAprilFools('2.0-purple')).toBe(true)
+    expect(isAprilFools('2.0_blue')).toBe(true)
+    expect(isAprilFools('2point0_red')).toBe(true)
     expect(isAprilFools('15w14a')).toBe(true)
+    expect(isAprilFools('1.rv-pre1')).toBe(true)
+    expect(isAprilFools('3d shareware v1.34')).toBe(true)
+    expect(isAprilFools('3D Shareware v1.34')).toBe(true)
+    expect(isAprilFools('20w14infinite')).toBe(true)
+    expect(isAprilFools('20w14∞')).toBe(true)
+    expect(isAprilFools('22w13oneblockatatime')).toBe(true)
+    expect(isAprilFools('23w13a_or_b')).toBe(true)
     expect(isAprilFools('24w14potato')).toBe(true)
+    expect(isAprilFools('25w14craftmine')).toBe(true)
+    expect(isAprilFools('26w14a')).toBe(true)
     expect(isAprilFools('1.20.1')).toBe(false)
+    expect(isAprilFools('24w14a')).toBe(false)
+  })
+
+  it('detects April 1st release dates', () => {
+    expect(isAprilFools('custom-joke', '2021-04-01T12:00:00Z')).toBe(true)
+    expect(isAprilFools('normal-snap', '2024-04-03T14:00:00Z')).toBe(false)
+  })
+})
+
+describe('compat classifyVersion', () => {
+  it('classifies release, snapshot, old, and april fools correctly', () => {
+    expect(classifyVersion({ id: '1.20.4', versionType: 'release' })).toBe('release')
+    expect(classifyVersion({ id: '1.20.1', versionType: 'release' })).toBe('release')
+    expect(classifyVersion({ id: '24w14a', versionType: 'snapshot' })).toBe('snapshot')
+    expect(classifyVersion({ id: '24w14potato', versionType: 'snapshot' })).toBe('aprilFools')
+    expect(classifyVersion({ id: '20w14∞', versionType: 'snapshot' })).toBe('aprilFools')
+    expect(classifyVersion({ id: 'b1.7.3', versionType: 'old_beta' })).toBe('old')
+    expect(classifyVersion({ id: 'c0.30', versionType: 'old_alpha' })).toBe('old')
+  })
+
+  it('classifies 1.0 as release regardless of snapshot typing (PCL parity)', () => {
+    expect(classifyVersion({ id: '1.0', versionType: 'snapshot' })).toBe('release')
+    expect(classifyVersion({ id: '1.0', type: 'snapshot' })).toBe('release')
+    expect(classifyVersion('1.0')).toBe('release')
+  })
+
+  it('preserves official release category even for April 1st release dates', () => {
+    expect(
+      classifyVersion({
+        id: '26.1.1',
+        versionType: 'release',
+        releaseTime: '2026-04-01T09:06:36+00:00',
+      }),
+    ).toBe('release')
+  })
+
+  it('mock manifest produces exact PCL counts (112 release, 825 snapshot, 165 old, 12 april fools, 1114 total)', () => {
+    const counts = { release: 0, snapshot: 0, old: 0, aprilFools: 0 }
+    for (const v of mockVersionManifest.versions) {
+      const cat = classifyVersion(v)
+      counts[cat]++
+    }
+    expect(counts.release).toBe(112)
+    expect(counts.snapshot).toBe(825)
+    expect(counts.old).toBe(165)
+    expect(counts.aprilFools).toBe(12)
+    expect(mockVersionManifest.versions.length).toBe(1114)
+    expect(mockVersionManifest.versions.some((v) => v.id === '1.0')).toBe(true)
+  })
+})
+
+describe('compat getMcFoolName', () => {
+  it('returns appropriate Chinese lore names for joke versions', () => {
+    expect(getMcFoolName('24w14potato')).toBe('毒马铃薯更新')
+    expect(getMcFoolName('20w14∞')).toBe('终极内容更新')
+    expect(getMcFoolName('20w14infinite')).toBe('终极内容更新')
+    expect(getMcFoolName('15w14a')).toBe('爱与拥抱更新')
+    expect(getMcFoolName('2.0_blue')).toBe('2.0 蓝色版')
+    expect(getMcFoolName('1.20.4')).toBe('')
   })
 })

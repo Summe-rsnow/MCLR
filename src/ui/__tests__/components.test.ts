@@ -8,6 +8,7 @@ import {
   MCard,
   MInput,
   MTextarea,
+  MPathPicker,
   MSelect,
   MSwitch,
   MCheckbox,
@@ -18,6 +19,7 @@ import {
   MListItem,
   MDialog,
   MTooltip,
+  MHelpTooltip,
   MProgress,
   MScroll,
   MContextMenu,
@@ -78,6 +80,7 @@ describe('UI Components', () => {
 
     await wrapper.setProps({ loading: true })
     expect(wrapper.find('button').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.animate-spin').exists()).toBe(true)
   })
 
   it('MIconButton triggers click', async () => {
@@ -112,6 +115,19 @@ describe('UI Components', () => {
     expect(wrapper.emitted('update:modelValue')?.[1]).toEqual([''])
     expect(wrapper.emitted('clear')).toHaveLength(1)
   })
+  it('MInput stepper buttons increment and decrement number values', async () => {
+    const wrapper = mount(MInput, {
+      props: { modelValue: '10', type: 'number', min: 0, max: 20, step: 2 },
+    })
+    const buttons = wrapper.findAll('button')
+    expect(buttons.length).toBe(2)
+    // Up stepper
+    await buttons[0].trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['12'])
+    // Down stepper
+    await buttons[1].trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[1]).toEqual(['8'])
+  })
 
   it('MTextarea emits update:modelValue', async () => {
     const wrapper = mount(MTextarea, {
@@ -141,6 +157,20 @@ describe('UI Components', () => {
     await nextTick()
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['b'])
   })
+  it('MSelect disabled and empty options state prevents opening and displays placeholder', async () => {
+    const wrapper = mount(MSelect, {
+      props: {
+        modelValue: '',
+        options: [],
+      },
+    })
+    const trigger = wrapper.find('button[role="combobox"]')
+    expect(trigger.attributes('disabled')).toBeDefined()
+    expect(trigger.text()).toContain('无可用选项')
+    await trigger.trigger('click')
+    await nextTick()
+    expect(document.body.querySelector('[role="listbox"]')).toBeNull()
+  })
 
   it('MSwitch toggles value', async () => {
     const wrapper = mount(MSwitch, {
@@ -158,6 +188,14 @@ describe('UI Components', () => {
     const checkbox = wrapper.find('input[type="checkbox"]')
     await checkbox.setValue(true)
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([true])
+  })
+  it('MCheckbox respects disabled prop', () => {
+    const wrapper = mount(MCheckbox, {
+      props: { modelValue: false, label: 'Disabled Checkbox', disabled: true },
+    })
+    const checkbox = wrapper.find('input[type="checkbox"]')
+    expect(checkbox.attributes('disabled')).toBeDefined()
+    expect(wrapper.find('label').classes()).toContain('cursor-not-allowed')
   })
 
   it('MRadioGroup updates selection', async () => {
@@ -249,14 +287,25 @@ describe('UI Components', () => {
     expect(toast.toasts.value.some((t) => t.id === id)).toBe(false)
   })
 
-  it('MTooltip renders slot content', () => {
+  it('MTooltip renders slot content and teleports tooltip on hover', async () => {
     const wrapper = mount(MTooltip, {
       props: { text: 'Help text' },
       slots: { default: '<span>Hover Me</span>' },
     })
     expect(wrapper.text()).toContain('Hover Me')
+    await wrapper.trigger('mouseenter')
+    expect(document.body.innerHTML).toContain('Help text')
   })
 
+  it('MHelpTooltip renders help icon and provides tooltip text', async () => {
+    const wrapper = mount(MHelpTooltip, {
+      props: { text: 'Helpful explanation', size: 'sm' },
+    })
+    expect(wrapper.find('button').exists()).toBe(true)
+    expect(wrapper.find('.i-lucide-help-circle').exists()).toBe(true)
+    await wrapper.find('.relative').trigger('mouseenter')
+    expect(document.body.innerHTML).toContain('Helpful explanation')
+  })
   it('MProgress displays percentage', () => {
     const wrapper = mount(MProgress, {
       props: { value: 0.75, showLabel: true },
@@ -348,7 +397,8 @@ describe('UI Components', () => {
       slots: { default: () => 'Control' },
     })
     expect(row.text()).toContain('Row Label')
-
+    expect(row.text()).toContain('Row Hint')
+    expect(row.find('.min-w-\\[140px\\]').exists()).toBe(true)
     const brand = mount(MBrandIcon, { props: { name: 'modrinth' } })
     expect(brand.find('span').classes()).toContain('i-simple-icons-modrinth')
 
@@ -362,5 +412,43 @@ describe('UI Components', () => {
     await nextTick()
     expect(document.body.innerHTML).toContain('Popover Body')
     pop.unmount()
+  })
+  it('renders MPathPicker non-editable path picker with browse and clear buttons', async () => {
+    const wrapper = mount(MPathPicker, {
+      props: {
+        modelValue: '/path/to/my/minecraft',
+        type: 'directory',
+        clearable: true,
+      },
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    expect(wrapper.find('.i-lucide-folder').exists()).toBe(true)
+    expect(wrapper.text()).toContain('浏览')
+    const input = wrapper.find('input')
+    expect(input.attributes('readonly')).toBeDefined()
+    expect((input.element as HTMLInputElement).value).toBe('/path/to/my/minecraft')
+
+    const clearBtn = wrapper.find('button .i-lucide-x')
+    expect(clearBtn.exists()).toBe(true)
+    await clearBtn.trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([''])
+    expect(wrapper.emitted('clear')).toBeDefined()
+
+    // Check file type
+    const filePicker = mount(MPathPicker, {
+      props: {
+        modelValue: 'file.zip',
+        type: 'file',
+        buttonText: 'Select Zip',
+      },
+      global: {
+        plugins: [i18n],
+      },
+    })
+    expect(filePicker.find('.i-lucide-file-text').exists()).toBe(true)
+    expect(filePicker.text()).toContain('Select Zip')
   })
 })

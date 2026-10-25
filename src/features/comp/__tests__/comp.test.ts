@@ -57,6 +57,20 @@ describe('Community platform feature (Comp)', () => {
     expect(store.hits[0].compType).toBe('shader')
   })
 
+  it('searches with platform all and returns hits from both modrinth and curseforge', async () => {
+    const store = useCompStore()
+    store.compType = 'mod'
+    store.platform = 'all'
+    store.query = ''
+
+    await store.search(true)
+
+    expect(store.hits.length).toBeGreaterThan(1)
+    const platforms = store.hits.map((h) => h.platform)
+    expect(platforms).toContain('modrinth')
+    expect(platforms).toContain('curseforge')
+  })
+
   it('toggles favorites and saves to settings', async () => {
     const store = useCompStore()
     await store.loadFavorites()
@@ -126,6 +140,30 @@ describe('Community platform feature (Comp)', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Modrinth')
     expect(wrapper.text()).toContain('CurseForge')
+    expect(wrapper.find('input[type="text"]').exists()).toBe(true)
+    const compStore = useCompStore()
+    expect(compStore.mcVersion).toBe('1.20.4')
+    expect(compStore.loader).toBe('fabric')
+  })
+
+  it('verifies platform options include all, tabs have no duplicate border, and modpack import button is removed', async () => {
+    const wrapper = mount(CompBrowserPage, {
+      global: {
+        plugins: [i18n],
+        stubs: {
+          RouterLink: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    expect(wrapper.text()).toContain('全部')
+    expect(wrapper.text()).toContain('Modrinth')
+    expect(wrapper.text()).toContain('CurseForge')
+    // Modpack import button should not be present in CompBrowserPage
+    expect(wrapper.text()).not.toContain('导入整合包')
+    // Outer border-b wrapper should be removed
+    expect(wrapper.find('.border-b.border-line.pb-2').exists()).toBe(false)
   })
 
   it('resolves dependencies for mod download', async () => {

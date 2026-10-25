@@ -54,10 +54,8 @@ export function setupMockIpc(): void {
       preferJdk: false,
     },
     game: {
-      folders: [
-        { name: 'Default', path: 'C:\\Users\\User\\AppData\\Roaming\\MCLR\\.minecraft' },
-      ],
-      currentFolder: 'C:\\Users\\User\\AppData\\Roaming\\MCLR\\.minecraft',
+      folders: [],
+      currentFolder: '',
       defaultIsolation: 'on',
       sortBy: 'name',
     },

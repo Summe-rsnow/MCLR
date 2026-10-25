@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
 import {
   ipcClient,
   type ModpackInspectResult,
@@ -10,6 +9,7 @@ import {
   MDialog,
   MButton,
   MInput,
+  MPathPicker,
   MSkeleton,
   MBadge,
   useToast,
@@ -34,26 +34,12 @@ const targetInstanceName = ref('')
 const importing = ref(false)
 const inspectError = ref('')
 
-async function chooseFile(): Promise<void> {
-  try {
-    const selected = await openFileDialog({
-      multiple: false,
-      filters: [
-        {
-          name: 'Minecraft Modpack (*.mrpack, *.zip)',
-          extensions: ['mrpack', 'zip'],
-        },
-      ],
-    })
-    if (selected && typeof selected === 'string') {
-      archivePath.value = selected
-      await onInspect()
-    }
-  } catch {
-    // Dialog cancelled or plugin-dialog fallback
+function onArchivePathChange(val: string) {
+  archivePath.value = val
+  if (val.trim()) {
+    onInspect()
   }
 }
-
 async function onInspect(): Promise<void> {
   if (!archivePath.value.trim()) return
   inspecting.value = true
@@ -123,22 +109,19 @@ function onClose(): void {
         <label class="text-xs font-semibold text-fg-muted block">
           {{ t('comp.modpackImport.selectFile') }}
         </label>
-        <div class="flex items-center space-x-2">
-          <div class="flex-1">
-            <MInput
-              v-model="archivePath"
-              placeholder="C:\path\to\modpack.zip"
-              @blur="onInspect"
-            />
-          </div>
-          <MButton
-            variant="tonal"
-            size="sm"
-            @click="chooseFile"
-          >
-            {{ t('comp.modpackImport.browse') }}
-          </MButton>
-        </div>
+        <MPathPicker
+          v-model="archivePath"
+          type="file"
+          placeholder="C:\path\to\modpack.zip"
+          :button-text="t('comp.modpackImport.browse')"
+          :filters="[
+            {
+              name: 'Minecraft Modpack (*.mrpack, *.zip)',
+              extensions: ['mrpack', 'zip'],
+            },
+          ]"
+          @update:model-value="onArchivePathChange"
+        />
       </div>
 
       <!-- Inspect Loading -->

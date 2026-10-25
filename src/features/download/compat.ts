@@ -88,8 +88,9 @@ export function isFormatFit(id: string): boolean {
 const APRIL_FOOLS_IDS: Record<string, true> = {
   '15w14a': true,
   '1.rv-pre1': true,
-  '3D Shareware v1.34': true,
+  '3d shareware v1.34': true,
   '20w14∞': true,
+  '20w14infinite': true,
   '22w13oneblockatatime': true,
   '23w13a_or_b': true,
   '24w14potato': true,
@@ -98,17 +99,102 @@ const APRIL_FOOLS_IDS: Record<string, true> = {
 }
 
 export function isAprilFools(id: string, releaseTime?: string): boolean {
-  if (id.startsWith('2.0') || APRIL_FOOLS_IDS[id]) {
+  const lower = id.toLowerCase()
+  if (
+    lower.startsWith('2.0') ||
+    lower.startsWith('2point0') ||
+    lower.startsWith('20w14inf') ||
+    APRIL_FOOLS_IDS[lower]
+  ) {
     return true
   }
   if (releaseTime) {
     const date = new Date(releaseTime)
-    const shifted = new Date(date.getTime() + 2 * 3600 * 1000)
-    if (shifted.getUTCMonth() === 3 && shifted.getUTCDate() === 1) {
-      return true
+    if (!isNaN(date.getTime())) {
+      const shifted = new Date(date.getTime() + 2 * 3600 * 1000)
+      if (shifted.getUTCMonth() === 3 && shifted.getUTCDate() === 1) {
+        return true
+      }
     }
   }
   return false
+}
+
+export function getMcFoolName(name: string): string {
+  const lower = name.toLowerCase()
+  if (lower.startsWith('2.0') || lower.startsWith('2point0')) {
+    if (lower.endsWith('red')) return '2.0 红色版'
+    if (lower.endsWith('blue')) return '2.0 蓝色版'
+    if (lower.endsWith('purple')) return '2.0 紫色版'
+    return '2.0 愚人节版'
+  }
+  if (lower === '15w14a') return '爱与拥抱更新'
+  if (lower === '1.rv-pre1') return '时尚更新'
+  if (lower === '3d shareware v1.34') return '3D 共享软件'
+  if (lower.startsWith('20w14inf') || lower === '20w14∞') return '终极内容更新'
+  if (lower === '22w13oneblockatatime') return '一次一个方块'
+  if (lower === '23w13a_or_b') return '投票更新'
+  if (lower === '24w14potato') return '毒马铃薯更新'
+  if (lower === '25w14craftmine') return 'Craftmine'
+  if (lower === '26w14a') return '2026 愚人节快照'
+  return ''
+}
+
+export type McVersionCategory = 'release' | 'snapshot' | 'old' | 'aprilFools'
+
+export interface VersionLike {
+  id: string
+  versionType?: string
+  type?: string
+  releaseTime?: string
+}
+
+export function classifyVersion(
+  versionOrId: VersionLike | string,
+  versionType?: string,
+  releaseTime?: string,
+): McVersionCategory {
+  let id = ''
+  let rawType = versionType ?? ''
+  let time = releaseTime
+  if (typeof versionOrId === 'object' && versionOrId !== null) {
+    id = versionOrId.id
+    rawType = versionOrId.versionType ?? versionOrId.type ?? rawType
+    time = versionOrId.releaseTime ?? time
+  } else {
+    id = String(versionOrId)
+  }
+
+  const lowerType = rawType.toLowerCase()
+  const lowerId = id.toLowerCase()
+
+  // 1. Release: official release or 1.0 (Mojang manifest mislabeled 1.0 as snapshot)
+  if (lowerType === 'release' || lowerId === '1.0') {
+    return 'release'
+  }
+
+  // 2. April Fools: special type or joke version IDs / April 1st release dates
+  if (lowerType === 'special' || isAprilFools(id, time)) {
+    return 'aprilFools'
+  }
+
+  // 3. Snapshots / Pending
+  if (lowerType === 'snapshot' || lowerType === 'pending') {
+    if (
+      lowerId.startsWith('1.') &&
+      !lowerId.includes('combat') &&
+      !lowerId.includes('rc') &&
+      !lowerId.includes('experimental') &&
+      lowerId !== '1.2' &&
+      !lowerId.includes('pre')
+    ) {
+      return 'release'
+    }
+    return 'snapshot'
+  }
+
+  // 4. Old versions (alpha, beta, indev, infdev, classic)
+  return 'old'
 }
 
 export interface LoaderVisibility {

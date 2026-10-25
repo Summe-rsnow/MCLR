@@ -5,6 +5,7 @@ import { createI18n } from 'vue-i18n'
 import { createRouter, createWebHistory, type Router } from 'vue-router'
 import { instanceDetailTabs } from '../tabs'
 import InstanceDetailPage from '../InstanceDetailPage.vue'
+import OverviewTab from '../tabs/OverviewTab.vue'
 import SettingsTab from '../tabs/SettingsTab.vue'
 import SavesTab from '../tabs/SavesTab.vue'
 import ServersTab from '../tabs/ServersTab.vue'
@@ -237,6 +238,34 @@ describe('Instance Detail feature', () => {
     })
     expect(updated.config?.jvmArgs).toBe('-Xmx8G -XX:+UseG1GC')
     expect(updated.config?.windowTitle).toBe('Custom Title')
+    expect(wrapper.text()).toContain('图标设置')
+  })
+
+  it('overview tab supports rich Minecraft icon selection and updates store', async () => {
+    const store = useInstancesStore()
+    await store.fetchInstances()
+    const inst = store.instances.find((i) => i.id === '1.20.1-vanilla')!
+
+    const wrapper = mount(OverviewTab, {
+      props: { instance: inst },
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('草方块')
+    expect(wrapper.text()).toContain('工作台')
+    expect(wrapper.text()).toContain('末影珍珠')
+
+    const buttons = wrapper.findAll('button')
+    const diamondBtn = buttons.find((b) => b.text().includes('钻石'))
+    expect(diamondBtn).toBeDefined()
+    if (diamondBtn) {
+      await diamondBtn.trigger('click')
+      await flushPromises()
+      expect(store.instances.find((i) => i.id === inst.id)?.config?.icon).toBe('diamond')
+    }
   })
 
   it('export tab loads candidate files and submits modpack export', async () => {

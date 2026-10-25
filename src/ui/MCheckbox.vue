@@ -23,14 +23,19 @@ function onChange(event: Event) {
 
 <template>
   <label
-    class="inline-flex items-center gap-2 cursor-pointer select-none text-sm text-fg"
-    :class="{ 'opacity-45 cursor-not-allowed': disabled }"
+    class="inline-flex items-center gap-2 select-none text-sm transition-colors"
+    :class="[
+      disabled
+        ? 'opacity-50 cursor-not-allowed text-fg-subtle'
+        : 'cursor-pointer text-fg',
+    ]"
   >
     <input
       type="checkbox"
       :checked="modelValue"
       :disabled="disabled"
-      class="w-4 h-4 rounded border-line-strong text-primary accent-primary focus:ring-primary/40 cursor-pointer disabled:cursor-not-allowed"
+      class="w-4 h-4 rounded border-line-strong text-primary accent-primary focus:ring-primary/40 disabled:cursor-not-allowed disabled:border-line"
+      :class="disabled ? 'cursor-not-allowed' : 'cursor-pointer'"
       @change="onChange"
     />
     <span v-if="label">{{ label }}</span>

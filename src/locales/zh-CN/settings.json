@@ -11,12 +11,46 @@
     "appearance": "外观",
     "language": "语言与格式",
     "launch": "启动",
-    "java": "Java",
     "gameManage": "游戏文件夹",
     "network": "网络与下载",
     "update": "更新",
     "logs": "启动器日志",
     "feedback": "反馈",
-    "about": "关于"
+    "about": "关于与帮助",
+    "aboutHelp": "关于与帮助"
+  },
+  "about": {
+    "title": "关于与帮助",
+    "appName": "MCLR (Minecraft Launcher Rewrite)",
+    "description": "轻量、现代、高效的跨平台 Minecraft 启动器，基于 Tauri v2 与 Vue 3 构建。",
+    "version": "版本 {version}",
+    "license": "开源协议：Apache-2.0",
+    "githubRepo": "GitHub 仓库",
+    "feedbackIssues": "问题反馈与建议",
+    "faqTitle": "常见问题与使用帮助",
+    "faqSubtitle": "常见故障自检与玩法指引",
+    "techStackTitle": "技术栈与驱动引擎",
+    "techTauri": "Tauri v2 跨平台桌面应用框架",
+    "techRust": "Rust 高性能后端与核心逻辑引擎",
+    "techVue": "Vue 3 组合式 API + 响应式前端框架",
+    "techUno": "UnoCSS 原子化高性能样式引擎",
+    "questions": {
+      "account": {
+        "title": "账号添加与登录模式",
+        "desc": "如何添加微软正版账号、第三方认证服务或离线账号？"
+      },
+      "mods": {
+        "title": "模组安装与加载器选择",
+        "desc": "如何安装 Forge / Fabric / NeoForge 及模组？"
+      },
+      "java": {
+        "title": "Java 版本匹配与自动下载",
+        "desc": "不同 Minecraft 版本需要哪个 Java？启动提示 Java 缺失怎么办？"
+      },
+      "crash": {
+        "title": "游戏闪退与崩溃排查",
+        "desc": "游戏无法启动或中途崩溃退出如何处理？"
+      }
+    }
   }
 }
