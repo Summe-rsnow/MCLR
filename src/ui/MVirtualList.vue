@@ -89,7 +89,7 @@ function measureEl(el: unknown) {
 <template>
   <div
     ref="outerRef"
-    class="px-1 -mx-1"
+    class="w-full overflow-x-hidden"
     :class="virtual && selfScroll ? 'overflow-y-auto' : ''"
     :style="virtual && selfScroll ? { maxHeight } : undefined"
   >

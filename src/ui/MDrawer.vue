@@ -109,7 +109,7 @@ const placementClass = computed(() => {
 <template>
   <MOverlay :open="open" :align="placement" :transition="overlayTransition" @close="onClose">
     <div
-      class="m-overlay m-refract flex flex-col text-fg shadow-2xl relative"
+      class="m-drawer flex flex-col text-fg shadow-2xl relative"
       :class="[sizeClass, placementClass]"
       role="dialog"
       aria-modal="true"

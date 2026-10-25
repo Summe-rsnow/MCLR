@@ -11,6 +11,7 @@ import type {
 } from '../../ipc/client'
 import { ipcClient } from '../../ipc/client'
 import { MButton, MCheckbox, MEmpty, MSkeleton, MVirtualList, useToast, useDialog } from '../../ui'
+import { useInstancesStore } from '../instances/store'
 import ResourceToolbar from './components/ResourceToolbar.vue'
 import ResourceItemRow from './components/ResourceItemRow.vue'
 import ResourceModals from './components/ResourceModals.vue'
@@ -23,8 +24,10 @@ const router = useRouter()
 const { t } = useI18n()
 const toast = useToast()
 const { confirmDanger } = useDialog()
+const instancesStore = useInstancesStore()
 
 // State
+const checkingUpdates = ref(false)
 const initialized = ref(false)
 const loading = ref(false)
 const entries = ref<ResourceEntry[]>([])
@@ -505,6 +508,42 @@ async function handleSchematicInspect(entry: ResourceEntry) {
     inspectingSchematic.value = false
   }
 }
+async function handleCheckUpdates() {
+  if (checkingUpdates.value) return
+  checkingUpdates.value = true
+  try {
+    let target = instancesStore.instances.find((i) => i.id === props.instanceId)
+    if (!target) {
+      await instancesStore.fetchInstances()
+      target = instancesStore.instances.find((i) => i.id === props.instanceId)
+    }
+    const mcVersion = target?.mcVersion || ''
+    const loader = target?.loaders?.[0] || target?.kind || 'fabric'
+
+    const updatedMods = await ipcClient.localModsCheckUpdates(props.instanceId, mcVersion, loader)
+
+    let updateCount = 0
+    for (const m of updatedMods) {
+      const entry = entries.value.find((e) => e.fileName === m.fileName || e.path === m.path)
+      if (entry && m.updateFile) {
+        entry.updateAvailable = true
+        entry.latestFile = m.updateFile as unknown as ResourceEntry['latestFile']
+        updateCount++
+      }
+    }
+
+    if (updateCount > 0) {
+      toast.success(t('resources.update.checkSuccess', { count: updateCount }))
+    } else {
+      toast.info(t('resources.status.noUpdates'))
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    toast.danger(msg)
+  } finally {
+    checkingUpdates.value = false
+  }
+}
 
 // File input / drag & drop
 
@@ -578,6 +617,7 @@ watch(
       :active-filter="activeFilter"
       :filter-counts="filterCounts"
       :current-rel-path="currentRelPath"
+      :checking-updates="checkingUpdates"
       @update:search-query="searchQuery = $event"
       @update:active-sort="activeSort = $event"
       @update:active-filter="activeFilter = $event"
@@ -588,9 +628,10 @@ watch(
       @navigate-back="handleNavigateBack"
       @download-more="handleDownloadMore"
       @export="handleExport"
+      @check-updates="handleCheckUpdates"
     />
     <!-- Content / Skeletons / List -->
-    <div class="flex-1 min-h-0 overflow-y-auto">
+    <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
       <div v-if="!initialized && loading" class="space-y-2">
         <div
           v-for="n in 5"
@@ -623,7 +664,13 @@ watch(
       </div>
 
       <div v-else class="space-y-2">
-        <MVirtualList :items="filteredEntries" item-key="path" :estimate-size="68" :threshold="60">
+        <MVirtualList
+          :items="filteredEntries"
+          item-key="path"
+          :estimate-size="64"
+          :gap="10"
+          :threshold="60"
+        >
           <template #item="{ item: entry }">
             <ResourceItemRow
               :entry="entry"

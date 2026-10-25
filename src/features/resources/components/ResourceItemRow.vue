@@ -49,14 +49,14 @@ function onMenuDelete() {
 </script>
 <template>
   <div
-    class="flex items-center justify-between p-3 rounded-xl border transition group"
+    class="flex items-center justify-between p-3 rounded-xl border transition group max-w-full overflow-hidden"
     :class="[
       selected ? 'bg-primary/10 border-primary' : 'bg-panel hover:bg-sunken/60 border-line',
       !entry.enabled && kind === 'mod' ? 'opacity-70' : '',
     ]"
   >
     <!-- Left: Checkbox, Icon, Title, Tags, Description -->
-    <div class="flex items-center space-x-3 min-w-0 flex-1 mr-3">
+    <div class="flex items-center space-x-3 min-w-0 flex-1 mr-3 overflow-hidden">
       <MCheckbox :model-value="selected" @update:model-value="emit('select', entry.path)" />
 
       <!-- Resource Icon / Thumbnail -->
@@ -88,12 +88,12 @@ function onMenuDelete() {
       </div>
 
       <div
-        class="min-w-0 flex-1 cursor-pointer"
+        class="min-w-0 flex-1 cursor-pointer overflow-hidden"
         @click="entry.isDir ? emit('navigateDir', entry) : emit('inspectSchematic', entry)"
       >
-        <div class="flex items-center space-x-2">
+        <div class="flex items-center space-x-2 min-w-0 overflow-hidden">
           <span
-            class="font-medium text-sm text-fg truncate"
+            class="font-medium text-sm text-fg truncate shrink"
             :class="{ 'line-through': entry.state === 'unavailable' }"
           >
             {{ entry.title || entry.fileName }}
@@ -120,11 +120,15 @@ function onMenuDelete() {
           </MBadge>
         </div>
 
-        <div class="flex items-center space-x-2 text-xs text-fg-muted truncate mt-0.5">
-          <span class="truncate">{{ entry.fileName }}</span>
-          <span>•</span>
-          <span>{{ formatBytes(entry.size) }}</span>
-          <span v-if="entry.description" class="truncate">• {{ entry.description }}</span>
+        <div
+          class="flex items-center space-x-2 text-xs text-fg-muted min-w-0 overflow-hidden mt-0.5"
+        >
+          <span class="truncate shrink max-w-[240px]">{{ entry.fileName }}</span>
+          <span class="shrink-0">•</span>
+          <span class="shrink-0">{{ formatBytes(entry.size) }}</span>
+          <span v-if="entry.description" class="truncate min-w-0 flex-1"
+            >• {{ entry.description }}</span
+          >
         </div>
       </div>
     </div>

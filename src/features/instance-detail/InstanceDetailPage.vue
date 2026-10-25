@@ -263,7 +263,7 @@ function handleLaunch() {
       </div>
     </div>
     <!-- Tab Content -->
-    <div>
+    <div class="max-w-full overflow-x-hidden">
       <div v-if="!instance && instancesStore.loading" class="space-y-4">
         <div class="flex items-center gap-2 py-2">
           <MSkeleton v-for="n in 5" :key="n" width="5.5rem" height="2rem" class="rounded-lg" />
@@ -280,9 +280,9 @@ function handleLaunch() {
           </MButton>
         </MEmpty>
       </div>
-      <div v-else class="overflow-hidden">
+      <div v-else class="max-w-full overflow-x-hidden">
         <Transition :name="direction === 'forward' ? 'm-tab-forward' : 'm-tab-back'" mode="out-in">
-          <div :key="activeTab">
+          <div :key="activeTab" class="max-w-full overflow-x-hidden">
             <ModsDisabledTab v-if="activeTab === 'mods' && instance && !instance.modable" />
             <component
               :is="activeComponent"

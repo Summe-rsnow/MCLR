@@ -1,4 +1,8 @@
 import { describe, it, expect } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import ResourceToolbar from '../components/ResourceToolbar.vue'
+import zhCnResources from '../../../locales/zh-CN/resources.json'
 import type { ResourceEntry } from '../../../ipc/client'
 
 describe('Resources feature unit tests', () => {
@@ -153,5 +157,96 @@ describe('Resources feature unit tests', () => {
     )
     expect(batchDisabled.find((e) => e.path === dummyEntries[0].path)?.enabled).toBe(false)
     expect(batchDisabled.find((e) => e.path === dummyEntries[1].path)?.enabled).toBe(true)
+  })
+
+  it('renders "检查更新" button in ResourceToolbar for mod kind and emits checkUpdates', async () => {
+    const i18n = createI18n({
+      legacy: false,
+      locale: 'zh-CN',
+      messages: {
+        'zh-CN': {
+          resources: zhCnResources,
+        },
+      },
+    })
+
+    const wrapper = mount(ResourceToolbar, {
+      props: {
+        kind: 'mod',
+        searchQuery: '',
+        activeSort: 'name',
+        sortOptions: [{ label: '名称', value: 'name' }],
+        activeFilter: 'all',
+        filterCounts: {
+          all: 3,
+          enabled: 2,
+          disabled: 1,
+          updatable: 1,
+          error: 0,
+          duplicate: 0,
+        },
+        checkingUpdates: false,
+      },
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    const checkBtn = wrapper.findAll('button').find((b) => b.text().includes('检查更新'))
+    expect(checkBtn).toBeDefined()
+    await checkBtn!.trigger('click')
+    expect(wrapper.emitted('checkUpdates')).toBeTruthy()
+  })
+
+  it('correctly maps updated mods to entries with updateAvailable and latestFile', () => {
+    const entries = JSON.parse(JSON.stringify(dummyEntries)) as ResourceEntry[]
+    const updatedMods = [
+      {
+        fileName: 'fabric-api.jar',
+        path: '/path/to/mods/fabric-api.jar',
+        enabled: true,
+        modId: 'fabric-api',
+        name: 'Fabric API',
+        version: '0.92.0',
+        description: 'Core API for Fabric',
+        authors: [],
+        loader: 'fabric',
+        sha1: 'abc',
+        murmur2: 123,
+        size: 2048000,
+        projectId: 'fabric-api',
+        updateFile: {
+          id: 'file-fabric-update',
+          platform: 'modrinth' as const,
+          projectId: 'fabric-api',
+          name: 'fabric-api-0.93.0.jar',
+          fileName: 'fabric-api-0.93.0.jar',
+          channel: 'release' as const,
+          releaseDate: '2024-06-01',
+          size: 2100000,
+          mcVersions: ['1.20.1'],
+          loaders: ['fabric'],
+          downloadUrls: ['https://example.com/fabric-api-0.93.0.jar'],
+          hashes: { sha1: 'abc2', sha512: null, murmur2: null },
+          dependencies: [],
+          distributionDisabled: false,
+        },
+      },
+    ]
+
+    let updateCount = 0
+    for (const m of updatedMods) {
+      const entry = entries.find((e) => e.fileName === m.fileName || e.path === m.path)
+      if (entry && m.updateFile) {
+        entry.updateAvailable = true
+        entry.latestFile = m.updateFile
+        updateCount++
+      }
+    }
+
+    expect(updateCount).toBe(1)
+    const updated = entries.find((e) => e.fileName === 'fabric-api.jar')
+    expect(updated?.updateAvailable).toBe(true)
+    expect(updated?.latestFile?.name).toBe('fabric-api-0.93.0.jar')
   })
 })

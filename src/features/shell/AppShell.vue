@@ -117,7 +117,7 @@ onUnmounted(() => {
 
         <!-- Content Area with Page Transition -->
         <main
-          class="relative flex-1 overflow-y-auto [overflow-y:overlay] pt-11"
+          class="relative flex-1 overflow-y-auto overflow-x-hidden [overflow-y:overlay] pt-11"
           @scroll.passive="onMainScroll"
         >
           <RouterView v-slot="{ Component }">

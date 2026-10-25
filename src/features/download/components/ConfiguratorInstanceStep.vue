@@ -69,7 +69,7 @@ const { t } = useI18n()
 
     <!-- Sticky Bottom Action Bar -->
     <div
-      class="sticky bottom-0 -mx-4 -mb-4 p-4 bg-raised/80 backdrop-blur-md border-t border-white/10 flex items-center justify-between rounded-b-2xl z-20 m-slide-up"
+      class="p-4 bg-raised border border-line flex items-center justify-between rounded-xl shadow-sm mt-3"
     >
       <div class="flex flex-col">
         <div class="text-xs text-fg-muted">{{ t('download.configurator.summaryLabel') }}</div>

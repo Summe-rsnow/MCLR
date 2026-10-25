@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{Cursor, Read, Seek};
 use std::path::Path;
+use std::sync::Arc;
 
 use mclr_core::paths;
 use serde::{Deserialize, Serialize};
@@ -644,19 +645,7 @@ pub async fn check_local_mods_updates(
 
     let sha1_list: Vec<String> = mods.iter().map(|m| m.sha1.clone()).collect();
 
-    // 1. Query Modrinth version files by SHA1 to identify projects
-    let modrinth_files = modrinth
-        .get_version_files_by_sha1(&sha1_list)
-        .await
-        .unwrap_or_default();
-
-    for m in &mut mods {
-        if let Some(cf_file) = modrinth_files.get(&m.sha1) {
-            m.project_id = Some(cf_file.project_id.clone());
-        }
-    }
-
-    // 2. Query Modrinth version files update
+    // 1 & 2. Concurrently query Modrinth SHA1 identification and version files update
     let loaders = if loader.is_empty() {
         Vec::new()
     } else {
@@ -668,12 +657,17 @@ pub async fn check_local_mods_updates(
         vec![mc_version.to_string()]
     };
 
-    let modrinth_updates = modrinth
-        .get_version_files_update(&sha1_list, &loaders, &game_versions)
-        .await
-        .unwrap_or_default();
+    let (modrinth_files_res, modrinth_updates_res) = tokio::join!(
+        modrinth.get_version_files_by_sha1(&sha1_list),
+        modrinth.get_version_files_update(&sha1_list, &loaders, &game_versions)
+    );
+    let modrinth_files = modrinth_files_res.unwrap_or_default();
+    let modrinth_updates = modrinth_updates_res.unwrap_or_default();
 
     for m in &mut mods {
+        if let Some(cf_file) = modrinth_files.get(&m.sha1) {
+            m.project_id = Some(cf_file.project_id.clone());
+        }
         if let Some(update_file) = modrinth_updates.get(&m.sha1)
             && update_file.hashes.sha1.as_deref() != Some(&m.sha1)
         {
@@ -682,7 +676,7 @@ pub async fn check_local_mods_updates(
         }
     }
 
-    // 3. Query CurseForge if configured and available
+    // 3. Concurrently query CurseForge if configured and available
     if let Some(cf) = curseforge {
         let fingerprints: Vec<u32> = mods
             .iter()
@@ -693,22 +687,56 @@ pub async fn check_local_mods_updates(
         if !fingerprints.is_empty()
             && let Ok(cf_files) = cf.match_fingerprints(&fingerprints).await
         {
+            let mut check_targets = Vec::new();
             for cf_file in cf_files {
                 if let Some(m2) = cf_file.hashes.murmur2
-                    && let Some(m) = mods
-                        .iter_mut()
-                        .find(|item| item.murmur2 == m2 && item.update_file.is_none())
+                    && mods
+                        .iter()
+                        .any(|item| item.murmur2 == m2 && item.update_file.is_none())
                 {
-                    m.project_id = Some(cf_file.project_id.clone());
+                    check_targets.push((cf_file.project_id.clone(), cf_file.id.clone(), m2));
+                }
+            }
 
-                    if let Ok(files) = cf
-                        .get_files(&cf_file.project_id, Some(mc_version), Some(loader))
-                        .await
-                        && let Some(best_file) = select_best_file(&files, mc_version, loader)
-                        && best_file.id != cf_file.id
-                        && best_file.hashes.murmur2 != Some(m2)
+            if !check_targets.is_empty() {
+                let cf_client = Arc::new(cf.clone());
+                let mc_v = if mc_version.is_empty() {
+                    None
+                } else {
+                    Some(mc_version.to_string())
+                };
+                let ldr = if loader.is_empty() {
+                    None
+                } else {
+                    Some(loader.to_string())
+                };
+
+                let mut join_set = tokio::task::JoinSet::new();
+                for (project_id, current_file_id, m2) in check_targets {
+                    let client = cf_client.clone();
+                    let mc_v_c = mc_v.clone();
+                    let ldr_c = ldr.clone();
+                    join_set.spawn(async move {
+                        let files_res = client
+                            .get_files(&project_id, mc_v_c.as_deref(), ldr_c.as_deref())
+                            .await;
+                        (project_id, current_file_id, m2, files_res)
+                    });
+                }
+
+                while let Some(res) = join_set.join_next().await {
+                    if let Ok((project_id, current_file_id, m2, Ok(files))) = res
+                        && let Some(m) = mods
+                            .iter_mut()
+                            .find(|item| item.murmur2 == m2 && item.update_file.is_none())
                     {
-                        m.update_file = Some(best_file);
+                        m.project_id = Some(project_id);
+                        if let Some(best_file) = select_best_file(&files, mc_version, loader)
+                            && best_file.id != current_file_id
+                            && best_file.hashes.murmur2 != Some(m2)
+                        {
+                            m.update_file = Some(best_file);
+                        }
                     }
                 }
             }

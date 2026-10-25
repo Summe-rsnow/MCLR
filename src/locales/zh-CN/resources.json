@@ -83,7 +83,8 @@
     "confirmMessage": "确定将「{name}」从 {current} 更新到 {latest} 吗？",
     "viewChangelog": "查看更新日志",
     "updating": "正在提交更新任务...",
-    "success": "已成功提交模组更新任务"
+    "success": "已成功提交模组更新任务",
+    "checkSuccess": "检查完成，发现 {count} 个模组有新版本"
   },
   "delete": {
     "confirmTitle": "删除资源",

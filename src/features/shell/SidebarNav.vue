@@ -6,11 +6,11 @@ import { featureRoutes, type NavMeta } from '../../router'
 import { NAV_GROUPS } from './navGroups'
 import AccountChip from './AccountChip.vue'
 import { MLogo } from '../../ui'
-
+import { useThemeStore } from '../../stores/theme'
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
-
+const themeStore = useThemeStore()
 // Read initial collapsed state
 function getSavedCollapsed(): boolean | null {
   try {
@@ -141,6 +141,10 @@ function updatePill() {
     if (el) {
       const containerRect = container.getBoundingClientRect()
       const elRect = el.getBoundingClientRect()
+      if (elRect.height === 0 || elRect.width === 0) {
+        pillVisible.value = false
+        return
+      }
       pillTop.value = elRect.top - containerRect.top + container.scrollTop
       pillHeight.value = elRect.height || 36
       pillVisible.value = true
@@ -150,16 +154,45 @@ function updatePill() {
   })
 }
 
+let containerResizeObserver: ResizeObserver | null = null
+
+function onContainerScroll() {
+  updatePill()
+}
+
 watch(
   () => route?.path,
   () => updatePill(),
   { immediate: true },
 )
 watch(collapsed, () => updatePill())
+watch(
+  () => themeStore.scale,
+  () => updatePill(),
+)
+
 onMounted(() => {
   updatePill()
+  if (navContainerRef.value) {
+    navContainerRef.value.addEventListener('scroll', onContainerScroll, { passive: true })
+    if (typeof ResizeObserver !== 'undefined') {
+      containerResizeObserver = new ResizeObserver(() => {
+        updatePill()
+      })
+      containerResizeObserver.observe(navContainerRef.value)
+    }
+  }
 })
 
+onUnmounted(() => {
+  if (navContainerRef.value) {
+    navContainerRef.value.removeEventListener('scroll', onContainerScroll)
+  }
+  if (containerResizeObserver) {
+    containerResizeObserver.disconnect()
+    containerResizeObserver = null
+  }
+})
 function setItemRef(path: string, el: unknown) {
   if (el) {
     itemRefs.value[path] = el as HTMLElement

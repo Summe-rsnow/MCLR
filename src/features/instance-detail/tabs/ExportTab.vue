@@ -267,7 +267,7 @@ onMounted(() => {
       </div>
       <div
         v-else
-        class="border border-line rounded-xl divide-y divide-line max-h-96 overflow-y-auto bg-sunken/40"
+        class="border border-line rounded-xl divide-y divide-line max-h-96 overflow-y-auto overflow-x-hidden bg-sunken/40"
       >
         <MVirtualList
           :items="candidates"

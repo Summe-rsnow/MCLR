@@ -19,6 +19,7 @@ defineProps<{
     duplicate: number
   }
   currentRelPath?: string
+  checkingUpdates?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -36,6 +37,7 @@ const emit = defineEmits<{
   (e: 'navigateBack'): void
   (e: 'downloadMore'): void
   (e: 'export', format: 'txt' | 'csv'): void
+  (e: 'checkUpdates'): void
 }>()
 
 const { t } = useI18n()
@@ -79,6 +81,16 @@ function handleFileInputChange(e: Event) {
         >
           <span class="i-lucide-arrow-up-circle mr-1 w-4 h-4 text-primary" />
           {{ t('resources.actions.updateAll') }} ({{ filterCounts.updatable }})
+        </MButton>
+        <MButton
+          v-if="kind === 'mod'"
+          variant="tonal"
+          size="sm"
+          icon="i-lucide-refresh-cw"
+          :loading="checkingUpdates"
+          @click="emit('checkUpdates')"
+        >
+          {{ t('resources.actions.checkUpdates') }}
         </MButton>
 
         <MButton variant="tonal" size="sm" @click="emit('openFolder')">

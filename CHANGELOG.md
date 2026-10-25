@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.24] - 2026-10-26
+
+### Added
+- **Concurrent Mod Update Checks (10x-20x Speedup)**:
+  - Re-architected `check_local_mods_updates` in Rust backend (`crates/mclr-comp::local`):
+    - Concurrent Modrinth SHA1 and version update queries via `tokio::join!`.
+    - Concurrent CurseForge mod files query pool powered by `tokio::task::JoinSet` with shared client connection pooling.
+  - Added dedicated "检查更新" (Check Updates) action in `ResourceToolbar.vue` with instant single-spinner animation and feedback toasts.
+- **Resource Item Spacing & Breathing Room**: Added explicit `:gap="10"` spacing between mod, resource pack, and shader cards in `MVirtualList`, eliminating dense unspaced rows.
+
+### Fixed
+- **Sidebar Active Pill Drift on UI Scale**:
+  - Bound `themeStore.scale` watcher in `SidebarNav.vue` and attached a persistent `ResizeObserver` to the navigation container, ensuring the active pill remains 100% pinned (`delta: 0px`) under any scale ratio (0.8x to 1.25x).
+  - Synchronized container scroll listener with pill positioning.
+- **Instance Detail Page Horizontal Overflow Elimination**:
+  - Added `overflow-x-hidden` to outer `<main>` in `AppShell.vue` and sub-tab containers in `InstanceDetailPage.vue`, completely eliminating unwanted page-wide horizontal scrollbars.
+- **Modify Instance Tab Bottom Truncation**:
+  - Removed harmful `-mx-4 -mb-4` negative margins on the bottom sticky action bar in `ConfiguratorInstanceStep.vue`, ensuring configuration summary, reset, and modify actions are 100% visible with full padding.
+  - Added bottom padding `pb-10` in `InstallTab.vue`.
+- **Side Drawer Glass Material Refinement**:
+  - Replaced distorted 8px SVG refraction filter on `MDrawer.vue` with dedicated `.m-drawer` high-opacity frosted glass (`0.88` alpha with `28px` heavy blur and elevated shadows in dark and light modes), eliminating see-through transparency.
+- **Duplicate Spinner on Check Updates Button**: Unified `MButton` loading state to display exactly one clean spinning circle.
+
 ## [0.0.23] - 2026-10-26
 
 ### Added
