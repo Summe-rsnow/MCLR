@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { CompProject, CompPlatform } from '../../../ipc/client'
-import { MCard, MBadge, MIconButton, MBrandIcon, compTypeMeta, type CompTypeKey } from '../../../ui'
+import {
+  MCard,
+  MBadge,
+  MIconButton,
+  MBrandIcon,
+  MImage,
+  compTypeMeta,
+  type CompTypeKey,
+} from '../../../ui'
 
 defineProps<{
   project: CompProject
@@ -35,23 +43,11 @@ function formatNumber(num: number): string {
   >
     <div>
       <div class="flex items-start space-x-3">
-        <img
-          v-if="project.iconUrl"
+        <MImage
           :src="project.iconUrl"
-          class="w-14 h-14 rounded-xl object-cover bg-sunken shrink-0"
-          alt=""
-          loading="lazy"
-          decoding="async"
+          :fallback-icon="compTypeMeta[activeTab as CompTypeKey]?.icon || 'i-lucide-box'"
+          class="w-14 h-14 rounded-xl bg-sunken shrink-0"
         />
-        <div
-          v-else
-          class="w-14 h-14 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
-        >
-          <span
-            :class="compTypeMeta[activeTab as CompTypeKey]?.icon || 'i-lucide-box'"
-            class="w-7 h-7 inline-block"
-          />
-        </div>
 
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between">

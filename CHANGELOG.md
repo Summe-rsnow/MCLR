@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.23] - 2026-10-26
+
+### Added
+- **Universal Image Component (`MImage`)**: Introduced a standardized image container with built-in loading fade-in transitions, automatic fallback to `fallbackSrc` or `fallbackIcon` upon network/404 errors, pixelated texture support (`:pixelated="true"`), and full `loading="lazy"` / `decoding="async"` contract compliance. Replaced all 17 raw `<img>` instances across the entire application.
+- **Authentic Minecraft & Loader Icon Assets**:
+  - Imported official high-resolution pixel art textures from PCL-CE (`Fabric`, `NeoForge`, `Forge`, `Quilt`, `OptiFine`, `LabyMod`, `Cleanroom`, `Grass`, `GrassPath`, `CobbleStone`, `GoldBlock`, `RedstoneBlock`, `CommandBlock`, `Egg`, `RedstoneLampOn`, `RedstoneLampOff`) to `public/assets/icons/`.
+  - Upgraded `icons.ts` and `MLoaderIcon.vue` to support authentic pixelated image textures and official vector brand logos.
+- **PCL-Aligned Instance Detail Navigation (Two-Tier Grouping)**:
+  - Replaced overcrowded 11-tab horizontal bar with a two-tier logical grouping via `MSegmented` and filtered `MTabs`:
+    - 🎮 **Game Management (`game`)**: Overview (`overview`), Auto-Install (`install`), Settings (`settings`), Export (`export`).
+    - 📦 **Resource Management (`resources`)**: Mods (`mods`), Resource Packs (`resourcepacks`), Shaders (`shaders`), Saves (`saves`), Screenshots (`screenshots`), Schematics (`schematics`), Servers (`servers`).
+  - Retained 100% backward compatibility with `?tab=...` route query params.
+- **PCL-Aligned Mod Management Operations (`ResourceList`)**:
+  - Added instant batch toggle actions (Enable All / Disable All).
+  - Restructured `ResourceItemRow` with compact layout, quick-toggle switch for `.jar` / `.jar.disabled`, and More menu (Reveal in Explorer, Jar-in-Jar inspector, Delete).
+
+### Changed
+- **Solid Flat Material & Zero Bleed-Through**:
+  - Restricted ambient background blobs in `AmbientBackdrop.vue` strictly to `material === 'glass'`, providing a clean, solid, opaque canvas in `flat` material.
+  - Window TitleBar when scrolled in `flat` mode uses solid `bg-canvas border-b border-line shadow-sm` without translucent text bleed.
+- **Light & Dark Mode Tonal Layers Overhaul**:
+  - Redesigned light mode palette (`canvas`: 0.965, `panel`: 0.985, pure white `raised` cards, crisp `line`: 0.885 and `lineStrong`: 0.785) with multi-layered Slate-900 shadows (`15 23 42`), passing all 17 WCAG AA/AAA contrast targets.
+  - Re-anchored dark mode layer hierarchy (`canvas`: 0.145, `panel`: 0.180, `raised`: 0.220, `sunken`: 0.125).
+- **Unified Page Header & Prominent Title Presence (`MPageHeader`)**:
+  - Enlarged title icon tile to `w-12 h-12 rounded-xl` with `w-6 h-6` icon, and title typography to `text-3xl font-extrabold tracking-tight`.
+  - Added `#icon` and `#badge` slot support.
+  - Reduced `.m-page` top padding from `1.5rem` to `1rem` to eliminate awkward empty voids at the top of the screen.
+- **Compact Instance Cards & Zero Redundant Void**:
+  - Reduced `InstanceCard.vue` height from `h-36` (144px) to `h-28 min-h-[112px]`, eliminating 32px of empty vertical dead space.
+- **Download Center Compact Padding**:
+  - Rebuilt `VersionCategoryTabs.vue` using Settings-About-Help style compact accordion cards (`padding="none"`, `px-4 py-2.5` header, `px-4 py-2` version items, 46px virtual row height).
+  - Compacted configuration wizard steps and removed bloated paddings across pages.
+- **Filtered Non-Authentic Minecraft Icons**:
+  - Purged 11 generic Lucide icon placeholders from `minecraftIconList`, strictly exposing authentic Minecraft block textures in icon pickers.
+
+### Fixed
+- **Double Divider Line in Instance Detail**: Eliminated redundant outer `border-b border-line pb-1` container surrounding `MTabs` in `InstanceDetailPage.vue`.
+
 ## [0.0.21] - 2026-10-26
 
 ### Added

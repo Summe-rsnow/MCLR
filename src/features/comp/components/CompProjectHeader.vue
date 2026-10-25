@@ -6,6 +6,7 @@ import {
   MBadge,
   MButton,
   MBrandIcon,
+  MImage,
   compTypeMeta,
   type CompTypeKey,
   useToast,
@@ -54,23 +55,11 @@ function formatDate(iso: string): string {
   <MCard class="p-6">
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div class="flex items-start space-x-4">
-        <img
-          v-if="project.iconUrl"
+        <MImage
           :src="project.iconUrl"
-          class="w-20 h-20 rounded-xl object-cover bg-sunken shrink-0"
-          alt=""
-          loading="lazy"
-          decoding="async"
+          :fallback-icon="compTypeMeta[project.compType as CompTypeKey]?.icon || 'i-lucide-box'"
+          class="w-20 h-20 rounded-xl bg-sunken shrink-0"
         />
-        <div
-          v-else
-          class="w-20 h-20 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
-        >
-          <span
-            :class="compTypeMeta[project.compType as CompTypeKey]?.icon || 'i-lucide-box'"
-            class="w-10 h-10 inline-block"
-          />
-        </div>
 
         <div>
           <div class="flex items-center space-x-3">

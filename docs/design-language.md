@@ -10,13 +10,13 @@ CSS variables (`--c-*`) contain space-separated RGB channels (`r g b`) generated
 
 | CSS Variable | UnoCSS Class | Light `(L, C)` | Dark `(L, C)` | Purpose |
 |---|---|---|---|---|
-| `--c-canvas` | `bg-canvas` | `0.955, 0.010` | `0.165, 0.012` | Window base behind all tiers |
-| `--c-panel` | `bg-panel` | `0.975, 0.008` | `0.195, 0.012` | Sidebar rail & structural panels |
-| `--c-raised` | `bg-raised` | `1.000, 0.000` | `0.235, 0.012` | Cards (`MCard`) |
-| `--c-sunken` | `bg-sunken` | `0.935, 0.012` | `0.140, 0.012` | Inputs, wells (`.m-well`), hover fills |
+| `--c-canvas` | `bg-canvas` | `0.965, 0.005` | `0.145, 0.012` | Window base behind all tiers |
+| `--c-panel` | `bg-panel` | `0.985, 0.005` | `0.180, 0.012` | Sidebar rail & structural panels |
+| `--c-raised` | `bg-raised` | `1.000, 0.000` | `0.220, 0.012` | Cards (`MCard`) |
+| `--c-sunken` | `bg-sunken` | `0.938, 0.006` | `0.125, 0.012` | Inputs, wells (`.m-well`), hover fills |
 | `--c-overlay` | `bg-overlay` | `1.000, 0.000` | `0.270, 0.012` | Dialogs, menus, popovers, toasts, drawers |
-| `--c-line` | `border-line` | `0.905, 0.010` | `0.300, 0.012` | Hairline borders & dividers |
-| `--c-line-strong` | `border-line-strong` | `0.840, 0.012` | `0.380, 0.012` | Input borders & emphasized dividers |
+| `--c-line` | `border-line` | `0.885, 0.006` | `0.285, 0.012` | Hairline borders & dividers |
+| `--c-line-strong` | `border-line-strong` | `0.785, 0.008` | `0.365, 0.012` | Input borders & emphasized dividers |
 | `--c-fg` | `text-fg` | `0.210, 0.020` | `0.950, 0.008` | Primary text (WCAG $\ge 7:1$ vs `raised` & `canvas`) |
 | `--c-fg-muted` | `text-fg-muted` | `0.460, 0.022` | `0.740, 0.012` | Secondary text (WCAG $\ge 4.5:1$ vs `raised` & `canvas`) |
 | `--c-fg-subtle` | `text-fg-subtle` | `0.620, 0.020` | `0.580, 0.012` | Placeholders, disabled text, decorative icons ($\ge 3:1$ vs `raised`) |
@@ -30,15 +30,15 @@ CSS variables (`--c-*`) contain space-separated RGB channels (`r g b`) generated
 | `--c-success` / `-soft` / `-fg` | `bg-success`, `bg-success-soft`, `text-success-fg` | `h=150, C=0.16`: `0.58 / 0.95 / 0.44` | `0.70 / 0.30 / 0.80` | Success states (`-fg` vs `-soft` $\ge 4.5:1$) |
 
 Additional CSS variables set by `applyTheme`:
-- `--shadow`: `24 32 56` (light) / `0 0 0` (dark)
+- `--shadow`: `15 23 42` (light) / `0 0 0` (dark)
 - `--shadow-1`, `--shadow-2`, `--shadow-3` (UnoCSS `shadow-1`, `shadow-2`, `shadow-3`)
-- `--ambient-1`, `--ambient-2`, `--ambient-3` and `--ambient-strength` (`0.55` in `flat`, `1` in `glass`)
+- `--ambient-1`, `--ambient-2`, `--ambient-3` and `--ambient-strength` (`0` in `flat`, `1` in `glass`)
 
 ---
 
 ## 2. Surface Classes & Materials (`src/ui/theme/material.css`)
 
-- `.m-page`: Standard page container (`max-width: 1120px`, `px-8 py-6`, `gap-6`). All feature pages and detail sub-tabs standardize on this width to ensure 0 horizontal layout shift.
+- `.m-page`: Standard page container (`max-width: 1120px`, `px-8 pt-4 pb-6`, `gap-5`). All feature pages and detail sub-tabs standardize on this container to ensure 0 horizontal layout shift.
 - `.m-panel`: Sidebar/navigation chrome (`panel` bg + `line` inner border in flat; translucent blurred surface in glass).
 - `.m-card`: Raised card surface (`raised` bg + `line` border + `shadow-1` in flat; blurred specular card in glass). Used via `<MCard>`.
 - `.m-well`: Sunken container (`sunken` bg + `line` border; opaque in both materials for legibility). Used via `<MCard variant="well">`.
@@ -118,6 +118,7 @@ The application supports three distinct motion modes configured via `html[data-m
   - Folder/path subtitle and quick action buttons (open folder, manage instance).
 - **`<MListItem>`**: Enhanced list row supporting `dense`, `active`, and named slots (`#prefix`, `#title`, `#subtitle`, `#badges`, `#actions`).
 - **`<MEmpty>`**: Empty state illustration with description and action slot (`#action` or `:actionText`).
+- **`<MImage>`**: Universal image container replacing raw `<img>` tags across the application. Features built-in loading transitions, automatic error fallback (`fallbackSrc` or `fallbackIcon`), pixelated texture rendering support (`:pixelated="true"` for Minecraft blocks/skins), and compliant lazy decoding.
 
 ---
 

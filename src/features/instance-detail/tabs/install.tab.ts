@@ -6,6 +6,7 @@ const tab: InstanceDetailTab = {
   titleKey: 'download.modify.tabTitle',
   icon: 'i-lucide-wrench',
   order: 15,
+  group: 'game',
   component: defineAsyncComponent(() => import('./InstallTab.vue')),
 }
 

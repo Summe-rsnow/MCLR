@@ -4,19 +4,19 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useInstancesStore } from '../instances/store'
 import { useLaunchStore } from '../launch/store'
-import { instanceDetailTabs } from './tabs'
+import { instanceDetailTabs, type TabGroupKey } from './tabs'
 import ModsDisabledTab from './tabs/ModsDisabledTab.vue'
 import {
   MPageHeader,
   MButton,
   MBadge,
+  MSegmented,
   MTabs,
   MCard,
   MEmpty,
   MSkeleton,
   MLoaderIcon,
 } from '../../ui'
-
 const props = defineProps<{
   id?: string
 }>()
@@ -37,6 +37,65 @@ const instance = computed(() => {
 
 const activeTab = ref(instanceDetailTabs[0]?.key || 'overview')
 const direction = ref<'forward' | 'back'>('forward')
+
+const tabGroupMap = computed(() => {
+  const map = new Map<string, TabGroupKey>()
+  for (const tab of instanceDetailTabs) {
+    map.set(tab.key, tab.group || 'game')
+  }
+  return map
+})
+
+const activeGroup = ref<TabGroupKey>(tabGroupMap.value.get(activeTab.value) || 'game')
+
+const groupOptions = computed(() => [
+  {
+    label: t('instanceDetail.groups.game'),
+    value: 'game',
+    icon: 'i-lucide-gamepad-2',
+  },
+  {
+    label: t('instanceDetail.groups.resources'),
+    value: 'resources',
+    icon: 'i-lucide-folder-archive',
+  },
+])
+
+const visibleTabs = computed(() => {
+  return instanceDetailTabs.filter((tab) => (tab.group || 'game') === activeGroup.value)
+})
+
+const visibleTabOptions = computed(() =>
+  visibleTabs.value.map((tab) => ({
+    key: tab.key,
+    label: t(tab.titleKey),
+    icon: tab.icon,
+  })),
+)
+
+// Keep activeGroup synchronized when activeTab changes
+watch(
+  activeTab,
+  (tab) => {
+    const group = tabGroupMap.value.get(tab)
+    if (group && group !== activeGroup.value) {
+      activeGroup.value = group
+    }
+  },
+  { immediate: true },
+)
+
+function onGroupChange(group: string) {
+  const newGroup = group as TabGroupKey
+  activeGroup.value = newGroup
+  const currentTabInGroup = visibleTabs.value.some((t) => t.key === activeTab.value)
+  if (!currentTabInGroup) {
+    const firstTab = visibleTabs.value[0]
+    if (firstTab) {
+      onTabChange(firstTab.key)
+    }
+  }
+}
 
 // Sync with query param if present
 watch(
@@ -69,14 +128,6 @@ function onTabChange(key: string) {
     },
   })
 }
-
-const tabOptions = computed(() =>
-  instanceDetailTabs.map((tab) => ({
-    key: tab.key,
-    label: t(tab.titleKey),
-    icon: tab.icon,
-  })),
-)
 
 const activeComponent = computed(() => {
   const target = instanceDetailTabs.find((tab) => tab.key === activeTab.value)
@@ -111,8 +162,15 @@ function handleLaunch() {
           ? `${instance.mcVersion} • ${instance.loaders.length > 0 ? instance.loaders.join(', ') : 'Vanilla'}`
           : undefined
       "
-      icon="i-lucide-box"
     >
+      <template #icon>
+        <MLoaderIcon
+          :kind="instance?.kind || (instance?.loaders?.[0]?.toLowerCase() ?? 'vanilla')"
+          :icon="instance?.config?.icon"
+          :size="40"
+          class="shrink-0"
+        />
+      </template>
       <template #actions>
         <div class="flex items-center gap-2">
           <MButton variant="text" size="sm" icon="i-lucide-arrow-left" @click="goBack">
@@ -187,11 +245,23 @@ function handleLaunch() {
         </div>
       </div>
     </MCard>
-    <!-- Navigation Tabs -->
-    <div class="border-b border-line pb-1">
-      <MTabs :model-value="activeTab" :tabs="tabOptions" @update:model-value="onTabChange" />
+    <!-- Navigation Tabs with Group Switcher -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <MSegmented
+        :model-value="activeGroup"
+        :options="groupOptions"
+        size="sm"
+        class="shrink-0"
+        @update:model-value="onGroupChange"
+      />
+      <div class="min-w-0 flex-1">
+        <MTabs
+          :model-value="activeTab"
+          :tabs="visibleTabOptions"
+          @update:model-value="onTabChange"
+        />
+      </div>
     </div>
-
     <!-- Tab Content -->
     <div>
       <div v-if="!instance && instancesStore.loading" class="space-y-4">

@@ -6,6 +6,7 @@ const tab: InstanceDetailTab = {
   titleKey: 'instanceDetail.tabs.screenshots',
   icon: 'i-lucide-image',
   order: 60,
+  group: 'resources',
   component: defineAsyncComponent(() => import('./ScreenshotsTab.vue')),
 }
 

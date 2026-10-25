@@ -1,10 +1,13 @@
 import type { Component } from 'vue'
 
+export type TabGroupKey = 'game' | 'resources'
+
 export interface InstanceDetailTab {
   key: string
   titleKey: string
   icon: string
   order: number
+  group?: TabGroupKey
   component: Component
 }
 

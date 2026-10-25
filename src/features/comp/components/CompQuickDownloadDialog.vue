@@ -13,6 +13,7 @@ import {
   MSkeleton,
   MEmpty,
   MBrandIcon,
+  MImage,
   useToast,
 } from '../../../ui'
 
@@ -308,20 +309,11 @@ function onSelectLoader(ldr: string) {
         class="flex items-start justify-between gap-3 p-3.5 rounded-xl bg-sunken/50 border border-line"
       >
         <div class="flex items-start gap-3 min-w-0">
-          <img
-            v-if="project.iconUrl"
+          <MImage
             :src="project.iconUrl"
-            class="w-12 h-12 rounded-xl object-cover bg-sunken shrink-0 border border-line"
-            alt=""
-            loading="lazy"
-            decoding="async"
+            fallback-icon="i-lucide-box"
+            class="w-12 h-12 rounded-xl bg-sunken shrink-0 border border-line"
           />
-          <div
-            v-else
-            class="w-12 h-12 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
-          >
-            <span class="i-lucide-box w-6 h-6 inline-block" />
-          </div>
 
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">

@@ -14,6 +14,8 @@ import {
   MPageHeader,
   MHelpTooltip,
   MSkeleton,
+  MEmpty,
+  MListItem,
 } from '../../ui'
 const { t } = useI18n()
 const toast = useToast()
@@ -191,7 +193,7 @@ async function onRemoveJava(item: JavaInstallation) {
       </template>
     </MPageHeader>
 
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-5">
       <!-- Installed Java List -->
       <MSection
         :title="t('java.installedList', { count: javaInstallations.length })"
@@ -219,19 +221,19 @@ async function onRemoveJava(item: JavaInstallation) {
           </div>
         </div>
 
-        <div
+        <MEmpty
           v-else-if="javaInstallations.length === 0"
-          class="text-sm text-fg-muted py-6 text-center"
-        >
-          {{ t('java.emptyList') }}
-        </div>
+          :title="t('java.emptyList')"
+          icon="i-lucide-coffee"
+        />
         <div v-else class="flex flex-col gap-2">
-          <div
+          <MListItem
             v-for="item in javaInstallations"
             :key="item.path"
-            class="flex items-center justify-between p-3 rounded-xl bg-sunken/40 border border-line"
+            :clickable="false"
+            class="p-3 rounded-xl bg-sunken/40 border border-line"
           >
-            <div class="min-w-0 flex-1 select-text">
+            <template #title>
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="font-bold text-sm text-fg">
                   {{ t('java.majorVersion', { major: item.major }) }}
@@ -248,11 +250,13 @@ async function onRemoveJava(item: JavaInstallation) {
                 </MBadge>
                 <MHelpTooltip :text="item.path" size="xs" />
               </div>
-              <div class="text-xs text-fg-muted truncate mt-1">
+            </template>
+            <template #subtitle>
+              <div class="text-xs text-fg-muted truncate mt-1 select-text">
                 {{ t('java.vendor', { vendor: item.implementor }) }}
               </div>
-            </div>
-            <div class="flex items-center gap-1 shrink-0 ml-3">
+            </template>
+            <template #actions>
               <MIconButton
                 icon="i-lucide-folder-open"
                 size="sm"
@@ -266,8 +270,8 @@ async function onRemoveJava(item: JavaInstallation) {
                 :title="t('java.remove')"
                 @click="onRemoveJava(item)"
               />
-            </div>
-          </div>
+            </template>
+          </MListItem>
         </div>
       </MSection>
     </div>

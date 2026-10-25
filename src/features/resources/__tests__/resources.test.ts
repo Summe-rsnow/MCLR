@@ -136,4 +136,22 @@ describe('Resources feature unit tests', () => {
     expect(sortedByName[1].title).toBe('Iris Shaders')
     expect(sortedByName[2].title).toBe('Sodium')
   })
+
+  it('supports batch toggle logic for all entries', () => {
+    // Simulate enable all
+    const allEnabled = dummyEntries.map((e) => ({ ...e, enabled: true }))
+    expect(allEnabled.every((e) => e.enabled)).toBe(true)
+
+    // Simulate disable all
+    const allDisabled = dummyEntries.map((e) => ({ ...e, enabled: false }))
+    expect(allDisabled.every((e) => !e.enabled)).toBe(true)
+
+    // Simulate batch toggle on selection
+    const selected = new Set([dummyEntries[0].path, dummyEntries[2].path])
+    const batchDisabled = dummyEntries.map((e) =>
+      selected.has(e.path) ? { ...e, enabled: false } : e,
+    )
+    expect(batchDisabled.find((e) => e.path === dummyEntries[0].path)?.enabled).toBe(false)
+    expect(batchDisabled.find((e) => e.path === dummyEntries[1].path)?.enabled).toBe(true)
+  })
 })

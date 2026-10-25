@@ -44,6 +44,7 @@ export { default as AmbientBackdrop } from './AmbientBackdrop.vue'
 export { default as GlassDefs } from './GlassDefs.vue'
 export { default as MPagination } from './MPagination.vue'
 export { default as MMarkdown } from './MMarkdown.vue'
+export { default as MImage } from './MImage.vue'
 
 export * from './icons'
 export * from './useDialog'

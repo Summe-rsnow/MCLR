@@ -3,6 +3,10 @@
   "back": "返回实例列表",
   "launch": "启动游戏",
   "notFound": "未找到指定的实例",
+  "groups": {
+    "game": "游戏管理",
+    "resources": "资源管理"
+  },
   "tabs": {
     "overview": "概览",
     "settings": "配置",
@@ -39,6 +43,13 @@
     "deleteSuccess": "实例已删除",
     "renameSuccess": "重命名成功",
     "iconGrass": "草方块",
+    "iconGrassPath": "草径",
+    "iconStone": "石头",
+    "iconGoldBlock": "金块",
+    "iconRedstoneBlock": "红石块",
+    "iconEgg": "鸡蛋",
+    "iconRedstoneLampOn": "红石灯（亮）",
+    "iconRedstoneLampOff": "红石灯（灭）",
     "iconCraftingTable": "工作台",
     "iconChest": "箱子",
     "iconFurnace": "熔炉",

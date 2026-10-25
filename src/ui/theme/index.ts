@@ -178,13 +178,13 @@ export function generatePalette(seedHex: string, effectiveMode: 'light' | 'dark'
     : Math.max(0.13, Math.min(0.22, seedOklch.c || 0.18))
   const isDark = effectiveMode === 'dark'
 
-  const canvasRgb = isDark ? toneToRgb(h, 0.012, 0.165) : toneToRgb(h, 0.01, 0.955)
-  const panelRgb = isDark ? toneToRgb(h, 0.012, 0.195) : toneToRgb(h, 0.008, 0.975)
-  const raisedRgb = isDark ? toneToRgb(h, 0.012, 0.235) : { r: 255, g: 255, b: 255 }
-  const sunkenRgb = isDark ? toneToRgb(h, 0.012, 0.14) : toneToRgb(h, 0.012, 0.935)
+  const canvasRgb = isDark ? toneToRgb(h, 0.012, 0.145) : toneToRgb(h, 0.005, 0.965)
+  const panelRgb = isDark ? toneToRgb(h, 0.012, 0.18) : toneToRgb(h, 0.005, 0.985)
+  const raisedRgb = isDark ? toneToRgb(h, 0.012, 0.22) : { r: 255, g: 255, b: 255 }
+  const sunkenRgb = isDark ? toneToRgb(h, 0.012, 0.125) : toneToRgb(h, 0.006, 0.938)
   const overlayRgb = isDark ? toneToRgb(h, 0.012, 0.27) : { r: 255, g: 255, b: 255 }
-  const lineRgb = isDark ? toneToRgb(h, 0.012, 0.3) : toneToRgb(h, 0.01, 0.905)
-  const lineStrongRgb = isDark ? toneToRgb(h, 0.012, 0.38) : toneToRgb(h, 0.012, 0.84)
+  const lineRgb = isDark ? toneToRgb(h, 0.012, 0.285) : toneToRgb(h, 0.006, 0.885)
+  const lineStrongRgb = isDark ? toneToRgb(h, 0.012, 0.365) : toneToRgb(h, 0.008, 0.785)
 
   let fgRgb = isDark ? toneToRgb(h, 0.008, 0.95) : toneToRgb(h, 0.02, 0.21)
   fgRgb = ensureContrast(ensureContrast(fgRgb, raisedRgb, 7), canvasRgb, 7)
@@ -236,7 +236,7 @@ export function generatePalette(seedHex: string, effectiveMode: 'light' | 'dark'
     4.5,
   )
 
-  const shadow = isDark ? '0 0 0' : '24 32 56'
+  const shadow = isDark ? '0 0 0' : '15 23 42'
 
   const ambient1Rgb = isDark ? toneToRgb(h, 0.1, 0.36) : toneToRgb(h, 0.11, 0.8)
   const ambient2Rgb = isDark ? toneToRgb(h + 45, 0.1, 0.34) : toneToRgb(h + 45, 0.11, 0.82)

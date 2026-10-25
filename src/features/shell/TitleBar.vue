@@ -5,6 +5,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import TaskIndicator from '../tasks/TaskIndicator.vue'
 import QuickSettings from './QuickSettings.vue'
+import { useThemeStore } from '../../stores/theme'
 
 defineProps<{
   scrolled?: boolean
@@ -13,6 +14,7 @@ defineProps<{
 const { t } = useI18n()
 const isMaximized = ref(false)
 let unlistenResized: UnlistenFn | null = null
+const themeStore = useThemeStore()
 
 async function checkMaximized() {
   try {
@@ -75,11 +77,13 @@ onUnmounted(() => {
   <header
     data-tauri-drag-region
     class="relative h-11 shrink-0 flex items-center justify-between px-3 z-40 select-none"
-    :class="
+    :class="[
       scrolled
-        ? 'bg-canvas/60 backdrop-blur-md border-b border-line/40 transition-colors duration-200'
-        : 'bg-transparent border-b border-transparent transition-colors duration-200'
-    "
+        ? themeStore.material === 'glass'
+          ? 'bg-canvas/70 backdrop-blur-md border-b border-line/50 transition-colors duration-200'
+          : 'bg-canvas border-b border-line shadow-sm transition-colors duration-200'
+        : 'bg-transparent border-b border-transparent transition-colors duration-200',
+    ]"
   >
     <!-- Center Task Indicator -->
     <div data-tauri-drag-region class="flex-1 flex items-center justify-center px-4">

@@ -6,6 +6,7 @@ const tab: InstanceDetailTab = {
   titleKey: 'instanceDetail.tabs.export',
   icon: 'i-lucide-package-plus',
   order: 40,
+  group: 'game',
   component: defineAsyncComponent(() => import('./ExportTab.vue')),
 }
 

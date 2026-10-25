@@ -16,6 +16,7 @@ import {
   MPageHeader,
   MPagination,
   MBrandIcon,
+  MImage,
   compTypeMeta,
   type CompTypeKey,
   useToast,
@@ -427,23 +428,11 @@ watch(
           @click="navigateToProject(fav.platform, fav.projectId)"
         >
           <div class="flex items-start space-x-3">
-            <img
-              v-if="fav.iconUrl"
+            <MImage
               :src="fav.iconUrl"
-              class="w-14 h-14 rounded-xl object-cover bg-sunken shrink-0"
-              alt=""
-              loading="lazy"
-              decoding="async"
+              :fallback-icon="compTypeMeta[fav.compType as CompTypeKey]?.icon || 'i-lucide-box'"
+              class="w-14 h-14 rounded-xl bg-sunken shrink-0"
             />
-            <div
-              v-else
-              class="w-14 h-14 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
-            >
-              <span
-                :class="compTypeMeta[fav.compType as CompTypeKey]?.icon || 'i-lucide-box'"
-                class="w-7 h-7 inline-block"
-              />
-            </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
                 <h4 class="font-bold text-base text-fg truncate">{{ fav.title }}</h4>

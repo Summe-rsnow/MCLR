@@ -433,6 +433,23 @@ async function handleBatchToggle(enable: boolean) {
   }
 }
 
+async function handleBatchToggleAll(enable: boolean) {
+  const targetEntries = entries.value.filter((e) => e.enabled !== enable)
+  if (targetEntries.length === 0) return
+  for (const entry of targetEntries) {
+    await doToggle(entry)
+  }
+  toast.success(enable ? t('resources.actions.enableAll') : t('resources.actions.disableAll'))
+}
+
+async function handleReveal(entry: ResourceEntry) {
+  try {
+    await ipcClient.screenshotReveal(entry.path)
+  } catch {
+    await handleOpenFolder()
+  }
+}
+
 // Open folder
 async function handleOpenFolder() {
   try {
@@ -565,12 +582,13 @@ watch(
       @update:active-sort="activeSort = $event"
       @update:active-filter="activeFilter = $event"
       @batch-update="handleBatchUpdateClick"
+      @batch-enable-all="handleBatchToggleAll(true)"
+      @batch-disable-all="handleBatchToggleAll(false)"
       @open-folder="handleOpenFolder"
       @navigate-back="handleNavigateBack"
       @download-more="handleDownloadMore"
       @export="handleExport"
     />
-
     <!-- Content / Skeletons / List -->
     <div class="flex-1 min-h-0 overflow-y-auto">
       <div v-if="!initialized && loading" class="space-y-2">
@@ -615,6 +633,7 @@ watch(
               @navigate-dir="handleNavigateDir"
               @inspect-schematic="handleSchematicInspect"
               @jar-in-jar="openJarInJar"
+              @reveal="handleReveal"
               @update="handleUpdateClick"
               @delete="handleDelete"
               @toggle="handleToggle"

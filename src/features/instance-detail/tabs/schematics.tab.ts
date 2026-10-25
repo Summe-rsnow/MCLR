@@ -6,6 +6,7 @@ const tab: InstanceDetailTab = {
   titleKey: 'instanceDetail.tabs.schematics',
   icon: 'i-lucide-box',
   order: 100,
+  group: 'resources',
   component: defineAsyncComponent(() => import('./SchematicsTab.vue')),
 }
 

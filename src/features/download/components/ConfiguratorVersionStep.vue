@@ -16,14 +16,18 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10">
-    <div class="flex items-center gap-3">
-      <span class="i-lucide-box text-2xl text-primary" />
+  <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+    <div class="flex items-center gap-2.5">
+      <div
+        class="w-8 h-8 rounded-lg bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
+      >
+        <span class="i-lucide-box w-4 h-4" />
+      </div>
       <div>
         <div class="text-xs text-fg-muted">
           {{ t('download.configurator.targetVersion') }}
         </div>
-        <div class="text-lg font-bold flex items-center gap-2">
+        <div class="text-base font-bold flex items-center gap-2">
           {{ mcVersion }}
           <MBadge variant="primary" size="sm"> Drop {{ dropOf(mcVersion) }} </MBadge>
         </div>

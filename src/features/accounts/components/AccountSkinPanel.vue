@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AccountView } from '../../../ipc/client'
-import { MCard, MButton, MAvatar, MEmpty } from '../../../ui'
+import { MCard, MButton, MAvatar, MEmpty, MImage } from '../../../ui'
 
 const props = defineProps<{
   selectedAccount: AccountView | null
@@ -30,14 +30,18 @@ const hasActiveCape = computed(() => props.selectedAccount?.capes.some((c) => c.
         <div
           class="w-16 h-16 rounded-lg bg-raised flex items-center justify-center border border-line overflow-hidden"
         >
-          <img
+          <MImage
             v-if="selectedAccount.skinHeadDataUrl"
             :src="selectedAccount.skinHeadDataUrl"
             alt="Skin Head"
-            class="w-full h-full object-contain image-rendering-pixelated"
-            loading="lazy"
-            decoding="async"
-          />
+            pixelated
+            fit="contain"
+            class="w-full h-full"
+          >
+            <template #fallback>
+              <MAvatar :name="selectedAccount.username" :size="64" />
+            </template>
+          </MImage>
           <MAvatar v-else :name="selectedAccount.username" :size="64" />
         </div>
         <div class="flex-1 min-w-0">

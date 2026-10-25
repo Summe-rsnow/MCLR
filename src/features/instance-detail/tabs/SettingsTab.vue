@@ -179,7 +179,7 @@ async function saveSettings() {
                 v-for="item in minecraftIconList"
                 :key="item.key"
                 type="button"
-                class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer"
+                class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors cursor-pointer"
                 :class="[
                   form.icon === item.key ||
                   (!form.icon && (item.key === 'grass_block' || item.key === 'grass')) ||
@@ -190,7 +190,7 @@ async function saveSettings() {
                 :title="t(item.labelKey)"
                 @click="form.icon = item.key"
               >
-                <span class="w-3.5 h-3.5 block" :class="item.icon" />
+                <MLoaderIcon :icon="item.key" :size="24" class="[image-rendering:pixelated]" />
                 <span>{{ t(item.labelKey) }}</span>
               </button>
             </div>

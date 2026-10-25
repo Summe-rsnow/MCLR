@@ -6,6 +6,7 @@ const tab: InstanceDetailTab = {
   titleKey: 'instanceDetail.tabs.settings',
   icon: 'i-lucide-sliders-horizontal',
   order: 20,
+  group: 'game',
   component: defineAsyncComponent(() => import('./SettingsTab.vue')),
 }
 

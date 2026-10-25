@@ -6,6 +6,7 @@ const tab: InstanceDetailTab = {
   titleKey: 'instanceDetail.tabs.resourcepacks',
   icon: 'i-lucide-palette',
   order: 80,
+  group: 'resources',
   component: defineAsyncComponent(() => import('./ResourcePacksTab.vue')),
 }
 

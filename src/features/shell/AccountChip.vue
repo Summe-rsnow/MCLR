@@ -2,7 +2,7 @@
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAccountsStore } from '../accounts/store'
-import { getAccountKindMeta, MBrandIcon } from '../../ui'
+import { getAccountKindMeta, MBrandIcon, MImage } from '../../ui'
 
 defineProps<{
   collapsed?: boolean
@@ -30,13 +30,13 @@ function navigateToAccounts() {
     <div
       class="relative w-8 h-8 rounded-lg overflow-hidden bg-sunken flex items-center justify-center shrink-0 border border-line"
     >
-      <img
+      <MImage
         v-if="accountsStore.selectedAccount?.skinHeadDataUrl"
         :src="accountsStore.selectedAccount.skinHeadDataUrl"
         alt="Avatar"
-        class="w-full h-full object-cover [image-rendering:pixelated]"
-        loading="lazy"
-        decoding="async"
+        pixelated
+        fallback-icon="i-lucide-user"
+        class="w-full h-full"
       />
       <span v-else-if="accountsStore.selectedAccount" class="i-lucide-user text-fg-muted w-4 h-4" />
       <span v-else class="i-lucide-user-plus text-fg-muted w-4 h-4" />

@@ -169,7 +169,7 @@ async function onKillClick() {
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col p-6 gap-4 box-border overflow-hidden">
+  <div class="m-page h-full flex flex-col gap-5 overflow-hidden">
     <!-- Header -->
     <MPageHeader
       :title="t('logs.title')"

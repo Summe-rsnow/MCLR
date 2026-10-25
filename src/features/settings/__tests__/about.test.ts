@@ -5,7 +5,7 @@ import { createI18n } from 'vue-i18n'
 import SettingsAboutPage from '../SettingsAboutPage.vue'
 import zhCnSettings from '../../../locales/zh-CN/settings.json'
 import zhCnCommon from '../../../locales/zh-CN/common.json'
-
+import pkg from '../../../../package.json'
 const i18n = createI18n({
   legacy: false,
   locale: 'zh-CN',
@@ -22,14 +22,14 @@ describe('SettingsAboutPage & Help Center', () => {
     setActivePinia(createPinia())
   })
 
-  it('renders app version badge v0.0.21, license, and description', () => {
+  it('renders app version badge, license, and description', () => {
     const wrapper = mount(SettingsAboutPage, {
       global: {
         plugins: [i18n],
       },
     })
 
-    expect(wrapper.text()).toContain('v0.0.21')
+    expect(wrapper.text()).toContain(`v${pkg.version}`)
     expect(wrapper.text()).toContain('Apache-2.0')
     expect(wrapper.text()).toContain('MCLR')
     expect(wrapper.text()).toContain('GitHub 仓库')

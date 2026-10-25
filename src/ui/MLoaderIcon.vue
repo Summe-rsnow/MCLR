@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { getInstanceIconMeta } from './icons'
+import MImage from './MImage.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -34,12 +35,24 @@ const sizeClasses = computed(() => {
 
 <template>
   <div
-    class="m-loader-tile inline-flex items-center justify-center shrink-0 select-none"
+    class="m-loader-tile inline-flex items-center justify-center shrink-0 select-none overflow-hidden"
     :class="sizeClasses.tile"
     :style="{ '--loader-hue': String(meta.hue) }"
     :title="meta.label"
   >
-    <span :class="[meta.icon, sizeClasses.icon]" />
+    <MImage
+      v-if="meta.image"
+      :src="meta.image"
+      :alt="meta.label"
+      pixelated
+      fit="contain"
+      :class="sizeClasses.icon"
+    >
+      <template #fallback>
+        <span :class="[meta.icon, sizeClasses.icon]" />
+      </template>
+    </MImage>
+    <span v-else :class="[meta.icon, sizeClasses.icon]" />
   </div>
 </template>
 

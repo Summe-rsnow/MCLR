@@ -6,6 +6,7 @@ const tab: InstanceDetailTab = {
   titleKey: 'instanceDetail.tabs.overview',
   icon: 'i-lucide-info',
   order: 10,
+  group: 'game',
   component: defineAsyncComponent(() => import('./OverviewTab.vue')),
 }
 

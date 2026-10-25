@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useThemeStore } from '../../stores/theme'
-import { MToast, MDialog, MCheckbox, useDialog, GlassDefs, AmbientBackdrop } from '../../ui'
+import { MToast, MDialog, MCheckbox, useDialog, GlassDefs, AmbientBackdrop, MImage } from '../../ui'
 import { useCrashStore } from '../crash/store'
 import CrashDialog from '../crash/CrashDialog.vue'
 import TitleBar from './TitleBar.vue'
@@ -84,20 +84,19 @@ onUnmounted(() => {
           opacity: themeStore.backgroundOpacity,
         }"
       />
-      <img
+      <MImage
         v-else-if="
           themeStore.backgroundMode === 'image' || themeStore.backgroundMode === 'slideshow'
         "
         data-testid="bg-img"
-        class="w-full h-full object-cover transition-opacity duration-500"
+        class="w-full h-full pointer-events-none"
         :src="backgroundMediaSrc"
         :style="{
           filter: `blur(${themeStore.backgroundBlur}px)`,
           opacity: themeStore.backgroundOpacity,
         }"
         alt="Background"
-        loading="lazy"
-        decoding="async"
+        fallback-icon="i-lucide-image"
       />
     </div>
 

@@ -35,12 +35,12 @@ function getLoaderBadgeVariant(kind?: string): 'primary' | 'warning' | 'neutral'
   <MCard
     hoverable
     padding="sm"
-    class="relative flex flex-col justify-between h-36 cursor-pointer group"
+    class="relative flex flex-col justify-between h-28 min-h-[112px] cursor-pointer group"
     @click="emit('click', instance)"
     @contextmenu="emit('contextmenu', $event, instance)"
   >
     <!-- Top Row Info -->
-    <div class="flex items-start justify-between gap-2">
+    <div class="flex items-start justify-between gap-2.5">
       <div class="flex items-center gap-3 min-w-0">
         <MLoaderIcon
           :kind="instance.kind || (instance.loaders?.[0]?.toLowerCase() ?? 'vanilla')"
@@ -99,7 +99,7 @@ function getLoaderBadgeVariant(kind?: string): 'primary' | 'warning' | 'neutral'
     </div>
 
     <!-- Badges & Quick Actions Row -->
-    <div class="flex items-center justify-between gap-2 mt-auto pt-2">
+    <div class="flex items-center justify-between gap-2 mt-auto pt-1.5">
       <div class="flex flex-wrap items-center gap-1.5 min-w-0">
         <MBadge
           v-if="instance.loaders && instance.loaders.length > 0"

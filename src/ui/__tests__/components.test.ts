@@ -40,6 +40,7 @@ import {
   MDrawer,
   MSearchBar,
   MStatusBadge,
+  MImage,
   useDialog,
   useToast,
   applyTheme,
@@ -484,8 +485,9 @@ describe('UI Components', () => {
     expect(brand.find('span').classes()).toContain('i-simple-icons-modrinth')
 
     const loader = mount(MLoaderIcon, { props: { kind: 'fabric', size: 40 } })
-    expect(loader.find('span').classes()).toContain('i-lucide-waypoints')
-
+    expect(loader.find('img').attributes('src')).toBe('/assets/icons/loaders/fabric.png')
+    const fallbackLoader = mount(MLoaderIcon, { props: { kind: 'unknown', size: 40 } })
+    expect(fallbackLoader.find('span').classes()).toContain('i-lucide-cpu')
     const pop = mount(MPopover, {
       props: { open: true },
       slots: { default: () => 'Popover Body' },
@@ -721,5 +723,31 @@ describe('UI Components', () => {
       global: { plugins: [i18n] },
     })
     expect(selectWrapper.find('.animate-spin').exists()).toBe(true)
+  })
+
+  it('MImage renders img with lazy decoding and handles fallback gracefully', async () => {
+    const img = mount(MImage, {
+      props: { src: 'https://example.com/photo.png', alt: 'Test Photo', pixelated: true },
+    })
+    const el = img.find('img')
+    expect(el.exists()).toBe(true)
+    expect(el.attributes('src')).toBe('https://example.com/photo.png')
+    expect(el.attributes('loading')).toBe('lazy')
+    expect(el.attributes('decoding')).toBe('async')
+    expect(img.classes()).toContain('[image-rendering:pixelated]')
+
+    // Fallback when src is empty
+    const fallbackImg = mount(MImage, {
+      props: { src: null, fallbackIcon: 'i-lucide-box' },
+    })
+    expect(fallbackImg.find('img').exists()).toBe(false)
+    expect(fallbackImg.find('.i-lucide-box').exists()).toBe(true)
+
+    // Fallback on error with fallbackSrc
+    const errorImg = mount(MImage, {
+      props: { src: 'https://broken.png', fallbackSrc: 'https://fallback.png' },
+    })
+    await errorImg.find('img').trigger('error')
+    expect(errorImg.find('img').attributes('src')).toBe('https://fallback.png')
   })
 })

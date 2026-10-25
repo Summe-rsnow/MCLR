@@ -13,6 +13,7 @@ import {
   MDialog,
   MInput,
   MSelect,
+  MLoaderIcon,
   useToast,
   useDialog,
   minecraftIconList,
@@ -243,7 +244,7 @@ function isCurrentIcon(key: string): boolean {
           v-for="item in minecraftIconList"
           :key="item.key"
           type="button"
-          class="flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition-all cursor-pointer"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-sm font-medium transition-all cursor-pointer"
           :class="[
             isCurrentIcon(item.key)
               ? 'border-primary bg-primary-soft text-primary-soft-fg ring-2 ring-primary/20'
@@ -251,7 +252,7 @@ function isCurrentIcon(key: string): boolean {
           ]"
           @click="setIcon(item.key)"
         >
-          <span class="w-4 h-4" :class="item.icon" />
+          <MLoaderIcon :icon="item.key" :size="24" class="[image-rendering:pixelated]" />
           <span>{{ t(item.labelKey) }}</span>
         </button>
       </div>

@@ -39,37 +39,45 @@ function formatDate(iso: string): string {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
+  <div class="flex flex-col gap-3">
     <!-- Latest Group -->
-    <MCard v-if="!searchQuery && latestVersions.length > 0" class="overflow-hidden">
+    <MCard
+      v-if="!searchQuery && latestVersions.length > 0"
+      padding="none"
+      class="overflow-hidden transition-all"
+    >
       <button
         type="button"
-        class="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+        class="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-sunken/50 transition-colors cursor-pointer"
         @click="openLatest = !openLatest"
       >
         <div class="flex items-center gap-3">
-          <span class="i-lucide-sparkles text-xl text-primary" />
-          <span class="font-bold text-base">{{ t('download.groups.latest') }}</span>
+          <div
+            class="w-8 h-8 rounded-lg bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
+          >
+            <span class="i-lucide-sparkles w-4 h-4" />
+          </div>
+          <span class="font-semibold text-sm text-fg">{{ t('download.groups.latest') }}</span>
         </div>
         <span
           :class="[
-            'i-lucide-chevron-down text-lg text-fg-muted transition-transform duration-200',
+            'i-lucide-chevron-down text-base text-fg-muted transition-transform duration-200',
             openLatest ? 'rotate-180' : '',
           ]"
         />
       </button>
       <MCollapse :open="openLatest">
-        <div class="divide-y divide-white/5 border-t border-white/5">
+        <div class="divide-y divide-line/40 border-t border-line/40">
           <div
             v-for="v in latestVersions"
             :key="v.id"
-            class="p-4 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group"
+            class="px-4 py-2 flex items-center justify-between hover:bg-sunken/50 transition-colors cursor-pointer group"
             @click="emit('select-version', v.id)"
           >
             <div class="flex items-center gap-3">
               <div
                 :class="[
-                  'w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border transition-all duration-200 group-hover:scale-105 shadow-sm',
+                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-all duration-200 group-hover:scale-105 shadow-sm',
                   v.category === 'release'
                     ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
                     : 'bg-amber-500/15 text-amber-500 border-amber-500/30',
@@ -77,14 +85,14 @@ function formatDate(iso: string): string {
               >
                 <span
                   :class="[
-                    'text-xl',
+                    'w-4 h-4',
                     v.category === 'release' ? 'i-lucide-box' : 'i-lucide-command',
                   ]"
                 />
               </div>
               <div class="flex flex-col">
                 <div class="flex items-center gap-2">
-                  <span class="font-bold text-base group-hover:text-primary transition-colors">
+                  <span class="font-semibold text-sm group-hover:text-primary transition-colors">
                     {{ v.id }}
                   </span>
                   <MBadge size="sm" :variant="v.category === 'release' ? 'primary' : 'neutral'">
@@ -95,7 +103,7 @@ function formatDate(iso: string): string {
                     }}
                   </MBadge>
                 </div>
-                <span class="text-xs text-fg-muted mt-0.5">
+                <span class="text-xs text-fg-muted">
                   {{
                     v.category === 'release'
                       ? t('download.latestReleaseDesc', { date: formatDate(v.releaseTime) })
@@ -105,7 +113,7 @@ function formatDate(iso: string): string {
               </div>
             </div>
             <MButton variant="text" size="sm">
-              <span class="i-lucide-arrow-right" />
+              <span class="i-lucide-arrow-right w-4 h-4" />
             </MButton>
           </div>
         </div>
@@ -113,37 +121,41 @@ function formatDate(iso: string): string {
     </MCard>
 
     <!-- Release Group -->
-    <MCard v-if="releaseVersions.length > 0" class="overflow-hidden">
+    <MCard v-if="releaseVersions.length > 0" padding="none" class="overflow-hidden transition-all">
       <button
         type="button"
-        class="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+        class="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-sunken/50 transition-colors cursor-pointer"
         @click="openRelease = !openRelease"
       >
         <div class="flex items-center gap-3">
-          <span class="i-lucide-circle-check text-xl text-emerald-400" />
-          <span class="font-bold text-base"
+          <div
+            class="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0"
+          >
+            <span class="i-lucide-circle-check w-4 h-4" />
+          </div>
+          <span class="font-semibold text-sm text-fg"
             >{{ t('download.groups.release') }} ({{ releaseVersions.length }})</span
           >
         </div>
         <span
           :class="[
-            'i-lucide-chevron-down text-lg text-fg-muted transition-transform duration-200',
+            'i-lucide-chevron-down text-base text-fg-muted transition-transform duration-200',
             openRelease ? 'rotate-180' : '',
           ]"
         />
       </button>
       <MCollapse :open="openRelease">
-        <div class="border-t border-white/5">
+        <div class="border-t border-line/40">
           <MVirtualList
             :items="releaseVersions"
             :item-key="(v) => v.id"
-            :estimate-size="49"
+            :estimate-size="46"
             :overscan="10"
             max-height="65vh"
           >
             <template #item="{ item: v }">
               <div
-                class="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group border-b border-white/5"
+                class="px-4 py-2 flex items-center justify-between hover:bg-sunken/50 transition-colors cursor-pointer group border-b border-line/30"
                 @click="emit('select-version', v.id)"
               >
                 <div class="flex items-center gap-3">
@@ -155,7 +167,7 @@ function formatDate(iso: string): string {
                   </span>
                 </div>
                 <span
-                  class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors"
+                  class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors w-4 h-4"
                 />
               </div>
             </template>
@@ -165,37 +177,41 @@ function formatDate(iso: string): string {
     </MCard>
 
     <!-- Snapshot Group -->
-    <MCard v-if="snapshotVersions.length > 0" class="overflow-hidden">
+    <MCard v-if="snapshotVersions.length > 0" padding="none" class="overflow-hidden transition-all">
       <button
         type="button"
-        class="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+        class="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-sunken/50 transition-colors cursor-pointer"
         @click="openSnapshot = !openSnapshot"
       >
         <div class="flex items-center gap-3">
-          <span class="i-lucide-flask-conical text-xl text-amber-400" />
-          <span class="font-bold text-base"
+          <div
+            class="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0"
+          >
+            <span class="i-lucide-flask-conical w-4 h-4" />
+          </div>
+          <span class="font-semibold text-sm text-fg"
             >{{ t('download.groups.snapshot') }} ({{ snapshotVersions.length }})</span
           >
         </div>
         <span
           :class="[
-            'i-lucide-chevron-down text-lg text-fg-muted transition-transform duration-200',
+            'i-lucide-chevron-down text-base text-fg-muted transition-transform duration-200',
             openSnapshot ? 'rotate-180' : '',
           ]"
         />
       </button>
       <MCollapse :open="openSnapshot">
-        <div class="border-t border-white/5">
+        <div class="border-t border-line/40">
           <MVirtualList
             :items="snapshotVersions"
             :item-key="(v) => v.id"
-            :estimate-size="49"
+            :estimate-size="46"
             :overscan="10"
             max-height="65vh"
           >
             <template #item="{ item: v }">
               <div
-                class="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group border-b border-white/5"
+                class="px-4 py-2 flex items-center justify-between hover:bg-sunken/50 transition-colors cursor-pointer group border-b border-line/30"
                 @click="emit('select-version', v.id)"
               >
                 <div class="flex items-center gap-3">
@@ -207,7 +223,7 @@ function formatDate(iso: string): string {
                   </span>
                 </div>
                 <span
-                  class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors"
+                  class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors w-4 h-4"
                 />
               </div>
             </template>
@@ -217,37 +233,41 @@ function formatDate(iso: string): string {
     </MCard>
 
     <!-- Old Group -->
-    <MCard v-if="oldVersions.length > 0" class="overflow-hidden">
+    <MCard v-if="oldVersions.length > 0" padding="none" class="overflow-hidden transition-all">
       <button
         type="button"
-        class="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+        class="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-sunken/50 transition-colors cursor-pointer"
         @click="openOld = !openOld"
       >
         <div class="flex items-center gap-3">
-          <span class="i-lucide-archive text-xl text-stone-400" />
-          <span class="font-bold text-base"
+          <div
+            class="w-8 h-8 rounded-lg bg-stone-500/15 text-stone-400 flex items-center justify-center shrink-0"
+          >
+            <span class="i-lucide-archive w-4 h-4" />
+          </div>
+          <span class="font-semibold text-sm text-fg"
             >{{ t('download.groups.old') }} ({{ oldVersions.length }})</span
           >
         </div>
         <span
           :class="[
-            'i-lucide-chevron-down text-lg text-fg-muted transition-transform duration-200',
+            'i-lucide-chevron-down text-base text-fg-muted transition-transform duration-200',
             openOld ? 'rotate-180' : '',
           ]"
         />
       </button>
       <MCollapse :open="openOld">
-        <div class="border-t border-white/5">
+        <div class="border-t border-line/40">
           <MVirtualList
             :items="oldVersions"
             :item-key="(v) => v.id"
-            :estimate-size="49"
+            :estimate-size="46"
             :overscan="10"
             max-height="65vh"
           >
             <template #item="{ item: v }">
               <div
-                class="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group border-b border-white/5"
+                class="px-4 py-2 flex items-center justify-between hover:bg-sunken/50 transition-colors cursor-pointer group border-b border-line/30"
                 @click="emit('select-version', v.id)"
               >
                 <div class="flex items-center gap-3">
@@ -262,7 +282,7 @@ function formatDate(iso: string): string {
                   </span>
                 </div>
                 <span
-                  class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors"
+                  class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors w-4 h-4"
                 />
               </div>
             </template>
@@ -272,37 +292,45 @@ function formatDate(iso: string): string {
     </MCard>
 
     <!-- April Fools Group -->
-    <MCard v-if="aprilFoolsVersions.length > 0" class="overflow-hidden">
+    <MCard
+      v-if="aprilFoolsVersions.length > 0"
+      padding="none"
+      class="overflow-hidden transition-all"
+    >
       <button
         type="button"
-        class="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+        class="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-sunken/50 transition-colors cursor-pointer"
         @click="openAprilFools = !openAprilFools"
       >
         <div class="flex items-center gap-3">
-          <span class="i-lucide-party-popper text-xl text-purple-400" />
-          <span class="font-bold text-base"
+          <div
+            class="w-8 h-8 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0"
+          >
+            <span class="i-lucide-party-popper w-4 h-4" />
+          </div>
+          <span class="font-semibold text-sm text-fg"
             >{{ t('download.groups.aprilFools') }} ({{ aprilFoolsVersions.length }})</span
           >
         </div>
         <span
           :class="[
-            'i-lucide-chevron-down text-lg text-fg-muted transition-transform duration-200',
+            'i-lucide-chevron-down text-base text-fg-muted transition-transform duration-200',
             openAprilFools ? 'rotate-180' : '',
           ]"
         />
       </button>
       <MCollapse :open="openAprilFools">
-        <div class="border-t border-white/5">
+        <div class="border-t border-line/40">
           <MVirtualList
             :items="aprilFoolsVersions"
             :item-key="(v) => v.id"
-            :estimate-size="49"
+            :estimate-size="46"
             :overscan="10"
             max-height="65vh"
           >
             <template #item="{ item: v }">
               <div
-                class="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group border-b border-white/5"
+                class="px-4 py-2 flex items-center justify-between hover:bg-sunken/50 transition-colors cursor-pointer group border-b border-line/30"
                 @click="emit('select-version', v.id)"
               >
                 <div class="flex items-center gap-3">
@@ -317,7 +345,7 @@ function formatDate(iso: string): string {
                   </span>
                 </div>
                 <span
-                  class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors"
+                  class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors w-4 h-4"
                 />
               </div>
             </template>

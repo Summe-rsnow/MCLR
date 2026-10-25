@@ -15,19 +15,60 @@ export interface LoaderMetaItem {
   icon: string
   hue: number
   label: string
+  image?: string
 }
 
 export const loaderMeta: Record<LoaderKindKey, LoaderMetaItem> = {
   vanilla: { icon: 'i-lucide-box', hue: 140, label: 'Vanilla' },
-  fabric: { icon: 'i-lucide-waypoints', hue: 75, label: 'Fabric' },
-  legacyfabric: { icon: 'i-lucide-waypoints', hue: 60, label: 'Legacy Fabric' },
-  forge: { icon: 'i-lucide-anvil', hue: 40, label: 'Forge' },
-  neoforge: { icon: 'i-lucide-flame', hue: 55, label: 'NeoForge' },
-  cleanroom: { icon: 'i-lucide-sparkles', hue: 150, label: 'Cleanroom' },
-  optifine: { icon: 'i-lucide-eye', hue: 25, label: 'OptiFine' },
+  fabric: {
+    icon: 'i-lucide-waypoints',
+    hue: 75,
+    label: 'Fabric',
+    image: '/assets/icons/loaders/fabric.png',
+  },
+  legacyfabric: {
+    icon: 'i-lucide-waypoints',
+    hue: 60,
+    label: 'Legacy Fabric',
+    image: '/assets/icons/loaders/fabric.png',
+  },
+  forge: {
+    icon: 'i-lucide-anvil',
+    hue: 40,
+    label: 'Forge',
+    image: '/assets/icons/loaders/forge.png',
+  },
+  neoforge: {
+    icon: 'i-lucide-flame',
+    hue: 55,
+    label: 'NeoForge',
+    image: '/assets/icons/loaders/neoforge.png',
+  },
+  cleanroom: {
+    icon: 'i-lucide-sparkles',
+    hue: 150,
+    label: 'Cleanroom',
+    image: '/assets/icons/loaders/cleanroom.png',
+  },
+  optifine: {
+    icon: 'i-lucide-eye',
+    hue: 25,
+    label: 'OptiFine',
+    image: '/assets/icons/loaders/optifine.png',
+  },
   liteloader: { icon: 'i-lucide-feather', hue: 200, label: 'LiteLoader' },
-  labymod: { icon: 'i-lucide-gem', hue: 260, label: 'LabyMod' },
-  quilt: { icon: 'i-lucide-blocks', hue: 300, label: 'Quilt' },
+  labymod: {
+    icon: 'i-lucide-gem',
+    hue: 260,
+    label: 'LabyMod',
+    image: '/assets/icons/loaders/labymod.png',
+  },
+  quilt: {
+    icon: 'i-lucide-blocks',
+    hue: 300,
+    label: 'Quilt',
+    image: '/assets/icons/loaders/quilt.png',
+  },
   unknown: { icon: 'i-lucide-cpu', hue: 250, label: 'Unknown' },
 }
 
@@ -46,6 +87,7 @@ export interface MinecraftIconMetaItem {
   hue: number
   labelKey: string
   label: string
+  image?: string
 }
 
 export const minecraftIconPresets: Record<string, MinecraftIconMetaItem> = {
@@ -55,6 +97,7 @@ export const minecraftIconPresets: Record<string, MinecraftIconMetaItem> = {
     hue: 145,
     labelKey: 'instanceDetail.overview.iconGrass',
     label: '草方块',
+    image: '/assets/icons/blocks/grass_block.png',
   },
   grass: {
     key: 'grass',
@@ -62,6 +105,63 @@ export const minecraftIconPresets: Record<string, MinecraftIconMetaItem> = {
     hue: 145,
     labelKey: 'instanceDetail.overview.iconGrass',
     label: '草方块',
+    image: '/assets/icons/blocks/grass_block.png',
+  },
+  stone: {
+    key: 'stone',
+    icon: 'i-lucide-box',
+    hue: 220,
+    labelKey: 'instanceDetail.overview.iconStone',
+    label: '石头',
+    image: '/assets/icons/blocks/stone.png',
+  },
+  gold_block: {
+    key: 'gold_block',
+    icon: 'i-lucide-box',
+    hue: 85,
+    labelKey: 'instanceDetail.overview.iconGoldBlock',
+    label: '金块',
+    image: '/assets/icons/blocks/gold_block.png',
+  },
+  redstone_block: {
+    key: 'redstone_block',
+    icon: 'i-lucide-box',
+    hue: 25,
+    labelKey: 'instanceDetail.overview.iconRedstoneBlock',
+    label: '红石块',
+    image: '/assets/icons/blocks/redstone_block.png',
+  },
+  grass_path: {
+    key: 'grass_path',
+    icon: 'i-lucide-box',
+    hue: 130,
+    labelKey: 'instanceDetail.overview.iconGrassPath',
+    label: '草径',
+    image: '/assets/icons/blocks/grass_path.png',
+  },
+  egg: {
+    key: 'egg',
+    icon: 'i-lucide-egg',
+    hue: 65,
+    labelKey: 'instanceDetail.overview.iconEgg',
+    label: '鸡蛋',
+    image: '/assets/icons/blocks/egg.png',
+  },
+  redstone_lamp_on: {
+    key: 'redstone_lamp_on',
+    icon: 'i-lucide-lamp',
+    hue: 80,
+    labelKey: 'instanceDetail.overview.iconRedstoneLampOn',
+    label: '红石灯（亮）',
+    image: '/assets/icons/blocks/redstone_lamp_on.png',
+  },
+  redstone_lamp_off: {
+    key: 'redstone_lamp_off',
+    icon: 'i-lucide-lamp',
+    hue: 45,
+    labelKey: 'instanceDetail.overview.iconRedstoneLampOff',
+    label: '红石灯（灭）',
+    image: '/assets/icons/blocks/redstone_lamp_off.png',
   },
   crafting_table: {
     key: 'crafting_table',
@@ -139,6 +239,7 @@ export const minecraftIconPresets: Record<string, MinecraftIconMetaItem> = {
     hue: 310,
     labelKey: 'instanceDetail.overview.iconCommandBlock',
     label: '命令方块',
+    image: '/assets/icons/blocks/command_block.png',
   },
   ender_pearl: {
     key: 'ender_pearl',
@@ -151,18 +252,14 @@ export const minecraftIconPresets: Record<string, MinecraftIconMetaItem> = {
 
 export const minecraftIconList: MinecraftIconMetaItem[] = [
   minecraftIconPresets.grass_block,
-  minecraftIconPresets.crafting_table,
-  minecraftIconPresets.chest,
-  minecraftIconPresets.furnace,
-  minecraftIconPresets.diamond,
-  minecraftIconPresets.sword,
-  minecraftIconPresets.pickaxe,
-  minecraftIconPresets.book,
-  minecraftIconPresets.tnt,
-  minecraftIconPresets.redstone,
-  minecraftIconPresets.apple,
+  minecraftIconPresets.grass_path,
+  minecraftIconPresets.stone,
+  minecraftIconPresets.gold_block,
+  minecraftIconPresets.redstone_block,
   minecraftIconPresets.command_block,
-  minecraftIconPresets.ender_pearl,
+  minecraftIconPresets.egg,
+  minecraftIconPresets.redstone_lamp_on,
+  minecraftIconPresets.redstone_lamp_off,
 ]
 
 export function getMinecraftIconMeta(icon?: string | null): MinecraftIconMetaItem | null {
@@ -179,6 +276,7 @@ export function getInstanceIconMeta(icon?: string | null, kind?: string | null):
         icon: mc.icon,
         hue: mc.hue,
         label: mc.label,
+        image: mc.image,
       }
     }
     if (icon.startsWith('i-')) {

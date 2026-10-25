@@ -72,19 +72,19 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-4">
     <!-- Section 1: Primary Loader -->
-    <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-2.5">
       <div class="text-sm font-semibold text-fg-muted flex items-center gap-2">
         <span>{{ t('download.configurator.primaryLoader') }}</span>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <button
           v-for="loader in primaryLoaderDefs"
           v-show="loader.visible"
           :key="loader.id"
           type="button"
-          class="flex items-center gap-3 p-3.5 rounded-xl border transition-all text-left group cursor-pointer"
+          class="flex items-center gap-2.5 p-2.5 rounded-xl border transition-all text-left group cursor-pointer"
           :class="[
             selectedPrimary === loader.id
               ? 'border-primary bg-primary/10 shadow-sm shadow-primary/20 ring-1 ring-primary'
@@ -93,7 +93,7 @@ const { t } = useI18n()
           @click="emit('select-primary', loader.id)"
         >
           <span
-            :class="[loader.icon, 'text-2xl']"
+            :class="[loader.icon, 'text-xl']"
             :style="{
               color: selectedPrimary === loader.id ? 'var(--primary)' : 'var(--fg-muted)',
             }"
@@ -110,7 +110,7 @@ const { t } = useI18n()
       <!-- Primary loader version select -->
       <div
         v-if="selectedPrimary !== 'none'"
-        class="mt-2 p-4 rounded-xl border border-white/10 bg-white/5 flex flex-col gap-2 min-h-[76px] justify-center"
+        class="mt-1 p-3 rounded-xl border border-white/10 bg-white/5 flex flex-col gap-2 min-h-[76px] justify-center"
       >
         <div class="text-xs text-fg-muted flex items-center justify-between">
           <span>{{ selectedPrimary }} {{ t('download.configurator.versionSelect') }}</span>
@@ -138,11 +138,12 @@ const { t } = useI18n()
       <div class="text-sm font-semibold text-fg-muted">
         {{ t('download.configurator.additional') }}
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <!-- OptiFine Card -->
         <MCard
           v-if="visibility.optifine"
-          class="p-4 flex flex-col gap-3"
+          padding="none"
+          class="p-3 flex flex-col gap-2.5"
           :class="[incomp.optifineDisabledReason ? 'opacity-50 pointer-events-none' : '']"
         >
           <div class="flex items-center justify-between">
@@ -165,7 +166,7 @@ const { t } = useI18n()
           </div>
 
           <!-- OptiFine Version Picker -->
-          <div v-if="optifineEnabled" class="flex flex-col gap-1.5 pt-2">
+          <div v-if="optifineEnabled" class="flex flex-col gap-1.5 pt-1">
             <MSkeleton v-if="loadingOptifineVersions" class="h-9 w-full rounded-lg" />
             <MSelect
               v-else
@@ -184,7 +185,8 @@ const { t } = useI18n()
         <!-- LiteLoader Card -->
         <MCard
           v-if="visibility.liteloader"
-          class="p-4 flex flex-col gap-3"
+          padding="none"
+          class="p-3 flex flex-col gap-2.5"
           :class="[incomp.liteloaderDisabledReason ? 'opacity-50 pointer-events-none' : '']"
         >
           <div class="flex items-center justify-between">
@@ -210,7 +212,7 @@ const { t } = useI18n()
           </div>
 
           <!-- LiteLoader Version Picker -->
-          <div v-if="liteloaderEnabled" class="flex flex-col gap-1.5 pt-2">
+          <div v-if="liteloaderEnabled" class="flex flex-col gap-1.5 pt-1">
             <MSkeleton v-if="loadingLiteloaderVersions" class="h-9 w-full rounded-lg" />
             <MSelect
               v-else
@@ -244,10 +246,11 @@ const { t } = useI18n()
       <!-- Fabric API Card -->
       <MCard
         v-if="selectedPrimary === 'fabric' && fabricApiCandidates.length > 0"
-        class="p-3.5 flex items-center justify-between"
+        padding="none"
+        class="p-3 flex items-center justify-between"
       >
-        <div class="flex items-center gap-3">
-          <span class="i-lucide-puzzle text-xl text-primary" />
+        <div class="flex items-center gap-2.5">
+          <span class="i-lucide-puzzle text-lg text-primary" />
           <div>
             <div class="text-sm font-medium flex items-center gap-2">
               {{ t('download.addons.fabricApi') }}
@@ -266,10 +269,11 @@ const { t } = useI18n()
       <!-- Legacy Fabric API Card -->
       <MCard
         v-if="selectedPrimary === 'legacyFabric' && legacyFabricApiCandidates.length > 0"
-        class="p-3.5 flex items-center justify-between"
+        padding="none"
+        class="p-3 flex items-center justify-between"
       >
-        <div class="flex items-center gap-3">
-          <span class="i-lucide-puzzle text-xl text-emerald-400" />
+        <div class="flex items-center gap-2.5">
+          <span class="i-lucide-puzzle text-lg text-emerald-400" />
           <div>
             <div class="text-sm font-medium flex items-center gap-2">
               {{ t('download.addons.legacyFabricApi') }}
@@ -288,10 +292,11 @@ const { t } = useI18n()
       <!-- OptiFabric Card -->
       <MCard
         v-if="selectedPrimary === 'fabric' && optifineEnabled && optiFabricCandidates.length > 0"
-        class="p-3.5 flex items-center justify-between"
+        padding="none"
+        class="p-3 flex items-center justify-between"
       >
-        <div class="flex items-center gap-3">
-          <span class="i-lucide-link text-xl text-cyan-400" />
+        <div class="flex items-center gap-2.5">
+          <span class="i-lucide-link text-lg text-cyan-400" />
           <div>
             <div class="text-sm font-medium flex items-center gap-2">
               {{ t('download.addons.optifabric') }}
@@ -313,36 +318,36 @@ const { t } = useI18n()
       <!-- Missing Fabric API warning (Red) -->
       <div
         v-if="selectedPrimary === 'fabric' && !fabricApiEnabled"
-        class="p-3.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-center gap-2.5"
+        class="p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-center gap-2.5"
       >
-        <span class="i-lucide-alert-circle text-lg shrink-0" />
+        <span class="i-lucide-alert-circle text-base shrink-0" />
         <span>{{ t('download.hints.fabricApiMissing') }}</span>
       </div>
 
       <!-- Missing Legacy Fabric API warning (Red) -->
       <div
         v-if="selectedPrimary === 'legacyFabric' && !legacyFabricApiEnabled"
-        class="p-3.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-center gap-2.5"
+        class="p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-center gap-2.5"
       >
-        <span class="i-lucide-alert-circle text-lg shrink-0" />
+        <span class="i-lucide-alert-circle text-base shrink-0" />
         <span>{{ t('download.hints.legacyFabricApiMissing') }}</span>
       </div>
 
       <!-- Missing OptiFabric warning (Red) -->
       <div
         v-if="selectedPrimary === 'fabric' && optifineEnabled && !optiFabricEnabled"
-        class="p-3.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-center gap-2.5"
+        class="p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-center gap-2.5"
       >
-        <span class="i-lucide-alert-circle text-lg shrink-0" />
+        <span class="i-lucide-alert-circle text-base shrink-0" />
         <span>{{ t('download.hints.optifabricMissing') }}</span>
       </div>
 
       <!-- OptiFine + Mod coexistence warning on drop >= 160 (Yellow) -->
       <div
         v-if="optifineEnabled && selectedPrimary !== 'none' && drop >= 160"
-        class="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs flex items-center gap-2.5"
+        class="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs flex items-center gap-2.5"
       >
-        <span class="i-lucide-info text-lg shrink-0" />
+        <span class="i-lucide-info text-base shrink-0" />
         <span>{{ t('download.hints.optifineModWarning') }}</span>
       </div>
     </div>

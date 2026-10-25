@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import MImage from './MImage.vue'
 
 export interface SelectOption {
   label: string
@@ -202,12 +203,10 @@ onUnmounted(() => {
       @keydown="handleKeyDown"
     >
       <span class="inline-flex items-center gap-2 min-w-0 truncate">
-        <img
+        <MImage
           v-if="selectedOption?.avatar"
           :src="selectedOption.avatar"
-          alt=""
-          loading="lazy"
-          decoding="async"
+          fallback-icon="i-lucide-user"
           class="w-5 h-5 rounded-full object-cover shrink-0"
         />
         <span
@@ -288,12 +287,10 @@ onUnmounted(() => {
               @click="selectOption(opt)"
             >
               <span class="inline-flex items-center gap-2 min-w-0 truncate">
-                <img
+                <MImage
                   v-if="opt.avatar"
                   :src="opt.avatar"
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
+                  fallback-icon="i-lucide-user"
                   class="w-5 h-5 rounded-full object-cover shrink-0"
                 />
                 <span v-else-if="opt.icon" :class="opt.icon" class="w-4 h-4 shrink-0" />

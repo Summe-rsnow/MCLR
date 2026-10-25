@@ -6,6 +6,7 @@ const tab: InstanceDetailTab = {
   titleKey: 'instanceDetail.tabs.shaders',
   icon: 'i-lucide-sparkles',
   order: 90,
+  group: 'resources',
   component: defineAsyncComponent(() => import('./ShadersTab.vue')),
 }
 

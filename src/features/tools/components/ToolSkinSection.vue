@@ -5,7 +5,7 @@ import { save as saveFileDialog } from '@tauri-apps/plugin-dialog'
 import { ipcClient, type SkinFetchResult } from '../../../ipc/client'
 import { useToast } from '../../../ui/useToast'
 import { useErrorText } from '../../../composables/useErrorText'
-import { MCard, MButton, MInput, MSkeleton, MHelpTooltip } from '../../../ui'
+import { MCard, MButton, MInput, MSkeleton, MHelpTooltip, MImage } from '../../../ui'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -102,12 +102,12 @@ async function downloadSkinPng() {
         <div class="flex items-center gap-4">
           <div class="flex flex-col items-center">
             <span class="text-xs text-fg-muted mb-1">{{ t('tools.skin.headPreview') }}</span>
-            <img
+            <MImage
               :src="skinResult.headDataUrl"
               :alt="skinResult.username"
-              class="w-16 h-16 rounded-lg border border-line bg-raised [image-rendering:pixelated]"
-              loading="lazy"
-              decoding="async"
+              pixelated
+              fallback-icon="i-lucide-user"
+              class="w-16 h-16 rounded-lg border border-line bg-raised"
             />
           </div>
 
@@ -128,12 +128,13 @@ async function downloadSkinPng() {
         <div>
           <span class="text-xs text-fg-muted block mb-1">{{ t('tools.skin.skinPreview') }}</span>
           <div class="p-2 rounded-lg bg-raised border border-line flex justify-center">
-            <img
+            <MImage
               :src="skinResult.skinDataUrl"
               alt="Skin Texture"
-              class="max-h-24 w-auto [image-rendering:pixelated]"
-              loading="lazy"
-              decoding="async"
+              pixelated
+              fit="contain"
+              fallback-icon="i-lucide-shirt"
+              class="max-h-24 w-auto"
             />
           </div>
         </div>

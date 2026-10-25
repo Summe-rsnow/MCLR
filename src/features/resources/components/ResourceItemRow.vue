@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import type { ResourceEntry, ResourceKind } from '../../../ipc/client'
-import { MCheckbox, MBadge, MIconButton, MSwitch } from '../../../ui'
+import { MCheckbox, MBadge, MIconButton, MSwitch, MPopover, MImage } from '../../../ui'
 
-defineProps<{
+const props = defineProps<{
   entry: ResourceEntry
   kind: ResourceKind
   selected: boolean
@@ -15,12 +16,14 @@ const emit = defineEmits<{
   (e: 'navigateDir', entry: ResourceEntry): void
   (e: 'inspectSchematic', entry: ResourceEntry): void
   (e: 'jarInJar', entry: ResourceEntry): void
+  (e: 'reveal', entry: ResourceEntry): void
   (e: 'update', entry: ResourceEntry): void
   (e: 'delete', entry: ResourceEntry, permanent: boolean): void
   (e: 'toggle', entry: ResourceEntry): void
 }>()
 
 const { t } = useI18n()
+const menuOpen = ref(false)
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return '0 B'
@@ -28,8 +31,22 @@ function formatBytes(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
 }
-</script>
 
+function onMenuReveal() {
+  menuOpen.value = false
+  emit('reveal', props.entry)
+}
+
+function onMenuJarInJar() {
+  menuOpen.value = false
+  emit('jarInJar', props.entry)
+}
+
+function onMenuDelete() {
+  menuOpen.value = false
+  emit('delete', props.entry, false)
+}
+</script>
 <template>
   <div
     class="flex items-center justify-between p-3 rounded-xl border transition group"
@@ -46,13 +63,22 @@ function formatBytes(bytes: number): string {
       <div
         class="w-10 h-10 rounded-lg overflow-hidden bg-sunken shrink-0 flex items-center justify-center border border-line"
       >
-        <img
+        <MImage
           v-if="entry.icon"
           :src="convertFileSrc(entry.icon)"
-          class="w-full h-full object-cover"
-          loading="lazy"
-          decoding="async"
           alt="pack-icon"
+          :fallback-icon="
+            entry.isDir
+              ? 'i-lucide-folder'
+              : kind === 'mod'
+                ? 'i-lucide-puzzle'
+                : kind === 'resourcePack'
+                  ? 'i-lucide-box'
+                  : kind === 'shader'
+                    ? 'i-lucide-sparkles'
+                    : 'i-lucide-file-code'
+          "
+          class="w-full h-full"
         />
         <span v-else-if="entry.isDir" class="i-lucide-folder text-primary w-5 h-5" />
         <span v-else-if="kind === 'mod'" class="i-lucide-puzzle text-primary w-5 h-5" />
@@ -104,15 +130,16 @@ function formatBytes(bytes: number): string {
     </div>
 
     <!-- Right: Actions & Switch -->
-    <div class="flex items-center space-x-2 shrink-0">
-      <!-- Jar-in-Jar action for mods -->
+    <div class="flex items-center space-x-1.5 shrink-0">
+      <!-- Update arrow button -->
       <MIconButton
-        v-if="kind === 'mod'"
-        icon="i-lucide-package"
+        v-if="kind === 'mod' && entry.updateAvailable"
+        icon="i-lucide-arrow-up-circle"
         size="sm"
         variant="text"
-        :title="t('resources.actions.jarInJar')"
-        @click="emit('jarInJar', entry)"
+        class="text-primary hover:bg-primary/10"
+        :title="t('resources.actions.update')"
+        @click="emit('update', entry)"
       />
 
       <!-- Schematic info action -->
@@ -125,33 +152,56 @@ function formatBytes(bytes: number): string {
         @click="emit('inspectSchematic', entry)"
       />
 
-      <!-- Update arrow button -->
-      <MIconButton
-        v-if="kind === 'mod' && entry.updateAvailable"
-        icon="i-lucide-arrow-up-circle"
-        size="sm"
-        variant="text"
-        class="text-primary hover:bg-primary/10"
-        :title="t('resources.actions.update')"
-        @click="emit('update', entry)"
-      />
+      <!-- More Menu Popover for items -->
+      <MPopover v-model:open="menuOpen" placement="bottom-end">
+        <template #trigger>
+          <MIconButton
+            icon="i-lucide-more-vertical"
+            size="sm"
+            variant="text"
+            class="text-fg-muted hover:text-fg"
+            @click="menuOpen = !menuOpen"
+          />
+        </template>
+        <div class="w-44 py-1 flex flex-col text-xs text-fg space-y-0.5">
+          <button
+            type="button"
+            class="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-sunken rounded-lg text-left transition cursor-pointer"
+            @click="onMenuReveal"
+          >
+            <span class="i-lucide-folder text-primary w-4 h-4 shrink-0" />
+            <span class="truncate">{{ t('resources.actions.reveal') }}</span>
+          </button>
 
-      <!-- Delete -->
-      <MIconButton
-        icon="i-lucide-trash-2"
-        size="sm"
-        variant="text"
-        class="text-danger hover:bg-danger/10"
-        :title="t('resources.actions.delete')"
-        @click.exact="emit('delete', entry, false)"
-        @click.shift="emit('delete', entry, true)"
-      />
+          <button
+            v-if="kind === 'mod'"
+            type="button"
+            class="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-sunken rounded-lg text-left transition cursor-pointer"
+            @click="onMenuJarInJar"
+          >
+            <span class="i-lucide-package text-primary w-4 h-4 shrink-0" />
+            <span class="truncate">{{ t('resources.actions.jarInJar') }}</span>
+          </button>
+
+          <div class="h-px bg-line my-1" />
+
+          <button
+            type="button"
+            class="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-danger/10 text-danger rounded-lg text-left transition cursor-pointer"
+            @click="onMenuDelete"
+          >
+            <span class="i-lucide-trash-2 w-4 h-4 shrink-0" />
+            <span class="truncate">{{ t('resources.actions.delete') }}</span>
+          </button>
+        </div>
+      </MPopover>
 
       <!-- Toggle Switch for mods -->
       <MSwitch
         v-if="kind === 'mod'"
         :model-value="entry.enabled"
         size="sm"
+        class="ml-1"
         @update:model-value="emit('toggle', entry)"
       />
     </div>

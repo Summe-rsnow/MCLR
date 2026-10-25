@@ -5,7 +5,15 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
 import { useThemeStore } from '../../../stores/theme'
 import { ipcClient } from '../../../ipc/client'
-import { MButton, MIconButton, MSlider, MSection, MSettingRow, MHelpTooltip } from '../../../ui'
+import {
+  MButton,
+  MIconButton,
+  MSlider,
+  MSection,
+  MSettingRow,
+  MHelpTooltip,
+  MImage,
+} from '../../../ui'
 
 const { t } = useI18n()
 const themeStore = useThemeStore()
@@ -183,17 +191,16 @@ function clearBackground() {
               previewMediaSrc
             "
           >
-            <img
+            <MImage
               data-testid="bg-preview-img"
-              class="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              class="absolute inset-0 w-full h-full pointer-events-none"
               :src="previewMediaSrc"
               :style="{
                 filter: `blur(${themeStore.backgroundBlur}px)`,
                 opacity: themeStore.backgroundOpacity,
               }"
               alt="Background preview"
-              loading="lazy"
-              decoding="async"
+              fallback-icon="i-lucide-image-off"
             />
           </template>
           <div v-else class="text-xs text-fg-muted flex items-center gap-1.5 z-10">

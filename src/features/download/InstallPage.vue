@@ -112,22 +112,22 @@ function handleBack() {
 </script>
 
 <template>
-  <div class="p-6 max-w-5xl mx-auto flex flex-col gap-6">
+  <div class="m-page">
     <MPageHeader
       :title="t('download.title')"
       :description="currentStep === 1 ? t('download.step1') : t('download.step2')"
+      icon="i-lucide-download"
     />
-
     <Transition :name="stepDirection === 'forward' ? 'm-tab-forward' : 'm-tab-back'" mode="out-in">
       <!-- STEP 1: Version List -->
-      <div v-if="currentStep === 1" key="step1" class="flex flex-col gap-6">
+      <div v-if="currentStep === 1" key="step1" class="flex flex-col gap-4">
         <!-- No game folder prompt banner -->
         <div
           v-if="!instancesStore.currentFolder"
-          class="p-4 rounded-xl border border-warning/30 bg-warning/10 flex items-center justify-between gap-4"
+          class="p-3 rounded-xl border border-warning/30 bg-warning/10 flex items-center justify-between gap-3"
         >
-          <div class="flex items-center gap-3">
-            <span class="w-6 h-6 i-lucide-alert-triangle text-warning shrink-0" />
+          <div class="flex items-center gap-2.5">
+            <span class="w-5 h-5 i-lucide-alert-triangle text-warning shrink-0" />
             <div>
               <div class="font-semibold text-sm text-fg">{{ t('download.noFolderWarning') }}</div>
               <div class="text-xs text-fg-muted mt-0.5">{{ t('download.noFolderDesc') }}</div>
@@ -143,7 +143,7 @@ function handleBack() {
           </MButton>
         </div>
         <!-- Search bar -->
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
           <MInput v-model="searchQuery" :placeholder="t('download.search')" class="flex-1">
             <template #prefix>
               <span class="i-lucide-search text-fg-muted" />
@@ -151,11 +151,11 @@ function handleBack() {
           </MInput>
           <MButton
             variant="text"
-            size="md"
+            size="sm"
             :loading="manifestResource.refreshing.value"
             @click="manifestResource.refresh(true)"
           >
-            <span class="i-lucide-refresh-cw mr-2" />
+            <span class="i-lucide-refresh-cw mr-1.5" />
             {{ t('download.refresh') }}
           </MButton>
         </div>
@@ -163,18 +163,18 @@ function handleBack() {
         <!-- Skeleton loading state -->
         <div
           v-if="manifestResource.loading.value"
-          class="flex flex-col gap-4"
+          class="flex flex-col gap-3"
           data-testid="install-skeleton"
         >
-          <MCard v-for="i in 3" :key="i" class="p-4 flex flex-col gap-3">
+          <MCard v-for="i in 3" :key="i" padding="none" class="p-3 flex flex-col gap-2.5">
             <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-2.5">
                 <MSkeleton width="1.5rem" height="1.5rem" class="rounded" />
                 <MSkeleton width="8rem" height="1.25rem" />
               </div>
               <MSkeleton width="1.25rem" height="1.25rem" class="rounded" />
             </div>
-            <div class="flex flex-col gap-2 pt-2 border-t border-white/5">
+            <div class="flex flex-col gap-2 pt-2 border-t border-line/40">
               <div v-for="j in 2" :key="j" class="flex items-center justify-between py-1">
                 <MSkeleton width="6rem" height="1rem" />
                 <MSkeleton width="4rem" height="0.875rem" />

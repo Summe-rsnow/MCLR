@@ -51,6 +51,7 @@ import {
   generatePalette,
   resolveEffectiveMode,
   loaderMeta,
+  minecraftIconList,
   brandIconMap,
   compTypeMeta,
   useDialog,
@@ -814,6 +815,14 @@ async function triggerConfirmDialog() {
               >
                 <MLoaderIcon :kind="k" :size="24" />
                 <span class="text-fg">{{ loaderMeta[k].label }}</span>
+              </div>
+              <div
+                v-for="mc in minecraftIconList"
+                :key="mc.key"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg m-well text-xs"
+              >
+                <MLoaderIcon :icon="mc.key" :size="24" class="[image-rendering:pixelated]" />
+                <span class="text-fg">{{ mc.label }}</span>
               </div>
               <div
                 v-for="b in brandNames"

@@ -30,6 +30,8 @@ const emit = defineEmits<{
   ): void
   (e: 'addFiles', files: FileList): void
   (e: 'batchUpdate'): void
+  (e: 'batchEnableAll'): void
+  (e: 'batchDisableAll'): void
   (e: 'openFolder'): void
   (e: 'navigateBack'): void
   (e: 'downloadMore'): void
@@ -118,6 +120,30 @@ function handleFileInputChange(e: Event) {
               @click="emit('export', 'csv')"
             >
               {{ t('resources.actions.exportCsv') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Batch Quick Actions (PCL parity) -->
+        <div v-if="kind === 'mod'" class="relative group">
+          <MButton variant="tonal" size="sm">
+            <span class="i-lucide-list-checks mr-1 w-4 h-4" />
+            {{ t('resources.title') }}
+          </MButton>
+          <div
+            class="absolute top-full left-0 mt-1 hidden group-hover:flex flex-col bg-panel border border-line rounded-lg shadow-lg z-20 py-1 min-w-32"
+          >
+            <button
+              class="px-3 py-1.5 text-xs text-left hover:bg-sunken text-fg transition cursor-pointer"
+              @click="emit('batchEnableAll')"
+            >
+              {{ t('resources.actions.enableAll') }}
+            </button>
+            <button
+              class="px-3 py-1.5 text-xs text-left hover:bg-sunken text-fg transition cursor-pointer"
+              @click="emit('batchDisableAll')"
+            >
+              {{ t('resources.actions.disableAll') }}
             </button>
           </div>
         </div>

@@ -46,7 +46,7 @@ const noiseDataUri =
 
 <template>
   <div
-    v-if="themeStore.backgroundMode === 'none'"
+    v-if="themeStore.backgroundMode === 'none' && themeStore.material === 'glass'"
     data-testid="ambient-backdrop"
     class="pointer-events-none fixed inset-0 z-0 overflow-hidden"
   >

@@ -96,6 +96,13 @@ describe('Instance Detail feature', () => {
     })
     await flushPromises()
 
+    // Switch to resources group first
+    const resButton = wrapper.findAll('button').find((b) => b.text().includes('资源管理'))
+    if (resButton) {
+      await resButton.trigger('click')
+      await flushPromises()
+    }
+
     const buttons = wrapper.findAll('button')
     const modsButton = buttons.find((b) => b.text().includes('模组'))
     if (modsButton) {
@@ -255,16 +262,18 @@ describe('Instance Detail feature', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('草方块')
-    expect(wrapper.text()).toContain('工作台')
-    expect(wrapper.text()).toContain('末影珍珠')
+    expect(wrapper.text()).toContain('草径')
+    expect(wrapper.text()).toContain('金块')
+    expect(wrapper.text()).not.toContain('工作台')
+    expect(wrapper.text()).not.toContain('末影珍珠')
 
     const buttons = wrapper.findAll('button')
-    const diamondBtn = buttons.find((b) => b.text().includes('钻石'))
-    expect(diamondBtn).toBeDefined()
-    if (diamondBtn) {
-      await diamondBtn.trigger('click')
+    const goldBtn = buttons.find((b) => b.text().includes('金块'))
+    expect(goldBtn).toBeDefined()
+    if (goldBtn) {
+      await goldBtn.trigger('click')
       await flushPromises()
-      expect(store.instances.find((i) => i.id === inst.id)?.config?.icon).toBe('diamond')
+      expect(store.instances.find((i) => i.id === inst.id)?.config?.icon).toBe('gold_block')
     }
   })
 

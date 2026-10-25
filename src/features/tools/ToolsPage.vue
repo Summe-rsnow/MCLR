@@ -31,9 +31,9 @@ onMounted(async () => {
       icon="i-lucide-wrench"
     />
 
-    <div v-if="!initialized" class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+    <div v-if="!initialized" class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
       <!-- Left Column Skeletons -->
-      <div class="flex flex-col gap-6">
+      <div class="flex flex-col gap-5">
         <div v-for="n in 2" :key="n" class="m-card p-5 flex flex-col space-y-4">
           <div class="flex items-center gap-3">
             <MSkeleton class="w-10 h-10 rounded-xl shrink-0" />
@@ -49,7 +49,7 @@ onMounted(async () => {
         </div>
       </div>
       <!-- Right Column Skeletons -->
-      <div class="flex flex-col gap-6">
+      <div class="flex flex-col gap-5">
         <div v-for="n in 2" :key="n" class="m-card p-5 flex flex-col space-y-4">
           <div class="flex items-center gap-3">
             <MSkeleton class="w-10 h-10 rounded-xl shrink-0" />
@@ -67,15 +67,15 @@ onMounted(async () => {
     </div>
 
     <template v-else>
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
         <!-- Left Column: Card 1 (Skin) & Card 3 (Downloader) -->
-        <div class="flex flex-col gap-6">
+        <div class="flex flex-col gap-5">
           <ToolSkinSection />
           <ToolDownloadSection />
         </div>
 
         <!-- Right Column: Card 2 (Cache) & Card 4 (Shortcut) -->
-        <div class="flex flex-col gap-6">
+        <div class="flex flex-col gap-5">
           <ToolCacheSection />
           <ToolShortcutSection />
         </div>

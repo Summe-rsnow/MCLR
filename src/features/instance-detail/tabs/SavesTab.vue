@@ -13,6 +13,7 @@ import {
   MInput,
   MEmpty,
   MSkeleton,
+  MImage,
   useToast,
   useDialog,
 } from '../../../ui'
@@ -280,13 +281,12 @@ onMounted(() => {
           <div
             class="w-14 h-14 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 border border-line overflow-hidden text-primary"
           >
-            <img
+            <MImage
               v-if="save.iconPath || save.iconDataUrl"
               :src="save.iconPath ? convertFileSrc(save.iconPath) : (save.iconDataUrl ?? undefined)"
-              class="w-full h-full object-cover"
               alt="World Icon"
-              loading="lazy"
-              decoding="async"
+              fallback-icon="i-lucide-compass"
+              class="w-full h-full"
             />
             <span v-else class="w-7 h-7 i-lucide-compass" />
           </div>

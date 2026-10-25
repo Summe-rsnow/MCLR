@@ -12,6 +12,7 @@ import {
   MBadge,
   MEmpty,
   MSkeleton,
+  MImage,
   useToast,
   useDialog,
 } from '../../../ui'
@@ -283,13 +284,12 @@ onMounted(() => {
           <div
             class="w-14 h-14 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 border border-line overflow-hidden text-primary"
           >
-            <img
+            <MImage
               v-if="pingResults[server.ip]?.favicon || server.icon"
               :src="pingResults[server.ip]?.favicon || server.icon || ''"
-              class="w-full h-full object-cover"
+              class="w-full h-full"
               alt="Server Favicon"
-              loading="lazy"
-              decoding="async"
+              fallback-icon="i-lucide-server"
             />
             <span v-else class="w-7 h-7 i-lucide-server" />
           </div>

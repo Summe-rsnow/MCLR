@@ -4,7 +4,16 @@ import { useI18n } from 'vue-i18n'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import type { ScreenshotMeta } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
-import { MCard, MButton, MIconButton, MEmpty, MSkeleton, useToast, useDialog } from '../../../ui'
+import {
+  MCard,
+  MButton,
+  MIconButton,
+  MEmpty,
+  MSkeleton,
+  MImage,
+  useToast,
+  useDialog,
+} from '../../../ui'
 
 const props = defineProps<{
   instanceId: string
@@ -243,19 +252,12 @@ watch(
           :title="t('instanceDetail.screenshots.preview', t('common.open'))"
           @click="handleOpen(item)"
         >
-          <img
-            v-if="thumbs[item.path]"
+          <MImage
             :src="thumbs[item.path]"
             :alt="item.fileName"
-            class="w-full h-full object-cover transition-all duration-200"
-            :class="loaded[item.path] ? 'opacity-100 scale-100' : 'opacity-0 scale-95'"
-            loading="lazy"
-            decoding="async"
-            @load="loaded[item.path] = true"
+            fallback-icon="i-lucide-image"
+            class="w-full h-full object-cover"
           />
-          <div v-else class="w-full h-full flex items-center justify-center bg-sunken/40">
-            <span class="w-8 h-8 i-lucide-image text-fg-muted/40" />
-          </div>
 
           <div
             class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"

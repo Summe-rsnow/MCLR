@@ -291,7 +291,7 @@ async function openCloset(serverUrl: string) {
         (accountsStore.loading && accountsStore.accounts.length === 0)
       "
       data-testid="accounts-skeleton"
-      class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"
+      class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start"
     >
       <div class="lg:col-span-7 flex flex-col gap-3">
         <MCard v-for="n in 3" :key="n" class="p-4">
@@ -336,7 +336,7 @@ async function openCloset(serverUrl: string) {
     </MCard>
 
     <!-- Main Grid: Accounts List & Skin Panel -->
-    <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
       <TransitionGroup name="m-list" tag="div" class="lg:col-span-7 flex flex-col gap-3">
         <AccountCardItem
           v-for="(acc, index) in accountsStore.accounts"

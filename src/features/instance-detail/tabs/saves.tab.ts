@@ -6,6 +6,7 @@ const tab: InstanceDetailTab = {
   titleKey: 'instanceDetail.tabs.saves',
   icon: 'i-lucide-globe',
   order: 50,
+  group: 'resources',
   component: defineAsyncComponent(() => import('./SavesTab.vue')),
 }
 
