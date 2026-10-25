@@ -14,6 +14,8 @@
     "reduced": "精简",
     "off": "关闭"
   },
+  "startupSplash": "启动动画",
+  "startupSplashDesc": "启动应用时播放 LOGO 动画（动画效果为“关闭”时自动跳过）",
   "theme": {
     "seedColor": "强调色 (种子颜色)",
     "mode": "色彩模式",
@@ -21,11 +23,16 @@
     "modeDark": "深色模式",
     "modeSystem": "跟随系统",
     "material": "高级材质效果",
-    "materialFlat": "扁平纯色 (高性能)",
-    "materialGlass": "流光玻璃 (液态亚克力/云母效果)",
+    "materialFlat": "扁平纯色",
+    "materialGlass": "流光玻璃",
     "materialDesc": "开启流光玻璃将启用高斯模糊、折射光晕与系统级云母磨砂材质",
     "livePreview": "实时材质预览",
-    "viewComponents": "查看完整组件库"
+    "viewComponents": "查看完整组件库",
+    "preview": {
+      "raisedCard": "凸起卡片",
+      "wellContainer": "凹陷容器",
+      "primaryButton": "主按钮"
+    }
   },
   "typography": {
     "scale": "界面缩放比例",

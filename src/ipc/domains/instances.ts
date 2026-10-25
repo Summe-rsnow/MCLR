@@ -1,7 +1,57 @@
 import { invokeCommand } from '../client'
-import type { InstanceConfig, InstanceInfo, CardKind } from '../client'
 
-export type { CardKind }
+export type InstanceKind =
+  | 'vanilla'
+  | 'snapshot'
+  | 'oldBeta'
+  | 'oldAlpha'
+  | 'fabric'
+  | 'legacyFabric'
+  | 'forge'
+  | 'neoforge'
+  | 'cleanroom'
+  | 'optiFine'
+  | 'liteLoader'
+  | 'labyMod'
+  | 'quilt'
+  | 'moddedMultiple'
+
+export type InstanceState = 'ok' | 'broken' | 'incomplete'
+
+export type CardKind = 'star' | 'api' | 'regular' | 'rubbish' | 'fool' | 'error' | 'hidden'
+
+export interface InstanceConfig {
+  icon: string
+  category: string
+  pinned: boolean
+  starred?: boolean
+  cardType?: CardKind | null
+  isolation: string
+  java?: string | null
+  memory?: number | null
+  jvmArgs?: string | null
+  gameArgs?: string | null
+  windowTitle?: string | null
+  preLaunchCommand?: string | null
+  loginRequirement: string
+  serverQuickPlay?: string | null
+}
+
+export interface InstanceInfo {
+  id: string
+  name: string
+  folder: string
+  path: string
+  mcVersion: string
+  kind: InstanceKind
+  loaders: string[]
+  state: InstanceState
+  config: InstanceConfig
+  modable: boolean
+  card: CardKind
+  releaseTime?: string | null
+  loaderVersions: Record<string, string>
+}
 
 export const instancesIpc = {
   instancesList: (): Promise<InstanceInfo[]> => invokeCommand<InstanceInfo[]>('instances_list'),

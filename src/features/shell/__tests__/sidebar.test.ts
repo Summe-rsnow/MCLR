@@ -23,15 +23,31 @@ const i18n = createI18n({
 
 describe('SidebarNav component', () => {
   let router: Router
+  let storage: Record<string, string> = {}
 
   beforeEach(() => {
     setActivePinia(createPinia())
+    storage = {}
+    const mockStorage = {
+      getItem: (k: string) => (k in storage ? storage[k] : null),
+      setItem: (k: string, v: string) => {
+        storage[k] = String(v)
+      },
+      removeItem: (k: string) => {
+        delete storage[k]
+      },
+      clear: () => {
+        storage = {}
+      },
+    }
+    Object.defineProperty(window, 'localStorage', {
+      value: mockStorage,
+      writable: true,
+      configurable: true,
+    })
     router = createRouter({
       history: createMemoryHistory(),
-      routes: [
-        ...featureRoutes,
-        { path: '/', redirect: '/launch' },
-      ],
+      routes: [...featureRoutes, { path: '/', redirect: '/launch' }],
     })
   })
 
@@ -46,9 +62,10 @@ describe('SidebarNav component', () => {
     })
     await flushPromises()
 
-    // dev-ui should not have nav metadata and should not appear in sidebar
+    // dev-ui and tasks should not appear in sidebar
     expect(wrapper.text()).not.toContain('组件调试')
     expect(wrapper.text()).not.toContain('dev-ui')
+    expect(wrapper.find('button[title*="任务"]').exists()).toBe(false)
   })
 
   it('activates comp nav item when on comp subroutes', async () => {
@@ -63,7 +80,9 @@ describe('SidebarNav component', () => {
     await flushPromises()
 
     const buttons = wrapper.findAll('button')
-    const compButton = buttons.find((btn) => btn.text().includes('组件') || btn.html().includes('i-lucide-store'))
+    const compButton = buttons.find(
+      (btn) => btn.text().includes('组件') || btn.html().includes('i-lucide-store'),
+    )
     expect(compButton?.classes()).toContain('text-primary-soft-fg')
   })
 
@@ -96,5 +115,38 @@ describe('SidebarNav component', () => {
 
     const navGroupDivs = wrapper.findAll('.flex-col.gap-1\\.5')
     expect(navGroupDivs.length).toBeGreaterThan(0)
+  })
+
+  it('renders MLogo and MCLR text when expanded, and no MCLR text when collapsed', async () => {
+    localStorage.setItem('mclr.sidebar', 'expanded')
+    router.push('/launch')
+    await router.isReady()
+
+    const expandedWrapper = mount(SidebarNav, {
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    // Expanded state: SVG logo exists with w-7 h-7 text-primary, text contains MCLR
+    const logoSvg = expandedWrapper.find('svg')
+    expect(logoSvg.exists()).toBe(true)
+    expect(logoSvg.classes()).toContain('w-7')
+    expect(logoSvg.classes()).toContain('h-7')
+    expect(logoSvg.classes()).toContain('text-primary')
+    expect(expandedWrapper.text()).toContain('MCLR')
+    // Collapsed state
+    localStorage.setItem('mclr.sidebar', 'collapsed')
+    const collapsedWrapper = mount(SidebarNav, {
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    expect(collapsedWrapper.find('svg').exists()).toBe(true)
+    expect(collapsedWrapper.text()).not.toContain('MCLR')
+    localStorage.removeItem('mclr.sidebar')
   })
 })

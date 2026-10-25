@@ -23,12 +23,7 @@ const router = useRouter()
         >
           {{ t('instanceDetail.modsDisabled.downloadModable') }}
         </MButton>
-        <MButton
-          variant="tonal"
-          size="sm"
-          icon="i-lucide-boxes"
-          @click="router.push('/instances')"
-        >
+        <MButton variant="tonal" size="sm" icon="i-lucide-boxes" @click="router.push('/instances')">
           {{ t('instanceDetail.modsDisabled.chooseOther') }}
         </MButton>
       </div>

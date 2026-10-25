@@ -209,8 +209,7 @@ pub fn remove_server(path: &Path, index: usize) -> Result<Vec<ServerEntry>, Save
 // SRV Resolution & Happy Eyeballs
 // ---------------------------------------------------------------------------
 
-#[allow(async_fn_in_trait)]
-pub trait SrvLookup: Send + Sync {
+pub(crate) trait SrvLookup: Send + Sync {
     async fn lookup_srv(&self, host: &str) -> Option<(String, u16)>;
 }
 
@@ -311,7 +310,7 @@ pub async fn resolve_server_address(address: &str) -> Result<ResolvedServerAddre
     resolve_server_address_with_resolver(address, &resolver).await
 }
 
-pub async fn resolve_server_address_with_resolver<S: SrvLookup + ?Sized>(
+pub(crate) async fn resolve_server_address_with_resolver<S: SrvLookup + ?Sized>(
     address: &str,
     resolver: &S,
 ) -> Result<ResolvedServerAddress, SavesError> {
@@ -548,7 +547,7 @@ pub async fn ping_server(ip: &str) -> Result<ServerPingResult, SavesError> {
     ping_server_with_resolver(ip, &resolver).await
 }
 
-pub async fn ping_server_with_resolver<S: SrvLookup + ?Sized>(
+pub(crate) async fn ping_server_with_resolver<S: SrvLookup + ?Sized>(
     ip: &str,
     resolver: &S,
 ) -> Result<ServerPingResult, SavesError> {

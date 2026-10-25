@@ -5,6 +5,8 @@
   "selectAccount": "选择账号",
   "noInstance": "尚未创建或选择实例",
   "noAccount": "尚未添加或选择账号",
+  "noInstanceHint": "还没有实例，点击右上角“安装新版本”创建第一个实例",
+  "noAccountHint": "还没有账号，点击右上角“添加账号”登录或创建离线账号",
   "createInstance": "安装新版本",
   "addAccount": "添加账号",
   "repairInstance": "检查与修复",
@@ -53,7 +55,12 @@
     "readMore": "阅读全文",
     "pagePrev": "上一页",
     "pageNext": "下一页",
-    "pageNumber": "第 {page} 页"
+    "pageNumber": "第 {page} 页",
+    "emptyPageTitle": "该页暂无资讯内容",
+    "emptyPageDesc": "所选页码超出资讯列表范围",
+    "backToFirstPage": "返回第一页",
+    "jumpPage": "跳转",
+    "jumpPagePrompt": "输入跳转页码"
   },
   "announcements": {
     "title": "系统公告",

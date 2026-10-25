@@ -4,6 +4,8 @@
   "empty": "当前没有正在运行或排队的任务",
   "emptySubtitle": "下载、安装与维护任务将显示在这里",
   "clearFinished": "清除已完成",
+  "cancelConfirmTitle": "取消任务",
+  "cancelConfirmContent": "确定要取消正在进行的任务吗？已下载的临时文件可能需要重新下载。",
   "indicator": {
     "activeTasks": "{count} 个任务进行中",
     "speed": "{speed}/s"
@@ -20,6 +22,8 @@
     "pause": "暂停",
     "resume": "继续",
     "cancel": "取消",
+    "cancelConfirmTitle": "取消任务",
+    "cancelConfirmContent": "确定要取消正在进行的任务吗？已下载的临时文件可能需要重新下载。",
     "retry": "重试"
   },
   "item": {

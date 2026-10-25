@@ -102,7 +102,9 @@ describe('Crash Analysis Feature', () => {
 
     expect(requiredCauses.length).toBe(45)
     for (const code of requiredCauses) {
-      const causeObj = (zhCnCrash.cause as Record<string, { title?: string; advice?: string }>)[code]
+      const causeObj = (zhCnCrash.cause as Record<string, { title?: string; advice?: string }>)[
+        code
+      ]
       expect(causeObj, `Missing cause key: ${code}`).toBeDefined()
       expect(causeObj.title, `Missing title for ${code}`).toBeTruthy()
       expect(causeObj.advice, `Missing advice for ${code}`).toBeTruthy()

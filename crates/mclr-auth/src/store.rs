@@ -4,9 +4,9 @@ use crate::dpapi::{protect_bytes, unprotect_bytes};
 use crate::error::AuthError;
 use crate::microsoft::{MicrosoftAuthService, MicrosoftLoginResult, MsAuthEndpoints};
 use crate::offline::{OfflineUuidMode, compute_offline_uuid, default_skin_model};
-use crate::skin::CapeView;
+use crate::skin::{CapeView, default_head_data_url};
 use crate::yggdrasil::{
-    AuthlibProfileView, YggdrasilProfile, authenticate, discover_api_location,
+    AuthlibProfileView, YggdrasilProfile, authenticate, discover_api_location, fetch_profile_head,
     fetch_server_metadata, refresh as yggdrasil_refresh,
 };
 use aes_gcm::aead::{Aead, KeyInit};
@@ -145,18 +145,23 @@ impl StoredAccount {
                 skin_head_data_url,
                 default_skin_model,
                 ..
-            } => AccountView {
-                id: id.clone(),
-                kind: AccountKind::Offline,
-                username: username.clone(),
-                uuid: uuid.clone(),
-                selected: is_selected,
-                server: None,
-                server_name: None,
-                skin_head_data_url: skin_head_data_url.clone(),
-                capes: vec![],
-                default_skin_model: default_skin_model.clone(),
-            },
+            } => {
+                let head_url = skin_head_data_url
+                    .clone()
+                    .or_else(|| Some(default_head_data_url(default_skin_model)));
+                AccountView {
+                    id: id.clone(),
+                    kind: AccountKind::Offline,
+                    username: username.clone(),
+                    uuid: uuid.clone(),
+                    selected: is_selected,
+                    server: None,
+                    server_name: None,
+                    skin_head_data_url: head_url,
+                    capes: vec![],
+                    default_skin_model: default_skin_model.clone(),
+                }
+            }
             StoredAccount::Authlib {
                 id,
                 server,
@@ -421,6 +426,48 @@ impl AccountStore {
         self.persist().await?;
         Ok(view)
     }
+    pub async fn rename_offline(&self, id: &str, username: &str) -> Result<AccountView, AuthError> {
+        let trimmed_name = username.trim();
+        if trimmed_name.is_empty() {
+            return Err(AuthError::Other("username cannot be empty".into()));
+        }
+
+        let mut inner = self.inner.write().await;
+        let is_selected = inner.data.last_used.as_deref() == Some(id);
+
+        // Find the account and ensure it's offline
+        let account = inner
+            .data
+            .accounts
+            .iter_mut()
+            .find(|a| a.id() == id)
+            .ok_or_else(|| AuthError::AccountNotFound(id.to_string()))?;
+
+        let updated_view = match account {
+            StoredAccount::Offline {
+                username: acc_name,
+                uuid,
+                uuid_mode,
+                default_skin_model: acc_model,
+                ..
+            } => {
+                // Recompute uuid unless mode is custom
+                if *uuid_mode != OfflineUuidMode::Custom {
+                    *uuid = compute_offline_uuid(trimmed_name, *uuid_mode, None)?;
+                    *acc_model = default_skin_model(uuid).to_string();
+                }
+                *acc_name = trimmed_name.to_string();
+                account.to_view(is_selected)
+            }
+            _ => {
+                return Err(AuthError::Other("account is not an offline account".into()));
+            }
+        };
+
+        drop(inner);
+        self.persist().await?;
+        Ok(updated_view)
+    }
 
     pub async fn add_microsoft(
         &self,
@@ -500,6 +547,7 @@ impl AccountStore {
 
             let model = default_skin_model(&selected.id).to_string();
             let id = Uuid::new_v4().to_string();
+            let skin_head = fetch_profile_head(client, &api_root, &selected.id).await;
 
             let account = StoredAccount::Authlib {
                 id: id.clone(),
@@ -510,7 +558,7 @@ impl AccountStore {
                 access_token: auth_res.access_token,
                 client_token: auth_res.client_token,
                 profiles: profiles_view,
-                skin_head_data_url: None,
+                skin_head_data_url: skin_head,
                 default_skin_model: model,
             };
 
@@ -587,6 +635,8 @@ impl AccountStore {
         let model = default_skin_model(&chosen_profile.id).to_string();
         let id = Uuid::new_v4().to_string();
 
+        let skin_head = fetch_profile_head(client, &pending.server, &chosen_profile.id).await;
+
         let account = StoredAccount::Authlib {
             id: id.clone(),
             server: pending.server,
@@ -596,7 +646,7 @@ impl AccountStore {
             access_token: refresh_res.access_token,
             client_token: refresh_res.client_token,
             profiles: pending.profiles,
-            skin_head_data_url: None,
+            skin_head_data_url: skin_head,
             default_skin_model: model,
         };
 

@@ -1,6 +1,6 @@
 //! Logging initialization and retention management for MCLR.
 //!
-//! Writes rolling daily logs to `<logs_dir>/mclr-<YYYY-MM-DD>.log` and prunes
+//! Writes rolling daily logs to `<logs_dir>/mclr.<YYYY-MM-DD>.log` and prunes
 //! older log files keeping only the newest `retention_days` files.
 
 use std::fs;
@@ -8,7 +8,41 @@ use std::path::{Path, PathBuf};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-/// Prunes old log files in `logs_dir`, keeping the newest `retention_days` files matching `mclr-*.log`.
+/// Checks if `file_name` is a launcher log file:
+/// Matches files starting with `"mclr."` or `"mclr-"` that either end with `".log"`
+/// or have a suffix formatted as a `YYYY-MM-DD` date (e.g. legacy `mclr.2026-10-26`).
+pub fn is_launcher_log_file(file_name: &str) -> bool {
+    let remainder = if let Some(rest) = file_name.strip_prefix("mclr.") {
+        rest
+    } else if let Some(rest) = file_name.strip_prefix("mclr-") {
+        rest
+    } else {
+        return false;
+    };
+
+    if let Some(date_part) = remainder.strip_suffix(".log") {
+        // Could be mclr.YYYY-MM-DD.log or mclr-YYYY-MM-DD.log or other log name
+        !date_part.is_empty()
+    } else {
+        // Legacy format: mclr.YYYY-MM-DD or mclr-YYYY-MM-DD without .log suffix
+        is_date_yyyy_mm_dd(remainder)
+    }
+}
+
+fn is_date_yyyy_mm_dd(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('-').collect();
+    if parts.len() != 3 {
+        return false;
+    }
+    parts[0].len() == 4
+        && parts[1].len() == 2
+        && parts[2].len() == 2
+        && parts[0].chars().all(|c| c.is_ascii_digit())
+        && parts[1].chars().all(|c| c.is_ascii_digit())
+        && parts[2].chars().all(|c| c.is_ascii_digit())
+}
+
+/// Prunes old log files in `logs_dir`, keeping the newest `retention_days` files matching `is_launcher_log_file`.
 pub fn prune_old_logs(logs_dir: &Path, retention_days: u32) -> std::io::Result<()> {
     if !logs_dir.exists() {
         return Ok(());
@@ -20,8 +54,7 @@ pub fn prune_old_logs(logs_dir: &Path, retention_days: u32) -> std::io::Result<(
         let path = entry.path();
         if path.is_file()
             && let Some(file_name) = path.file_name().and_then(|n| n.to_str())
-            && file_name.starts_with("mclr-")
-            && file_name.ends_with(".log")
+            && is_launcher_log_file(file_name)
         {
             log_files.push(path);
         }
@@ -51,7 +84,11 @@ pub fn init_logging(
     fs::create_dir_all(logs_dir)?;
     let _ = prune_old_logs(logs_dir, retention_days);
 
-    let file_appender = tracing_appender::rolling::daily(logs_dir, "mclr");
+    let file_appender = tracing_appender::rolling::RollingFileAppender::builder()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("mclr")
+        .filename_suffix("log")
+        .build(logs_dir)?;
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     let filter = EnvFilter::try_new(level).unwrap_or_else(|_| EnvFilter::new("info"));
@@ -102,5 +139,20 @@ mod tests {
         assert!(!remaining.contains(&"mclr-2026-10-03.log".to_string()));
         assert!(remaining.contains(&"mclr-2026-10-04.log".to_string()));
         assert!(remaining.contains(&"mclr-2026-10-10.log".to_string()));
+    }
+
+    #[test]
+    fn test_is_launcher_log_file() {
+        assert!(is_launcher_log_file("mclr.2026-10-26.log"));
+        assert!(is_launcher_log_file("mclr-2026-10-26.log"));
+        assert!(is_launcher_log_file("mclr.2026-10-26"));
+        assert!(is_launcher_log_file("mclr-2026-10-26"));
+        assert!(is_launcher_log_file("mclr.legacy.log"));
+
+        assert!(!is_launcher_log_file("mclr.txt"));
+        assert!(!is_launcher_log_file("other.log"));
+        assert!(!is_launcher_log_file("mclr"));
+        assert!(!is_launcher_log_file("launcher.log"));
+        assert!(!is_launcher_log_file("mclr.2026-10"));
     }
 }

@@ -1,6 +1,23 @@
 // Slice-owned IPC types and client methods (install).
 import { invokeCommand } from '../client'
-import type { CompFile } from '../bindings'
+import type {
+  ExtraCandidates,
+  ExtraMod,
+  CurrentExtras,
+  CurrentInstallInfo,
+  LabyModSel,
+  InstallRequest as BindingsInstallRequest,
+} from '../bindings'
+
+export type { ExtraCandidates, ExtraMod, CurrentExtras, CurrentInstallInfo, LabyModSel }
+
+export type InstallMode =
+  | { type: 'create' }
+  | { type: 'modify'; removeModFiles?: string[]; remove_mod_files?: string[] }
+
+export type InstallRequest = Omit<BindingsInstallRequest, 'mode'> & {
+  mode: InstallMode
+}
 
 export type LoaderKind =
   | 'fabric'
@@ -22,7 +39,8 @@ export interface LoaderVersionEntry {
 
 export interface VersionManifestEntry {
   id: string
-  type: string
+  versionType: string
+  type?: string
   url: string
   releaseTime: string
 }
@@ -33,56 +51,37 @@ export interface VersionManifestList {
   versions: VersionManifestEntry[]
 }
 
-export interface LabyModSel {
-  channel: string
-  commitRef: string
-  baseVersion: string
-}
-
-export interface ExtraMod {
-  fileName: string
-  urls: string[]
-  sha1: string | null
-  size: number | null
-}
-
-export type InstallMode =
-  | { type: 'create' }
-  | { type: 'modify'; removeModFiles: string[] }
-
-export interface InstallRequest {
-  mcVersion: string
-  instanceName: string
-  forge?: string | null
-  neoforge?: string | null
-  cleanroom?: string | null
-  fabric?: string | null
-  legacyFabric?: string | null
-  labymod?: LabyModSel | null
-  liteloader?: string | null
-  optifine?: string | null
-  extraMods: ExtraMod[]
-  mode: InstallMode
-}
-
-export interface ExtraCandidates {
-  fabricApi: CompFile[]
-  legacyFabricApi: CompFile[]
-  optiFabric: CompFile[]
-}
-
-export interface CurrentExtras {
-  fabricApi?: string | null
-  legacyFabricApi?: string | null
-  optifabric?: string | null
-}
-
-export interface CurrentInstallInfo {
-  loaders: string[]
-  extras: CurrentExtras
+export interface VersionCompatInfo {
+  isAprilFools: boolean
+  foolCode?: string | null
+  supportedLoaders: string[]
+  incompatiblePairs: [string, string][]
+  recommendedJava: number
 }
 
 export const installIpc = {
+  installManifest: (forceRefresh?: boolean): Promise<VersionManifestList> =>
+    invokeCommand<VersionManifestList>('install_manifest', { forceRefresh: !!forceRefresh }),
+  installVanilla: (version: string, name: string): Promise<string> =>
+    invokeCommand<string>('install_vanilla', { version, name }),
+  installRepair: (instanceId: string): Promise<string> =>
+    invokeCommand<string>('install_repair', { instanceId }),
+  loadersVersions: (loader: LoaderKind, mcVersion: string): Promise<LoaderVersionEntry[]> =>
+    invokeCommand<LoaderVersionEntry[]>('loaders_versions', { loader, mcVersion }),
+  loadersInstall: (
+    mcVersion: string,
+    instanceName: string,
+    loader: LoaderKind,
+    loaderVersion: string,
+    optifineVersion?: string | null,
+  ): Promise<string> =>
+    invokeCommand<string>('loaders_install', {
+      mcVersion,
+      instanceName,
+      loader,
+      loaderVersion,
+      optifineVersion: optifineVersion ?? null,
+    }),
   installCreate: (req: InstallRequest): Promise<string> =>
     invokeCommand<string>('install_create', { req }),
   installExtras: (
@@ -101,4 +100,14 @@ export const installIpc = {
     invokeCommand<CurrentInstallInfo>('install_current_info', { instanceId }),
   installValidateName: (name: string): Promise<void> =>
     invokeCommand<void>('install_validate_name', { name }),
+  installVersionCompat: (
+    mcVersion: string,
+    releaseType: string,
+    releaseTime: string,
+  ): Promise<VersionCompatInfo> =>
+    invokeCommand<VersionCompatInfo>('install_version_compat', {
+      mcVersion,
+      releaseType,
+      releaseTime,
+    }),
 }

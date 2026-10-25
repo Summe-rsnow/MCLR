@@ -1,9 +1,5 @@
-import type {
-  VersionManifestList,
-  LoaderKind,
-  LoaderVersionEntry,
-} from '../../ipc/client'
-import { validateInstanceNameLocal } from './compat'
+import type { VersionManifestList, LoaderKind, LoaderVersionEntry } from '../../ipc/client'
+import { validateInstanceNameLocal, isAprilFools, loaderVisibility, getMcFoolName } from './compat'
 
 function generateMockVersions() {
   const versions: VersionManifestList['versions'] = []
@@ -35,26 +31,94 @@ function generateMockVersions() {
 
   // 2. Releases: exactly 112
   const realReleases = [
-    '1.21.4', '1.21.3', '1.21.2', '1.21.1', '1.21',
-    '1.20.6', '1.20.5', '1.20.4', '1.20.3', '1.20.2', '1.20.1', '1.20',
-    '1.19.4', '1.19.3', '1.19.2', '1.19.1', '1.19',
-    '1.18.2', '1.18.1', '1.18',
-    '1.17.1', '1.17',
-    '1.16.5', '1.16.4', '1.16.3', '1.16.2', '1.16.1', '1.16',
-    '1.15.2', '1.15.1', '1.15',
-    '1.14.4', '1.14.3', '1.14.2', '1.14.1', '1.14',
-    '1.13.2', '1.13.1', '1.13',
-    '1.12.2', '1.12.1', '1.12',
-    '1.11.2', '1.11.1', '1.11',
-    '1.10.2', '1.10.1', '1.10',
-    '1.9.4', '1.9.3', '1.9.2', '1.9.1', '1.9',
-    '1.8.9', '1.8.8', '1.8.7', '1.8.6', '1.8.5', '1.8.4', '1.8.3', '1.8.2', '1.8.1', '1.8',
-    '1.7.10', '1.7.9', '1.7.8', '1.7.7', '1.7.6', '1.7.5', '1.7.4', '1.7.2',
-    '1.6.4', '1.6.2', '1.6.1',
-    '1.5.2', '1.5.1',
-    '1.4.7', '1.4.6', '1.4.5', '1.4.4', '1.4.2',
-    '1.3.2', '1.3.1',
-    '1.2.5', '1.2.4', '1.2.3', '1.2.2', '1.2.1',
+    '1.21.4',
+    '1.21.3',
+    '1.21.2',
+    '1.21.1',
+    '1.21',
+    '1.20.6',
+    '1.20.5',
+    '1.20.4',
+    '1.20.3',
+    '1.20.2',
+    '1.20.1',
+    '1.20',
+    '1.19.4',
+    '1.19.3',
+    '1.19.2',
+    '1.19.1',
+    '1.19',
+    '1.18.2',
+    '1.18.1',
+    '1.18',
+    '1.17.1',
+    '1.17',
+    '1.16.5',
+    '1.16.4',
+    '1.16.3',
+    '1.16.2',
+    '1.16.1',
+    '1.16',
+    '1.15.2',
+    '1.15.1',
+    '1.15',
+    '1.14.4',
+    '1.14.3',
+    '1.14.2',
+    '1.14.1',
+    '1.14',
+    '1.13.2',
+    '1.13.1',
+    '1.13',
+    '1.12.2',
+    '1.12.1',
+    '1.12',
+    '1.11.2',
+    '1.11.1',
+    '1.11',
+    '1.10.2',
+    '1.10.1',
+    '1.10',
+    '1.9.4',
+    '1.9.3',
+    '1.9.2',
+    '1.9.1',
+    '1.9',
+    '1.8.9',
+    '1.8.8',
+    '1.8.7',
+    '1.8.6',
+    '1.8.5',
+    '1.8.4',
+    '1.8.3',
+    '1.8.2',
+    '1.8.1',
+    '1.8',
+    '1.7.10',
+    '1.7.9',
+    '1.7.8',
+    '1.7.7',
+    '1.7.6',
+    '1.7.5',
+    '1.7.4',
+    '1.7.2',
+    '1.6.4',
+    '1.6.2',
+    '1.6.1',
+    '1.5.2',
+    '1.5.1',
+    '1.4.7',
+    '1.4.6',
+    '1.4.5',
+    '1.4.4',
+    '1.4.2',
+    '1.3.2',
+    '1.3.1',
+    '1.2.5',
+    '1.2.4',
+    '1.2.3',
+    '1.2.2',
+    '1.2.1',
     '1.1',
     '1.0',
   ]
@@ -97,19 +161,65 @@ function generateMockVersions() {
 
   // 3. Old: exactly 165
   const knownBetas = [
-    'b1.8.1', 'b1.8', 'b1.7.3', 'b1.7.2', 'b1.7', 'b1.6.6', 'b1.6.5',
-    'b1.6.4', 'b1.6.3', 'b1.6.2', 'b1.6.1', 'b1.6', 'b1.5_02', 'b1.5_01',
-    'b1.5', 'b1.4_01', 'b1.4', 'b1.3_01', 'b1.3', 'b1.2_02', 'b1.2_01',
-    'b1.2', 'b1.1_02', 'b1.1_01', 'b1.1', 'b1.0_01', 'b1.0',
+    'b1.8.1',
+    'b1.8',
+    'b1.7.3',
+    'b1.7.2',
+    'b1.7',
+    'b1.6.6',
+    'b1.6.5',
+    'b1.6.4',
+    'b1.6.3',
+    'b1.6.2',
+    'b1.6.1',
+    'b1.6',
+    'b1.5_02',
+    'b1.5_01',
+    'b1.5',
+    'b1.4_01',
+    'b1.4',
+    'b1.3_01',
+    'b1.3',
+    'b1.2_02',
+    'b1.2_01',
+    'b1.2',
+    'b1.1_02',
+    'b1.1_01',
+    'b1.1',
+    'b1.0_01',
+    'b1.0',
   ]
   const knownAlphas = [
-    'a1.2.6', 'a1.2.5', 'a1.2.4_01', 'a1.2.3_04', 'a1.2.3_02', 'a1.2.3_01',
-    'a1.2.3', 'a1.2.2b', 'a1.2.2a', 'a1.2.1_01', 'a1.2.0_02', 'a1.2.0_01',
-    'a1.1.2_01', 'a1.1.1', 'a1.1.0', 'a1.0.17_04', 'a1.0.17_02', 'a1.0.16',
-    'a1.0.15', 'a1.0.14', 'a1.0.5_01', 'a1.0.4',
+    'a1.2.6',
+    'a1.2.5',
+    'a1.2.4_01',
+    'a1.2.3_04',
+    'a1.2.3_02',
+    'a1.2.3_01',
+    'a1.2.3',
+    'a1.2.2b',
+    'a1.2.2a',
+    'a1.2.1_01',
+    'a1.2.0_02',
+    'a1.2.0_01',
+    'a1.1.2_01',
+    'a1.1.1',
+    'a1.1.0',
+    'a1.0.17_04',
+    'a1.0.17_02',
+    'a1.0.16',
+    'a1.0.15',
+    'a1.0.14',
+    'a1.0.5_01',
+    'a1.0.4',
   ]
   const knownClassics = [
-    'c0.30', 'c0.0.13a_03', 'c0.0.13a', 'rd-132211', 'rd-20090515', 'inf-20100618',
+    'c0.30',
+    'c0.0.13a_03',
+    'c0.0.13a',
+    'rd-132211',
+    'rd-20090515',
+    'inf-20100618',
   ]
   const oldList = [...knownBetas, ...knownAlphas, ...knownClassics]
   let oldPad = 1
@@ -122,10 +232,7 @@ function generateMockVersions() {
     const d = new Date(Date.UTC(2011, 8, 1, 10, 0, 0))
     d.setUTCDate(d.getUTCDate() - i)
     if (d.getUTCMonth() === 3 && d.getUTCDate() === 1) d.setUTCDate(2)
-    const releaseTime =
-      id === 'b1.7.3'
-        ? '2011-07-08T00:00:00+00:00'
-        : d.toISOString()
+    const releaseTime = id === 'b1.7.3' ? '2011-07-08T00:00:00+00:00' : d.toISOString()
     versions.push({
       id,
       versionType: isBeta ? 'old_beta' : 'old_alpha',
@@ -169,10 +276,7 @@ function generateMockVersions() {
     const d = new Date(Date.UTC(2024, 3, 10, 15, 0, 0))
     d.setUTCDate(d.getUTCDate() - i * 2)
     if (d.getUTCMonth() === 3 && d.getUTCDate() === 1) d.setUTCDate(2)
-    const releaseTime =
-      id === '24w14a'
-        ? '2024-04-03T14:00:00+00:00'
-        : d.toISOString()
+    const releaseTime = id === '24w14a' ? '2024-04-03T14:00:00+00:00' : d.toISOString()
     versions.push({
       id,
       versionType: 'snapshot',
@@ -194,18 +298,13 @@ export const mockVersionManifest: VersionManifestList = {
   versions: generateMockVersions(),
 }
 
-let manifestData: VersionManifestList = JSON.parse(
-  JSON.stringify(mockVersionManifest),
-)
+let manifestData: VersionManifestList = JSON.parse(JSON.stringify(mockVersionManifest))
 
 export function resetMockDownload(): void {
   manifestData = JSON.parse(JSON.stringify(mockVersionManifest))
 }
 
-export function getMockLoaderVersions(
-  loader: LoaderKind,
-  mcVersion: string,
-): LoaderVersionEntry[] {
+export function getMockLoaderVersions(loader: LoaderKind, mcVersion: string): LoaderVersionEntry[] {
   switch (loader) {
     case 'fabric':
       return [
@@ -298,6 +397,16 @@ export function getMockLoaderVersions(
           releaseTime: '2023-11-01T00:00:00Z',
         },
       ]
+    case 'labyMod':
+      return [
+        {
+          loader: 'labyMod',
+          mcVersion,
+          version: '48',
+          stable: true,
+          releaseTime: '2024-04-01T00:00:00Z',
+        },
+      ]
     default:
       return []
   }
@@ -370,6 +479,27 @@ const handlers = {
       throw { code: err }
     }
     return null
+  },
+  install_version_compat: (args: Record<string, unknown>) => {
+    const mcVersion = String(args.mcVersion || '')
+    const releaseTime = String(args.releaseTime || '')
+    const fool = isAprilFools(mcVersion, releaseTime)
+    const vis = loaderVisibility(mcVersion)
+    const supportedLoaders: string[] = []
+    if (vis.fabric) supportedLoaders.push('fabric')
+    if (vis.forge) supportedLoaders.push('forge')
+    if (vis.neoforge) supportedLoaders.push('neoforge')
+    if (vis.cleanroom) supportedLoaders.push('cleanroom')
+    if (vis.legacyFabric) supportedLoaders.push('legacyfabric')
+    if (vis.liteloader) supportedLoaders.push('liteloader')
+    if (vis.labymod) supportedLoaders.push('labymod')
+    return {
+      isAprilFools: fool,
+      foolCode: fool ? getMcFoolName(mcVersion) : null,
+      supportedLoaders,
+      incompatiblePairs: [],
+      recommendedJava: 17,
+    }
   },
   install_vanilla: (args: Record<string, unknown>) => {
     const version = String(args.version || '')

@@ -51,6 +51,11 @@ describe('Accounts feature', () => {
     // Switch selection
     await store.selectAccount(created.id)
     expect(store.selectedAccount?.id).toBe(created.id)
+
+    // Can add with explicit skin model via addOfflineAccount
+    const createdSlim = await store.addOfflineAccount('AlexOffline', 'standard', undefined, 'slim')
+    expect(createdSlim.username).toBe('AlexOffline')
+    expect(createdSlim.kind).toBe('offline')
   })
 
   it('removes an account', async () => {
@@ -91,5 +96,41 @@ describe('Accounts feature', () => {
     expect(wrapper.text()).toContain('AlexBuilder')
     expect(wrapper.text()).toContain('SkinUser01')
     expect(wrapper.text()).toContain('皮肤与披风管理')
+  })
+
+  it('offline account renders default skin head image', async () => {
+    const store = useAccountsStore()
+    await store.fetchAccounts()
+    const offlineAcc = store.accounts.find((a) => a.kind === 'offline')
+    expect(offlineAcc?.skinHeadDataUrl).toBeTruthy()
+    expect(offlineAcc?.skinHeadDataUrl).toMatch(/^data:image\/png;base64,/)
+  })
+
+  it('renames an offline account', async () => {
+    const store = useAccountsStore()
+    await store.fetchAccounts()
+    const offlineAcc = store.accounts.find((a) => a.kind === 'offline')!
+
+    const renamed = await store.renameOffline(offlineAcc.id, 'NewOfflineName')
+    expect(renamed.username).toBe('NewOfflineName')
+    expect(store.accounts.find((a) => a.id === offlineAcc.id)?.username).toBe('NewOfflineName')
+  })
+
+  it('renders realistic layout skeleton when uninitialized and loading', async () => {
+    const store = useAccountsStore()
+    store.initialized = false
+    store.loading = true
+    const wrapper = mount(AccountsPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+    const skeleton = wrapper.find('[data-testid="accounts-skeleton"]')
+    expect(skeleton.exists()).toBe(true)
+    expect(skeleton.classes()).toContain('grid')
+    expect(skeleton.classes()).toContain('lg:grid-cols-12')
+    const cards = skeleton.findAll('.m-card')
+    // 3 account cards on left, 1 skin card on right
+    expect(cards.length).toBe(4)
   })
 })

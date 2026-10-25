@@ -27,7 +27,10 @@
     "itemLogs": "启动器与游戏日志",
     "itemSkins": "玩家皮肤与头像缓存",
     "totalSize": "占用总空间",
-    "noneSelected": "请至少选择一项要清理的内容"
+    "noneSelected": "请至少选择一项要清理的内容",
+    "confirmTitle": "清理缓存确认",
+    "confirmMessage": "确定要清理选中的缓存数据吗？将删除 {categories}，共释放 {size} 存储空间。",
+    "confirmDetail": "被清理的日志与缓存文件将被永久删除，无法撤销。"
   },
   "download": {
     "title": "自定义文件下载",

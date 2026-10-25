@@ -25,7 +25,8 @@ export const mockAnnouncements: AnnouncementItem[] = [
   {
     id: 'announcement-v0011',
     title: 'MCLR v0.0.11 Available',
-    detail: 'Welcome to MCLR v0.0.11! Personalization, home news, and built-in help center are now ready.',
+    detail:
+      'Welcome to MCLR v0.0.11! Personalization, home news, and built-in help center are now ready.',
     btn1: {
       text: 'View Help',
       url: null,

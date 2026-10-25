@@ -8,11 +8,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="p-6 max-w-4xl mx-auto">
-    <InstallConfigurator
-      mode="modify"
-      :mc-version="instance.mcVersion"
-      :instance="instance"
-    />
+  <div class="w-full space-y-6">
+    <InstallConfigurator mode="modify" :mc-version="instance.mcVersion" :instance="instance" />
   </div>
 </template>

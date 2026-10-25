@@ -1,11 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import {
-  applyTheme,
-  type ThemeMode,
-  type MaterialMode,
-  type ThemeConfig,
-} from '../ui/theme'
+import { applyTheme, type ThemeMode, type MaterialMode, type ThemeConfig } from '../ui/theme'
 import { ipcClient } from '../ipc/client'
 
 export type BackgroundMode = 'none' | 'image' | 'slideshow' | 'video'
@@ -18,6 +13,21 @@ export const useThemeStore = defineStore('theme', () => {
   const mode = ref<ThemeMode>('system')
   const material = ref<MaterialMode>('flat')
   const motion = ref<MotionMode>(initialMotion())
+  // Startup splash
+  const startupSplash = ref<boolean>(
+    typeof localStorage !== 'undefined' ? localStorage.getItem('mclr.splash') !== 'off' : true,
+  )
+
+  function setStartupSplash(v: boolean) {
+    startupSplash.value = v
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('mclr.splash', v ? 'on' : 'off')
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }
 
   function initialMotion(): MotionMode {
     try {
@@ -94,7 +104,6 @@ export const useThemeStore = defineStore('theme', () => {
     schedulePersist()
   }
 
-
   function setBackgroundMode(newMode: BackgroundMode) {
     backgroundMode.value = newMode
     schedulePersist()
@@ -159,7 +168,8 @@ export const useThemeStore = defineStore('theme', () => {
         if (s.ui.backgroundMode) backgroundMode.value = s.ui.backgroundMode as BackgroundMode
         if (typeof s.ui.backgroundPath === 'string') backgroundPath.value = s.ui.backgroundPath
         if (typeof s.ui.backgroundBlur === 'number') backgroundBlur.value = s.ui.backgroundBlur
-        if (typeof s.ui.backgroundOpacity === 'number') backgroundOpacity.value = s.ui.backgroundOpacity
+        if (typeof s.ui.backgroundOpacity === 'number')
+          backgroundOpacity.value = s.ui.backgroundOpacity
       }
     } catch {
       // In tests/mock
@@ -189,6 +199,8 @@ export const useThemeStore = defineStore('theme', () => {
     setMode,
     setMaterial,
     setMotion,
+    startupSplash,
+    setStartupSplash,
     setScale,
     setBackgroundMode,
     setBackgroundPath,

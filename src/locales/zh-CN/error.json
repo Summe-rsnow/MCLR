@@ -12,7 +12,8 @@
     "invalidInstanceName": "实例名称包含非法字符",
     "javaNotFound": "未找到适合该版本的 Java 运行环境",
     "runtimeManifest": "下载 Java 运行时清单失败",
-    "invalidPath": "无效的资源目录：{sub}"
+    "invalidPath": "无效的资源目录：{sub}",
+    "folderNotFound": "目录不存在或已被移动"
   },
   "tasks": {
     "notFound": "找不到指定的任务",
@@ -110,6 +111,8 @@
     "logNotFound": "未找到相关的崩溃日志文件"
   },
   "tools": {
+    "invalidSkinData": "皮肤数据无效",
+    "saveFailed": "保存失败",
     "skin": {
       "invalidUsername": "请输入有效的玩家用户名",
       "userNotFound": "未找到名为“{username}”的玩家或档案不存在",

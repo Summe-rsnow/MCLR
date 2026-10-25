@@ -65,8 +65,7 @@ export function useBackgroundMedia() {
         if (!slideshowTimer) {
           slideshowTimer = window.setInterval(() => {
             if (slideshowFiles.value.length > 0) {
-              slideshowIndex.value =
-                (slideshowIndex.value + 1) % slideshowFiles.value.length
+              slideshowIndex.value = (slideshowIndex.value + 1) % slideshowFiles.value.length
             }
           }, 8000) as unknown as number
         }

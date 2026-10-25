@@ -1,19 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  ipcClient,
-  type ModpackInspectResult,
-} from '../../ipc/client'
-import {
-  MDialog,
-  MButton,
-  MInput,
-  MPathPicker,
-  MSkeleton,
-  MBadge,
-  useToast,
-} from '../../ui'
+import { ipcClient, type ModpackInspectResult } from '../../ipc/client'
+import { MDialog, MButton, MInput, MPathPicker, MSkeleton, MBadge, useToast } from '../../ui'
 
 defineProps<{
   open: boolean
@@ -68,10 +57,7 @@ async function onImport(): Promise<void> {
   if (!archivePath.value.trim() || !targetInstanceName.value.trim()) return
   importing.value = true
   try {
-    await ipcClient.modpackImportFile(
-      archivePath.value.trim(),
-      targetInstanceName.value.trim(),
-    )
+    await ipcClient.modpackImportFile(archivePath.value.trim(), targetInstanceName.value.trim())
     toast.show({
       message: t('comp.modpackImport.success'),
       type: 'success',
@@ -83,7 +69,8 @@ async function onImport(): Promise<void> {
     targetInstanceName.value = ''
   } catch (err: unknown) {
     toast.show({
-      message: t('comp.modpackImport.failed') + ': ' + (err instanceof Error ? err.message : String(err)),
+      message:
+        t('comp.modpackImport.failed') + ': ' + (err instanceof Error ? err.message : String(err)),
       type: 'danger',
     })
   } finally {
@@ -174,10 +161,7 @@ function onClose(): void {
 
     <template #footer>
       <div class="flex items-center justify-end space-x-3">
-        <MButton
-          variant="text"
-          @click="onClose"
-        >
+        <MButton variant="text" @click="onClose">
           {{ t('comp.downloadDialog.cancel') }}
         </MButton>
         <MButton

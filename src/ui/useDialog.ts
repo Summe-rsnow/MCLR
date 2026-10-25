@@ -3,35 +3,59 @@ import { ref } from 'vue'
 export interface DialogOptions {
   title?: string
   content: string
+  detail?: string
+  severity?: 'info' | 'warning' | 'danger'
   confirmText?: string
   cancelText?: string
+  confirmVariant?: 'primary' | 'danger' | 'tonal'
+  requireCheckbox?: string
 }
 
-const activeDialog = ref<{
+export interface ActiveDialogState {
   open: boolean
   title?: string
   content: string
+  detail?: string
+  severity?: 'info' | 'warning' | 'danger'
   confirmText?: string
   cancelText?: string
+  confirmVariant?: 'primary' | 'danger' | 'tonal'
+  requireCheckbox?: string
   resolve: (value: boolean) => void
-} | null>(null)
+}
+
+const activeDialog = ref<ActiveDialogState | null>(null)
 
 export function useDialog() {
   function confirm(options: DialogOptions): Promise<boolean> {
-    let resolver: (value: boolean) => void = () => {}
-    const promise = new Promise<boolean>((resolve) => {
-      resolver = resolve
-    })
+    const { promise, resolve } = Promise.withResolvers<boolean>()
+
+    const severity = options.severity ?? 'warning'
+    const confirmVariant = options.confirmVariant ?? (severity === 'danger' ? 'danger' : 'primary')
 
     activeDialog.value = {
       open: true,
       title: options.title,
       content: options.content,
+      detail: options.detail,
+      severity,
       confirmText: options.confirmText,
       cancelText: options.cancelText,
-      resolve: resolver,
+      confirmVariant,
+      requireCheckbox: options.requireCheckbox,
+      resolve,
     }
     return promise
+  }
+
+  function confirmDanger(
+    options: Omit<DialogOptions, 'severity' | 'confirmVariant'>,
+  ): Promise<boolean> {
+    return confirm({
+      ...options,
+      severity: 'danger',
+      confirmVariant: 'danger',
+    })
   }
 
   function handleConfirm() {
@@ -53,6 +77,7 @@ export function useDialog() {
   return {
     activeDialog,
     confirm,
+    confirmDanger,
     handleConfirm,
     handleCancel,
   }

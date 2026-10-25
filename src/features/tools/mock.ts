@@ -3,7 +3,8 @@ import type { CacheSizeInfo, DailyLuckResult, SkinFetchResult } from '../../ipc/
 export const mockSkinResult: SkinFetchResult = {
   username: 'Notch',
   uuid: '069a79f444e94726a5bef2a2fce1b29d',
-  skinUrl: 'http://textures.minecraft.net/texture/292009a4925b58f02c77ad806f9b99f40e3d526ea4a44b36e600d8317d221173',
+  skinUrl:
+    'http://textures.minecraft.net/texture/292009a4925b58f02c77ad806f9b99f40e3d526ea4a44b36e600d8317d221173',
   skinDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAF',
   headDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAA',
   slim: false,
@@ -41,6 +42,9 @@ const handlers = {
       ...mockSkinResult,
       username,
     }
+  },
+  tools_save_skin: (_args: Record<string, unknown>): null => {
+    return null
   },
   tools_cache_info: (): CacheSizeInfo => {
     return { ...currentCacheState }

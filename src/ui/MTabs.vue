@@ -31,6 +31,14 @@ function updateIndicator() {
   }
 }
 
+function onWheel(e: WheelEvent) {
+  const root = containerRef.value
+  if (!root) return
+  if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && e.deltaY !== 0) {
+    root.scrollLeft += e.deltaY
+  }
+}
+
 watch(
   () => [props.modelValue, props.tabs.length],
   async () => {
@@ -55,7 +63,8 @@ onUnmounted(() => {
 <template>
   <div
     ref="containerRef"
-    class="relative flex items-center gap-1 border-b border-line select-none overflow-x-auto"
+    class="relative flex items-center gap-1 border-b border-line select-none overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    @wheel.passive="onWheel"
   >
     <button
       v-for="tab in tabs"
@@ -63,11 +72,7 @@ onUnmounted(() => {
       data-tab-btn
       type="button"
       class="relative inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer shrink-0"
-      :class="
-        modelValue === tab.key
-          ? 'text-primary'
-          : 'text-fg-muted hover:text-fg'
-      "
+      :class="modelValue === tab.key ? 'text-primary' : 'text-fg-muted hover:text-fg'"
       @click="emit('update:modelValue', tab.key)"
     >
       <span v-if="tab.icon" :class="tab.icon" class="w-4 h-4 shrink-0" />
@@ -78,7 +83,7 @@ onUnmounted(() => {
       />
     </button>
     <div
-      class="pointer-events-none absolute bottom-0 left-0 h-0.5 bg-primary rounded-t transition-all duration-200"
+      class="m-tabs-pill pointer-events-none absolute bottom-0 left-0 h-0.5 bg-primary rounded-t transition-all duration-200"
       :style="indicatorStyle"
     />
   </div>

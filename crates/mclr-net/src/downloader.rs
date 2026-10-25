@@ -101,13 +101,14 @@ impl Downloader {
             return Err(last_err);
         }
 
-        for attempt in 0..max_whole_retries {
+        let total_attempts = spec.urls.len().max(max_whole_retries);
+        for attempt in 0..total_attempts {
             if attempt > 0 {
                 let delay = Duration::from_millis(300 + (attempt as u64) * 300);
                 tokio::time::sleep(delay).await;
             }
 
-            // Pick URL across attempts
+            // Pick URL across attempts sequentially through all candidate URLs
             let url = &spec.urls[attempt % spec.urls.len()];
 
             // Clean up any stale part file before attempting
@@ -136,9 +137,9 @@ impl Downloader {
                 },
                 Err(err) => {
                     warn!(
-                        "Download attempt {} failed for {}: {}",
+                        "Download attempt {} from {} failed: {}",
                         attempt + 1,
-                        spec.dest.display(),
+                        url,
                         err
                     );
                     let _ = tokio::fs::remove_file(&part_path).await;
@@ -541,6 +542,11 @@ impl Downloader {
             return Ok(());
         }
 
+        if let Some((tc, tid)) = task_center {
+            let mut count_map = std::collections::HashMap::new();
+            count_map.insert("count".to_string(), specs.len().to_string());
+            let _ = tc.update_title_params(tid, count_map).await;
+        }
         let max_files = (self.settings.max_concurrent_files as usize).clamp(1, 128);
         let sem = Arc::new(Semaphore::new(max_files));
 

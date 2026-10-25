@@ -7,8 +7,9 @@ use mclr_core::{AppError, SettingsStore, TaskCenter};
 use mclr_game::gamedir::resolve_game_dir;
 use mclr_game::instance::classify_instance;
 use mclr_game::{
-    VersionManifestList, fetch_version_manifest, install_vanilla as game_install_vanilla,
-    load_resolved_version_json, repair_instance as game_repair_instance,
+    VersionCompatInfo, VersionManifestList, compute_version_compat, fetch_version_manifest,
+    install_vanilla as game_install_vanilla, load_resolved_version_json,
+    repair_instance as game_repair_instance,
 };
 use mclr_loaders::{InstallEnv, InstallRequest};
 use serde::{Deserialize, Serialize};
@@ -55,6 +56,19 @@ pub async fn install_manifest(
         .await
         .map_err(AppError::from)
 }
+#[tauri::command]
+#[specta::specta]
+pub async fn install_version_compat(
+    mc_version: String,
+    release_type: String,
+    release_time: String,
+) -> Result<VersionCompatInfo, AppError> {
+    Ok(compute_version_compat(
+        &mc_version,
+        &release_type,
+        &release_time,
+    ))
+}
 
 #[tauri::command]
 #[specta::specta]
@@ -73,7 +87,7 @@ pub async fn install_create(
     params.insert("name".to_string(), req.instance_name.clone());
 
     let (task_id, _token) = tasks_state
-        .create_task(None, "tasks.item.download.group", params)
+        .create_task(None, "tasks.item.install.create", params)
         .await;
 
     let tc = Arc::clone(&tasks_state);
@@ -98,6 +112,7 @@ pub async fn install_create(
                 let _ = tc.complete_task(&tid).await;
             }
             Err(e) => {
+                tracing::error!("Installation failed for {}: {:?}", tid, e);
                 let _ = tc.fail_task(&tid, AppError::from(e)).await;
             }
         }
@@ -259,6 +274,7 @@ pub async fn install_vanilla(
                 let _ = tc.complete_task(&tid).await;
             }
             Err(e) => {
+                tracing::error!("Installation failed for {}: {:?}", tid, e);
                 let _ = tc.fail_task(&tid, AppError::from(e)).await;
             }
         }
@@ -305,6 +321,7 @@ pub async fn install_repair(
                 let _ = tc.complete_task(&tid).await;
             }
             Err(e) => {
+                tracing::error!("Installation failed for {}: {:?}", tid, e);
                 let _ = tc.fail_task(&tid, AppError::from(e)).await;
             }
         }

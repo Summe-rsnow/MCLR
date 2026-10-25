@@ -35,15 +35,12 @@ export const mediaIpc = {
   screenshotReveal: (path: string): Promise<void> =>
     invokeCommand<void>('screenshot_reveal', { path }),
 
-  screenshotOpen: (path: string): Promise<void> =>
-    invokeCommand<void>('screenshot_open', { path }),
+  screenshotOpen: (path: string): Promise<void> => invokeCommand<void>('screenshot_open', { path }),
 
-  screenshotCopy: (path: string): Promise<void> =>
-    invokeCommand<void>('screenshot_copy', { path }),
+  screenshotCopy: (path: string): Promise<void> => invokeCommand<void>('screenshot_copy', { path }),
 
   javaScan: (forceRefresh?: boolean): Promise<JavaInstallation[]> =>
     invokeCommand<JavaInstallation[]>('java_scan', { forceRefresh: forceRefresh ?? null }),
 
-  javaList: (): Promise<JavaInstallation[]> =>
-    invokeCommand<JavaInstallation[]>('java_list'),
+  javaList: (): Promise<JavaInstallation[]> => invokeCommand<JavaInstallation[]>('java_list'),
 }

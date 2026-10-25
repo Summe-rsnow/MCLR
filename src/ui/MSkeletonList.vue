@@ -21,20 +21,14 @@ withDefaults(
     aria-busy="true"
   >
     <template v-for="n in rows" :key="n">
-      <div
-        v-if="variant === 'row'"
-        class="flex items-center gap-3 px-3 py-2.5"
-      >
+      <div v-if="variant === 'row'" class="flex items-center gap-3 px-3 py-2.5">
         <MSkeleton width="2.25rem" height="2.25rem" />
         <div class="flex-1 flex flex-col gap-2">
           <MSkeleton :width="n % 2 ? '45%' : '60%'" height="0.9rem" />
           <MSkeleton width="30%" height="0.7rem" />
         </div>
       </div>
-      <div
-        v-else-if="variant === 'card'"
-        class="m-card rounded-2xl p-4 flex items-center gap-3"
-      >
+      <div v-else-if="variant === 'card'" class="m-card rounded-2xl p-4 flex items-center gap-3">
         <MSkeleton width="3rem" height="3rem" />
         <div class="flex-1 flex flex-col gap-2">
           <MSkeleton width="40%" height="1rem" />

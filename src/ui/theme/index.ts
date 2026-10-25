@@ -21,7 +21,7 @@ export interface SeedPreset {
 }
 
 export const SEED_PRESETS: readonly SeedPreset[] = [
-  { key: 'sky', hex: '#3b82f6' },
+  { key: 'sky', hex: '#0ea5e9' },
   { key: 'indigo', hex: '#6366f1' },
   { key: 'emerald', hex: '#10b981' },
   { key: 'amber', hex: '#f59e0b' },
@@ -95,7 +95,10 @@ function fmtRgbStr(rgb: ResolvedRgb): string {
 
 function parseRgbInput(input: ResolvedRgb | string): ResolvedRgb {
   if (typeof input === 'string') {
-    const parts = input.trim().split(/\s+/).map((n) => parseInt(n, 10))
+    const parts = input
+      .trim()
+      .split(/\s+/)
+      .map((n) => parseInt(n, 10))
     return { r: parts[0] || 0, g: parts[1] || 0, b: parts[2] || 0 }
   }
   return input
@@ -169,7 +172,10 @@ export function resolveEffectiveMode(mode: ThemeMode): 'light' | 'dark' {
 export function generatePalette(seedHex: string, effectiveMode: 'light' | 'dark'): ThemePalette {
   const seedOklch = parseHexToOklch(seedHex)
   const h = seedOklch.h ?? 250
-  const c = Math.max(0.13, Math.min(0.22, seedOklch.c || 0.18))
+  const isNeutral = (seedOklch.c || 0) < 0.08
+  const c = isNeutral
+    ? Math.max(0.015, Math.min(0.045, seedOklch.c || 0.03))
+    : Math.max(0.13, Math.min(0.22, seedOklch.c || 0.18))
   const isDark = effectiveMode === 'dark'
 
   const canvasRgb = isDark ? toneToRgb(h, 0.012, 0.165) : toneToRgb(h, 0.01, 0.955)
@@ -191,10 +197,13 @@ export function generatePalette(seedHex: string, effectiveMode: 'light' | 'dark'
 
   let primaryRgb = isDark ? toneToRgb(h, c, 0.74) : toneToRgb(h, c, 0.55)
   const primaryHoverRgb = isDark ? toneToRgb(h, c, 0.79) : toneToRgb(h, c, 0.5)
-  const primarySoftRgb = isDark ? toneToRgb(h, 0.06, 0.3) : toneToRgb(h, 0.035, 0.94)
+  const primarySoftRgb = isDark
+    ? toneToRgb(h, isNeutral ? 0.02 : 0.06, 0.3)
+    : toneToRgb(h, isNeutral ? 0.015 : 0.035, 0.94)
 
-  let primarySoftFgRgb = isDark ? toneToRgb(h, 0.08, 0.86) : toneToRgb(h, 0.13, 0.38)
-  primarySoftFgRgb = ensureContrast(primarySoftFgRgb, primarySoftRgb, 4.5)
+  let primarySoftFgRgb = isDark
+    ? toneToRgb(h, isNeutral ? 0.03 : 0.08, 0.86)
+    : toneToRgb(h, isNeutral ? 0.04 : 0.13, 0.38)
 
   let primaryOnRgb = isDark ? toneToRgb(h, 0.02, 0.17) : { r: 255, g: 255, b: 255 }
   if (!isDark) {

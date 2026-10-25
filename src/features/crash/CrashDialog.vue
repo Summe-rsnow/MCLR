@@ -5,13 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { save as saveFileDialog } from '@tauri-apps/plugin-dialog'
 import { useCrashStore } from './store'
 import type { CrashConfidence } from '../../ipc/client'
-import {
-  MDialog,
-  MButton,
-  MBadge,
-  MSkeletonList,
-  useToast,
-} from '../../ui'
+import { MDialog, MButton, MBadge, MSkeletonList, useToast } from '../../ui'
 
 const { t, te } = useI18n()
 const router = useRouter()
@@ -97,7 +91,9 @@ function onClose() {
   >
     <div class="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
       <!-- Subtitle banner -->
-      <div class="flex items-center gap-3 p-3 rounded-xl bg-danger-soft text-danger-fg border border-danger/20">
+      <div
+        class="flex items-center gap-3 p-3 rounded-xl bg-danger-soft text-danger-fg border border-danger/20"
+      >
         <span class="w-5 h-5 i-lucide-alert-triangle shrink-0" />
         <div class="text-xs">
           <div class="font-semibold">{{ t('crash.dialog.subtitle') }}</div>
@@ -106,7 +102,11 @@ function onClose() {
               {{ t('crash.dialog.instance', { name: crashStore.currentInstanceId }) }}
             </span>
             <span v-if="crashStore.currentResult?.analyzedAt">
-              {{ t('crash.dialog.analyzedAt', { time: new Date(crashStore.currentResult.analyzedAt).toLocaleTimeString() }) }}
+              {{
+                t('crash.dialog.analyzedAt', {
+                  time: new Date(crashStore.currentResult.analyzedAt).toLocaleTimeString(),
+                })
+              }}
             </span>
           </div>
         </div>
@@ -133,10 +133,7 @@ function onClose() {
               <span class="w-2 h-2 rounded-full bg-danger" />
               {{ getCauseTitle(cause.code, cause.params) }}
             </h3>
-            <MBadge
-              :variant="getConfidenceVariant(cause.confidence)"
-              size="sm"
-            >
+            <MBadge :variant="getConfidenceVariant(cause.confidence)" size="sm">
               {{ t('crash.dialog.confidence.' + cause.confidence) }}
             </MBadge>
           </div>
@@ -154,10 +151,16 @@ function onClose() {
             >
               <span
                 class="w-3.5 h-3.5 transition-transform"
-                :class="expandedEvidence[index] ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                :class="
+                  expandedEvidence[index] ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'
+                "
               />
               <span>
-                {{ expandedEvidence[index] ? t('crash.dialog.evidence.toggle') : t('crash.dialog.evidence.lines', { count: cause.evidence.length }) }}
+                {{
+                  expandedEvidence[index]
+                    ? t('crash.dialog.evidence.toggle')
+                    : t('crash.dialog.evidence.lines', { count: cause.evidence.length })
+                }}
               </span>
             </button>
             <div
@@ -177,10 +180,7 @@ function onClose() {
       </div>
 
       <!-- Fallback when no causes detected -->
-      <div
-        v-else
-        class="p-6 rounded-xl border border-line bg-sunken text-center space-y-2"
-      >
+      <div v-else class="p-6 rounded-xl border border-line bg-sunken text-center space-y-2">
         <span class="w-8 h-8 i-lucide-help-circle mx-auto text-fg-subtle block" />
         <h3 class="text-sm font-semibold text-fg">
           {{ t('crash.dialog.noCausesFoundTitle') }}
@@ -204,21 +204,12 @@ function onClose() {
           >
             {{ t('crash.dialog.actions.exportReport') }}
           </MButton>
-          <MButton
-            variant="tonal"
-            size="sm"
-            icon="i-lucide-terminal"
-            @click="onOpenLogs"
-          >
+          <MButton variant="tonal" size="sm" icon="i-lucide-terminal" @click="onOpenLogs">
             {{ t('crash.dialog.actions.openLogs') }}
           </MButton>
         </div>
 
-        <MButton
-          variant="primary"
-          size="sm"
-          @click="onClose"
-        >
+        <MButton variant="primary" size="sm" @click="onClose">
           {{ t('crash.dialog.actions.close') }}
         </MButton>
       </div>

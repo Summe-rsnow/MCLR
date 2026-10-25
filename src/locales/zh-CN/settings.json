@@ -14,9 +14,6 @@
     "gameManage": "游戏文件夹",
     "network": "网络与下载",
     "update": "更新",
-    "logs": "启动器日志",
-    "feedback": "反馈",
-    "about": "关于与帮助",
     "aboutHelp": "关于与帮助"
   },
   "about": {
@@ -27,6 +24,16 @@
     "license": "开源协议：Apache-2.0",
     "githubRepo": "GitHub 仓库",
     "feedbackIssues": "问题反馈与建议",
+    "feedback": {
+      "title": "问题反馈",
+      "subtitle": "遇到问题、崩溃或有新功能构想？欢迎与我们共同完善 MCLR",
+      "guideTitle": "提交问题前建议检查：",
+      "guide1": "请先在“关于”或“检查更新”页面确认当前已是最新版本",
+      "guide2": "游戏运行崩溃请优先使用“崩溃分析”页面查看智能诊断建议",
+      "guide3": "提交 GitHub Issue 时请尽可能附带启动器日志或复现步骤",
+      "openGithub": "前往 GitHub 提交反馈",
+      "copyLink": "复制 GitHub Issues 地址"
+    },
     "faqTitle": "常见问题与使用帮助",
     "faqSubtitle": "常见故障自检与玩法指引",
     "techStackTitle": "技术栈与驱动引擎",
@@ -37,19 +44,44 @@
     "questions": {
       "account": {
         "title": "账号添加与登录模式",
-        "desc": "如何添加微软正版账号、第三方认证服务或离线账号？"
+        "desc": "如何添加微软正版账号、第三方认证服务或离线账号？",
+        "msTitle": "微软正版账号：",
+        "msDesc": "推荐拥有 Minecraft 正版的玩家使用。点击“账号管理” -> “添加账号” -> “微软登录”，通过浏览器打开微软授权页并输入设备验证码即可绑定，自动同步正版皮肤。",
+        "authlibTitle": "第三方登录 (authlib-injector)：",
+        "authlibDesc": "支持 LittleSkin、统一通行证等第三方认证服务。输入认证服务器 URL 或拖拽外置登录配置链接，输入邮箱与密码即可登录。",
+        "offlineTitle": "离线模式账号：",
+        "offlineDesc": "无需联网验证，可直接输入自定义游戏 ID。适用于局域网联机或离线体验。"
       },
       "mods": {
         "title": "模组安装与加载器选择",
-        "desc": "如何安装 Forge / Fabric / NeoForge 及模组？"
+        "desc": "如何安装 Forge / Fabric / NeoForge 及模组？",
+        "loaderTitle": "模组加载器安装：",
+        "loaderDesc": "进入“下载中心”，选择游戏版本时直接勾选 Fabric、Forge、NeoForge 或 Quilt，启动器会自动完成对应加载器的文件补丁与依赖下载。",
+        "marketTitle": "组件市场一键安装：",
+        "marketDesc": "点击左侧“社区资源”或实例详情页中的“模组”，即可直接在线搜索 CurseForge 与 Modrinth 的数十万款模组，支持依赖自动解析与版本匹配。",
+        "manualTitle": "手动安装模组：",
+        "manualDesc": "进入实例管理页点击“打开游戏文件夹”，将下载好的 .jar 模组文件直接拖入 mods 文件夹中即可。"
       },
       "java": {
         "title": "Java 版本匹配与自动下载",
-        "desc": "不同 Minecraft 版本需要哪个 Java？启动提示 Java 缺失怎么办？"
+        "desc": "不同 Minecraft 版本需要哪个 Java？启动提示 Java 缺失怎么办？",
+        "versionTitle": "版本对应关系推荐：",
+        "v8": "1.16.5 及更早版本：需要 Java 8 (JRE 8)",
+        "v16": "1.17 - 1.17.1：需要 Java 16",
+        "v17": "1.18 - 1.20.4：需要 Java 17",
+        "v21": "1.20.5 及最新版本：需要 Java 21",
+        "autoTitle": "自动下载与匹配：",
+        "autoDesc": "启动器会在启动时自动检测并优先匹配最契合的 Java。如果本机缺失合适运行时，点击启动页面的“自动下载 Java”按钮即可秒级下载 Mojang 官方运行时。"
       },
       "crash": {
         "title": "游戏闪退与崩溃排查",
-        "desc": "游戏无法启动或中途崩溃退出如何处理？"
+        "desc": "游戏无法启动或中途崩溃退出如何处理？",
+        "logTitle": "查看日志与崩溃分析：",
+        "logDesc": "发生崩溃时启动器会自动弹出崩溃分析对话框，精准提示崩溃原因（如缺少前置模组、内存溢出、显卡驱动不兼容等）。也可点击“查看日志”寻找带有 FATAL 或 Exception 的错误行。",
+        "memTitle": "内存设置：",
+        "memDesc": "进入“设置” -> “启动设置”，确保为游戏分配了合理内存（通常推荐 4096MB - 8192MB）。",
+        "bisectTitle": "模组排查（二分法）：",
+        "bisectDesc": "若崩溃由模组引起，可先将 mods 文件夹中的一半模组移出测试，逐步缩小范围定位冲突模组。"
       }
     }
   }

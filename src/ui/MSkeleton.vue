@@ -1,23 +1,40 @@
 <script setup lang="ts">
-withDefaults(
+import { computed } from 'vue'
+
+const props = withDefaults(
   defineProps<{
     width?: string
     height?: string
-    rounded?: boolean
+    rounded?: boolean | string
   }>(),
   {
-    width: '100%',
-    height: '1rem',
+    width: undefined,
+    height: undefined,
     rounded: true,
   },
 )
+
+const inlineStyle = computed(() => {
+  const s: Record<string, string> = {}
+  if (props.width) s.width = props.width
+  if (props.height) s.height = props.height
+  return s
+})
+
+const roundedClass = computed(() => {
+  if (props.rounded === false) return ''
+  if (typeof props.rounded === 'string') {
+    return `rounded-${props.rounded}`
+  }
+  return 'rounded-xl'
+})
 </script>
 
 <template>
   <div
     class="m-skeleton"
-    :class="rounded ? 'rounded-lg' : ''"
-    :style="{ width, height }"
+    :class="[roundedClass, !width ? 'w-full' : '', !height ? 'h-4' : '']"
+    :style="inlineStyle"
   />
 </template>
 

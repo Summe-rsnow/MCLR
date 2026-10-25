@@ -6,6 +6,7 @@
     clippy::map_entry
 )]
 
+pub mod compat;
 pub mod error;
 pub mod gamedir;
 pub mod install;
@@ -14,7 +15,7 @@ pub mod java;
 pub mod launch;
 pub mod naming;
 pub mod version;
-
+pub use compat::{VersionCompatInfo, compute_version_compat};
 pub use error::GameError;
 pub use install::{
     VersionManifestEntry, VersionManifestList, collect_version_download_specs,
@@ -31,12 +32,13 @@ pub use java::{
     resolve_mojang_runtime_downloads, scan_java, select_java,
 };
 pub use launch::{
-    LaunchCommandSpec, LaunchExitPayload, LaunchProcessInfo, LaunchStartResult, LaunchWatcher,
-    LogLevel, LogLine, WatcherEvent, build_launch_command, check_launch_paths,
-    check_login_requirement, classify_log_level, compute_ram_mb, compute_ram_mb_auto,
-    ensure_authlib_injector, execute_pre_launch_command, extract_natives, find_window_for_pid,
-    get_free_physical_memory_mb, launch, resolve_java_installation, sanitize_log_line,
-    set_window_title_for_pid, version_java_constraint,
+    LaunchCommandInput, LaunchCommandSpec, LaunchExitPayload, LaunchPipelineParams,
+    LaunchProcessInfo, LaunchStartResult, LaunchWatcher, LogLevel, LogLine, WatcherEvent,
+    build_launch_command, check_launch_paths, check_login_requirement, classify_log_level,
+    compute_ram_mb, compute_ram_mb_auto, ensure_authlib_injector, execute_pre_launch_command,
+    extract_natives, find_window_for_pid, get_free_physical_memory_mb, launch,
+    resolve_java_installation, sanitize_log_line, set_window_title_for_pid,
+    version_java_constraint,
 };
 pub use version::{
     ArgumentEntry, ArgumentValue, Arguments, Artifact, AssetIndexInfo, ConditionalArgument,

@@ -107,17 +107,6 @@ pub async fn save_datapack_toggle(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn screenshots_list(
-    state: State<'_, SettingsStore>,
-    instance_id: String,
-) -> Result<Vec<ScreenshotInfo>, AppError> {
-    let base_dir = super::game_dir_for(&state, &instance_id).await;
-    let screenshots_dir = base_dir.join("screenshots");
-    super::run_blocking(move || mclr_saves::list_screenshots(&screenshots_dir)).await
-}
-
-#[tauri::command]
-#[specta::specta]
 pub async fn screenshots_list_paged(
     state: State<'_, SettingsStore>,
     instance_id: String,

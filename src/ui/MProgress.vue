@@ -38,7 +38,7 @@ const percentage = computed(() => {
       />
       <div
         v-else
-        class="m-progress-fill h-full rounded-full w-1/3 animate-indeterminate"
+        class="m-progress-fill m-progress-indeterminate h-full rounded-full w-1/3 animate-indeterminate"
       />
     </div>
     <span

@@ -23,6 +23,21 @@ fn test_rewrite_url() {
         variants[1].1.as_str(),
         "https://resources.download.minecraft.net/ab/abcdef123456"
     );
+    // piston-data.mojang.com should NOT be rewritten under SourceKind::Assets
+    let url_piston =
+        Url::parse("https://piston-data.mojang.com/v1/objects/123/client-1.21.2.xml").unwrap();
+    let piston_variants = rewrite_url(&url_piston, SourceKind::Assets);
+    assert_eq!(piston_variants.len(), 1);
+    assert_eq!(piston_variants[0].0, SourceOrigin::Official);
+
+    // But under SourceKind::VersionMeta, it should be rewritten to bmclapi2
+    let meta_variants = rewrite_url(&url_piston, SourceKind::VersionMeta);
+    assert_eq!(meta_variants.len(), 2);
+    assert_eq!(meta_variants[0].0, SourceOrigin::Mirror);
+    assert_eq!(
+        meta_variants[0].1.as_str(),
+        "https://bmclapi2.bangbang93.com/v1/objects/123/client-1.21.2.xml"
+    );
 
     let url_lib =
         Url::parse("https://libraries.minecraft.net/org/lwjgl/lwjgl/3.3.3/lwjgl-3.3.3.jar")

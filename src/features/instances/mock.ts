@@ -231,6 +231,7 @@ const handlers = {
     return { ...inst }
   },
   instance_open_path: () => null,
+  path_open: () => null,
   java_scan: () => [...mockJavaInstallations],
   java_download: (args: Record<string, unknown>) => `task-java-${String(args.component)}`,
 }

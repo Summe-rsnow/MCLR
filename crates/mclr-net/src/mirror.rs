@@ -43,11 +43,7 @@ pub fn rewrite_url(url: &Url, kind: SourceKind) -> Vec<(SourceOrigin, Url)> {
     match kind {
         SourceKind::Assets => {
             // resources.download.minecraft.net -> bmclapi2.bangbang93.com/assets
-            // piston-data.mojang.com / piston-meta.mojang.com -> bmclapi2.bangbang93.com/assets
-            if host.eq_ignore_ascii_case("resources.download.minecraft.net")
-                || host.eq_ignore_ascii_case("piston-data.mojang.com")
-                || host.eq_ignore_ascii_case("piston-meta.mojang.com")
-            {
+            if host.eq_ignore_ascii_case("resources.download.minecraft.net") {
                 let path = url.path();
                 let mirror_str = format!("https://bmclapi2.bangbang93.com/assets{path}");
                 if let Ok(mirror_url) = Url::parse(&mirror_str) {
@@ -57,8 +53,9 @@ pub fn rewrite_url(url: &Url, kind: SourceKind) -> Vec<(SourceOrigin, Url)> {
             results.push(original);
         }
         SourceKind::VersionMeta => {
-            // piston-meta.mojang.com / launchermeta.mojang.com / launcher.mojang.com -> bmclapi2.bangbang93.com
+            // piston-meta.mojang.com / piston-data.mojang.com / launchermeta.mojang.com / launcher.mojang.com -> bmclapi2.bangbang93.com
             if host.eq_ignore_ascii_case("piston-meta.mojang.com")
+                || host.eq_ignore_ascii_case("piston-data.mojang.com")
                 || host.eq_ignore_ascii_case("launchermeta.mojang.com")
                 || host.eq_ignore_ascii_case("launcher.mojang.com")
             {

@@ -1,15 +1,18 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { createRouter, createWebHistory, type Router } from 'vue-router'
+import { save as saveFileDialog } from '@tauri-apps/plugin-dialog'
+
+vi.mock('@tauri-apps/plugin-dialog', () => ({
+  save: vi.fn(),
+  open: vi.fn(),
+}))
+import { ipcClient } from '../../../ipc/client'
+import { useDialog } from '../../../ui/useDialog'
 import ToolsPage from '../ToolsPage.vue'
-import {
-  resetToolsMock,
-  mockSkinResult,
-  lastCreatedShortcut,
-  lastCustomDownload,
-} from '../mock'
+import { resetToolsMock, mockSkinResult, lastCreatedShortcut, lastCustomDownload } from '../mock'
 import { setupMockIpc } from '../../../ipc/mock'
 import zhCnTools from '../../../locales/zh-CN/tools.json'
 import zhCnCommon from '../../../locales/zh-CN/common.json'
@@ -84,9 +87,19 @@ describe('Tools Feature', () => {
 
     const downloadBtn = wrapper.find('[data-testid="download-skin-btn"]')
     expect(downloadBtn.exists()).toBe(true)
-  })
 
-  it('tool 2: cache cleaner displays size and performs cleanup', async () => {
+    // Test downloadSkinPng invoking toolsSaveSkin
+    vi.mocked(saveFileDialog).mockResolvedValue('C:/mock/saved_skin.png')
+    const saveSkinSpy = vi.spyOn(ipcClient, 'toolsSaveSkin').mockResolvedValue()
+
+    await downloadBtn.trigger('click')
+    await flushPromises()
+
+    expect(saveFileDialog).toHaveBeenCalled()
+    expect(saveSkinSpy).toHaveBeenCalledWith('C:/mock/saved_skin.png', mockSkinResult.skinDataUrl)
+  })
+  it('tool 2: cache cleaner displays size and performs cleanup with danger confirm', async () => {
+    const { activeDialog, handleConfirm } = useDialog()
     const wrapper = mount(ToolsPage, {
       global: {
         plugins: [i18n, router],
@@ -101,6 +114,13 @@ describe('Tools Feature', () => {
     const cleanBtn = wrapper.find('[data-testid="clean-cache-btn"]')
     expect(cleanBtn.exists()).toBe(true)
     await cleanBtn.trigger('click')
+    await flushPromises()
+
+    expect(activeDialog.value?.open).toBe(true)
+    expect(activeDialog.value?.severity).toBe('danger')
+    expect(activeDialog.value?.confirmVariant).toBe('danger')
+
+    handleConfirm()
     await flushPromises()
 
     expect(wrapper.text()).toContain(zhCnTools.cache.cleaned)
@@ -155,5 +175,4 @@ describe('Tools Feature', () => {
       shortcutName: 'My Vanilla Game',
     })
   })
-
 })

@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.17`
-- **Next Milestone**: `None (Complete)`
+- **Current Version**: `0.0.21`
+- **Next Milestone**: `v0.0.22`
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -22,3 +22,7 @@
 | v0.0.15 | UI alignment, PCL version parity, Minecraft icons & component polish | done | v0.0.15 | v0.0.15 | 2026-10-25 |
 | v0.0.16 | Home & Launch consolidation, standalone Java page, Help in About & cleanups | done | v0.0.16 | v0.0.16 | 2026-10-25 |
 | v0.0.17 | UVMC parity, select-to-add flows, MHelpTooltip, compact UI & polish | done | v0.0.17 | v0.0.17 | 2026-10-25 |
+| v0.0.18 | Shell redesign, news masonry, floating paginator, folders dialog, MMarkdown, PCL skin parity | done | v0.0.18 | v0.0.18 | 2026-10-25 |
+| v0.0.19 | Tasks in logs, Java folder reveal, MSelect adaptive width, layout refinements & PCL comp parity | done | v0.0.19 | v0.0.19 | 2026-10-25 |
+| v0.0.20 | Oxc toolchain, NeoForge detection, simplified instance card, liquid glass titlebar & PCL polish | done | v0.0.20 | v0.0.20 | 2026-10-26 |
+| v0.0.21 | Unified overlay architecture, codebase health overhaul & UX consistency | done | v0.0.21 | v0.0.21 | 2026-10-26 |

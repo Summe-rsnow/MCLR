@@ -165,4 +165,35 @@ describe('Download / Install feature', () => {
     expect(wrapper.text()).toContain('Quilt')
     expect(wrapper.text()).toContain('暂不支持通过配置器修改')
   })
+
+  it('fetches NeoForge and LabyMod versions successfully and keeps stable container height', async () => {
+    const wrapper = mount(InstallConfigurator, {
+      props: {
+        mode: 'create',
+        mcVersion: '1.20.1',
+      },
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    await flushPromises()
+    expect(wrapper.classes()).toContain('min-h-[560px]')
+
+    // Select NeoForge
+    const neoforgeBtn = wrapper.findAll('button').find((b) => b.text().includes('NeoForge'))
+    expect(neoforgeBtn).toBeDefined()
+    await neoforgeBtn!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('20.4.80-beta')
+
+    // Select LabyMod
+    const labymodBtn = wrapper.findAll('button').find((b) => b.text().includes('LabyMod'))
+    expect(labymodBtn).toBeDefined()
+    await labymodBtn!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('48')
+  })
 })

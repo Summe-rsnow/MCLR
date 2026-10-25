@@ -25,12 +25,8 @@ body {
   font-size: 14px;
   line-height: 1.5;
   font-family:
-    var(--font-user, 'HarmonyOS Sans SC'),
-    'HarmonyOS Sans SC',
-    'Segoe UI Variable Text',
-    'Microsoft YaHei UI',
-    system-ui,
-    sans-serif;
+    var(--font-user, 'HarmonyOS Sans SC'), 'HarmonyOS Sans SC', 'Segoe UI Variable Text',
+    'Microsoft YaHei UI', system-ui, sans-serif;
   background-color: rgb(var(--c-canvas, 242 244 247));
   color: rgb(var(--c-fg, 19 25 36));
   user-select: none;
@@ -75,12 +71,20 @@ select:focus-visible {
   background-color: rgb(var(--c-fg, 19 25 36) / 0.3);
 }
 
+/* Overlay scrollbars: custom scrollbar on top of content with zero layout footprint */
+main,
+.m-scroll-overlay {
+  overflow-y: auto;
+  overflow-y: overlay;
+}
 /* Standard Page Container */
 .m-page {
   max-width: 1120px;
-  margin-left: auto;
-  margin-right: auto;
+  width: 100%;
+  box-sizing: border-box;
   padding: 1.5rem 2rem;
+  margin-left: max(0px, calc((100vw - var(--sidebar-w, 196px) - 1120px) / 2));
+  margin-right: auto;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -99,18 +103,22 @@ select:focus-visible {
 :root[data-material='flat'] .m-card {
   background-color: rgb(var(--c-raised, 255 255 255));
   border: 1px solid rgb(var(--c-line, 226 230 236));
+  border-radius: 0.75rem;
   box-shadow: var(--shadow-1);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 
 :root[data-mode='dark']:not([data-material='glass']) .m-card {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), var(--shadow-1);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.04),
+    var(--shadow-1);
 }
 
 .m-well {
   background-color: rgb(var(--c-sunken, 236 239 243));
   border: 1px solid rgb(var(--c-line, 226 230 236));
+  border-radius: 0.75rem;
 }
 
 .m-overlay,

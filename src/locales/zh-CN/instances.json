@@ -43,6 +43,20 @@
     "pathPlaceholder": "C:\\path\\to\\.minecraft",
     "pathError": "目录路径不能为空"
   },
+  "folders": {
+    "title": "游戏目录管理",
+    "manage": "管理游戏目录",
+    "addFolder": "添加目录",
+    "emptyFolders": "尚未添加任何游戏目录",
+    "currentBadge": "当前",
+    "switchFolder": "设为当前",
+    "editRemark": "修改备注",
+    "openFolder": "打开文件夹",
+    "removeFolder": "移除",
+    "removeConfirmTitle": "移除游戏目录",
+    "removeConfirmDesc": "确定要移除目录「{path}」吗？（不会删除磁盘中的游戏文件）",
+    "alreadyExists": "该游戏目录已存在于列表中"
+  },
   "filter": {
     "all": "全部",
     "pinned": "置顶",

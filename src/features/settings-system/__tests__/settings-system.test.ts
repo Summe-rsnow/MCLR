@@ -16,8 +16,6 @@ vi.mock('@tauri-apps/plugin-opener', () => ({
   openUrl: vi.fn(),
 }))
 
-import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
-
 describe('SettingsSystemPage (v0.0.12)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -26,9 +24,7 @@ describe('SettingsSystemPage (v0.0.12)', () => {
     i18n.global.locale.value = 'zh-CN'
   })
 
-  it('renders Game Manage tab and adds a new game folder via select-to-add with remark editing', async () => {
-    vi.mocked(openFileDialog).mockResolvedValue('D:\\Games\\.minecraft')
-
+  it('renders Game Manage tab with isolation settings', async () => {
     const wrapper = mount(SettingsSystemPage, {
       global: {
         plugins: [createPinia(), i18n, router],
@@ -37,24 +33,7 @@ describe('SettingsSystemPage (v0.0.12)', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="tab-gameManage"]').exists()).toBe(true)
-    await wrapper.find('[data-testid="add-folder-btn"]').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('.minecraft')
-
-    // Edit remark name
-    const editBtn = wrapper.find('[data-testid="edit-remark-btn"]')
-    expect(editBtn.exists()).toBe(true)
-    await editBtn.trigger('click')
-    await flushPromises()
-
-    const input = wrapper.find('[data-testid="edit-remark-input"] input')
-    expect(input.exists()).toBe(true)
-    await input.setValue('Secondary MC')
-    await wrapper.find('[data-testid="save-remark-btn"]').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Secondary MC')
+    expect(wrapper.text()).toContain('版本隔离策略')
   })
 
   it('switches to Language tab and dynamically switches to throw-away zz-TEST locale', async () => {
@@ -76,9 +55,7 @@ describe('SettingsSystemPage (v0.0.12)', () => {
     await flushPromises()
 
     // Switch to language tab
-    const langTab = wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('语言偏好'))
+    const langTab = wrapper.findAll('button').find((b) => b.text().includes('语言偏好'))
     expect(langTab).toBeDefined()
     await langTab!.trigger('click')
     await flushPromises()
@@ -104,9 +81,7 @@ describe('SettingsSystemPage (v0.0.12)', () => {
     })
     await flushPromises()
 
-    const updateTab = wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('检查更新'))
+    const updateTab = wrapper.findAll('button').find((b) => b.text().includes('检查更新'))
     await updateTab!.trigger('click')
     await flushPromises()
 
@@ -128,7 +103,7 @@ describe('SettingsSystemPage (v0.0.12)', () => {
     expect(wrapper.find('[data-testid="install-update-btn"]').exists()).toBe(true)
   })
 
-  it('renders Launcher Logs and About tabs', async () => {
+  it('renders remaining tabs correctly', async () => {
     const wrapper = mount(SettingsSystemPage, {
       global: {
         plugins: [createPinia(), i18n, router],
@@ -136,18 +111,9 @@ describe('SettingsSystemPage (v0.0.12)', () => {
     })
     await flushPromises()
 
-    const logsTab = wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('启动器日志'))
-    await logsTab!.trigger('click')
+    const updateTab = wrapper.findAll('button').find((b) => b.text().includes('检查更新'))
+    await updateTab!.trigger('click')
     await flushPromises()
-    expect(wrapper.find('[data-testid="launcher-log-content"]').text()).toContain('MCLR initialized')
-
-    const aboutTab = wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('关于 MCLR'))
-    await aboutTab!.trigger('click')
-    await flushPromises()
-    expect(wrapper.find('[data-testid="tab-about"]').text()).toContain('Apache-2.0')
+    expect(wrapper.find('[data-testid="tab-update"]').exists()).toBe(true)
   })
 })

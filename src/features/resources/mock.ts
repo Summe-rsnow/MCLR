@@ -86,7 +86,10 @@ const handlers = {
   local_mods_scan_start: (): { entries: ResourceEntry[] } => ({
     entries: [...mockModEntries],
   }),
-  resource_toggle: () => null,
+  resource_toggle: (args: Record<string, unknown>) =>
+    String(args?.path || '').endsWith('.disabled')
+      ? String(args?.path || '').replace(/\.disabled$/, '')
+      : `${String(args?.path || '')}.disabled`,
   resources_delete: () => null,
   resources_import: (): ImportResourcesResult => ({ imported: [], conflicts: [] }),
   resources_export: () => 'name,file,version\nSodium,sodium.jar,0.5.8',

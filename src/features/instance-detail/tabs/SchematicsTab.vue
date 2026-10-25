@@ -60,9 +60,11 @@ watch(
 
     <div
       v-else-if="folderMissing"
-      class="flex flex-col items-center justify-center text-center py-16 px-4 space-y-4 max-w-md mx-auto"
+      class="flex flex-col items-center justify-center text-center py-16 px-4 space-y-4"
     >
-      <div class="w-16 h-16 rounded-2xl bg-sunken flex items-center justify-center text-fg-muted mb-2 border border-line">
+      <div
+        class="w-16 h-16 rounded-2xl bg-sunken flex items-center justify-center text-fg-muted mb-2 border border-line"
+      >
         <span class="i-lucide-file-code w-8 h-8 text-primary" />
       </div>
       <h3 class="text-base font-semibold text-fg">
@@ -82,10 +84,6 @@ watch(
       </div>
     </div>
 
-    <ResourceList
-      v-else
-      :instance-id="instanceId"
-      kind="schematic"
-    />
+    <ResourceList v-else :instance-id="instanceId" kind="schematic" />
   </div>
 </template>

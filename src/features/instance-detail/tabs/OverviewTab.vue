@@ -25,7 +25,7 @@ const props = defineProps<{
 const { t } = useI18n()
 const router = useRouter()
 const toast = useToast()
-const { confirm } = useDialog()
+const { confirm, confirmDanger } = useDialog()
 const instancesStore = useInstancesStore()
 
 const showRenameModal = ref(false)
@@ -114,7 +114,7 @@ async function handleDelete(e?: MouseEvent) {
     content += `\n\n${t('instanceDetail.overview.deleteIsolatedWarning')}`
   }
 
-  const ok = await confirm({
+  const ok = await confirmDanger({
     title: isPermanent
       ? t('instances.actions.deletePermanent')
       : t('instanceDetail.overview.deleteConfirmTitle'),
@@ -174,7 +174,11 @@ function isCurrentIcon(key: string): boolean {
   const current = props.instance.config?.icon
   if (!current && (key === 'grass_block' || key === 'grass')) return true
   if (current === key) return true
-  if ((current === 'grass' || current === 'grass_block') && (key === 'grass' || key === 'grass_block')) return true
+  if (
+    (current === 'grass' || current === 'grass_block') &&
+    (key === 'grass' || key === 'grass_block')
+  )
+    return true
   return false
 }
 </script>
@@ -195,7 +199,7 @@ function isCurrentIcon(key: string): boolean {
         </MSettingRow>
 
         <MSettingRow :label="t('instanceDetail.overview.mcVersion')">
-          <span class="font-mono text-fg">{{ instance.mcVersion }}</span>
+          <span class="font-mono text-fg select-text">{{ instance.mcVersion }}</span>
         </MSettingRow>
 
         <MSettingRow :label="t('instanceDetail.overview.kind')">
@@ -203,21 +207,18 @@ function isCurrentIcon(key: string): boolean {
         </MSettingRow>
 
         <MSettingRow :label="t('instanceDetail.overview.loaders')">
-          <div class="flex flex-wrap gap-1.5 items-center justify-end">
-            <MBadge
-              v-for="loader in instance.loaders"
-              :key="loader"
-              variant="primary"
-            >
+          <div class="flex flex-wrap gap-1.5 items-center justify-end select-text">
+            <MBadge v-for="loader in instance.loaders" :key="loader" variant="primary">
               {{ loader }}
             </MBadge>
-            <span v-if="instance.loaders.length === 0" class="text-fg-muted">
-              Vanilla
-            </span>
+            <span v-if="instance.loaders.length === 0" class="text-fg-muted"> Vanilla </span>
           </div>
         </MSettingRow>
 
-        <MSettingRow :label="t('instanceDetail.overview.cardTypeLabel')" :hint="t('instanceDetail.overview.cardTypeHint')">
+        <MSettingRow
+          :label="t('instanceDetail.overview.cardTypeLabel')"
+          :hint="t('instanceDetail.overview.cardTypeHint')"
+        >
           <MSelect
             :model-value="instance.config?.cardType || ''"
             :options="cardTypeOptions"
@@ -228,7 +229,9 @@ function isCurrentIcon(key: string): boolean {
         </MSettingRow>
 
         <MSettingRow :label="t('instanceDetail.overview.path')">
-          <span class="font-mono text-xs text-fg-muted break-all text-right max-w-md">{{ instance.path }}</span>
+          <span class="font-mono text-xs text-fg-muted break-all text-right max-w-md select-text">{{
+            instance.path
+          }}</span>
         </MSettingRow>
       </div>
     </MSection>
@@ -260,10 +263,18 @@ function isCurrentIcon(key: string): boolean {
         <MButton
           :variant="instance.config?.starred || instance.config?.pinned ? 'primary' : 'tonal'"
           size="sm"
-          :icon="instance.config?.starred || instance.config?.pinned ? 'i-lucide-star-off' : 'i-lucide-star'"
+          :icon="
+            instance.config?.starred || instance.config?.pinned
+              ? 'i-lucide-star-off'
+              : 'i-lucide-star'
+          "
           @click="toggleStar"
         >
-          {{ instance.config?.starred || instance.config?.pinned ? t('instances.actions.unstar') : t('instances.actions.star') }}
+          {{
+            instance.config?.starred || instance.config?.pinned
+              ? t('instances.actions.unstar')
+              : t('instances.actions.star')
+          }}
         </MButton>
 
         <MButton variant="tonal" size="sm" icon="i-lucide-folder-open" @click="handleOpenFolder">

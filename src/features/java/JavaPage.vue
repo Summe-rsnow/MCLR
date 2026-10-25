@@ -2,23 +2,22 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
-import {
-  ipcClient,
-  type JavaInstallation,
-  type JavaSettings,
-} from '../../ipc/client'
+import { ipcClient, type JavaInstallation, type JavaSettings } from '../../ipc/client'
 import { useToast } from '../../ui/useToast'
+import { useDialog } from '../../ui/useDialog'
 import {
   MButton,
+  MIconButton,
   MSwitch,
   MBadge,
   MSection,
   MPageHeader,
   MHelpTooltip,
+  MSkeleton,
 } from '../../ui'
-
 const { t } = useI18n()
 const toast = useToast()
+const { confirmDanger } = useDialog()
 
 const isSaving = ref(false)
 const isScanning = ref(false)
@@ -29,9 +28,25 @@ const javaSettings = ref<JavaSettings>({
   select: 'auto',
   preferJdk: false,
 })
+const hiddenJavaPaths = ref<string[]>([])
 const javaInstallations = ref<JavaInstallation[]>([])
 
+function loadHiddenJavaPaths() {
+  try {
+    const raw = localStorage.getItem('mclr.hidden_java_paths')
+    if (raw) {
+      hiddenJavaPaths.value = JSON.parse(raw)
+    }
+  } catch {
+    hiddenJavaPaths.value = []
+  }
+}
+
+function saveHiddenJavaPaths() {
+  localStorage.setItem('mclr.hidden_java_paths', JSON.stringify(hiddenJavaPaths.value))
+}
 onMounted(async () => {
+  loadHiddenJavaPaths()
   try {
     const s = await ipcClient.settingsGet()
     if (s.java) {
@@ -61,7 +76,8 @@ async function saveJavaSettings() {
 async function onScanJava(force = true) {
   isScanning.value = true
   try {
-    javaInstallations.value = await ipcClient.javaScan(force)
+    const list = await ipcClient.javaScan(force)
+    javaInstallations.value = list.filter((item) => !hiddenJavaPaths.value.includes(item.path))
     if (force) {
       toast.success(t('java.scanComplete', { count: javaInstallations.value.length }))
     }
@@ -97,24 +113,54 @@ async function onPickAndAddJava() {
   }
 }
 
-async function onRemoveCustomJava(path: string) {
-  javaSettings.value.custom = javaSettings.value.custom.filter((p) => p !== path)
-  await saveJavaSettings()
-  await onScanJava(true)
+function getJavaFolderPath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  const lastSlash = normalized.lastIndexOf('/')
+  if (lastSlash > 0) {
+    return filePath.slice(0, lastSlash)
+  }
+  return filePath
 }
 
+async function onOpenJavaFolder(filePath: string) {
+  try {
+    const folderPath = getJavaFolderPath(filePath)
+    await ipcClient.pathOpen(folderPath)
+  } catch (err) {
+    toast.danger(`${t('common.error')}: ${String(err)}`)
+  }
+}
+
+async function onRemoveJava(item: JavaInstallation) {
+  const confirmed = await confirmDanger({
+    title: t('java.remove'),
+    content: t('java.removeConfirm'),
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+  })
+  if (!confirmed) return
+
+  if (javaSettings.value.custom.includes(item.path)) {
+    javaSettings.value.custom = javaSettings.value.custom.filter((p) => p !== item.path)
+    await saveJavaSettings()
+  } else {
+    if (!hiddenJavaPaths.value.includes(item.path)) {
+      hiddenJavaPaths.value.push(item.path)
+      saveHiddenJavaPaths()
+    }
+  }
+  javaInstallations.value = javaInstallations.value.filter((i) => i.path !== item.path)
+}
 </script>
 
 <template>
   <div class="m-page">
-    <MPageHeader
-      :title="t('java.title')"
-      :description="t('java.subtitle')"
-      icon="i-lucide-coffee"
-    >
+    <MPageHeader :title="t('java.title')" :description="t('java.subtitle')" icon="i-lucide-coffee">
       <template #actions>
         <div class="flex items-center gap-3 flex-wrap justify-end">
-          <label class="flex items-center gap-2 text-xs font-medium text-fg cursor-pointer select-none">
+          <label
+            class="flex items-center gap-2 text-xs font-medium text-fg cursor-pointer select-none"
+          >
             <span>{{ t('java.preferJdk') }}</span>
             <MSwitch
               v-model="javaSettings.preferJdk"
@@ -151,18 +197,41 @@ async function onRemoveCustomJava(path: string) {
         :title="t('java.installedList', { count: javaInstallations.length })"
         icon="i-lucide-list"
       >
-
-        <div v-if="javaInstallations.length === 0" class="text-sm text-fg-muted py-6 text-center">
-          {{ t('java.emptyList') }}
+        <!-- Scanning Skeleton -->
+        <div v-if="isScanning && javaInstallations.length === 0" class="flex flex-col gap-2">
+          <div
+            v-for="n in 3"
+            :key="n"
+            class="flex items-center justify-between p-3 rounded-xl bg-sunken/40 border border-line"
+          >
+            <div class="min-w-0 flex-1 space-y-2">
+              <div class="flex items-center gap-2">
+                <MSkeleton class="h-4 w-36" />
+                <MSkeleton class="h-5 w-16 rounded-full" />
+                <MSkeleton class="h-5 w-16 rounded-full" />
+                <MSkeleton class="h-5 w-16 rounded-full" />
+              </div>
+              <MSkeleton class="h-3 w-56" />
+            </div>
+            <div class="shrink-0 ml-3">
+              <MSkeleton class="h-8 w-16 rounded-lg" />
+            </div>
+          </div>
         </div>
 
+        <div
+          v-else-if="javaInstallations.length === 0"
+          class="text-sm text-fg-muted py-6 text-center"
+        >
+          {{ t('java.emptyList') }}
+        </div>
         <div v-else class="flex flex-col gap-2">
           <div
             v-for="item in javaInstallations"
             :key="item.path"
             class="flex items-center justify-between p-3 rounded-xl bg-sunken/40 border border-line"
           >
-            <div class="min-w-0 flex-1">
+            <div class="min-w-0 flex-1 select-text">
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="font-bold text-sm text-fg">
                   {{ t('java.majorVersion', { major: item.major }) }}
@@ -183,17 +252,20 @@ async function onRemoveCustomJava(path: string) {
                 {{ t('java.vendor', { vendor: item.implementor }) }}
               </div>
             </div>
-            <div class="flex items-center gap-2 shrink-0 ml-3">
-              <MButton
-                v-if="javaSettings.custom.includes(item.path)"
-                variant="text"
-                size="xs"
+            <div class="flex items-center gap-1 shrink-0 ml-3">
+              <MIconButton
+                icon="i-lucide-folder-open"
+                size="sm"
+                :title="t('java.openFolder')"
+                @click="onOpenJavaFolder(item.path)"
+              />
+              <MIconButton
                 icon="i-lucide-trash-2"
+                size="sm"
                 class="text-danger"
-                @click="onRemoveCustomJava(item.path)"
-              >
-                {{ t('java.remove') }}
-              </MButton>
+                :title="t('java.remove')"
+                @click="onRemoveJava(item)"
+              />
             </div>
           </div>
         </div>

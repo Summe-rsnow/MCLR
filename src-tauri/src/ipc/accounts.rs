@@ -57,6 +57,19 @@ pub async fn accounts_add_offline(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn accounts_rename_offline(
+    state: State<'_, Arc<AccountStore>>,
+    id: String,
+    username: String,
+) -> Result<AccountView, AppError> {
+    state
+        .rename_offline(&id, &username)
+        .await
+        .map_err(AppError::from)
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn accounts_add_microsoft(
     http: State<'_, crate::http::HttpState>,
     app: AppHandle,

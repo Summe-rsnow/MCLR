@@ -65,8 +65,7 @@ struct TokenSuccessResponse {
     access_token: String,
     refresh_token: Option<String>,
     #[serde(default)]
-    #[allow(dead_code)]
-    expires_in: u64,
+    _expires_in: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]

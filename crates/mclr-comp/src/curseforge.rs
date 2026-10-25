@@ -69,52 +69,76 @@ impl CurseForgeClient {
         self
     }
 
-    fn require_api_key(&self) -> Result<&str, CompError> {
+    fn key(&self) -> Option<&str> {
         match self.api_key.as_deref() {
-            Some(key) if !key.trim().is_empty() => Ok(key.trim()),
-            _ => Err(CompError::NotConfigured),
+            Some(k) if !k.trim().is_empty() => Some(k.trim()),
+            _ => None,
         }
     }
 
+    fn is_official(url: &Url) -> bool {
+        url.host_str() == Some("api.curseforge.com")
+    }
+
     fn resolve_candidate_urls(&self, endpoint_url: &Url) -> Vec<Url> {
-        if self.base_url.trim_end_matches('/') == "https://api.curseforge.com" {
+        let mut candidates = if self.base_url.trim_end_matches('/') == "https://api.curseforge.com"
+        {
             let rewritten = rewrite_url(endpoint_url, SourceKind::CurseForgeApi);
             if rewritten.is_empty() {
-                return vec![endpoint_url.clone()];
-            }
-            let ladder = racing_ladder(self.priority);
-            let mut ordered = Vec::new();
-            for (ladder_origin, _) in ladder {
-                for (origin, u) in &rewritten {
-                    if *origin == ladder_origin && !ordered.contains(u) {
+                vec![endpoint_url.clone()]
+            } else {
+                let ladder = racing_ladder(self.priority);
+                let mut ordered = Vec::new();
+                for (ladder_origin, _) in ladder {
+                    for (origin, u) in &rewritten {
+                        if *origin == ladder_origin && !ordered.contains(u) {
+                            ordered.push(u.clone());
+                        }
+                    }
+                }
+                for (_, u) in &rewritten {
+                    if !ordered.contains(u) {
                         ordered.push(u.clone());
                     }
                 }
-            }
-            for (_, u) in &rewritten {
-                if !ordered.contains(u) {
-                    ordered.push(u.clone());
+                if !ordered.is_empty() {
+                    ordered
+                } else {
+                    vec![endpoint_url.clone()]
                 }
             }
-            if !ordered.is_empty() {
-                return ordered;
-            }
+        } else {
+            vec![endpoint_url.clone()]
+        };
+
+        if self.key().is_none() {
+            candidates.retain(|u| !Self::is_official(u));
         }
-        vec![endpoint_url.clone()]
+
+        candidates
     }
 
     async fn get_json<T: for<'de> Deserialize<'de>>(
         &self,
         path_and_query: &str,
     ) -> Result<T, CompError> {
-        let key = self.require_api_key()?;
         let full = format!("{}{}", self.base_url.trim_end_matches('/'), path_and_query);
         let url = Url::parse(&full).map_err(|e| CompError::InvalidParams(e.to_string()))?;
         let candidates = self.resolve_candidate_urls(&url);
+        if candidates.is_empty() {
+            return Err(CompError::NotConfigured);
+        }
 
+        let key = self.key();
         let mut last_err = None;
         for cand in candidates {
-            match self.client.get(cand).header("x-api-key", key).send().await {
+            let mut req = self.client.get(cand.clone());
+            if Self::is_official(&cand)
+                && let Some(k) = key
+            {
+                req = req.header("x-api-key", k);
+            }
+            match req.send().await {
                 Ok(resp) => {
                     if resp.status().is_success() {
                         let bytes = resp.bytes().await?;
@@ -135,21 +159,23 @@ impl CurseForgeClient {
         path: &str,
         body: &B,
     ) -> Result<T, CompError> {
-        let key = self.require_api_key()?;
         let full = format!("{}{}", self.base_url.trim_end_matches('/'), path);
         let url = Url::parse(&full).map_err(|e| CompError::InvalidParams(e.to_string()))?;
         let candidates = self.resolve_candidate_urls(&url);
+        if candidates.is_empty() {
+            return Err(CompError::NotConfigured);
+        }
 
+        let key = self.key();
         let mut last_err = None;
         for cand in candidates {
-            match self
-                .client
-                .post(cand)
-                .header("x-api-key", key)
-                .json(body)
-                .send()
-                .await
+            let mut req = self.client.post(cand.clone());
+            if Self::is_official(&cand)
+                && let Some(k) = key
             {
+                req = req.header("x-api-key", k);
+            }
+            match req.json(body).send().await {
                 Ok(resp) => {
                     if resp.status().is_success() {
                         let bytes = resp.bytes().await?;
@@ -166,7 +192,6 @@ impl CurseForgeClient {
     }
 
     pub async fn search(&self, q: &CompSearchQuery) -> Result<CompSearchResult, CompError> {
-        let _ = self.require_api_key()?;
         let class_id = match q.comp_type {
             CompType::Mod => 6,
             CompType::Modpack => 4471,
@@ -658,41 +683,55 @@ fn rewrite_cdn_urls(raw_url: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mclr_core::AppError;
-    use wiremock::matchers::{header, method, path, query_param};
+    use wiremock::matchers::{method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    #[tokio::test]
-    async fn test_missing_api_key_returns_not_configured() {
+    #[test]
+    fn test_no_key_uses_mirror_only() {
         let client = CurseForgeClient::new(SourcePriority::OfficialFirst).with_api_key(None);
-        let q = CompSearchQuery {
-            platform: CompPlatform::Curseforge,
-            comp_type: CompType::Mod,
-            query: "jei".to_string(),
-            mc_version: Some("1.20.1".to_string()),
-            loader: Some("forge".to_string()),
-            category: None,
-            sort: CompSort::Relevance,
-            offset: 0,
-            limit: 20,
-        };
-        let err = client.search(&q).await.unwrap_err();
-        assert_eq!(err.code(), "notConfigured");
-        let app_err: AppError = err.into();
-        assert_eq!(app_err.code, "notConfigured");
-        assert_eq!(
-            app_err.params.get("what").map(String::as_str),
-            Some("curseforge")
+        let cands = client.resolve_candidate_urls(
+            &Url::parse("https://api.curseforge.com/v1/mods/search").unwrap(),
+        );
+        assert!(
+            !cands
+                .iter()
+                .any(|u| u.host_str() == Some("api.curseforge.com")),
+            "candidates should not contain official api.curseforge.com when key is none"
+        );
+        assert!(
+            cands
+                .iter()
+                .any(|u| u.host_str() == Some("mod.mcimirror.top")),
+            "candidates should contain mod.mcimirror.top mirror"
         );
     }
 
+    #[test]
+    fn test_key_keeps_official_candidate() {
+        let client = CurseForgeClient::new(SourcePriority::OfficialFirst)
+            .with_api_key(Some("test-key".to_string()));
+        let cands = client.resolve_candidate_urls(
+            &Url::parse("https://api.curseforge.com/v1/mods/search").unwrap(),
+        );
+        assert!(
+            cands
+                .iter()
+                .any(|u| u.host_str() == Some("api.curseforge.com")),
+            "candidates should contain official api.curseforge.com when key is set"
+        );
+        assert!(
+            cands
+                .iter()
+                .any(|u| u.host_str() == Some("mod.mcimirror.top")),
+            "candidates should also contain mirror"
+        );
+    }
     #[tokio::test]
     async fn test_curseforge_search_and_files_wiremock() {
         let server = MockServer::start().await;
 
         Mock::given(method("GET"))
             .and(path("/v1/mods/search"))
-            .and(header("x-api-key", "test-cf-key"))
             .and(query_param("gameId", "432"))
             .and(query_param("classId", "6"))
             .and(query_param("searchFilter", "jei"))
@@ -718,7 +757,6 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/v1/mods/238222/files"))
-            .and(header("x-api-key", "test-cf-key"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "data": [
                     {
@@ -811,14 +849,10 @@ mod tests {
             offset: 0,
             limit: 10,
         };
-        match client.search(&q).await {
-            Ok(res) => {
-                assert!(!res.hits.is_empty());
-            }
-            Err(CompError::NotConfigured) => {
-                // Expected when MCLR_CURSEFORGE_API_KEY is not set in env
-            }
-            Err(other) => panic!("unexpected CurseForge live error: {other}"),
-        }
+        let res = client
+            .search(&q)
+            .await
+            .expect("live CurseForge search should succeed without key via mirror");
+        assert!(!res.hits.is_empty());
     }
 }

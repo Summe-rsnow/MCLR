@@ -241,7 +241,6 @@ export const useInstancesStore = defineStore('instances', () => {
     return updated
   }
 
-
   async function openFolder(id: string, sub = '') {
     await ipcClient.instanceOpenPath(id, sub)
   }
@@ -277,6 +276,45 @@ export const useInstancesStore = defineStore('instances', () => {
     await fetchInstances(true)
   }
 
+  async function removeFolder(path: string) {
+    folders.value = folders.value.filter((f) => f.path !== path)
+    if (currentFolder.value === path) {
+      currentFolder.value = folders.value.length > 0 ? folders.value[0].path : ''
+    }
+    try {
+      await ipcClient.settingsPatch({
+        game: {
+          folders: folders.value,
+          currentFolder: currentFolder.value,
+        },
+      })
+    } catch {
+      // Fallback
+    }
+    if (!currentFolder.value) {
+      instances.value = []
+      resource.set([])
+    } else {
+      await fetchInstances(true)
+    }
+  }
+
+  async function renameFolder(path: string, name: string) {
+    const folder = folders.value.find((f) => f.path === path)
+    if (!folder) return
+    folder.name = name
+    try {
+      await ipcClient.settingsPatch({
+        game: {
+          folders: folders.value,
+          currentFolder: currentFolder.value,
+        },
+      })
+    } catch {
+      // Fallback
+    }
+  }
+
   return {
     instances,
     folders,
@@ -302,6 +340,8 @@ export const useInstancesStore = defineStore('instances', () => {
     openFolder,
     switchFolder,
     addFolder,
+    removeFolder,
+    renameFolder,
     updateConfig,
   }
 })

@@ -56,30 +56,26 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <Transition name="m-pop">
-    <div
-      v-if="open"
-      class="fixed z-50 m-overlay m-refract min-w-40 p-1 rounded-xl text-fg flex flex-col gap-0.5 select-none"
-      :style="{ left: `${x}px`, top: `${y}px`, '--origin': 'top left' }"
-      @click.stop
-      @contextmenu.stop.prevent
-    >
-      <button
-        v-for="item in items"
-        :key="item.key"
-        type="button"
-        :disabled="item.disabled"
-        class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer text-left disabled:cursor-not-allowed disabled:opacity-45"
-        :class="
-          item.danger
-            ? 'text-danger-fg hover:bg-danger-soft'
-            : 'text-fg hover:bg-sunken'
-        "
-        @click="onItemClick(item)"
+      <div
+        v-if="open"
+        class="fixed z-50 m-overlay m-refract min-w-40 p-1 rounded-xl text-fg flex flex-col gap-0.5 select-none"
+        :style="{ left: `${x}px`, top: `${y}px`, '--origin': 'top left' }"
+        @click.stop
+        @contextmenu.stop.prevent
       >
-        <span v-if="item.icon" :class="item.icon" class="w-3.5 h-3.5 shrink-0" />
-        <span class="flex-1">{{ item.label }}</span>
-      </button>
-    </div>
+        <button
+          v-for="item in items"
+          :key="item.key"
+          type="button"
+          :disabled="item.disabled"
+          class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer text-left disabled:cursor-not-allowed disabled:opacity-45"
+          :class="item.danger ? 'text-danger-fg hover:bg-danger-soft' : 'text-fg hover:bg-sunken'"
+          @click="onItemClick(item)"
+        >
+          <span v-if="item.icon" :class="item.icon" class="w-3.5 h-3.5 shrink-0" />
+          <span class="flex-1">{{ item.label }}</span>
+        </button>
+      </div>
     </Transition>
   </Teleport>
 </template>

@@ -3,7 +3,10 @@ import { wcagContrast } from 'culori'
 import { generatePalette, SEED_PRESETS, applyTheme } from '../index'
 
 function rgbStrToCulori(rgbStr: string) {
-  const [r, g, b] = rgbStr.trim().split(/\s+/).map((n) => parseInt(n, 10) / 255)
+  const [r, g, b] = rgbStr
+    .trim()
+    .split(/\s+/)
+    .map((n) => parseInt(n, 10) / 255)
   return { mode: 'rgb' as const, r, g, b }
 }
 

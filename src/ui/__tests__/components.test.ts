@@ -18,6 +18,7 @@ import {
   MTabs,
   MListItem,
   MDialog,
+  MToast,
   MTooltip,
   MHelpTooltip,
   MProgress,
@@ -34,6 +35,11 @@ import {
   MPopover,
   MBrandIcon,
   MLoaderIcon,
+  MPagination,
+  MOverlay,
+  MDrawer,
+  MSearchBar,
+  MStatusBadge,
   useDialog,
   useToast,
   applyTheme,
@@ -151,17 +157,60 @@ describe('UI Components', () => {
     const trigger = wrapper.find('button[role="combobox"]')
     await trigger.trigger('click')
     await nextTick()
+    const listbox = document.body.querySelector('[role="listbox"]')
+    expect(listbox?.classList.contains('m-select-list')).toBe(true)
     const options = document.body.querySelectorAll('[role="option"]')
     expect(options.length).toBeGreaterThanOrEqual(2)
     ;(options[1] as HTMLButtonElement).click()
     await nextTick()
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['b'])
   })
+  it('MSelect renders avatar and badge on trigger and options', async () => {
+    const wrapper = mount(MSelect, {
+      props: {
+        modelValue: 'user1',
+        options: [
+          {
+            label: 'PlayerOne',
+            value: 'user1',
+            avatar: 'data:image/png;base64,avatar1',
+            badge: '离线',
+          },
+          {
+            label: 'PlayerTwo',
+            value: 'user2',
+            avatar: 'data:image/png;base64,avatar2',
+            badge: '微软',
+          },
+        ],
+      },
+    })
+    // Trigger should display selected avatar
+    const triggerImg = wrapper.find('button[role="combobox"] img')
+    expect(triggerImg.exists()).toBe(true)
+    expect(triggerImg.attributes('src')).toBe('data:image/png;base64,avatar1')
+
+    // Open listbox and check options
+    await wrapper.find('button[role="combobox"]').trigger('click')
+    await nextTick()
+    const options = document.body.querySelectorAll('[role="option"]')
+    expect(options[0]?.textContent).toContain('PlayerOne')
+    expect(options[0]?.textContent).toContain('离线')
+    expect(options[1]?.textContent).toContain('PlayerTwo')
+    expect(options[1]?.textContent).toContain('微软')
+    const optionImgs = document.body.querySelectorAll('[role="option"] img')
+    expect(optionImgs.length).toBeGreaterThanOrEqual(2)
+    wrapper.unmount()
+    await nextTick()
+  })
   it('MSelect disabled and empty options state prevents opening and displays placeholder', async () => {
     const wrapper = mount(MSelect, {
       props: {
         modelValue: '',
         options: [],
+      },
+      global: {
+        plugins: [i18n],
       },
     })
     const trigger = wrapper.find('button[role="combobox"]')
@@ -171,7 +220,28 @@ describe('UI Components', () => {
     await nextTick()
     expect(document.body.querySelector('[role="listbox"]')).toBeNull()
   })
+  it('MSelect supports block prop and adaptive trigger width', () => {
+    const defaultWrapper = mount(MSelect, {
+      props: {
+        modelValue: 'a',
+        options: [{ label: 'Option A', value: 'a' }],
+      },
+    })
+    expect(defaultWrapper.classes()).toContain('w-full')
+    expect(defaultWrapper.find('button').classes()).toContain('w-full')
 
+    const inlineWrapper = mount(MSelect, {
+      props: {
+        modelValue: 'a',
+        options: [{ label: 'Option A', value: 'a' }],
+        block: false,
+      },
+    })
+    expect(inlineWrapper.classes()).toContain('w-auto')
+    expect(inlineWrapper.classes()).toContain('max-w-[360px]')
+    expect(inlineWrapper.find('button').classes()).toContain('w-auto')
+    expect(inlineWrapper.find('button').classes()).toContain('min-w-[140px]')
+  })
   it('MSwitch toggles value', async () => {
     const wrapper = mount(MSwitch, {
       props: { modelValue: false, label: 'Toggle' },
@@ -353,12 +423,23 @@ describe('UI Components', () => {
     expect(wrapper.text()).toContain('Check back later')
   })
 
-  it('MSkeleton renders width and height', () => {
+  it('MSkeleton renders width and height and rounded variants', () => {
     const wrapper = mount(MSkeleton, {
       props: { width: '120px', height: '24px' },
     })
     expect(wrapper.attributes('style')).toContain('width: 120px')
     expect(wrapper.attributes('style')).toContain('height: 24px')
+    expect(wrapper.classes()).toContain('rounded-xl')
+
+    const customRounded = mount(MSkeleton, {
+      props: { rounded: '2xl' },
+    })
+    expect(customRounded.classes()).toContain('rounded-2xl')
+
+    const noRounded = mount(MSkeleton, {
+      props: { rounded: false },
+    })
+    expect(noRounded.classes()).not.toContain('rounded-xl')
   })
 
   it('MBadge renders slot content and tonal status classes', () => {
@@ -450,5 +531,195 @@ describe('UI Components', () => {
     })
     expect(filePicker.find('.i-lucide-file-text').exists()).toBe(true)
     expect(filePicker.text()).toContain('Select Zip')
+  })
+
+  it('renders MPagination and handles page navigation', async () => {
+    const wrapper = mount(MPagination, {
+      props: {
+        page: 10,
+        pageCount: 20,
+      },
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    // Page numbers rendered: 1 … 9 10 11 … 20
+    const text = wrapper.text()
+    expect(text).toContain('1')
+    expect(text).toContain('…')
+    expect(text).toContain('9')
+    expect(text).toContain('10')
+    expect(text).toContain('11')
+    expect(text).toContain('20')
+
+    // Click on page 11 button
+    const btn11 = wrapper.findAll('button').find((b) => b.text() === '11')
+    expect(btn11).toBeDefined()
+    await btn11!.trigger('click')
+    expect(wrapper.emitted('update:page')).toEqual([[11]])
+
+    // page=1 prev disabled
+    const page1Wrapper = mount(MPagination, {
+      props: {
+        page: 1,
+        pageCount: 20,
+      },
+      global: {
+        plugins: [i18n],
+      },
+    })
+    const prevBtn = page1Wrapper.findAll('button')[0]
+    expect(prevBtn.attributes('disabled')).toBeDefined()
+
+    // pageCount undefined with hasNext=false -> next disabled
+    const noNextWrapper = mount(MPagination, {
+      props: {
+        page: 2,
+        hasNext: false,
+      },
+      global: {
+        plugins: [i18n],
+      },
+    })
+    const buttons = noNextWrapper.findAll('button')
+    const nextBtn = buttons[buttons.length - 1]
+    expect(nextBtn.attributes('disabled')).toBeDefined()
+
+    // teleport=false renders inline without fixed classes
+    const inlinePagination = mount(MPagination, {
+      props: {
+        page: 1,
+        pageCount: 5,
+        teleport: false,
+      },
+      global: {
+        plugins: [i18n],
+      },
+    })
+    const nav = inlinePagination.find('nav')
+    expect(nav.exists()).toBe(true)
+    expect(nav.classes()).not.toContain('fixed')
+  })
+
+  it('asserts MToast, MDialog and MEmpty contain select-text elements', async () => {
+    const toast = useToast()
+    toast.info('Selectable toast message', 0)
+    const toastWrapper = mount(MToast)
+    await nextTick()
+    expect(toastWrapper.find('.select-text').exists()).toBe(true)
+    expect(toastWrapper.find('.select-text').text()).toContain('Selectable toast message')
+
+    const dialogWrapper = mount(MDialog, {
+      props: { open: true, title: 'Dialog Title' },
+      slots: { default: '<p>Dialog body text</p>' },
+      global: { plugins: [i18n] },
+    })
+    await nextTick()
+    expect(document.body.querySelector('.select-text')).not.toBeNull()
+    dialogWrapper.unmount()
+
+    const emptyWrapper = mount(MEmpty, {
+      props: { title: 'Empty', description: 'Selectable description' },
+    })
+    expect(emptyWrapper.find('p.select-text').exists()).toBe(true)
+    expect(emptyWrapper.find('p.select-text').text()).toBe('Selectable description')
+  })
+
+  it('MOverlay renders into body and handles close', async () => {
+    const wrapper = mount(MOverlay, {
+      props: { open: true },
+      slots: { default: '<div class="overlay-inner">Overlay Content</div>' },
+    })
+    expect(document.body.innerHTML).toContain('Overlay Content')
+    wrapper.unmount()
+  })
+
+  it('MDrawer renders into body and emits confirm/close', async () => {
+    const wrapper = mount(MDrawer, {
+      props: { open: true, title: 'Drawer Title', hideFooter: false },
+      slots: { default: '<p>Drawer Body</p>' },
+      global: { plugins: [i18n] },
+    })
+    expect(document.body.innerHTML).toContain('Drawer Title')
+    expect(document.body.innerHTML).toContain('Drawer Body')
+    wrapper.unmount()
+  })
+
+  it('useDialog confirmDanger sets severity and confirmVariant to danger', async () => {
+    const { confirmDanger, handleConfirm, activeDialog } = useDialog()
+    const promise = confirmDanger({ content: 'Danger prompt' })
+    expect(activeDialog.value?.open).toBe(true)
+    expect(activeDialog.value?.severity).toBe('danger')
+    expect(activeDialog.value?.confirmVariant).toBe('danger')
+    handleConfirm()
+    const res = await promise
+    expect(res).toBe(true)
+  })
+
+  it('MSearchBar handles input, clear, and search events', async () => {
+    const wrapper = mount(MSearchBar, {
+      props: { modelValue: 'hello' },
+      global: { plugins: [i18n] },
+    })
+    expect(wrapper.find('input').element.value).toBe('hello')
+    const clearBtn = wrapper.find('button')
+    if (clearBtn.exists()) {
+      await clearBtn.trigger('click')
+      expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([''])
+      expect(wrapper.emitted('clear')).toHaveLength(1)
+    }
+  })
+
+  it('MStatusBadge renders status with semantic variant and dot', () => {
+    const wrapper = mount(MStatusBadge, {
+      props: { status: 'online' },
+    })
+    expect(wrapper.text()).toContain('online')
+  })
+
+  it('MCard renders skeleton when loading is true', () => {
+    const wrapper = mount(MCard, {
+      props: { loading: true },
+    })
+    expect(wrapper.findAll('.m-skeleton').length).toBeGreaterThan(0)
+  })
+
+  it('MEmpty renders action slot or action button', async () => {
+    const wrapper = mount(MEmpty, {
+      props: { actionText: 'Create New' },
+      global: { plugins: [i18n] },
+    })
+    const button = wrapper.find('button')
+    expect(button.exists()).toBe(true)
+    expect(button.text()).toContain('Create New')
+    await button.trigger('click')
+    expect(wrapper.emitted('action')).toHaveLength(1)
+  })
+
+  it('MListItem supports dense and named slots', () => {
+    const wrapper = mount(MListItem, {
+      props: { dense: true, title: 'Dense Item' },
+      slots: {
+        badges: '<span class="badge-slot">New</span>',
+        actions: '<button class="action-btn">Action</button>',
+      },
+    })
+    expect(wrapper.find('.badge-slot').exists()).toBe(true)
+    expect(wrapper.find('.action-btn').exists()).toBe(true)
+    expect(wrapper.classes()).toContain('px-2.5')
+  })
+
+  it('MInput and MSelect render loading spinner when loading is true', () => {
+    const inputWrapper = mount(MInput, {
+      props: { modelValue: '', loading: true },
+    })
+    expect(inputWrapper.find('.animate-spin').exists()).toBe(true)
+
+    const selectWrapper = mount(MSelect, {
+      props: { modelValue: '1', options: [{ label: '1', value: '1' }], loading: true },
+      global: { plugins: [i18n] },
+    })
+    expect(selectWrapper.find('.animate-spin').exists()).toBe(true)
   })
 })

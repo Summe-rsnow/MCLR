@@ -5,9 +5,9 @@ import { createI18n } from 'vue-i18n'
 import JavaPage from '../JavaPage.vue'
 import { setupMockIpc } from '../../../ipc/mock'
 import { ipcClient } from '../../../ipc/client'
+import { useDialog } from '../../../ui/useDialog'
 import zhCnJava from '../../../locales/zh-CN/java.json'
 import zhCnCommon from '../../../locales/zh-CN/common.json'
-
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: vi.fn(),
 }))
@@ -26,9 +26,29 @@ const i18n = createI18n({
 })
 
 describe('Java feature', () => {
+  let storage: Record<string, string> = {}
+
   beforeEach(() => {
     setActivePinia(createPinia())
     setupMockIpc()
+    storage = {}
+    const mockStorage = {
+      getItem: (k: string) => (k in storage ? storage[k] : null),
+      setItem: (k: string, v: string) => {
+        storage[k] = String(v)
+      },
+      removeItem: (k: string) => {
+        delete storage[k]
+      },
+      clear: () => {
+        storage = {}
+      },
+    }
+    Object.defineProperty(window, 'localStorage', {
+      value: mockStorage,
+      writable: true,
+      configurable: true,
+    })
     vi.clearAllMocks()
   })
 
@@ -53,9 +73,27 @@ describe('Java feature', () => {
     expect(javas.some((j) => j.major === 17)).toBe(true)
   })
 
-  it('adds and removes custom Java via select-to-add dialog', async () => {
+  it('opens Java parent folder when folder button is clicked', async () => {
+    const pathOpenSpy = vi.spyOn(ipcClient, 'pathOpen').mockResolvedValue(undefined)
+    const wrapper = mount(JavaPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+    await flushPromises()
+
+    const folderBtn = wrapper.find('button[title="打开所在文件夹"]')
+    expect(folderBtn.exists()).toBe(true)
+    await folderBtn.trigger('click')
+    await flushPromises()
+
+    expect(pathOpenSpy).toHaveBeenCalled()
+  })
+
+  it('adds and removes custom Java via select-to-add dialog with confirmation', async () => {
     const customPath = 'C:\\Program Files\\Java\\jdk-25\\bin\\javaw.exe'
     vi.mocked(openFileDialog).mockResolvedValue(customPath)
+    const { handleConfirm } = useDialog()
 
     const wrapper = mount(JavaPage, {
       global: {
@@ -72,13 +110,37 @@ describe('Java feature', () => {
     const settings = await ipcClient.settingsGet()
     expect(settings.java?.custom).toContain(customPath)
 
-    // Verify remove button is rendered and functional
-    const removeBtn = wrapper.findAll('button').find((b) => b.text().includes('移除'))
-    expect(removeBtn?.exists()).toBe(true)
-    await removeBtn?.trigger('click')
+    // Verify remove button is rendered and functional with confirmation
+    const removeBtns = wrapper.findAll('button[title="移除"]')
+    expect(removeBtns.length).toBeGreaterThan(0)
+    // The first item in mockJavaInstallations matches customPath
+    const customItemRemoveBtn = removeBtns[0]
+    await customItemRemoveBtn.trigger('click')
+    handleConfirm()
     await flushPromises()
 
     const updatedSettings = await ipcClient.settingsGet()
     expect(updatedSettings.java?.custom).not.toContain(customPath)
+  })
+
+  it('removes detected Java by adding to hiddenJavaPaths', async () => {
+    const { handleConfirm } = useDialog()
+    const wrapper = mount(JavaPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+    await flushPromises()
+
+    const initialCount = wrapper.findAll('button[title="移除"]').length
+    expect(initialCount).toBeGreaterThan(0)
+
+    const firstRemoveBtn = wrapper.findAll('button[title="移除"]')[0]
+    await firstRemoveBtn.trigger('click')
+    handleConfirm()
+    await flushPromises()
+
+    expect(wrapper.findAll('button[title="移除"]').length).toBe(initialCount - 1)
+    expect(localStorage.getItem('mclr.hidden_java_paths')).toBeTruthy()
   })
 })

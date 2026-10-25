@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import MSkeleton from './MSkeleton.vue'
 
 const props = withDefaults(
   defineProps<{
     variant?: 'raised' | 'well' | 'ghost' | 'tinted'
     padding?: 'none' | 'sm' | 'md' | 'lg'
     hoverable?: boolean
+    loading?: boolean
+    skeletonLines?: number
   }>(),
   {
     variant: 'raised',
     padding: 'md',
     hoverable: false,
+    loading: false,
+    skeletonLines: 3,
   },
 )
 
@@ -49,9 +54,19 @@ const variantClass = computed(() => {
     :class="[
       variantClass,
       paddingClass,
-      hoverable ? 'hover:-translate-y-[1px] hover:shadow-2 cursor-pointer' : '',
+      hoverable ? 'm-card-hover hover:-translate-y-[1px] hover:shadow-2 cursor-pointer' : '',
     ]"
   >
-    <slot />
+    <div v-if="loading" class="space-y-3">
+      <MSkeleton height="1.25rem" width="40%" rounded="lg" />
+      <MSkeleton
+        v-for="i in Math.max(0, skeletonLines - 1)"
+        :key="i"
+        height="0.875rem"
+        :width="i === skeletonLines - 1 ? '60%' : '100%'"
+        rounded="md"
+      />
+    </div>
+    <slot v-else />
   </div>
 </template>

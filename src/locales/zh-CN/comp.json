@@ -17,6 +17,9 @@
     "modrinth": "Modrinth",
     "curseforge": "CurseForge"
   },
+  "filter": {
+    "all": "全部"
+  },
   "search": {
     "placeholder": "搜索项目名称、关键词...",
     "category": "分类",
@@ -55,7 +58,9 @@
     "noResults": "未找到匹配的社区资源",
     "loadMore": "加载更多",
     "noMore": "已加载全部内容",
-    "totalHits": "共找到 {count} 个项目"
+    "totalHits": "共找到 {count} 个项目",
+    "failed": "搜索失败",
+    "partialFailed": "{platform} 暂时不可用，仅显示其余来源结果"
   },
   "project": {
     "author": "作者：{author}",
@@ -63,12 +68,19 @@
     "follows": "关注量：{count}",
     "updated": "更新于：{date}",
     "website": "官方主页",
+    "projectHome": "项目主页",
     "favorite": "收藏",
     "unfavorite": "取消收藏",
     "description": "介绍",
     "files": "文件列表",
     "noDescription": "暂无介绍内容",
-    "noFiles": "暂无可用的文件"
+    "noFiles": "暂无可用的文件",
+    "mcmod": "MC 百科",
+    "copyName": "复制名称",
+    "copyLink": "复制链接",
+    "copiedName": "已复制名称",
+    "copiedLink": "已复制链接",
+    "favorited": "已收藏"
   },
   "files": {
     "channel": {
@@ -85,7 +97,11 @@
     "distributionDisabled": "该文件不支持第三方下载",
     "openWebsite": "网页下载",
     "selectedVersionGroup": "所选版本：{loader} {mc}",
-    "otherVersions": "其他版本"
+    "otherVersions": "其他版本",
+    "snapshotGroup": "快照 / 测试版",
+    "filterInstance": "实例筛选",
+    "filterLoader": "模组加载器筛选",
+    "ancient": "远古版"
   },
   "downloadDialog": {
     "title": "下载并安装文件",
@@ -129,11 +145,29 @@
   },
   "favorites": {
     "empty": "暂无收藏的项目",
-    "emptyDesc": "在浏览资源时点击爱心图标即可加入收藏"
+    "emptyDesc": "在浏览资源时点击爱心图标即可加入收藏",
+    "added": "已添加至收藏夹",
+    "removed": "已从收藏夹移除"
   },
   "favorite": {
     "added": "已添加至收藏夹",
     "removed": "已从收藏夹移除"
+  },
+  "quickDownload": {
+    "title": "快速下载",
+    "viewDetails": "查看完整详情",
+    "targetInstance": "下载目标实例",
+    "selectInstanceFirst": "请先选择下载的目标实例",
+    "autoMatchInstance": "匹配所选实例",
+    "filterVersion": "游戏版本",
+    "filterLoader": "加载器",
+    "allVersions": "全部版本",
+    "allLoaders": "全部加载器",
+    "compatibleOnly": "仅显示兼容版本",
+    "downloading": "下载中...",
+    "download": "下载",
+    "noFiles": "暂无匹配所选版本与加载器的文件",
+    "downloadSuccess": "已成功下载 {name} 到 {instance}"
   },
   "downloadForInstance": "为 {instance} 下载",
   "detail": {

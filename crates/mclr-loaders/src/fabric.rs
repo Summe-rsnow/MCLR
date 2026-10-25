@@ -408,7 +408,7 @@ struct LabyModMinecraftVersion {
 #[derive(Deserialize)]
 struct LabyModManifest {
     #[serde(rename = "labyModVersion")]
-    laby_mod_version: String,
+    laby_mod_version: serde_json::Value,
     #[serde(default, rename = "releaseTime")]
     release_time: Option<serde_json::Value>,
     #[serde(default, rename = "minecraftVersions")]
@@ -467,10 +467,15 @@ impl LoaderInstaller for LabyModInstaller {
         }
 
         let release_time = manifest.release_time.map(|v| v.to_string());
+        let version_str = manifest
+            .laby_mod_version
+            .to_string()
+            .trim_matches('"')
+            .to_string();
         Ok(vec![LoaderVersionEntry {
             loader: LoaderKind::LabyMod,
             mc_version: mc_version.to_string(),
-            version: manifest.laby_mod_version,
+            version: version_str,
             stable: true,
             release_time,
         }])
@@ -798,5 +803,33 @@ mod tests {
         let (kind, loaders) = classify_instance(&vanilla, "1.20.1");
         assert_eq!(kind, InstanceKind::OptiFine);
         assert!(loaders.iter().any(|l| l.contains("OptiFine")));
+    }
+
+    #[test]
+    fn test_labymod_manifest_deserialization_integer_or_string() {
+        let json_int = r#"{
+            "labyModVersion": 48,
+            "releaseTime": 1700000000,
+            "minecraftVersions": [{"version": "1.20.1"}]
+        }"#;
+        let manifest: super::LabyModManifest = serde_json::from_str(json_int).unwrap();
+        let ver = manifest
+            .laby_mod_version
+            .to_string()
+            .trim_matches('"')
+            .to_string();
+        assert_eq!(ver, "48");
+
+        let json_str = r#"{
+            "labyModVersion": "4.1.20",
+            "minecraftVersions": []
+        }"#;
+        let manifest_str: super::LabyModManifest = serde_json::from_str(json_str).unwrap();
+        let ver_str = manifest_str
+            .laby_mod_version
+            .to_string()
+            .trim_matches('"')
+            .to_string();
+        assert_eq!(ver_str, "4.1.20");
     }
 }

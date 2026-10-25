@@ -3,10 +3,9 @@ import { isEmptyScenarioActive, mockLatencyMs } from './scenario'
 
 type MockHandlers = Record<string, (args: Record<string, unknown>) => unknown>
 
-const featureMocks = import.meta.glob<{ default: MockHandlers }>(
-  '../features/*/mock.ts',
-  { eager: true },
-)
+const featureMocks = import.meta.glob<{ default: MockHandlers }>('../features/*/mock.ts', {
+  eager: true,
+})
 
 export function setupMockIpc(): void {
   const mockSettings = {
@@ -94,12 +93,12 @@ export function setupMockIpc(): void {
       if (patch && typeof patch === 'object') {
         for (const [key, val] of Object.entries(patch)) {
           if (val && typeof val === 'object' && !Array.isArray(val)) {
-            (mockSettings as Record<string, unknown>)[key] = {
+            ;(mockSettings as Record<string, unknown>)[key] = {
               ...((mockSettings as Record<string, unknown>)[key] as Record<string, unknown>),
               ...val,
             }
           } else {
-            (mockSettings as Record<string, unknown>)[key] = val
+            ;(mockSettings as Record<string, unknown>)[key] = val
           }
         }
       }
@@ -129,6 +128,8 @@ export function setupMockIpc(): void {
       await promise
     }
     const result = handler((args ?? {}) as Record<string, unknown>)
-    return isEmptyScenarioActive() && /_(list|scan)$/.test(cmd) && Array.isArray(result) ? [] : result
+    return isEmptyScenarioActive() && /_(list|scan)$/.test(cmd) && Array.isArray(result)
+      ? []
+      : result
   })
 }

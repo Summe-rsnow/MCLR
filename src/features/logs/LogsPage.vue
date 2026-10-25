@@ -1,91 +1,91 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { useLogsStore } from './store'
 import { useToast } from '../../ui/useToast'
 import { useDialog } from '../../ui/useDialog'
 import { useCrashStore } from '../crash/store'
-import type { LogLevel } from '../../ipc/client'
-import {
-  MPageHeader,
-  MButton,
-  MInput,
-  MSegmented,
-  MSwitch,
-  MSelect,
-  MBadge,
-  MCard,
-  MVirtualList,
-} from '../../ui'
+import { useTasksStore } from '../tasks/store'
+import { ipcClient } from '../../ipc/client'
+import LauncherLogsPanel from './LauncherLogsPanel.vue'
+import GameLogTerminal from './components/GameLogTerminal.vue'
+import TasksManagerPanel from './components/TasksManagerPanel.vue'
+import { MPageHeader, MTabs, MButton, MIconButton } from '../../ui'
 
 const { t } = useI18n()
 const toast = useToast()
 const dialog = useDialog()
 const logsStore = useLogsStore()
 const crashStore = useCrashStore()
+const tasksStore = useTasksStore()
+
+const route = useRoute()
+type TabKey = 'game' | 'launcher' | 'tasks'
+const initialTab = ((): TabKey => {
+  const q = route?.query?.tab
+  if (q === 'launcher' || q === 'tasks') return q
+  return 'game'
+})()
+const activeTab = ref<TabKey>(initialTab)
+
+watch(
+  () => route?.query?.tab,
+  (newTab) => {
+    if (newTab === 'launcher' || newTab === 'tasks' || newTab === 'game') {
+      activeTab.value = newTab
+    }
+  },
+)
+
+const launcherLogsCount = ref(0)
+
+async function fetchLauncherLogsCount() {
+  try {
+    const files = await ipcClient.launcherLogsList()
+    launcherLogsCount.value = files.length
+  } catch {
+    launcherLogsCount.value = 0
+  }
+}
+
+const tabs = computed(() => [
+  { key: 'game', label: t('logs.tabs.game'), icon: 'i-lucide-terminal' },
+  {
+    key: 'launcher',
+    label:
+      launcherLogsCount.value > 0
+        ? `${t('logs.tabs.launcher')} (${launcherLogsCount.value})`
+        : t('logs.tabs.launcher'),
+    icon: 'i-lucide-file-text',
+  },
+  { key: 'tasks', label: t('logs.tabs.tasks'), icon: 'i-lucide-list-checks' },
+])
 
 async function onAnalyzeCrash() {
   const instanceId = logsStore.selectedInstanceId || '1.20.1-vanilla'
   await crashStore.analyzeInstance(instanceId, null, true)
 }
 
-const logContainer = ref<HTMLElement | null>(null)
 const isKilling = ref(false)
 
-const levelOptions = [
-  { label: 'logs.levels.all', value: 'all' },
-  { label: 'logs.levels.info', value: 'info' },
-  { label: 'logs.levels.warn', value: 'warn' },
-  { label: 'logs.levels.error', value: 'error' },
-  { label: 'logs.levels.debug', value: 'debug' },
-]
-
-const processOptions = computed(() => {
-  const options = [{ label: t('logs.allProcesses'), value: 'all' }]
-  for (const proc of logsStore.runningProcesses) {
-    options.push({
-      label: t('logs.processItem', {
-        instance: proc.instanceId,
-        pid: proc.processId,
-      }),
-      value: String(proc.processId),
-    })
-  }
-  return options
-})
-
-const isAtBottom = ref(true)
-const totalCount = computed(() => logsStore.filteredLogs.length)
-
-function onScroll(e: Event) {
-  const target = e.target as HTMLElement
-  isAtBottom.value = target.scrollHeight - target.scrollTop - target.clientHeight < 40
-}
-
-function scrollToBottom() {
-  if (!logsStore.autoScroll || !isAtBottom.value || !logContainer.value) return
-  nextTick(() => {
-    if (logContainer.value && isAtBottom.value) {
-      logContainer.value.scrollTop = logContainer.value.scrollHeight
-    }
-  })
-}
-watch(
-  () => logsStore.logs.length,
-  () => {
-    scrollToBottom()
-  },
-)
-
-
 onMounted(async () => {
-  await logsStore.fetchLogs()
-  await logsStore.startListening()
-  scrollToBottom()
+  await Promise.all([
+    (async () => {
+      await logsStore.fetchLogs()
+      await logsStore.startListening()
+    })(),
+    (async () => {
+      await tasksStore.fetchTasks()
+      await tasksStore.startListening()
+    })(),
+    fetchLauncherLogsCount(),
+  ])
 })
 
 onUnmounted(() => {
   logsStore.stopListening()
+  tasksStore.stopListening()
 })
 
 async function onCopyLogs() {
@@ -126,14 +126,25 @@ async function onExportLogs() {
   }
 }
 
+async function onClearLogs() {
+  const confirmed = await dialog.confirmDanger({
+    title: t('logs.clearConfirmTitle'),
+    content: t('logs.clearConfirmContent'),
+    confirmText: t('logs.clear'),
+    cancelText: t('common.cancel'),
+  })
+  if (!confirmed) return
+  logsStore.clearLogs()
+}
+
 async function onKillClick() {
   const proc = logsStore.activeProcess
   if (!proc) return
 
-  const confirmed = await dialog.confirm({
+  const confirmed = await dialog.confirmDanger({
     title: t('logs.killConfirmTitle'),
     content: t('logs.killConfirmMessage', { pid: proc.processId }),
-    confirmText: t('common.confirm'),
+    confirmText: t('logs.killProcess'),
     cancelText: t('common.cancel'),
   })
 
@@ -155,76 +166,46 @@ async function onKillClick() {
     isKilling.value = false
   }
 }
-
-function getLevelBadgeVariant(level: LogLevel): 'primary' | 'success' | 'warning' | 'danger' | 'neutral' {
-  switch (level.toLowerCase()) {
-    case 'error':
-    case 'fatal':
-      return 'danger'
-    case 'warn':
-      return 'warning'
-    case 'debug':
-      return 'neutral'
-    default:
-      return 'primary'
-  }
-}
-
-function getLineTextColor(level: LogLevel) {
-  switch (level.toLowerCase()) {
-    case 'error':
-    case 'fatal':
-      return 'text-danger'
-    case 'warn':
-      return 'text-warning'
-    case 'debug':
-      return 'text-fg-muted'
-    default:
-      return 'text-fg'
-  }
-}
 </script>
 
 <template>
-  <div class="m-page max-w-none h-full">
+  <div class="w-full h-full flex flex-col p-6 gap-4 box-border overflow-hidden">
     <!-- Header -->
     <MPageHeader
       :title="t('logs.title')"
-      :description="logsStore.activeProcess ? `${t('logs.status.running')} (PID: ${logsStore.activeProcess.processId})` : undefined"
-      icon="i-lucide-terminal"
+      :description="
+        activeTab === 'game' && logsStore.activeProcess
+          ? `${t('logs.status.running')} (PID: ${logsStore.activeProcess.processId})`
+          : activeTab === 'tasks'
+            ? t('tasks.indicator.activeTasks', { count: tasksStore.activeTasksCount })
+            : t('logs.description')
+      "
+      :icon="
+        activeTab === 'tasks'
+          ? 'i-lucide-list-checks'
+          : activeTab === 'launcher'
+            ? 'i-lucide-file-text'
+            : 'i-lucide-terminal'
+      "
     >
-      <template #actions>
+      <template v-if="activeTab === 'game'" #actions>
         <div class="flex flex-wrap items-center gap-2">
-          <MButton
-            variant="tonal"
-            size="sm"
-            icon="i-lucide-copy"
-            @click="onCopyLogs"
-          >
+          <MButton variant="tonal" size="sm" icon="i-lucide-copy" @click="onCopyLogs">
             {{ t('common.copy') }}
           </MButton>
-          <MButton
-            variant="tonal"
-            size="sm"
-            icon="i-lucide-download"
-            @click="onExportLogs"
-          >
+          <MButton variant="tonal" size="sm" icon="i-lucide-download" @click="onExportLogs">
             {{ t('logs.export') }}
           </MButton>
           <MButton
             variant="text"
             size="sm"
             icon="i-lucide-trash-2"
-            @click="logsStore.clearLogs"
+            data-testid="clear-logs-btn"
+            @click="onClearLogs"
           >
             {{ t('logs.clear') }}
           </MButton>
-          <MButton
-            variant="tonal"
-            size="sm"
-            icon="i-lucide-activity"
-            @click="onAnalyzeCrash"
-          >
+          <MButton variant="tonal" size="sm" icon="i-lucide-activity" @click="onAnalyzeCrash">
             {{ t('logs.crashAnalyze') }}
           </MButton>
           <MButton
@@ -233,87 +214,50 @@ function getLineTextColor(level: LogLevel) {
             size="sm"
             icon="i-lucide-power"
             :loading="isKilling"
+            data-testid="kill-process-btn"
             @click="onKillClick"
           >
             {{ t('logs.killProcess') }}
           </MButton>
         </div>
       </template>
+      <template v-else-if="activeTab === 'tasks'" #actions>
+        <div class="flex items-center gap-2">
+          <MButton
+            v-if="tasksStore.tasks.length > 0"
+            variant="tonal"
+            size="sm"
+            @click="tasksStore.clearFinished"
+          >
+            {{ t('tasks.clearFinished') }}
+          </MButton>
+          <MIconButton
+            icon="i-lucide-rotate-cw"
+            size="sm"
+            :title="t('common.refresh')"
+            :loading="tasksStore.loading"
+            @click="tasksStore.fetchTasks"
+          />
+        </div>
+      </template>
     </MPageHeader>
 
-    <!-- Toolbar: Filters, Search, Auto-scroll -->
-    <MCard padding="sm" class="flex flex-wrap items-center justify-between gap-3 shrink-0">
-      <div class="flex flex-wrap items-center gap-3">
-        <MSegmented
-          v-model="logsStore.levelFilter"
-          :options="levelOptions.map(o => ({ label: t(o.label), value: o.value }))"
-          size="sm"
-        />
+    <!-- Tabs navigation -->
+    <MTabs v-model="activeTab" :tabs="tabs" class="shrink-0" />
 
-        <div class="w-64">
-          <MInput
-            v-model="logsStore.searchQuery"
-            :placeholder="t('logs.searchPlaceholder')"
-            icon="i-lucide-search"
-            size="sm"
-            clearable
-          />
-        </div>
+    <!-- Game Logs Tab -->
+    <div v-if="activeTab === 'game'" class="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <GameLogTerminal @switch-tab="activeTab = 'launcher'" />
+    </div>
 
-        <div v-if="logsStore.runningProcesses.length > 1" class="w-56">
-          <MSelect
-            :model-value="logsStore.selectedProcessId != null ? String(logsStore.selectedProcessId) : 'all'"
-            :options="processOptions"
-            size="sm"
-            @update:model-value="(val) => logsStore.selectedProcessId = val === 'all' ? null : Number(val)"
-          />
-        </div>
-      </div>
+    <!-- Launcher Logs Tab -->
+    <div v-else-if="activeTab === 'launcher'" class="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <LauncherLogsPanel @files-loaded="(files) => (launcherLogsCount = files.length)" />
+    </div>
 
-      <div class="flex items-center gap-2 pl-2">
-        <span class="text-xs text-fg-muted">{{ t('logs.autoScroll') }}</span>
-        <MSwitch v-model="logsStore.autoScroll" size="sm" />
-      </div>
-    </MCard>
-
-    <!-- Virtualized Log Output -->
-    <div
-      ref="logContainer"
-      class="flex-1 bg-sunken rounded-xl border border-line p-4 font-mono text-xs overflow-y-auto relative select-text min-h-[300px]"
-      @scroll="onScroll"
-    >
-      <div
-        v-if="totalCount === 0"
-        class="h-full flex items-center justify-center text-fg-muted"
-      >
-        {{ t('logs.empty') }}
-      </div>
-
-      <MVirtualList
-        v-else
-        :items="logsStore.filteredLogs"
-        :item-key="(line, index) => `${line.timestamp}-${index}`"
-        :estimate-size="24"
-        :threshold="60"
-        :scroll-el="logContainer"
-      >
-        <template #item="{ item: line }">
-          <div
-            class="flex items-center gap-2 px-1 py-0.5 hover:bg-sunken whitespace-nowrap overflow-hidden text-ellipsis leading-tight h-[24px]"
-          >
-            <MBadge
-              :variant="getLevelBadgeVariant(line.level)"
-              size="sm"
-              class="uppercase shrink-0 text-[10px] px-1 py-0 h-4"
-            >
-              {{ line.level }}
-            </MBadge>
-            <span :class="[getLineTextColor(line.level), 'select-text truncate']">
-              {{ line.text }}
-            </span>
-          </div>
-        </template>
-      </MVirtualList>
+    <!-- Tasks Tab -->
+    <div v-else-if="activeTab === 'tasks'" class="flex-1 overflow-y-auto px-2 py-3">
+      <TasksManagerPanel />
     </div>
   </div>
 </template>

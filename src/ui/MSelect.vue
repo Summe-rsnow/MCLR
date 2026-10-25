@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 export interface SelectOption {
   label: string
   value: string | number
   icon?: string
+  avatar?: string
+  badge?: string
   disabled?: boolean
 }
 
@@ -15,13 +18,25 @@ const props = withDefaults(
     placeholder?: string
     size?: 'sm' | 'md'
     disabled?: boolean
+    block?: boolean
+    loading?: boolean
   }>(),
   {
     placeholder: '',
     size: 'md',
     disabled: false,
+    block: true,
+    loading: false,
   },
 )
+
+let t = (key: string) => key
+try {
+  const i18n = useI18n()
+  t = i18n.t
+} catch {
+  // safe fallback in unit tests mounted without vue-i18n
+}
 
 const emit = defineEmits<{
   (e: 'update:modelValue', val: string | number): void
@@ -45,15 +60,17 @@ function updatePopupPosition() {
   const spaceBelow = vh - rect.bottom
   const openAbove = spaceBelow < 200 && rect.top > spaceBelow
 
+  const triggerWidth = rect.width
   popupStyle.value = {
     left: `${Math.max(8, rect.left)}px`,
-    width: `${Math.max(120, rect.width)}px`,
+    minWidth: `${Math.max(120, triggerWidth)}px`,
+    maxWidth: '380px',
+    width: 'max-content',
     ...(openAbove
       ? { bottom: `${Math.max(8, vh - rect.top + 4)}px` }
       : { top: `${rect.bottom + 4}px` }),
   }
 }
-
 async function openListbox() {
   if (props.disabled || props.options.length === 0) return
   isOpen.value = true
@@ -163,15 +180,19 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative inline-flex items-center w-full">
+  <div
+    class="relative inline-flex items-center"
+    :class="block ? 'w-full max-w-full' : 'w-auto max-w-[360px] min-w-[140px]'"
+  >
     <button
       ref="triggerRef"
       type="button"
       role="combobox"
       :aria-expanded="isOpen"
-      :disabled="disabled || options.length === 0"
-      class="w-full px-3 inline-flex items-center justify-between gap-2 rounded-lg text-fg border outline-none select-none text-left transition-colors"
+      :disabled="disabled || loading || options.length === 0"
+      class="px-3 inline-flex items-center justify-between gap-2 rounded-lg text-fg border outline-none select-none text-left transition-colors"
       :class="[
+        block ? 'w-full max-w-full' : 'w-auto min-w-[140px] max-w-[360px]',
         size === 'sm' ? 'h-8 text-xs' : 'h-10 text-sm',
         disabled || options.length === 0
           ? 'opacity-60 bg-sunken/40 border-line text-fg-subtle cursor-not-allowed'
@@ -181,15 +202,38 @@ onUnmounted(() => {
       @keydown="handleKeyDown"
     >
       <span class="inline-flex items-center gap-2 min-w-0 truncate">
+        <img
+          v-if="selectedOption?.avatar"
+          :src="selectedOption.avatar"
+          alt=""
+          loading="lazy"
+          decoding="async"
+          class="w-5 h-5 rounded-full object-cover shrink-0"
+        />
         <span
-          v-if="selectedOption?.icon"
+          v-else-if="selectedOption?.icon"
           :class="selectedOption.icon"
           class="w-4 h-4 text-fg-muted shrink-0"
         />
         <span v-if="selectedOption" class="truncate">{{ selectedOption.label }}</span>
-        <span v-else class="truncate text-fg-subtle">{{ placeholder || (options.length === 0 ? '无可用选项' : '未选择') }}</span>
+        <span
+          v-if="selectedOption?.badge"
+          class="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0 font-normal"
+        >
+          {{ selectedOption.badge }}
+        </span>
+        <span v-else-if="!selectedOption" class="truncate text-fg-subtle">
+          {{
+            placeholder || (options.length === 0 ? t('common.noOptions') : t('common.unselected'))
+          }}
+        </span>
       </span>
       <span
+        v-if="loading"
+        class="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin text-fg-muted shrink-0"
+      />
+      <span
+        v-else
         class="i-lucide-chevron-down w-4 h-4 text-fg-muted shrink-0 transition-transform duration-150"
         :class="{ 'rotate-180': isOpen }"
       />
@@ -202,54 +246,79 @@ onUnmounted(() => {
       class="sr-only pointer-events-none"
       @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
     >
-      <option v-for="opt in options" :key="String(opt.value)" :value="opt.value" :disabled="opt.disabled">
+      <option
+        v-for="opt in options"
+        :key="String(opt.value)"
+        :value="opt.value"
+        :disabled="opt.disabled"
+      >
         {{ opt.label }}
       </option>
     </select>
 
     <Teleport to="body">
       <Transition name="m-pop">
-      <div
-        v-if="isOpen"
-        class="fixed z-50 m-overlay m-refract rounded-xl overflow-hidden select-none"
-        :style="popupStyle"
-      >
         <div
-          ref="listRef"
-          role="listbox"
-          data-testid="m-select-listbox"
-          class="max-h-[280px] overflow-y-auto p-1 flex flex-col gap-0.5"
+          v-if="isOpen"
+          class="fixed z-50 m-overlay m-refract rounded-xl overflow-hidden select-none"
+          :style="popupStyle"
         >
-        <button
-          v-for="(opt, idx) in options"
-          :key="String(opt.value)"
-          type="button"
-          role="option"
-          :aria-selected="String(opt.value) === String(modelValue)"
-          :disabled="opt.disabled"
-          class="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg transition-colors text-left cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
-          :class="[
-            String(opt.value) === String(modelValue)
-              ? 'bg-primary-soft text-primary-soft-fg font-medium'
-              : idx === activeIndex
-                ? 'bg-sunken text-fg'
-                : 'text-fg hover:bg-sunken',
-          ]"
-          @mouseenter="activeIndex = idx"
-          @click="selectOption(opt)"
-        >
-          <span class="inline-flex items-center gap-2 min-w-0 truncate">
-            <span v-if="opt.icon" :class="opt.icon" class="w-4 h-4 shrink-0" />
-            <span class="truncate">{{ opt.label }}</span>
-          </span>
-          <span
-            v-if="String(opt.value) === String(modelValue)"
-            class="i-lucide-check w-4 h-4 shrink-0"
-          />
-        </button>
+          <div
+            ref="listRef"
+            role="listbox"
+            data-testid="m-select-listbox"
+            class="m-select-list max-h-[280px] overflow-y-auto p-1 pr-1.5 flex flex-col gap-0.5"
+          >
+            <button
+              v-for="(opt, idx) in options"
+              :key="String(opt.value)"
+              type="button"
+              role="option"
+              :aria-selected="String(opt.value) === String(modelValue)"
+              :disabled="opt.disabled"
+              class="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg transition-colors text-left cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+              :class="[
+                String(opt.value) === String(modelValue)
+                  ? 'bg-primary-soft text-primary-soft-fg font-medium'
+                  : idx === activeIndex
+                    ? 'bg-sunken text-fg'
+                    : 'text-fg hover:bg-sunken',
+              ]"
+              @mouseenter="activeIndex = idx"
+              @click="selectOption(opt)"
+            >
+              <span class="inline-flex items-center gap-2 min-w-0 truncate">
+                <img
+                  v-if="opt.avatar"
+                  :src="opt.avatar"
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  class="w-5 h-5 rounded-full object-cover shrink-0"
+                />
+                <span v-else-if="opt.icon" :class="opt.icon" class="w-4 h-4 shrink-0" />
+                <span class="truncate">{{ opt.label }}</span>
+                <span
+                  v-if="opt.badge"
+                  class="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0 font-normal"
+                >
+                  {{ opt.badge }}
+                </span>
+              </span>
+              <span
+                v-if="String(opt.value) === String(modelValue)"
+                class="i-lucide-check w-4 h-4 shrink-0 ml-auto text-primary"
+              />
+            </button>
+          </div>
         </div>
-      </div>
       </Transition>
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.m-select-list::-webkit-scrollbar-track {
+  margin: 6px 0;
+}
+</style>

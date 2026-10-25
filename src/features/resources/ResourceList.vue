@@ -2,7 +2,6 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { convertFileSrc } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type {
   ResourceEntry,
@@ -11,23 +10,10 @@ import type {
   SchematicInfo,
 } from '../../ipc/client'
 import { ipcClient } from '../../ipc/client'
-import {
-  MButton,
-  MIconButton,
-  MInput,
-  MSelect,
-  MBadge,
-  MSwitch,
-  MCheckbox,
-  MDialog,
-  MEmpty,
-  MSkeleton,
-  MVirtualList,
-  useToast,
-  useDialog,
-} from '../../ui'
-import JarInJarDrawer from './JarInJarDrawer.vue'
-
+import { MButton, MCheckbox, MEmpty, MSkeleton, MVirtualList, useToast, useDialog } from '../../ui'
+import ResourceToolbar from './components/ResourceToolbar.vue'
+import ResourceItemRow from './components/ResourceItemRow.vue'
+import ResourceModals from './components/ResourceModals.vue'
 const props = defineProps<{
   instanceId: string
   kind: ResourceKind
@@ -36,14 +22,16 @@ const props = defineProps<{
 const router = useRouter()
 const { t } = useI18n()
 const toast = useToast()
-const { confirm } = useDialog()
+const { confirmDanger } = useDialog()
 
 // State
 const initialized = ref(false)
 const loading = ref(false)
 const entries = ref<ResourceEntry[]>([])
 const searchQuery = ref('')
-const activeFilter = ref<'all' | 'enabled' | 'disabled' | 'updatable' | 'error' | 'duplicate'>('all')
+const activeFilter = ref<'all' | 'enabled' | 'disabled' | 'updatable' | 'error' | 'duplicate'>(
+  'all',
+)
 const activeSort = ref<'name' | 'fileName' | 'tagCount' | 'createdTime' | 'fileSize'>('name')
 const selectedPaths = ref<Set<string>>(new Set())
 
@@ -256,10 +244,7 @@ async function handleToggle(entry: ResourceEntry) {
   if (entry.enabled) {
     // Check dependents before disabling
     try {
-      const deps = await ipcClient.localModsDependents(
-        props.instanceId,
-        entry.fileName,
-      )
+      const deps = await ipcClient.localModsDependents(props.instanceId, entry.fileName)
       if (deps.length > 0) {
         cascadeTargetEntry.value = entry
         cascadeDependents.value = deps
@@ -277,7 +262,17 @@ async function handleToggle(entry: ResourceEntry) {
 
 async function doToggle(entry: ResourceEntry) {
   try {
-    await ipcClient.resourceToggle(props.instanceId, entry.path)
+    const newPath = await ipcClient.resourceToggle(props.instanceId, entry.path)
+    if (newPath) {
+      entry.path = newPath
+      entry.fileName = newPath.split(/[\\/]/).pop() || entry.fileName
+    } else if (entry.path.endsWith('.disabled')) {
+      entry.path = entry.path.slice(0, -9)
+      entry.fileName = entry.path.split(/[\\/]/).pop() || entry.fileName
+    } else {
+      entry.path = `${entry.path}.disabled`
+      entry.fileName = `${entry.fileName}.disabled`
+    }
     entry.enabled = !entry.enabled
   } catch (err: unknown) {
     toast.danger(String(err))
@@ -288,10 +283,7 @@ async function doToggle(entry: ResourceEntry) {
 async function handleDelete(entry: ResourceEntry, permanent = false) {
   if (props.kind === 'mod') {
     try {
-      const deps = await ipcClient.localModsDependents(
-        props.instanceId,
-        entry.fileName,
-      )
+      const deps = await ipcClient.localModsDependents(props.instanceId, entry.fileName)
       if (deps.length > 0) {
         cascadeTargetEntry.value = entry
         cascadeDependents.value = deps
@@ -304,7 +296,7 @@ async function handleDelete(entry: ResourceEntry, permanent = false) {
     }
   }
 
-  const ok = await confirm({
+  const ok = await confirmDanger({
     title: t('resources.delete.confirmTitle'),
     content: permanent
       ? t('resources.delete.confirmPermanentMessage', { name: entry.title || entry.fileName })
@@ -331,11 +323,7 @@ function handleUpdateClick(entry: ResourceEntry) {
 async function doSingleUpdate(entry: ResourceEntry) {
   if (!entry.latestFile) return
   try {
-    await ipcClient.localModUpdate(
-      props.instanceId,
-      entry.fileName,
-      entry.latestFile,
-    )
+    await ipcClient.localModUpdate(props.instanceId, entry.fileName, entry.latestFile)
     toast.success(t('resources.update.success'))
     updateDialogOpen.value = false
   } catch (err: unknown) {
@@ -377,6 +365,22 @@ async function doBatchUpdate(list: ResourceEntry[]) {
   }
 }
 
+function openJarInJar(entry: ResourceEntry) {
+  selectedJijMod.value = entry
+  jijDrawerOpen.value = true
+}
+
+function handleCascadeConfirm() {
+  if (cascadeTargetEntry.value) {
+    if (cascadeAction.value === 'disable') {
+      doToggle(cascadeTargetEntry.value)
+    } else {
+      handleDelete(cascadeTargetEntry.value)
+    }
+  }
+  cascadeDialogOpen.value = false
+}
+
 // Multi-select & Batch Actions
 function isSelected(path: string): boolean {
   return selectedPaths.value.has(path)
@@ -404,12 +408,11 @@ async function handleBatchDelete() {
   const count = selectedPaths.value.size
   if (count === 0) return
 
-  const ok = await confirm({
+  const ok = await confirmDanger({
     title: t('resources.delete.confirmTitle'),
     content: t('resources.delete.batchConfirmMessage', { count }),
   })
   if (!ok) return
-
   try {
     const paths = Array.from(selectedPaths.value)
     await ipcClient.resourcesDelete(paths, false)
@@ -487,19 +490,6 @@ async function handleSchematicInspect(entry: ResourceEntry) {
 }
 
 // File input / drag & drop
-const fileInputRef = ref<HTMLInputElement | null>(null)
-
-function triggerFileInput() {
-  fileInputRef.value?.click()
-}
-
-async function handleFileInputChange(ev: Event) {
-  const target = ev.target as HTMLInputElement
-  if (!target.files || target.files.length === 0) return
-  // In web environment, files have name/webkitRelativePath
-  // But inside Tauri, standard dialog or dropped paths are used
-  // We can also support native drop
-}
 
 // Keyboard shortcuts (Ctrl+A)
 function handleKeyDown(ev: KeyboardEvent) {
@@ -513,46 +503,34 @@ function handleKeyDown(ev: KeyboardEvent) {
   }
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
-}
-
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown)
   await loadResources()
 
   // Listen for background streaming patches
   try {
-    unlistenPatch = await listen<ResourcesPatchEvent>(
-      'resources://patch',
-      (event) => {
-        if (event.payload.instanceId !== props.instanceId) return
-        for (const patch of event.payload.patches) {
-          const idx = entries.value.findIndex(
-            (e) => e.fileName === patch.fileName,
-          )
-          if (idx !== -1) {
-            const cur = entries.value[idx]
-            if (cur) {
-              if (patch.title !== undefined) cur.title = patch.title
-              if (patch.description !== undefined) cur.description = patch.description
-              if (patch.version !== undefined) cur.version = patch.version
-              if (patch.tags !== undefined && patch.tags !== null) cur.tags = patch.tags
-              if (patch.modId !== undefined) cur.modId = patch.modId
-              if (patch.projectId !== undefined) cur.projectId = patch.projectId
-              if (patch.latestFile !== undefined) cur.latestFile = patch.latestFile
-              if (patch.updateAvailable !== undefined && patch.updateAvailable !== null) {
-                cur.updateAvailable = patch.updateAvailable
-              }
-              if (patch.state !== undefined && patch.state !== null) cur.state = patch.state
+    unlistenPatch = await listen<ResourcesPatchEvent>('resources://patch', (event) => {
+      if (event.payload.instanceId !== props.instanceId) return
+      for (const patch of event.payload.patches) {
+        const idx = entries.value.findIndex((e) => e.fileName === patch.fileName)
+        if (idx !== -1) {
+          const cur = entries.value[idx]
+          if (cur) {
+            if (patch.title !== undefined) cur.title = patch.title
+            if (patch.description !== undefined) cur.description = patch.description
+            if (patch.version !== undefined) cur.version = patch.version
+            if (patch.tags !== undefined && patch.tags !== null) cur.tags = patch.tags
+            if (patch.modId !== undefined) cur.modId = patch.modId
+            if (patch.projectId !== undefined) cur.projectId = patch.projectId
+            if (patch.latestFile !== undefined) cur.latestFile = patch.latestFile
+            if (patch.updateAvailable !== undefined && patch.updateAvailable !== null) {
+              cur.updateAvailable = patch.updateAvailable
             }
+            if (patch.state !== undefined && patch.state !== null) cur.state = patch.state
           }
         }
-      },
-    )
+      }
+    })
   } catch {
     // Ignore in non-Tauri test environments
   }
@@ -563,369 +541,84 @@ onBeforeUnmount(() => {
   if (unlistenPatch) unlistenPatch()
 })
 
-watch(() => props.instanceId, () => {
-  currentRelPath.value = ''
-  loadResources()
-})
+watch(
+  () => props.instanceId,
+  () => {
+    currentRelPath.value = ''
+    loadResources()
+  },
+)
 </script>
 
 <template>
   <div class="flex flex-col h-full space-y-3">
     <!-- Toolbar -->
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="flex flex-wrap items-center gap-2">
-        <MButton variant="primary" size="sm" @click="triggerFileInput">
-          <span class="i-lucide-plus mr-1 w-4 h-4" />
-          {{ t('resources.actions.addFiles') }}
-        </MButton>
-        <input
-          ref="fileInputRef"
-          type="file"
-          multiple
-          class="hidden"
-          @change="handleFileInputChange"
-        />
-
-        <MButton
-          v-if="kind === 'mod' && filterCounts.updatable > 0"
-          variant="tonal"
-          size="sm"
-          @click="handleBatchUpdateClick"
-        >
-          <span class="i-lucide-arrow-up-circle mr-1 w-4 h-4 text-primary" />
-          {{ t('resources.actions.updateAll') }} ({{ filterCounts.updatable }})
-        </MButton>
-
-        <MButton variant="tonal" size="sm" @click="handleOpenFolder">
-          <span class="i-lucide-folder mr-1 w-4 h-4" />
-          {{ t('resources.actions.openFolder') }}
-        </MButton>
-
-        <MButton
-          v-if="kind === 'schematic' && currentRelPath"
-          variant="tonal"
-          size="sm"
-          @click="handleNavigateBack"
-        >
-          <span class="i-lucide-corner-up-left mr-1 w-4 h-4" />
-          {{ t('resources.schematic.folderBack') }}
-        </MButton>
-
-        <MButton variant="tonal" size="sm" @click="handleDownloadMore">
-          <span class="i-lucide-download-cloud mr-1 w-4 h-4" />
-          {{ t('resources.downloadMore') }}
-        </MButton>
-
-        <div class="relative group">
-          <MButton variant="tonal" size="sm">
-            <span class="i-lucide-file-output mr-1 w-4 h-4" />
-            {{ t('resources.actions.export') }}
-          </MButton>
-          <div
-            class="absolute top-full left-0 mt-1 hidden group-hover:flex flex-col bg-panel border border-line rounded-lg shadow-lg z-20 py-1 min-w-32"
-          >
-            <button
-              class="px-3 py-1.5 text-xs text-left hover:bg-sunken text-fg transition"
-              @click="handleExport('txt')"
-            >
-              {{ t('resources.actions.exportTxt') }}
-            </button>
-            <button
-              class="px-3 py-1.5 text-xs text-left hover:bg-sunken text-fg transition"
-              @click="handleExport('csv')"
-            >
-              {{ t('resources.actions.exportCsv') }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="flex items-center gap-2">
-        <div class="w-60">
-          <MInput
-            v-model="searchQuery"
-            icon="i-lucide-search"
-            :placeholder="t('resources.searchPlaceholder')"
-            size="sm"
-            clearable
-          />
-        </div>
-        <div class="w-36">
-          <MSelect
-            v-model="activeSort"
-            :options="sortOptions"
-            size="sm"
-          />
-        </div>
-      </div>
-    </div>
-
-    <!-- Filter Chips -->
-    <div class="flex flex-wrap items-center gap-1.5 text-xs">
-      <button
-        class="px-2.5 py-1 rounded-full border transition"
-        :class="
-          activeFilter === 'all'
-            ? 'bg-primary text-primary-on border-primary font-medium'
-            : 'bg-sunken/40 hover:bg-sunken text-fg-muted border-line'
-        "
-        @click="activeFilter = 'all'"
-      >
-        {{ searchQuery ? t('resources.filter.searchResult') : t('resources.filter.all') }}
-        ({{ filterCounts.all }})
-      </button>
-
-      <button
-        v-if="kind === 'mod' && (filterCounts.enabled > 0 || activeFilter === 'enabled')"
-        class="px-2.5 py-1 rounded-full border transition"
-        :class="
-          activeFilter === 'enabled'
-            ? 'bg-primary text-primary-on border-primary font-medium'
-            : 'bg-sunken/40 hover:bg-sunken text-fg-muted border-line'
-        "
-        @click="activeFilter = 'enabled'"
-      >
-        {{ t('resources.filter.enabled') }} ({{ filterCounts.enabled }})
-      </button>
-
-      <button
-        v-if="kind === 'mod' && (filterCounts.disabled > 0 || activeFilter === 'disabled')"
-        class="px-2.5 py-1 rounded-full border transition"
-        :class="
-          activeFilter === 'disabled'
-            ? 'bg-primary text-primary-on border-primary font-medium'
-            : 'bg-sunken/40 hover:bg-sunken text-fg-muted border-line'
-        "
-        @click="activeFilter = 'disabled'"
-      >
-        {{ t('resources.filter.disabled') }} ({{ filterCounts.disabled }})
-      </button>
-
-      <button
-        v-if="kind === 'mod' && (filterCounts.updatable > 0 || activeFilter === 'updatable')"
-        class="px-2.5 py-1 rounded-full border transition"
-        :class="
-          activeFilter === 'updatable'
-            ? 'bg-primary text-primary-on border-primary font-medium'
-            : 'bg-sunken/40 hover:bg-sunken text-fg-muted border-line'
-        "
-        @click="activeFilter = 'updatable'"
-      >
-        {{ t('resources.filter.updatable') }} ({{ filterCounts.updatable }})
-      </button>
-
-      <button
-        v-if="filterCounts.error > 0 || activeFilter === 'error'"
-        class="px-2.5 py-1 rounded-full border transition"
-        :class="
-          activeFilter === 'error'
-            ? 'bg-danger text-danger-fg border-danger font-medium'
-            : 'bg-sunken/40 hover:bg-sunken text-danger border-line'
-        "
-        @click="activeFilter = 'error'"
-      >
-        {{ t('resources.filter.error') }} ({{ filterCounts.error }})
-      </button>
-
-      <button
-        v-if="filterCounts.duplicate > 0 || activeFilter === 'duplicate'"
-        class="px-2.5 py-1 rounded-full border transition"
-        :class="
-          activeFilter === 'duplicate'
-            ? 'bg-primary text-primary-on border-primary font-medium'
-            : 'bg-sunken/40 hover:bg-sunken text-fg-muted border-line'
-        "
-        @click="activeFilter = 'duplicate'"
-      >
-        {{ t('resources.filter.duplicate') }} ({{ filterCounts.duplicate }})
-      </button>
-
-      <span
-        v-if="kind === 'schematic' && currentRelPath"
-        class="ml-auto text-fg-muted"
-      >
-        {{ t('resources.schematic.currentFolder', { path: currentRelPath }) }}
-      </span>
-    </div>
+    <ResourceToolbar
+      :kind="kind"
+      :search-query="searchQuery"
+      :active-sort="activeSort"
+      :sort-options="sortOptions"
+      :active-filter="activeFilter"
+      :filter-counts="filterCounts"
+      :current-rel-path="currentRelPath"
+      @update:search-query="searchQuery = $event"
+      @update:active-sort="activeSort = $event"
+      @update:active-filter="activeFilter = $event"
+      @batch-update="handleBatchUpdateClick"
+      @open-folder="handleOpenFolder"
+      @navigate-back="handleNavigateBack"
+      @download-more="handleDownloadMore"
+      @export="handleExport"
+    />
 
     <!-- Content / Skeletons / List -->
     <div class="flex-1 min-h-0 overflow-y-auto">
       <div v-if="!initialized && loading" class="space-y-2">
-        <MSkeleton class="h-16 rounded-xl" />
-        <MSkeleton class="h-16 rounded-xl" />
-        <MSkeleton class="h-16 rounded-xl" />
-        <MSkeleton class="h-16 rounded-xl" />
+        <div
+          v-for="n in 5"
+          :key="n"
+          class="h-16 flex items-center justify-between p-3 rounded-xl border border-line bg-panel"
+        >
+          <div class="flex items-center space-x-3 min-w-0 flex-1 mr-3">
+            <MSkeleton width="1.25rem" height="1.25rem" class="rounded shrink-0" />
+            <MSkeleton width="2.5rem" height="2.5rem" class="rounded-lg shrink-0" />
+            <div class="space-y-1.5 min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <MSkeleton :width="n % 2 === 0 ? '11rem' : '8rem'" height="1rem" />
+                <MSkeleton width="3rem" height="1rem" class="rounded-md" />
+              </div>
+              <div class="flex items-center gap-3">
+                <MSkeleton width="4.5rem" height="0.75rem" />
+                <MSkeleton width="6rem" height="0.75rem" />
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2 shrink-0">
+            <MSkeleton width="2rem" height="2rem" class="rounded-lg" />
+            <MSkeleton width="2.25rem" height="1.25rem" class="rounded-full" />
+          </div>
+        </div>
       </div>
 
       <div v-else-if="filteredEntries.length === 0" class="py-12">
-        <MEmpty
-          :title="searchQuery ? t('resources.empty.search') : t(`resources.empty.${kind}`)"
-        />
+        <MEmpty :title="searchQuery ? t('resources.empty.search') : t(`resources.empty.${kind}`)" />
       </div>
 
       <div v-else class="space-y-2">
-        <MVirtualList
-          :items="filteredEntries"
-          item-key="path"
-          :estimate-size="68"
-          :threshold="60"
-        >
+        <MVirtualList :items="filteredEntries" item-key="path" :estimate-size="68" :threshold="60">
           <template #item="{ item: entry }">
-            <div
-              class="flex items-center justify-between p-3 rounded-xl border transition group"
-              :class="[
-                isSelected(entry.path)
-                  ? 'bg-primary/10 border-primary'
-                  : 'bg-panel hover:bg-sunken/60 border-line',
-                !entry.enabled && kind === 'mod' ? 'opacity-70' : '',
-              ]"
-            >
-              <!-- Left: Checkbox, Icon, Title, Tags, Description -->
-              <div class="flex items-center space-x-3 min-w-0 flex-1 mr-3">
-                <MCheckbox
-                  :model-value="isSelected(entry.path)"
-                  @update:model-value="toggleSelect(entry.path)"
-                />
-
-                <!-- Resource Icon / Thumbnail -->
-                <div class="w-10 h-10 rounded-lg overflow-hidden bg-sunken shrink-0 flex items-center justify-center border border-line">
-                  <img
-                    v-if="entry.icon"
-                    :src="convertFileSrc(entry.icon)"
-                    class="w-full h-full object-cover"
-                    loading="lazy"
-                    decoding="async"
-                    alt="pack-icon"
-                  />
-                  <span
-                    v-else-if="entry.isDir"
-                    class="i-lucide-folder text-primary w-5 h-5"
-                  />
-                  <span
-                    v-else-if="kind === 'mod'"
-                    class="i-lucide-puzzle text-primary w-5 h-5"
-                  />
-                  <span
-                    v-else-if="kind === 'resourcePack'"
-                    class="i-lucide-box text-primary w-5 h-5"
-                  />
-                  <span
-                    v-else-if="kind === 'shader'"
-                    class="i-lucide-sparkles text-primary w-5 h-5"
-                  />
-                  <span
-                    v-else
-                    class="i-lucide-file-code text-primary w-5 h-5"
-                  />
-                </div>
-
-                <div
-                  class="min-w-0 flex-1 cursor-pointer"
-                  @click="entry.isDir ? handleNavigateDir(entry) : handleSchematicInspect(entry)"
-                >
-                  <div class="flex items-center space-x-2">
-                    <span
-                      class="font-medium text-sm text-fg truncate"
-                      :class="{ 'line-through': entry.state === 'unavailable' }"
-                    >
-                      {{ entry.title || entry.fileName }}
-                    </span>
-
-                    <span v-if="entry.version" class="text-xs text-fg-muted font-mono">
-                      v{{ entry.version }}
-                    </span>
-
-                    <MBadge
-                      v-if="entry.state === 'unavailable'"
-                      variant="danger"
-                      size="sm"
-                    >
-                      {{ t('resources.status.unavailable') }}
-                    </MBadge>
-
-                    <MBadge
-                      v-if="entry.updateAvailable"
-                      variant="primary"
-                      size="sm"
-                    >
-                      {{ t('resources.status.updateAvailable', { version: entry.latestFile?.name || '' }) }}
-                    </MBadge>
-
-                    <MBadge
-                      v-for="tag in entry.tags"
-                      :key="tag"
-                      variant="neutral"
-                      size="sm"
-                    >
-                      {{ tag }}
-                    </MBadge>
-                  </div>
-
-                  <div class="flex items-center space-x-2 text-xs text-fg-muted truncate mt-0.5">
-                    <span class="truncate">{{ entry.fileName }}</span>
-                    <span>•</span>
-                    <span>{{ formatBytes(entry.size) }}</span>
-                    <span v-if="entry.description" class="truncate">• {{ entry.description }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Right: Hover Actions & Switch -->
-              <div class="flex items-center space-x-2 shrink-0">
-                <!-- Jar-in-Jar action for mods -->
-                <MIconButton
-                  v-if="kind === 'mod'"
-                  icon="i-lucide-package"
-                  size="sm"
-                  variant="text"
-                  :title="t('resources.actions.jarInJar')"
-                  @click="
-                    selectedJijMod = entry;
-                    jijDrawerOpen = true;
-                  "
-                />
-
-                <!-- Schematic info action -->
-                <MIconButton
-                  v-if="kind === 'schematic' && !entry.isDir"
-                  icon="i-lucide-info"
-                  size="sm"
-                  variant="text"
-                  :title="t('resources.actions.info')"
-                  @click="handleSchematicInspect(entry)"
-                />
-
-                <!-- Update arrow button -->
-                <MIconButton
-                  v-if="kind === 'mod' && entry.updateAvailable"
-                  icon="i-lucide-arrow-up-circle"
-                  size="sm"
-                  variant="text"
-                  class="text-primary hover:bg-primary/10"
-                  :title="t('resources.actions.update')"
-                  @click="handleUpdateClick(entry)"
-                />
-
-                <!-- Delete -->
-                <MIconButton
-                  icon="i-lucide-trash-2"
-                  size="sm"
-                  variant="text"
-                  class="text-danger hover:bg-danger/10"
-                  :title="t('resources.actions.delete')"
-                  @click.exact="handleDelete(entry, false)"
-                  @click.shift="handleDelete(entry, true)"
-                />
-
-                <!-- Toggle Switch for mods -->
-                <MSwitch
-                  v-if="kind === 'mod'"
-                  :model-value="entry.enabled"
-                  size="sm"
-                  @update:model-value="handleToggle(entry)"
-                />
-              </div>
-            </div>
+            <ResourceItemRow
+              :entry="entry"
+              :kind="kind"
+              :selected="isSelected(entry.path)"
+              @select="toggleSelect"
+              @navigate-dir="handleNavigateDir"
+              @inspect-schematic="handleSchematicInspect"
+              @jar-in-jar="openJarInJar"
+              @update="handleUpdateClick"
+              @delete="handleDelete"
+              @toggle="handleToggle"
+            />
           </template>
         </MVirtualList>
       </div>
@@ -947,216 +640,48 @@ watch(() => props.instanceId, () => {
       </div>
 
       <div class="flex items-center space-x-2">
-        <MButton
-          v-if="kind === 'mod'"
-          variant="tonal"
-          size="sm"
-          @click="handleBatchToggle(true)"
-        >
+        <MButton v-if="kind === 'mod'" variant="tonal" size="sm" @click="handleBatchToggle(true)">
           <span class="i-lucide-check mr-1 w-4 h-4 text-primary" />
           {{ t('resources.actions.enable') }}
         </MButton>
-        <MButton
-          v-if="kind === 'mod'"
-          variant="tonal"
-          size="sm"
-          @click="handleBatchToggle(false)"
-        >
+        <MButton v-if="kind === 'mod'" variant="tonal" size="sm" @click="handleBatchToggle(false)">
           <span class="i-lucide-x mr-1 w-4 h-4 text-fg-muted" />
           {{ t('resources.actions.disable') }}
         </MButton>
-        <MButton
-          variant="danger"
-          size="sm"
-          @click="handleBatchDelete"
-        >
+        <MButton variant="danger" size="sm" @click="handleBatchDelete">
           <span class="i-lucide-trash mr-1 w-4 h-4" />
           {{ t('resources.actions.delete') }}
         </MButton>
-        <MButton
-          variant="tonal"
-          size="sm"
-          @click="selectedPaths.clear()"
-        >
+        <MButton variant="tonal" size="sm" @click="selectedPaths.clear()">
           {{ t('resources.actions.cancel') }}
         </MButton>
       </div>
     </div>
 
-    <!-- Jar-in-Jar Drawer -->
-    <JarInJarDrawer
-      v-model="jijDrawerOpen"
+    <!-- Modals -->
+    <ResourceModals
       :instance-id="instanceId"
-      :mod="selectedJijMod"
+      :jij-open="jijDrawerOpen"
+      :jij-mod="selectedJijMod"
+      :schematic-open="schematicDialogOpen"
+      :inspecting-schematic="inspectingSchematic"
+      :schematic-detail="schematicDetail"
+      :cascade-open="cascadeDialogOpen"
+      :cascade-action="cascadeAction"
+      :cascade-dependents="cascadeDependents"
+      :cascade-target="cascadeTargetEntry"
+      :update-open="updateDialogOpen"
+      :update-target="updateTargetEntry"
+      :batch-update-risk-open="batchUpdateRiskDialogOpen"
+      :pending-batch-updates="pendingBatchUpdates"
+      @update:jij-open="jijDrawerOpen = $event"
+      @update:schematic-open="schematicDialogOpen = $event"
+      @update:cascade-open="cascadeDialogOpen = $event"
+      @update:update-open="updateDialogOpen = $event"
+      @update:batch-update-risk-open="batchUpdateRiskDialogOpen = $event"
+      @cascade-confirm="handleCascadeConfirm"
+      @single-update="doSingleUpdate"
+      @batch-update="doBatchUpdate"
     />
-
-    <!-- Schematic Inspection Dialog -->
-    <MDialog
-      :open="schematicDialogOpen"
-      :title="t('resources.actions.info')"
-      class="max-w-md"
-      @update:open="schematicDialogOpen = $event"
-      @cancel="schematicDialogOpen = false"
-    >
-      <div v-if="inspectingSchematic" class="space-y-2 py-4">
-        <MSkeleton class="h-6 rounded" />
-        <MSkeleton class="h-6 rounded" />
-        <MSkeleton class="h-6 rounded" />
-      </div>
-      <div v-else-if="schematicDetail" class="space-y-3 py-2 text-xs">
-        <div class="flex justify-between border-b border-line pb-1.5">
-          <span class="text-fg-muted">{{ t('resources.schematic.dimensions') }}</span>
-          <span class="font-mono text-fg font-medium">
-            {{ schematicDetail.size[0] }} × {{ schematicDetail.size[1] }} × {{ schematicDetail.size[2] }}
-          </span>
-        </div>
-        <div class="flex justify-between border-b border-line pb-1.5">
-          <span class="text-fg-muted">{{ t('resources.schematic.volume') }}</span>
-          <span class="font-mono text-fg font-medium">
-            {{ schematicDetail.totalVolume.toLocaleString() }}
-          </span>
-        </div>
-        <div class="flex justify-between border-b border-line pb-1.5">
-          <span class="text-fg-muted">{{ t('resources.schematic.blocks') }}</span>
-          <span class="font-mono text-fg font-medium">
-            {{ schematicDetail.totalBlocks.toLocaleString() }}
-          </span>
-        </div>
-        <div class="flex justify-between border-b border-line pb-1.5">
-          <span class="text-fg-muted">{{ t('resources.schematic.regions') }}</span>
-          <span class="font-mono text-fg font-medium">
-            {{ schematicDetail.regionCount }}
-          </span>
-        </div>
-        <div v-if="schematicDetail.author" class="flex justify-between border-b border-line pb-1.5">
-          <span class="text-fg-muted">{{ t('resources.schematic.author') }}</span>
-          <span class="text-fg font-medium">{{ schematicDetail.author }}</span>
-        </div>
-      </div>
-      <template #footer>
-        <div class="flex justify-end">
-          <MButton variant="tonal" @click="schematicDialogOpen = false">
-            {{ t('resources.actions.confirm') }}
-          </MButton>
-        </div>
-      </template>
-    </MDialog>
-
-    <!-- Cascade Prompt Dialog -->
-    <MDialog
-      :open="cascadeDialogOpen"
-      :title="t('resources.cascade.title')"
-      class="max-w-md"
-      @update:open="cascadeDialogOpen = $event"
-      @cancel="cascadeDialogOpen = false"
-    >
-      <div class="space-y-3 py-2 text-xs">
-        <div class="text-fg">
-          {{
-            cascadeAction === 'disable'
-              ? t('resources.cascade.disableMessage', {
-                  count: cascadeDependents.length,
-                  names: cascadeDependents.join(', '),
-                })
-              : t('resources.cascade.deleteMessage', {
-                  count: cascadeDependents.length,
-                  names: cascadeDependents.join(', '),
-                })
-          }}
-        </div>
-      </div>
-      <template #footer>
-        <div class="flex justify-end space-x-2">
-          <MButton variant="tonal" @click="cascadeDialogOpen = false">
-            {{ t('resources.actions.cancel') }}
-          </MButton>
-          <MButton
-            variant="tonal"
-            @click="
-              if (cascadeTargetEntry) {
-                if (cascadeAction === 'disable') doToggle(cascadeTargetEntry);
-                else handleDelete(cascadeTargetEntry);
-              }
-              cascadeDialogOpen = false;
-            "
-          >
-            {{ t('resources.cascade.onlyThis') }}
-          </MButton>
-          <MButton
-            variant="danger"
-            @click="
-              if (cascadeTargetEntry) {
-                if (cascadeAction === 'disable') doToggle(cascadeTargetEntry);
-                else handleDelete(cascadeTargetEntry);
-              }
-              cascadeDialogOpen = false;
-            "
-          >
-            {{
-              cascadeAction === 'disable'
-                ? t('resources.cascade.cascadeDisable')
-                : t('resources.cascade.cascadeDelete')
-            }}
-          </MButton>
-        </div>
-      </template>
-    </MDialog>
-
-    <!-- Update Confirm Dialog -->
-    <MDialog
-      :open="updateDialogOpen"
-      :title="t('resources.update.confirmTitle')"
-      class="max-w-md"
-      @update:open="updateDialogOpen = $event"
-      @cancel="updateDialogOpen = false"
-    >
-      <div v-if="updateTargetEntry" class="space-y-3 py-2 text-xs">
-        <div class="text-fg">
-          {{
-            t('resources.update.confirmMessage', {
-              name: updateTargetEntry.title || updateTargetEntry.fileName,
-              current: updateTargetEntry.version || 'unknown',
-              latest: updateTargetEntry.latestFile?.name || '',
-            })
-          }}
-        </div>
-      </div>
-      <template #footer>
-        <div class="flex justify-end space-x-2">
-          <MButton variant="tonal" @click="updateDialogOpen = false">
-            {{ t('resources.actions.cancel') }}
-          </MButton>
-          <MButton
-            variant="primary"
-            @click="updateTargetEntry && doSingleUpdate(updateTargetEntry)"
-          >
-            {{ t('resources.actions.update') }}
-          </MButton>
-        </div>
-      </template>
-    </MDialog>
-
-    <!-- Batch Update Risk Dialog -->
-    <MDialog
-      :open="batchUpdateRiskDialogOpen"
-      :title="t('resources.update.warningTitle')"
-      class="max-w-md"
-      @update:open="batchUpdateRiskDialogOpen = $event"
-      @cancel="batchUpdateRiskDialogOpen = false"
-    >
-      <div class="space-y-3 py-2 text-xs text-fg">
-        {{ t('resources.update.warningMessage', { count: pendingBatchUpdates.length }) }}
-      </div>
-      <template #footer>
-        <div class="flex justify-end space-x-2">
-          <MButton variant="tonal" @click="batchUpdateRiskDialogOpen = false">
-            {{ t('resources.actions.cancel') }}
-          </MButton>
-          <MButton variant="primary" @click="doBatchUpdate(pendingBatchUpdates)">
-            {{ t('resources.update.understoodRisk') }}
-          </MButton>
-        </div>
-      </template>
-    </MDialog>
   </div>
 </template>

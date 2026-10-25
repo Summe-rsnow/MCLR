@@ -37,7 +37,8 @@ export const mockAccounts: AccountView[] = [
     selected: false,
     server: null,
     serverName: null,
-    skinHeadDataUrl: null,
+    skinHeadDataUrl:
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAJElEQVQoU2P8z8BQDwAEgAF/QualIQAAAABJRU5ErkJggg==',
     capes: [],
     defaultSkinModel: 'slim',
   },
@@ -104,6 +105,17 @@ const handlers = {
     }
     accountsData.push(newAcc)
     return { ...newAcc }
+  },
+
+  accounts_rename_offline: (args: Record<string, unknown>) => {
+    const id = String(args.id)
+    const username = String(args.username || '').trim()
+    if (!username) throw { code: 'auth.other', detail: 'username cannot be empty' }
+    const acc = accountsData.find((a) => a.id === id)
+    if (!acc) throw { code: 'auth.accountNotFound', detail: id }
+    if (acc.kind !== 'offline') throw { code: 'auth.other', detail: 'not an offline account' }
+    acc.username = username
+    return { ...acc }
   },
 
   accounts_add_microsoft: () => {

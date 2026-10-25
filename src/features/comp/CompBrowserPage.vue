@@ -8,21 +8,22 @@ import { useLaunchStore } from '../launch/store'
 import type { CompType, CompPlatform, CompSort } from '../../ipc/client'
 import {
   MTabs,
-  MInput,
-  MSelect,
-  MButton,
   MIconButton,
   MCard,
   MBadge,
   MEmpty,
   MSkeleton,
   MPageHeader,
+  MPagination,
   MBrandIcon,
   compTypeMeta,
   type CompTypeKey,
   useToast,
 } from '../../ui'
 import type { CompFavoriteEntry, CompProject } from '../../ipc/client'
+import CompSearchToolbar from './components/CompSearchToolbar.vue'
+import CompProjectCard from './components/CompProjectCard.vue'
+import CompQuickDownloadDialog from './components/CompQuickDownloadDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -40,11 +41,17 @@ function isForgeUnder114(mcVer: string): boolean {
   }
   return false
 }
-function applyTargetInstance(inst: { kind?: string; mcVersion?: string; loaders?: string[] } | null, triggerSearch = true) {
+
+function applyTargetInstance(
+  inst: { kind?: string; mcVersion?: string; loaders?: string[] } | null,
+  triggerSearch = true,
+) {
   if (inst) {
     compStore.mcVersion = inst.mcVersion || null
     let primaryLoader: string | null = null
-    const raw = (inst.kind && inst.kind.toLowerCase() !== 'vanilla' ? inst.kind : inst.loaders?.[0])?.toLowerCase()
+    const raw = (
+      inst.kind && inst.kind.toLowerCase() !== 'vanilla' ? inst.kind : inst.loaders?.[0]
+    )?.toLowerCase()
     if (raw) {
       for (const known of ['fabric', 'forge', 'neoforge', 'quilt', 'optifine', 'iris']) {
         if (raw.includes(known)) {
@@ -90,13 +97,21 @@ function clearTargetInstance() {
   }
 }
 
-const targetInstanceOptions = computed(() => [
-  { label: t('comp.search.noTargetInstance'), value: '' },
-  ...instancesStore.instances.map((i) => ({
-    label: `${i.name} (${i.mcVersion})`,
-    value: i.id,
-  })),
-])
+const targetInstanceOptions = computed(() => {
+  const isModTab = compStore.activeTab === 'mod'
+  const availableInstances = isModTab
+    ? instancesStore.instances.filter((i) => i.modable)
+    : instancesStore.instances
+
+  return [
+    { label: t('comp.search.noTargetInstance'), value: '' },
+    ...availableInstances.map((i) => ({
+      label: `${i.name} (${i.mcVersion})`,
+      value: i.id,
+    })),
+  ]
+})
+
 const tabs = computed(() => [
   { key: 'mod', label: t('comp.tabs.mod') },
   { key: 'modpack', label: t('comp.tabs.modpack') },
@@ -112,6 +127,7 @@ const platformOptions = computed(() => [
   { label: t('comp.platform.modrinth'), value: 'modrinth' },
   { label: t('comp.platform.curseforge'), value: 'curseforge' },
 ])
+
 const categoryOptions = computed(() => [
   { label: t('comp.search.categories.all'), value: '' },
   { label: t('comp.search.categories.technology'), value: 'technology' },
@@ -131,7 +147,6 @@ const categoryOptions = computed(() => [
 
 const sortOptions = computed(() => [
   { label: t('comp.search.sorts.default'), value: 'relevance' },
-  { label: t('comp.search.sorts.relevance'), value: 'relevance' },
   { label: t('comp.search.sorts.downloads'), value: 'downloads' },
   { label: t('comp.search.sorts.follows'), value: 'follows' },
   { label: t('comp.search.sorts.newest'), value: 'newest' },
@@ -140,7 +155,11 @@ const sortOptions = computed(() => [
 
 const searchPlaceholder = computed(() => t('comp.search.placeholder'))
 const standardMcVersions = [
+  '26.3',
+  '1.21.4',
+  '1.21.1',
   '1.21',
+  '1.20.6',
   '1.20.4',
   '1.20.2',
   '1.20.1',
@@ -148,6 +167,8 @@ const standardMcVersions = [
   '1.18.2',
   '1.16.5',
   '1.12.2',
+  '1.10.2',
+  '1.8.9',
   '1.7.10',
 ]
 
@@ -189,9 +210,14 @@ const loaderOptions = computed(() => [
   { label: 'Iris', value: 'iris' },
 ])
 
-
 function onTabChange(tabValue: string): void {
   compStore.activeTab = tabValue as CompType | 'favorites'
+  if (tabValue === 'mod') {
+    const curInst = instancesStore.instances.find((i) => i.id === targetInstanceId.value)
+    if (curInst && !curInst.modable) {
+      clearTargetInstance()
+    }
+  }
   const query = route?.query ? { ...route.query } : {}
   if (tabValue === 'favorites') {
     if (router) router.replace({ path: '/comp/favorites', query }).catch(() => {})
@@ -228,6 +254,7 @@ function onSortChange(val: string | number): void {
     compStore.search(true)
   }
 }
+
 function onCategoryChange(val: string | number): void {
   const s = String(val)
   compStore.category = s || null
@@ -263,22 +290,30 @@ function navigateToProject(platform: string, id: string): void {
   if (targetInstanceId.value) q.instance = targetInstanceId.value
   if (router) router.push({ path: `/comp/project/${platform}/${id}`, query: q }).catch(() => {})
 }
+const quickDownloadOpen = ref(false)
+const quickDownloadProject = ref<CompProject | null>(null)
 
-function formatNumber(num: number): string {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M'
+function onProjectCardClick(platform: string, id: string): void {
+  const proj = compStore.hits.find((h) => h.platform === platform && h.id === id)
+  if (proj) {
+    quickDownloadProject.value = proj
+    quickDownloadOpen.value = true
+  } else {
+    navigateToProject(platform, id)
   }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'K'
-  }
-  return num.toString()
+}
+
+function onViewDetails(project: CompProject): void {
+  navigateToProject(project.platform, project.id)
 }
 
 onMounted(async () => {
-  if (instancesStore.instances.length === 0 && typeof instancesStore.fetchInstances === 'function') {
+  if (
+    instancesStore.instances.length === 0 &&
+    typeof instancesStore.fetchInstances === 'function'
+  ) {
     await instancesStore.fetchInstances()
   }
-
 
   let defaultInstId = ''
   if (route?.query?.instance) {
@@ -291,7 +326,9 @@ onMounted(async () => {
 
   if (defaultInstId) {
     targetInstanceId.value = defaultInstId
-    const inst = instancesStore.instances.find((i) => i.id === defaultInstId || i.name === defaultInstId) || null
+    const inst =
+      instancesStore.instances.find((i) => i.id === defaultInstId || i.name === defaultInstId) ||
+      null
     applyTargetInstance(inst, false)
   }
 
@@ -300,7 +337,9 @@ onMounted(async () => {
   }
   await compStore.loadFavorites()
   const path = route?.path || ''
-  const routeType = (route?.params?.type as string) || (path.match(/^\/comp\/(mod|modpack|resourcepack|shader|datapack|world)/)?.[1])
+  const routeType =
+    (route?.params?.type as string) ||
+    path.match(/^\/comp\/(mod|modpack|resourcepack|shader|datapack|world)/)?.[1]
   if (path === '/comp/favorites' || routeType === 'favorites') {
     compStore.activeTab = 'favorites'
   } else if (routeType) {
@@ -318,7 +357,9 @@ watch(
   () => route?.params?.type || route?.path,
   () => {
     const path = route?.path || ''
-    const routeType = (route?.params?.type as string) || (path.match(/^\/comp\/(mod|modpack|resourcepack|shader|datapack|world)/)?.[1])
+    const routeType =
+      (route?.params?.type as string) ||
+      path.match(/^\/comp\/(mod|modpack|resourcepack|shader|datapack|world)/)?.[1]
     if (path === '/comp/favorites' || routeType === 'favorites') {
       if (compStore.activeTab !== 'favorites') {
         compStore.activeTab = 'favorites'
@@ -337,114 +378,45 @@ watch(
 
 <template>
   <div class="m-page">
-    <MPageHeader
-      :title="t('comp.title')"
-      :description="t('comp.subtitle')"
-      icon="i-lucide-store"
-    />
+    <MPageHeader :title="t('comp.title')" :description="t('comp.subtitle')" icon="i-lucide-store" />
 
     <!-- Tabs Bar -->
-    <MTabs
-      :model-value="compStore.activeTab"
-      :tabs="tabs"
-      @update:model-value="onTabChange"
-    />
+    <MTabs :model-value="compStore.activeTab" :tabs="tabs" @update:model-value="onTabChange" />
 
     <!-- Filter Bar (visible when not in favorites tab) -->
-    <MCard
+    <CompSearchToolbar
       v-if="compStore.activeTab !== 'favorites'"
-      padding="sm"
-      class="flex flex-col gap-2.5 sticky top-0 z-10"
-    >
-      <!-- Row 1: Filters -->
-      <div class="flex flex-wrap items-center gap-2.5">
-        <!-- 来源 (Platform) -->
-        <div class="w-32 shrink-0">
-          <MSelect
-            :model-value="compStore.platform"
-            :options="platformOptions"
-            size="sm"
-            @update:model-value="onPlatformChange"
-          />
-        </div>
+      class="-mt-2.5"
+      :comp-type="compStore.compType"
+      v-model:query="compStore.query"
+      :platform="compStore.platform"
+      :category="compStore.category"
+      :sort="compStore.sort"
+      :target-instance-id="targetInstanceId"
+      :mc-version="compStore.mcVersion"
+      :loader="compStore.loader"
+      :loading="compStore.loading"
+      :platform-options="platformOptions"
+      :category-options="categoryOptions"
+      :sort-options="sortOptions"
+      :target-instance-options="targetInstanceOptions"
+      :mc-version-options="mcVersionOptions"
+      :loader-options="loaderOptions"
+      :search-placeholder="searchPlaceholder"
+      @update:platform="onPlatformChange"
+      @update:category="onCategoryChange"
+      @update:sort="onSortChange"
+      @update:target-instance="onTargetInstanceChange"
+      @update:mc-version="onMcVersionChange"
+      @update:loader="onLoaderChange"
+      @refresh="onRefresh"
+      @search="compStore.search(true)"
+    />
 
-        <!-- 标签/分类 (Category) -->
-        <div class="w-36 shrink-0">
-          <MSelect
-            :model-value="compStore.category || ''"
-            :options="categoryOptions"
-            size="sm"
-            @update:model-value="onCategoryChange"
-          />
-        </div>
-
-        <!-- 排序方式 (Sort) + 刷新按钮 -->
-        <div class="flex items-center gap-1.5 shrink-0">
-          <div class="w-36">
-            <MSelect
-              :model-value="compStore.sort"
-              :options="sortOptions"
-              size="sm"
-              @update:model-value="onSortChange"
-            />
-          </div>
-          <MIconButton
-            icon="i-lucide-rotate-cw"
-            size="sm"
-            variant="tonal"
-            :loading="compStore.loading"
-            :title="t('common.refresh')"
-            @click="onRefresh"
-          />
-        </div>
-
-        <!-- 目标实例/版本 (Target Instance / Version) -->
-        <div class="flex items-center gap-1.5 shrink-0">
-          <MSelect
-            :model-value="targetInstanceId"
-            :options="targetInstanceOptions"
-            size="sm"
-            class="w-48"
-            @update:model-value="onTargetInstanceChange"
-          />
-          <MSelect
-            :model-value="compStore.mcVersion || ''"
-            :options="mcVersionOptions"
-            size="sm"
-            class="w-36"
-            @update:model-value="onMcVersionChange"
-          />
-        </div>
-
-        <!-- 加载器 (Loader) -->
-        <div class="w-36 shrink-0">
-          <MSelect
-            :model-value="compStore.loader || ''"
-            :options="loaderOptions"
-            size="sm"
-            @update:model-value="onLoaderChange"
-          />
-        </div>
-      </div>
-
-      <!-- Row 2: Search Bar -->
-      <div class="w-full">
-        <MInput
-          v-model="compStore.query"
-          :placeholder="searchPlaceholder"
-          icon="i-lucide-search"
-          clearable
-          @keydown.enter="compStore.search(true)"
-        />
-      </div>
-    </MCard>
     <!-- Content Area: Favorites Tab -->
     <div v-if="compStore.activeTab === 'favorites'" class="flex-1 space-y-3">
       <div v-if="compStore.favorites.length === 0" class="py-16">
-        <MEmpty
-          :title="t('comp.favorites.empty')"
-          :description="t('comp.favorites.emptyDesc')"
-        />
+        <MEmpty :title="t('comp.favorites.empty')" :description="t('comp.favorites.emptyDesc')" />
       </div>
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <MCard
@@ -460,12 +432,17 @@ watch(
               :src="fav.iconUrl"
               class="w-14 h-14 rounded-xl object-cover bg-sunken shrink-0"
               alt=""
-             loading="lazy" decoding="async"/>
+              loading="lazy"
+              decoding="async"
+            />
             <div
               v-else
               class="w-14 h-14 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
             >
-              <span :class="compTypeMeta[fav.compType as CompTypeKey]?.icon || 'i-lucide-box'" class="w-7 h-7 inline-block" />
+              <span
+                :class="compTypeMeta[fav.compType as CompTypeKey]?.icon || 'i-lucide-box'"
+                class="w-7 h-7 inline-block"
+              />
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
@@ -479,7 +456,11 @@ watch(
               </div>
               <div class="flex items-center space-x-2 mt-1">
                 <MBadge variant="neutral">
-                  <MBrandIcon v-if="fav.platform === 'modrinth' || fav.platform === 'curseforge'" :name="fav.platform" class="w-3.5 h-3.5 mr-1" />
+                  <MBrandIcon
+                    v-if="fav.platform === 'modrinth' || fav.platform === 'curseforge'"
+                    :name="fav.platform"
+                    class="w-3.5 h-3.5 mr-1"
+                  />
                   {{ fav.platform }}
                 </MBadge>
                 <MBadge variant="neutral">{{ fav.compType }}</MBadge>
@@ -495,16 +476,14 @@ watch(
       <!-- Loading Skeletons -->
       <div
         v-if="compStore.loading && compStore.hits.length === 0"
+        data-testid="comp-skeleton"
         class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 py-4"
       >
         <MSkeleton v-for="n in 6" :key="n" class="h-36 rounded-xl" />
       </div>
 
       <!-- Empty State -->
-      <div
-        v-else-if="!compStore.loading && compStore.hits.length === 0"
-        class="py-16"
-      >
+      <div v-else-if="!compStore.loading && compStore.hits.length === 0" class="py-16">
         <MEmpty :title="t('comp.search.noResults')" />
       </div>
 
@@ -514,98 +493,35 @@ watch(
           {{ t('comp.search.totalHits', { count: compStore.totalHits.toString() }) }}
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <MCard
+        <div data-testid="comp-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <CompProjectCard
             v-for="project in compStore.hits"
             :key="project.platform + '-' + project.id"
-            hoverable
-            class="cursor-pointer p-4 flex flex-col justify-between"
-            @click="navigateToProject(project.platform, project.id)"
-          >
-            <div>
-              <div class="flex items-start space-x-3">
-                <img
-                  v-if="project.iconUrl"
-                  :src="project.iconUrl"
-                  class="w-14 h-14 rounded-xl object-cover bg-sunken shrink-0"
-                  alt=""
-                 loading="lazy" decoding="async"/>
-                <div
-                  v-else
-                  class="w-14 h-14 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
-                >
-                  <span :class="compTypeMeta[compStore.activeTab as CompTypeKey]?.icon || 'i-lucide-box'" class="w-7 h-7 inline-block" />
-                </div>
-
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center justify-between">
-                    <h3 class="font-bold text-base text-fg truncate">{{ project.title }}</h3>
-                    <MIconButton
-                      :icon="
-                        compStore.isFavorite(project.platform, project.id)
-                          ? 'i-lucide-heart fill-current text-rose-500'
-                          : 'i-lucide-heart text-fg-muted hover:text-rose-500'
-                      "
-                      size="sm"
-                      :class="
-                        compStore.isFavorite(project.platform, project.id)
-                          ? 'i-lucide-heart fill-current text-rose-500'
-                          : 'i-lucide-heart text-fg-muted hover:text-rose-500'
-                      "
-                      @click.stop="handleToggleFavorite(project)"
-                    />
-                  </div>
-                  <div class="text-xs text-fg-muted mt-0.5 truncate flex items-center gap-1.5">
-                    <MBrandIcon v-if="project.platform === 'modrinth' || project.platform === 'curseforge'" :name="project.platform" class="w-3 h-3 text-fg-muted" />
-                    <span>{{ t('comp.project.author', { author: project.author }) }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <p class="text-xs text-fg-muted mt-3 line-clamp-2 h-8 leading-4">
-                {{ project.summary }}
-              </p>
-            </div>
-
-            <div class="mt-4 pt-3 border-t border-line flex items-center justify-between text-xs text-fg-muted">
-              <div class="flex items-center space-x-3">
-                <span class="flex items-center space-x-1">
-                  <i class="i-lucide-download text-sm" />
-                  <span>{{ formatNumber(project.downloads) }}</span>
-                </span>
-                <span class="flex items-center space-x-1">
-                  <i class="i-lucide-heart text-sm" />
-                  <span>{{ formatNumber(project.follows) }}</span>
-                </span>
-              </div>
-              <div class="flex items-center space-x-1">
-                <MBadge
-                  v-for="cat in project.categories.slice(0, 2)"
-                  :key="cat"
-                  variant="neutral"
-                >
-                  {{ cat }}
-                </MBadge>
-              </div>
-            </div>
-          </MCard>
+            :project="project"
+            :is-favorite="compStore.isFavorite(project.platform, project.id)"
+            :active-tab="compStore.activeTab"
+            @click="onProjectCardClick"
+            @toggle-favorite="handleToggleFavorite"
+          />
         </div>
 
-        <!-- Load More Button -->
-        <div
-          v-if="compStore.hits.length < compStore.totalHits"
-          class="flex justify-center pt-4"
-        >
-          <MButton
-            variant="tonal"
-            :loading="compStore.loading"
-            @click="compStore.loadMore()"
-          >
-            {{ t('comp.search.loadMore') }}
-          </MButton>
-        </div>
+        <!-- Pagination -->
+        <MPagination
+          v-if="compStore.hits.length > 0 && compStore.pageCount > 1"
+          :page="compStore.page"
+          :page-count="compStore.pageCount"
+          :loading="compStore.loading"
+          @update:page="compStore.goToPage"
+        />
       </div>
     </div>
 
+    <!-- Quick Download Modal -->
+    <CompQuickDownloadDialog
+      v-model:open="quickDownloadOpen"
+      :project="quickDownloadProject"
+      :initial-target-instance-id="targetInstanceId"
+      @view-details="onViewDetails"
+    />
   </div>
 </template>

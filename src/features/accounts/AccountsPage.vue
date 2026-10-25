@@ -1,28 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAccountsStore } from './store'
 import type { AccountView, AuthlibProfileView } from '../../ipc/client'
-import {
-  MButton,
-  MIconButton,
-  MCard,
-  MInput,
-  MSelect,
-  MBadge,
-  MAvatar,
-  MDialog,
-  MEmpty,
-  MPageHeader,
-  MBrandIcon,
-  MSkeletonList,
-  getAccountKindMeta,
-  useDialog,
-  useToast,
-} from '../../ui'
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { MButton, MCard, MEmpty, MPageHeader, MSkeleton, useDialog, useToast } from '../../ui'
+import AccountCardItem from './components/AccountCardItem.vue'
+import AccountSkinPanel from './components/AccountSkinPanel.vue'
+import AccountModals from './components/AccountModals.vue'
+
 const { t } = useI18n()
 const accountsStore = useAccountsStore()
-const { confirm } = useDialog()
+const { confirmDanger } = useDialog()
 const toast = useToast()
 
 onMounted(async () => {
@@ -38,18 +27,17 @@ onUnmounted(() => {
 const showAddTypeDialog = ref(false)
 const showAddOfflineDialog = ref(false)
 const showAddAuthlibDialog = ref(false)
+const showRenameDialog = ref(false)
+const renameTargetAccount = ref<AccountView | null>(null)
+const renameNewUsername = ref('')
+const renameLoading = ref(false)
 
 // Offline form state
 const offlineUsername = ref('')
 const offlineUuidMode = ref<'standard' | 'legacy' | 'custom'>('standard')
+const offlineSkinModel = ref<'classic' | 'slim'>('classic')
 const offlineCustomUuid = ref('')
 const offlineError = ref('')
-
-const uuidModeOptions = computed(() => [
-  { label: t('accounts.dialog.uuidModes.standard'), value: 'standard' },
-  { label: t('accounts.dialog.uuidModes.legacy'), value: 'legacy' },
-  { label: t('accounts.dialog.uuidModes.custom'), value: 'custom' },
-])
 
 // Authlib form state
 const authServer = ref('https://littleskin.cn/api/yggdrasil')
@@ -64,11 +52,6 @@ const skinVariant = ref<'classic' | 'slim'>('classic')
 const skinPngPath = ref('')
 const skinUploadLoading = ref(false)
 
-const skinModelOptions = computed(() => [
-  { label: t('accounts.skin.models.classic'), value: 'classic' },
-  { label: t('accounts.skin.models.slim'), value: 'slim' },
-])
-
 function openAddDialog() {
   showAddTypeDialog.value = true
 }
@@ -77,6 +60,7 @@ function startAddOffline() {
   showAddTypeDialog.value = false
   offlineUsername.value = ''
   offlineUuidMode.value = 'standard'
+  offlineSkinModel.value = 'classic'
   offlineCustomUuid.value = ''
   offlineError.value = ''
   showAddOfflineDialog.value = true
@@ -90,22 +74,25 @@ async function handleAddOffline() {
   }
   if (offlineUuidMode.value === 'custom') {
     const rawUuid = offlineCustomUuid.value.trim()
-    const cleanUuid = rawUuid.replace(/-/g, '')
-    if (cleanUuid.length !== 32 || !/^[0-9a-fA-F]+$/.test(cleanUuid)) {
+    const uuidClean = rawUuid.replace(/-/g, '')
+    if (uuidClean.length !== 32 || !/^[0-9a-fA-F]{32}$/.test(uuidClean)) {
       offlineError.value = t('accounts.dialog.validation.uuidInvalid')
       return
     }
   }
 
   try {
-    await accountsStore.addOffline(
+    await accountsStore.addOfflineAccount(
       username,
       offlineUuidMode.value,
       offlineUuidMode.value === 'custom' ? offlineCustomUuid.value.trim() : undefined,
+      offlineSkinModel.value,
     )
     showAddOfflineDialog.value = false
+    toast.success(t('accounts.dialog.addSuccess'))
   } catch (err: unknown) {
-    const msg = err && typeof err === 'object' && 'code' in err ? String(err.code) : 'unknown'
+    const msg =
+      err && typeof err === 'object' && 'message' in err ? String(err.message) : t('error.unknown')
     offlineError.value = msg
   }
 }
@@ -115,17 +102,14 @@ async function startAddMicrosoft() {
   try {
     await accountsStore.addMicrosoft()
   } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'notConfigured') {
-      toast.danger(t('error.notConfigured', { what: 'Microsoft Client ID' }))
-    } else {
-      toast.danger(t('error.unknown'))
-    }
+    const msg =
+      err && typeof err === 'object' && 'message' in err ? String(err.message) : t('error.unknown')
+    toast.danger(msg)
   }
 }
 
 function startAddAuthlib() {
   showAddTypeDialog.value = false
-  authServer.value = 'https://littleskin.cn/api/yggdrasil'
   authAccount.value = ''
   authPassword.value = ''
   authError.value = ''
@@ -133,15 +117,18 @@ function startAddAuthlib() {
 }
 
 async function handleAddAuthlib() {
-  if (!authServer.value.trim()) {
+  const server = authServer.value.trim()
+  const account = authAccount.value.trim()
+  const password = authPassword.value
+  if (!server) {
     authError.value = t('accounts.dialog.validation.serverRequired')
     return
   }
-  if (!authAccount.value.trim()) {
+  if (!account) {
     authError.value = t('accounts.dialog.validation.accountRequired')
     return
   }
-  if (!authPassword.value.trim()) {
+  if (!password) {
     authError.value = t('accounts.dialog.validation.passwordRequired')
     return
   }
@@ -149,23 +136,35 @@ async function handleAddAuthlib() {
   authLoading.value = true
   authError.value = ''
   try {
-    await accountsStore.addAuthlib(
-      authServer.value.trim(),
-      authAccount.value.trim(),
-      authPassword.value,
-    )
+    await accountsStore.addAuthlib(server, account, password)
     showAddAuthlibDialog.value = false
+    toast.success(t('accounts.dialog.addSuccess'))
   } catch (err: unknown) {
-    const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : 'auth.authlib.loginFailed'
-    authError.value = t(`error.${code}`) || code
+    const msg =
+      err && typeof err === 'object' && 'message' in err ? String(err.message) : t('error.unknown')
+    authError.value = msg
   } finally {
     authLoading.value = false
   }
 }
 
-async function handleSelectProfile(p: AuthlibProfileView) {
+function copyDeviceCode() {
+  if (accountsStore.deviceCodeData) {
+    navigator.clipboard.writeText(accountsStore.deviceCodeData.userCode)
+    toast.success(t('accounts.dialog.copiedCode'))
+  }
+}
+
+async function openDeviceUrl() {
+  if (accountsStore.deviceCodeData) {
+    await openUrl(accountsStore.deviceCodeData.verificationUri)
+  }
+}
+
+async function handleSelectProfile(profile: AuthlibProfileView) {
   try {
-    await accountsStore.selectProfile(p.id)
+    await accountsStore.selectProfile(profile.id)
+    toast.success(t('accounts.actions.profileSelected', { name: profile.name }))
   } catch {
     toast.danger(t('error.unknown'))
   }
@@ -179,14 +178,14 @@ async function handleSelectAccount(acc: AccountView) {
 async function handleRefreshAccount(acc: AccountView) {
   try {
     await accountsStore.refreshAccount(acc.id)
-    toast.success(t('common.refresh'))
+    toast.success(t('accounts.actions.refreshSuccess'))
   } catch {
     toast.danger(t('error.unknown'))
   }
 }
 
 async function handleRemoveAccount(acc: AccountView) {
-  const confirmed = await confirm({
+  const confirmed = await confirmDanger({
     title: t('accounts.actions.deleteConfirmTitle'),
     content: t('accounts.actions.deleteConfirmMessage', { name: acc.username }),
   })
@@ -195,34 +194,50 @@ async function handleRemoveAccount(acc: AccountView) {
   }
 }
 
-function copyDeviceCode() {
-  if (accountsStore.deviceCodeData?.userCode) {
-    navigator.clipboard?.writeText(accountsStore.deviceCodeData.userCode)
-    toast.success(t('common.copied'))
+async function handleCopyUuid(acc: AccountView) {
+  try {
+    await navigator.clipboard.writeText(acc.uuid)
+    toast.success(t('accounts.actions.copyUuidSuccess'))
+  } catch {
+    toast.danger(t('accounts.actions.copyUuidFailed'))
   }
 }
 
-async function openDeviceUrl() {
-  if (accountsStore.deviceCodeData?.verificationUri) {
-    try {
-      const opener = await import('@tauri-apps/plugin-opener')
-      await opener.openUrl(accountsStore.deviceCodeData.verificationUri)
-    } catch {
-      window.open(accountsStore.deviceCodeData.verificationUri, '_blank')
-    }
+function openRenameDialog(acc: AccountView) {
+  renameTargetAccount.value = acc
+  renameNewUsername.value = acc.username
+  showRenameDialog.value = true
+}
+
+async function handleRenameConfirm() {
+  if (!renameTargetAccount.value) return
+  const newName = renameNewUsername.value.trim()
+  if (!newName) return
+  renameLoading.value = true
+  try {
+    await accountsStore.renameOffline(renameTargetAccount.value.id, newName)
+    showRenameDialog.value = false
+    toast.success(t('accounts.actions.renameSuccess'))
+  } catch (err: unknown) {
+    const msg =
+      err && typeof err === 'object' && 'message' in err ? String(err.message) : t('error.unknown')
+    toast.danger(msg)
+  } finally {
+    renameLoading.value = false
   }
 }
 
 function openSkinUpload() {
   skinPngPath.value = ''
-  skinVariant.value = (accountsStore.selectedAccount?.defaultSkinModel as 'classic' | 'slim') || 'classic'
+  skinVariant.value = 'classic'
   showSkinUploadDialog.value = true
 }
 
 async function handleSkinUpload() {
-  if (!accountsStore.selectedAccount || !skinPngPath.value.trim()) return
+  if (!skinPngPath.value.trim()) return
   skinUploadLoading.value = true
   try {
+    if (!accountsStore.selectedAccount) return
     await accountsStore.uploadSkin(
       accountsStore.selectedAccount.id,
       skinVariant.value,
@@ -230,55 +245,80 @@ async function handleSkinUpload() {
     )
     showSkinUploadDialog.value = false
     toast.success(t('accounts.skin.uploadSuccess'))
-  } catch {
-    toast.danger(t('error.auth.skin.uploadFailed'))
+  } catch (err: unknown) {
+    const msg =
+      err && typeof err === 'object' && 'message' in err ? String(err.message) : t('error.unknown')
+    toast.danger(msg)
   } finally {
     skinUploadLoading.value = false
   }
 }
 
 async function handleSelectCape(capeId: string | null) {
-  if (!accountsStore.selectedAccount) return
   try {
+    if (!accountsStore.selectedAccount) return
     await accountsStore.setCape(accountsStore.selectedAccount.id, capeId)
+    toast.success(t('accounts.skin.capeChanged'))
   } catch {
-    toast.danger(t('error.auth.cape.setFailed'))
+    toast.danger(t('error.unknown'))
   }
 }
 
-async function openCloset(serverUrl?: string | null) {
-  if (!serverUrl) return
-  const closetUrl = `${serverUrl.replace(/\/+$/, '')}/user/closet`
-  try {
-    const opener = await import('@tauri-apps/plugin-opener')
-    await opener.openUrl(closetUrl)
-  } catch {
-    window.open(closetUrl, '_blank')
-  }
+async function openCloset(serverUrl: string) {
+  const closetUrl = serverUrl.replace(/\/api\/yggdrasil\/?$/, '') + '/user/closet'
+  await openUrl(closetUrl)
 }
 </script>
 
 <template>
   <div class="m-page">
-    <!-- Header -->
     <MPageHeader
       :title="t('accounts.title')"
-      :description="t('accounts.emptySubtitle')"
-      icon="i-lucide-user-round"
+      :description="t('accounts.subtitle')"
+      icon="i-lucide-users"
     >
       <template #actions>
-        <MButton variant="primary" icon="i-lucide-plus" @click="openAddDialog">
+        <MButton variant="primary" size="md" icon="i-lucide-plus" @click="openAddDialog">
           {{ t('accounts.addAccount') }}
         </MButton>
       </template>
     </MPageHeader>
-    <!-- Loading Skeleton State -->
-    <div v-if="!accountsStore.initialized && accountsStore.loading" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <div class="lg:col-span-7">
-        <MSkeletonList :rows="3" variant="card" />
+
+    <!-- Skeleton Loading State -->
+    <div
+      v-if="
+        (!accountsStore.initialized && accountsStore.loading) ||
+        (accountsStore.loading && accountsStore.accounts.length === 0)
+      "
+      data-testid="accounts-skeleton"
+      class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"
+    >
+      <div class="lg:col-span-7 flex flex-col gap-3">
+        <MCard v-for="n in 3" :key="n" class="p-4">
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <MSkeleton width="2.5rem" height="2.5rem" class="rounded-full" />
+              <div class="space-y-1.5">
+                <MSkeleton width="6rem" height="1.125rem" />
+                <MSkeleton width="12rem" height="0.875rem" />
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              <MSkeleton width="1.75rem" height="1.75rem" class="rounded-lg" />
+              <MSkeleton width="1.75rem" height="1.75rem" class="rounded-lg" />
+            </div>
+          </div>
+        </MCard>
       </div>
-      <div class="lg:col-span-5">
-        <MSkeletonList :rows="1" variant="card" />
+      <div class="lg:col-span-5 flex flex-col gap-4">
+        <MCard class="p-6 h-[360px] flex flex-col items-center justify-center gap-4">
+          <MSkeleton width="6rem" height="6rem" class="rounded-full" />
+          <div class="space-y-2 flex flex-col items-center">
+            <MSkeleton width="8rem" height="1.25rem" />
+            <MSkeleton width="5rem" height="0.875rem" />
+          </div>
+          <MSkeleton width="75%" height="2.25rem" class="rounded-lg mt-2" />
+        </MCard>
       </div>
     </div>
 
@@ -297,435 +337,62 @@ async function openCloset(serverUrl?: string | null) {
 
     <!-- Main Grid: Accounts List & Skin Panel -->
     <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      <!-- Accounts List (Left 7 Cols) -->
       <TransitionGroup name="m-list" tag="div" class="lg:col-span-7 flex flex-col gap-3">
-        <MCard
+        <AccountCardItem
           v-for="(acc, index) in accountsStore.accounts"
           :key="acc.id"
-          hoverable
-          :variant="acc.selected ? 'tinted' : 'raised'"
-          class="p-4 cursor-pointer m-stagger"
-          :style="{ '--i': index }"
-          @click="handleSelectAccount(acc)"
-        >
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3 min-w-0">
-              <MAvatar
-                :src="acc.skinHeadDataUrl ?? undefined"
-                :name="acc.username"
-                :size="40"
-              />
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="font-medium text-fg truncate">
-                    {{ acc.username }}
-                  </span>
-                  <MBadge
-                    :variant="acc.kind === 'microsoft' ? 'primary' : 'neutral'"
-                    size="sm"
-                  >
-                    <MBrandIcon v-if="acc.kind === 'microsoft'" name="microsoft" class="w-3.5 h-3.5 mr-1" />
-                    <span v-else :class="getAccountKindMeta(acc.kind).icon" class="w-3.5 h-3.5 mr-1 inline-block" />
-                    {{ t(`accounts.types.${acc.kind}`) }}
-                  </MBadge>
-                  <MBadge v-if="acc.selected" variant="success" size="sm">
-                    {{ t('accounts.status.current') }}
-                  </MBadge>
-                </div>
-                <div class="text-xs text-fg-muted truncate mt-0.5">
-                  <span v-if="acc.serverName">{{ acc.serverName }} · </span>
-                  <span>{{ acc.uuid }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-1 shrink-0" @click.stop>
-              <MIconButton
-                icon="i-lucide-refresh-cw"
-                size="sm"
-                variant="text"
-                :title="t('accounts.actions.refresh')"
-                @click="handleRefreshAccount(acc)"
-              />
-              <MIconButton
-                icon="i-lucide-trash-2"
-                size="sm"
-                variant="text"
-                class="text-danger"
-                :title="t('accounts.actions.delete')"
-                @click="handleRemoveAccount(acc)"
-              />
-            </div>
-          </div>
-        </MCard>
+          :account="acc"
+          :index="index"
+          @select="handleSelectAccount"
+          @copy-uuid="handleCopyUuid"
+          @rename="openRenameDialog"
+          @refresh="handleRefreshAccount"
+          @remove="handleRemoveAccount"
+        />
       </TransitionGroup>
 
-      <!-- Skin & Cape Panel (Right 5 Cols) -->
       <div class="lg:col-span-5 flex flex-col gap-4">
-        <MCard class="p-5 flex flex-col gap-4">
-          <h2 class="text-lg font-semibold text-fg">
-            {{ t('accounts.skin.title') }}
-          </h2>
-
-          <template v-if="accountsStore.selectedAccount">
-            <!-- 2D Head Preview -->
-            <div class="flex items-center gap-4 p-4 rounded-xl bg-sunken">
-              <div class="w-16 h-16 rounded-lg bg-raised flex items-center justify-center border border-line overflow-hidden">
-                <img
-                  v-if="accountsStore.selectedAccount.skinHeadDataUrl"
-                  :src="accountsStore.selectedAccount.skinHeadDataUrl"
-                  alt="Skin Head"
-                  class="w-full h-full object-contain image-rendering-pixelated"
-                 loading="lazy" decoding="async"/>
-                <MAvatar
-                  v-else
-                  :name="accountsStore.selectedAccount.username"
-                  :size="64"
-                />
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-medium text-fg truncate">
-                  {{ accountsStore.selectedAccount.username }}
-                </div>
-                <div class="text-xs text-fg-muted mt-1">
-                  {{ t('accounts.skin.model') }}:
-                  {{ t(`accounts.skin.models.${accountsStore.selectedAccount.defaultSkinModel || 'classic'}`) }}
-                </div>
-              </div>
-            </div>
-
-            <!-- Skin Actions -->
-            <div class="flex flex-col gap-2">
-              <MButton
-                v-if="accountsStore.selectedAccount.kind !== 'offline'"
-                variant="tonal"
-                icon="i-lucide-upload"
-                @click="openSkinUpload"
-              >
-                {{ t('accounts.skin.upload') }}
-              </MButton>
-              <MButton
-                v-if="accountsStore.selectedAccount.kind === 'authlib' && accountsStore.selectedAccount.server"
-                variant="text"
-                icon="i-lucide-external-link"
-                @click="openCloset(accountsStore.selectedAccount.server)"
-              >
-                {{ t('accounts.actions.openCloset') }}
-              </MButton>
-              <p v-if="accountsStore.selectedAccount.kind === 'offline'" class="text-xs text-fg-muted">
-                {{ t('accounts.skin.unsupportedOffline') }}
-              </p>
-            </div>
-
-            <!-- Cape Selection (for accounts that have capes) -->
-            <div v-if="accountsStore.selectedAccount.capes.length > 0" class="flex flex-col gap-2 mt-2">
-              <div class="text-sm font-medium text-fg">
-                {{ t('accounts.skin.capes') }}
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <div
-                  class="p-2 rounded-lg border text-center cursor-pointer text-xs transition"
-                  :class="[
-                    !accountsStore.selectedAccount.capes.some((c) => c.active)
-                      ? 'border-primary bg-primary-soft text-primary font-medium'
-                      : 'border-line text-fg-muted hover:bg-sunken',
-                  ]"
-                  @click="handleSelectCape(null)"
-                >
-                  {{ t('accounts.skin.noneCape') }}
-                </div>
-                <div
-                  v-for="cape in accountsStore.selectedAccount.capes"
-                  :key="cape.id"
-                  class="p-2 rounded-lg border text-center cursor-pointer text-xs truncate transition"
-                  :class="[
-                    cape.active
-                      ? 'border-primary bg-primary-soft text-primary font-medium'
-                      : 'border-line text-fg hover:bg-sunken',
-                  ]"
-                  @click="handleSelectCape(cape.id)"
-                >
-                  {{ cape.alias }}
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <MEmpty v-else :description="t('accounts.skin.noAccount')" />
-        </MCard>
+        <AccountSkinPanel
+          :selected-account="accountsStore.selectedAccount"
+          @upload-skin="openSkinUpload"
+          @open-closet="openCloset"
+          @select-cape="handleSelectCape"
+        />
       </div>
     </div>
 
-    <!-- Dialog 1: Add Account Type Picker -->
-    <MDialog
-      v-model:open="showAddTypeDialog"
-      :title="t('accounts.addAccount')"
-    >
-      <div class="flex flex-col gap-2.5 py-2">
-        <button
-          type="button"
-          class="w-full flex items-center px-4 py-3 rounded-xl border border-line/60 bg-surface hover:bg-sunken/60 active:scale-[0.99] transition-all cursor-pointer text-left select-none outline-none group"
-          @click="startAddMicrosoft"
-        >
-          <div class="w-10 h-10 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 text-primary">
-            <MBrandIcon name="microsoft" class="w-5 h-5" />
-          </div>
-          <div class="flex flex-col text-left min-w-0 ml-3.5">
-            <span class="text-sm font-semibold text-fg">{{ t('accounts.types.microsoft') }}</span>
-            <span class="text-xs text-fg-muted mt-0.5">OAuth 2.0 / Xbox Live</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          class="w-full flex items-center px-4 py-3 rounded-xl border border-line/60 bg-surface hover:bg-sunken/60 active:scale-[0.99] transition-all cursor-pointer text-left select-none outline-none group"
-          @click="startAddOffline"
-        >
-          <div class="w-10 h-10 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 text-fg-muted group-hover:text-fg transition-colors">
-            <span class="i-lucide-user-round w-5 h-5 inline-block" />
-          </div>
-          <div class="flex flex-col text-left min-w-0 ml-3.5">
-            <span class="text-sm font-semibold text-fg">{{ t('accounts.types.offline') }}</span>
-            <span class="text-xs text-fg-muted mt-0.5">Standard MD5 / Custom UUID</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          class="w-full flex items-center px-4 py-3 rounded-xl border border-line/60 bg-surface hover:bg-sunken/60 active:scale-[0.99] transition-all cursor-pointer text-left select-none outline-none group"
-          @click="startAddAuthlib"
-        >
-          <div class="w-10 h-10 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 text-fg-muted group-hover:text-fg transition-colors">
-            <span class="i-lucide-shield-check w-5 h-5 inline-block" />
-          </div>
-          <div class="flex flex-col text-left min-w-0 ml-3.5">
-            <span class="text-sm font-semibold text-fg">{{ t('accounts.types.authlib') }}</span>
-            <span class="text-xs text-fg-muted mt-0.5">Authlib-Injector / LittleSkin</span>
-          </div>
-        </button>
-      </div>
-      <template #footer>
-        <MButton variant="text" @click="showAddTypeDialog = false">
-          {{ t('common.cancel') }}
-        </MButton>
-      </template>
-    </MDialog>
-
-    <!-- Dialog 2: Add Offline Dialog -->
-    <MDialog
-      v-model:open="showAddOfflineDialog"
-      :title="t('accounts.dialog.offlineTitle')"
-    >
-      <div class="flex flex-col gap-4 py-2">
-        <div>
-          <label class="text-xs font-medium text-fg-muted mb-1 block">
-            {{ t('accounts.dialog.username') }}
-          </label>
-          <MInput
-            v-model="offlineUsername"
-            :placeholder="t('accounts.dialog.usernamePlaceholder')"
-          />
-        </div>
-
-        <div>
-          <label class="text-xs font-medium text-fg-muted mb-1 block">
-            {{ t('accounts.dialog.uuidMode') }}
-          </label>
-          <MSelect
-            v-model="offlineUuidMode"
-            :options="uuidModeOptions"
-          />
-        </div>
-
-        <div v-if="offlineUuidMode === 'custom'">
-          <label class="text-xs font-medium text-fg-muted mb-1 block">
-            {{ t('accounts.dialog.customUuid') }}
-          </label>
-          <MInput
-            v-model="offlineCustomUuid"
-            :placeholder="t('accounts.dialog.customUuidPlaceholder')"
-          />
-        </div>
-
-        <div v-if="offlineError" class="text-xs text-danger">
-          {{ offlineError }}
-        </div>
-      </div>
-      <template #footer>
-        <MButton variant="text" @click="showAddOfflineDialog = false">
-          {{ t('common.cancel') }}
-        </MButton>
-        <MButton variant="primary" @click="handleAddOffline">
-          {{ t('common.confirm') }}
-        </MButton>
-      </template>
-    </MDialog>
-
-    <!-- Dialog 3: Add Authlib Dialog -->
-    <MDialog
-      v-model:open="showAddAuthlibDialog"
-      :title="t('accounts.dialog.authlibTitle')"
-    >
-      <div class="flex flex-col gap-4 py-2">
-        <div>
-          <label class="text-xs font-medium text-fg-muted mb-1 block">
-            {{ t('accounts.dialog.authServer') }}
-          </label>
-          <MInput
-            v-model="authServer"
-            :placeholder="t('accounts.dialog.authServerPlaceholder')"
-          />
-        </div>
-
-        <div>
-          <label class="text-xs font-medium text-fg-muted mb-1 block">
-            {{ t('accounts.dialog.authAccount') }}
-          </label>
-          <MInput
-            v-model="authAccount"
-            :placeholder="t('accounts.dialog.authAccountPlaceholder')"
-          />
-        </div>
-
-        <div>
-          <label class="text-xs font-medium text-fg-muted mb-1 block">
-            {{ t('accounts.dialog.authPassword') }}
-          </label>
-          <MInput
-            v-model="authPassword"
-            type="password"
-            :placeholder="t('accounts.dialog.authPasswordPlaceholder')"
-          />
-        </div>
-
-        <div v-if="authError" class="text-xs text-danger">
-          {{ authError }}
-        </div>
-      </div>
-      <template #footer>
-        <MButton variant="text" @click="showAddAuthlibDialog = false">
-          {{ t('common.cancel') }}
-        </MButton>
-        <MButton
-          variant="primary"
-          :loading="authLoading"
-          @click="handleAddAuthlib"
-        >
-          {{ t('common.confirm') }}
-        </MButton>
-      </template>
-    </MDialog>
-
-    <!-- Dialog 4: Microsoft Device Code Modal -->
-    <MDialog
-      v-model:open="accountsStore.deviceCodeDialog"
-      :title="t('accounts.dialog.msDeviceTitle')"
-    >
-      <div v-if="accountsStore.deviceCodeData" class="flex flex-col gap-4 py-2">
-        <p class="text-sm text-fg">
-          {{ t('accounts.dialog.msDevicePrompt') }}
-        </p>
-
-        <div class="flex items-center justify-between p-4 rounded-xl m-well">
-          <div>
-            <div class="text-xs text-fg-muted">
-              {{ t('accounts.dialog.msCodeLabel') }}
-            </div>
-            <div class="text-xl font-mono font-bold tracking-wider text-primary mt-0.5">
-              {{ accountsStore.deviceCodeData.userCode }}
-            </div>
-          </div>
-          <MButton variant="tonal" size="sm" icon="i-lucide-copy" @click="copyDeviceCode">
-            {{ t('common.copy') }}
-          </MButton>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <MButton variant="primary" icon="i-lucide-external-link" @click="openDeviceUrl">
-            {{ t('accounts.dialog.msOpenBrowser') }}
-          </MButton>
-        </div>
-
-        <p class="text-xs text-fg-muted flex items-center gap-2">
-          <span class="i-lucide-loader animate-spin inline-block" />
-          {{ t('accounts.dialog.msWaiting') }}
-        </p>
-      </div>
-      <template #footer>
-        <MButton variant="text" @click="accountsStore.deviceCodeDialog = false">
-          {{ t('common.close') }}
-        </MButton>
-      </template>
-    </MDialog>
-
-    <!-- Dialog 5: Authlib Multi-profile Picker -->
-    <MDialog
-      v-model:open="accountsStore.profileSelectDialog"
-      :title="t('accounts.actions.selectProfileTitle')"
-    >
-      <div class="flex flex-col gap-3 py-2">
-        <p class="text-sm text-fg">
-          {{ t('accounts.actions.selectProfilePrompt') }}
-        </p>
-        <div class="flex flex-col gap-2">
-          <MCard
-            v-for="p in accountsStore.pendingProfiles"
-            :key="p.id"
-            hoverable
-            class="p-3 cursor-pointer border border-line"
-            @click="handleSelectProfile(p)"
-          >
-            <div class="font-medium text-fg">{{ p.name }}</div>
-            <div class="text-xs text-fg-muted">{{ p.id }}</div>
-          </MCard>
-        </div>
-      </div>
-      <template #footer>
-        <MButton variant="text" @click="accountsStore.profileSelectDialog = false">
-          {{ t('common.cancel') }}
-        </MButton>
-      </template>
-    </MDialog>
-
-    <!-- Dialog 6: Skin Upload Dialog -->
-    <MDialog
-      v-model:open="showSkinUploadDialog"
-      :title="t('accounts.skin.upload')"
-    >
-      <div class="flex flex-col gap-4 py-2">
-        <div>
-          <label class="text-xs font-medium text-fg-muted mb-1 block">
-            {{ t('accounts.skin.model') }}
-          </label>
-          <MSelect
-            v-model="skinVariant"
-            :options="skinModelOptions"
-          />
-        </div>
-
-        <div>
-          <label class="text-xs font-medium text-fg-muted mb-1 block">
-            {{ t('accounts.skin.uploadPathPrompt') }}
-          </label>
-          <MInput
-            v-model="skinPngPath"
-            placeholder="C:\Users\...\skin.png"
-          />
-        </div>
-      </div>
-      <template #footer>
-        <MButton variant="text" @click="showSkinUploadDialog = false">
-          {{ t('common.cancel') }}
-        </MButton>
-        <MButton
-          variant="primary"
-          :loading="skinUploadLoading"
-          :disabled="!skinPngPath.trim()"
-          @click="handleSkinUpload"
-        >
-          {{ t('common.confirm') }}
-        </MButton>
-      </template>
-    </MDialog>
+    <AccountModals
+      v-model:show-add-type-dialog="showAddTypeDialog"
+      v-model:show-add-offline-dialog="showAddOfflineDialog"
+      v-model:show-add-authlib-dialog="showAddAuthlibDialog"
+      v-model:show-skin-upload-dialog="showSkinUploadDialog"
+      v-model:show-rename-dialog="showRenameDialog"
+      v-model:offline-username="offlineUsername"
+      v-model:offline-uuid-mode="offlineUuidMode"
+      v-model:offline-skin-model="offlineSkinModel"
+      v-model:offline-custom-uuid="offlineCustomUuid"
+      v-model:offline-error="offlineError"
+      v-model:auth-server="authServer"
+      v-model:auth-account="authAccount"
+      v-model:auth-password="authPassword"
+      v-model:auth-error="authError"
+      v-model:auth-loading="authLoading"
+      v-model:skin-variant="skinVariant"
+      v-model:skin-png-path="skinPngPath"
+      v-model:skin-upload-loading="skinUploadLoading"
+      v-model:rename-new-username="renameNewUsername"
+      v-model:rename-loading="renameLoading"
+      :accounts-store="accountsStore"
+      @start-add-microsoft="startAddMicrosoft"
+      @start-add-offline="startAddOffline"
+      @start-add-authlib="startAddAuthlib"
+      @confirm-add-offline="handleAddOffline"
+      @confirm-add-authlib="handleAddAuthlib"
+      @copy-device-code="copyDeviceCode"
+      @open-device-url="openDeviceUrl"
+      @select-profile="handleSelectProfile"
+      @confirm-skin-upload="handleSkinUpload"
+      @confirm-rename="handleRenameConfirm"
+    />
   </div>
 </template>

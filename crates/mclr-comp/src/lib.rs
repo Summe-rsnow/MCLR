@@ -14,8 +14,8 @@ pub mod resources;
 pub use curseforge::CurseForgeClient;
 pub use error::CompError;
 pub use export::{
-    ExportCandidateEntry, ModpackExportFormat, ModpackExportOptions, export_modpack,
-    scan_export_candidates,
+    ExportCandidateEntry, ModpackExportFormat, ModpackExportOptions, ModpackExportParams,
+    export_modpack, scan_export_candidates,
 };
 pub use jarinjar::{JarInJarNode, scan_jar_in_jar};
 pub use local::{
@@ -27,8 +27,8 @@ pub use model::{
     CompReleaseChannel, CompSearchQuery, CompSearchResult, CompSort, CompType,
 };
 pub use modpack::{
-    ModpackFileDownload, ModpackFormat, ModpackInspectResult, ModpackInstallPlan,
-    extract_modpack_overrides, import_modpack, inspect_modpack,
+    ModpackFileDownload, ModpackFormat, ModpackImportContext, ModpackInspectResult,
+    ModpackInstallPlan, extract_modpack_overrides, import_modpack, inspect_modpack,
 };
 pub use modrinth::ModrinthClient;
 pub use resolver::{ResolvedDependencyItem, resolve_dependencies, select_best_file};

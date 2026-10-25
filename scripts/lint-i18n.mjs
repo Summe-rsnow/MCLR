@@ -59,8 +59,9 @@ for (const file of files) {
   const isTest = rel.endsWith('.test.ts') || rel.endsWith('.spec.ts')
   const isMock = rel.endsWith('mock.ts')
   const isBindings = rel === 'ipc/bindings.ts'
+  const isData = rel === 'features/download/compat.ts' || rel === 'ui/icons.ts'
 
-  if (!isLocale && !isTest && !isMock && !isBindings) {
+  if (!isLocale && !isTest && !isMock && !isBindings && !isData) {
     const lines = content.split(/\r?\n/)
     lines.forEach((line, idx) => {
       if (cjkRegex.test(line)) {

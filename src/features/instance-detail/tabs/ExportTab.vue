@@ -20,7 +20,7 @@ import {
   MCheckbox,
   MBadge,
   MEmpty,
-  MSkeletonList,
+  MSkeleton,
   MVirtualList,
   useToast,
 } from '../../../ui'
@@ -51,7 +51,8 @@ const formatOptions = computed(() => [
 
 const exportFilters = computed(() => [
   {
-    name: format.value === 'modrinth' ? 'Modrinth Modpack (*.mrpack)' : 'CurseForge Modpack (*.zip)',
+    name:
+      format.value === 'modrinth' ? 'Modrinth Modpack (*.mrpack)' : 'CurseForge Modpack (*.zip)',
     extensions: format.value === 'modrinth' ? ['mrpack'] : ['zip'],
   },
 ])
@@ -89,8 +90,6 @@ async function fetchCandidates() {
     loadingCandidates.value = false
   }
 }
-
-
 
 function selectAll() {
   selectedPaths.value = candidates.value.map((c) => c.relPath)
@@ -172,11 +171,7 @@ onMounted(() => {
     <MSection :title="t('instanceDetail.export.title')" icon="i-lucide-settings-2">
       <div class="divide-y divide-line">
         <MSettingRow :label="t('instanceDetail.export.formatLabel')">
-          <MSegmented
-            v-model="format"
-            :options="formatOptions"
-            size="sm"
-          />
+          <MSegmented v-model="format" :options="formatOptions" size="sm" />
         </MSettingRow>
 
         <MSettingRow :label="t('instanceDetail.export.packName')">
@@ -232,41 +227,43 @@ onMounted(() => {
     </MSection>
 
     <!-- File selection checklist Section -->
-    <MSection :title="t('instanceDetail.export.filesSelection')" :description="t('instanceDetail.export.filesSelectionSubtitle')" icon="i-lucide-folder-tree">
+    <MSection
+      :title="t('instanceDetail.export.filesSelection')"
+      :description="t('instanceDetail.export.filesSelectionSubtitle')"
+      icon="i-lucide-folder-tree"
+    >
       <template #actions>
         <div class="flex items-center gap-2">
-          <MButton
-            variant="text"
-            size="xs"
-            @click="selectAll"
-          >
+          <MButton variant="text" size="xs" @click="selectAll">
             {{ t('instanceDetail.export.selectAll') }}
           </MButton>
-          <MButton
-            variant="text"
-            size="xs"
-            @click="deselectAll"
-          >
+          <MButton variant="text" size="xs" @click="deselectAll">
             {{ t('instanceDetail.export.deselectAll') }}
           </MButton>
-          <MButton
-            variant="tonal"
-            size="xs"
-            @click="restoreDefault"
-          >
+          <MButton variant="tonal" size="xs" @click="restoreDefault">
             {{ t('instanceDetail.export.defaultSelection') }}
           </MButton>
         </div>
       </template>
 
-      <div v-if="loadingCandidates && candidates.length === 0" class="py-4">
-        <MSkeletonList :rows="5" variant="row" />
+      <div
+        v-if="loadingCandidates && candidates.length === 0"
+        class="border border-line rounded-xl divide-y divide-line bg-sunken/40 overflow-hidden"
+      >
+        <div v-for="n in 5" :key="n" class="flex items-center justify-between px-4 py-2.5">
+          <div class="flex items-center gap-3 min-w-0">
+            <MSkeleton width="1.25rem" height="1.25rem" class="rounded shrink-0" />
+            <MSkeleton width="1rem" height="1rem" class="shrink-0" />
+            <MSkeleton :width="n % 2 === 0 ? '14rem' : '10rem'" height="1rem" />
+          </div>
+          <div class="flex items-center gap-2 shrink-0 ml-3">
+            <MSkeleton width="3.5rem" height="0.875rem" />
+            <MSkeleton width="2.5rem" height="1.25rem" class="rounded-md" />
+          </div>
+        </div>
       </div>
       <div v-else-if="candidates.length === 0" class="py-8">
-        <MEmpty
-          :title="t('instanceDetail.export.emptyFiles')"
-          icon="i-lucide-folder"
-        />
+        <MEmpty :title="t('instanceDetail.export.emptyFiles')" icon="i-lucide-folder" />
       </div>
       <div
         v-else
@@ -303,7 +300,11 @@ onMounted(() => {
                   {{ formatBytes(entry.size) }}
                 </span>
                 <MBadge variant="neutral" size="sm">
-                  {{ entry.isDir ? t('instanceDetail.export.isDir') : t('instanceDetail.export.isFile') }}
+                  {{
+                    entry.isDir
+                      ? t('instanceDetail.export.isDir')
+                      : t('instanceDetail.export.isFile')
+                  }}
                 </MBadge>
               </div>
             </div>
@@ -320,7 +321,11 @@ onMounted(() => {
           :loading="exporting"
           @click="handleStartExport"
         >
-          {{ exporting ? t('instanceDetail.export.exporting') : t('instanceDetail.export.startExport') }}
+          {{
+            exporting
+              ? t('instanceDetail.export.exporting')
+              : t('instanceDetail.export.startExport')
+          }}
         </MButton>
       </div>
     </MSection>

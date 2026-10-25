@@ -1,20 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  ipcClient,
-  type LaunchSettings,
-} from '../../ipc/client'
+import { ipcClient, type LaunchSettings } from '../../ipc/client'
 import { useToast } from '../../ui/useToast'
-import {
-  MInput,
-  MSelect,
-  MSlider,
-  MSwitch,
-  MSection,
-  MSettingRow,
-  MHelpTooltip,
-} from '../../ui'
+import { MInput, MSelect, MSlider, MSwitch, MSection, MSettingRow, MHelpTooltip } from '../../ui'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -73,10 +62,7 @@ async function saveLaunchSettings() {
     <!-- Launch Settings -->
     <div data-testid="tab-launch" class="flex flex-col gap-6">
       <!-- RAM Section -->
-      <MSection
-        :title="t('settingsGame.launch.ramSection')"
-        icon="i-lucide-cpu"
-      >
+      <MSection :title="t('settingsGame.launch.ramSection')" icon="i-lucide-cpu">
         <template #title>
           <span>{{ t('settingsGame.launch.ramSection') }}</span>
           <MHelpTooltip :text="t('settingsGame.launch.ramModeAuto')" />
@@ -84,7 +70,11 @@ async function saveLaunchSettings() {
         <div class="flex flex-col">
           <MSettingRow
             :label="t('settingsGame.launch.ramMode')"
-            :hint="launchSettings.ramMode === 'auto' ? t('settingsGame.launch.ramModeAuto') : t('settingsGame.launch.ramModeCustom')"
+            :hint="
+              launchSettings.ramMode === 'auto'
+                ? t('settingsGame.launch.ramModeAuto')
+                : t('settingsGame.launch.ramModeCustom')
+            "
           >
             <MSelect
               v-model="launchSettings.ramMode"
@@ -121,18 +111,10 @@ async function saveLaunchSettings() {
       </MSection>
 
       <!-- Window Section -->
-      <MSection
-        :title="t('settingsGame.launch.windowSection')"
-        icon="i-lucide-monitor"
-      >
+      <MSection :title="t('settingsGame.launch.windowSection')" icon="i-lucide-monitor">
         <div class="flex flex-col">
-          <MSettingRow
-            :label="t('settingsGame.launch.fullscreen')"
-          >
-            <MSwitch
-              v-model="launchSettings.fullscreen"
-              @update:model-value="saveLaunchSettings"
-            />
+          <MSettingRow :label="t('settingsGame.launch.fullscreen')">
+            <MSwitch v-model="launchSettings.fullscreen" @update:model-value="saveLaunchSettings" />
           </MSettingRow>
 
           <MSettingRow
@@ -160,9 +142,7 @@ async function saveLaunchSettings() {
             </div>
           </MSettingRow>
 
-          <MSettingRow
-            :label="t('settingsGame.launch.windowTitle')"
-          >
+          <MSettingRow :label="t('settingsGame.launch.windowTitle')">
             <MInput
               v-model="launchSettings.windowTitle"
               size="sm"
@@ -175,14 +155,9 @@ async function saveLaunchSettings() {
       </MSection>
 
       <!-- Advanced Args Section -->
-      <MSection
-        :title="t('settingsGame.launch.argsSection')"
-        icon="i-lucide-terminal"
-      >
+      <MSection :title="t('settingsGame.launch.argsSection')" icon="i-lucide-terminal">
         <div class="flex flex-col">
-          <MSettingRow
-            :label="t('settingsGame.launch.jvmArgs')"
-          >
+          <MSettingRow :label="t('settingsGame.launch.jvmArgs')">
             <MInput
               v-model="launchSettings.jvmArgs"
               size="sm"
@@ -192,9 +167,7 @@ async function saveLaunchSettings() {
             />
           </MSettingRow>
 
-          <MSettingRow
-            :label="t('settingsGame.launch.gameArgs')"
-          >
+          <MSettingRow :label="t('settingsGame.launch.gameArgs')">
             <MInput
               v-model="launchSettings.gameArgs"
               size="sm"
@@ -207,17 +180,12 @@ async function saveLaunchSettings() {
       </MSection>
 
       <!-- Runtime Section -->
-      <MSection
-        :title="t('settingsGame.launch.runtimeSection')"
-        icon="i-lucide-activity"
-      >
+      <MSection :title="t('settingsGame.launch.runtimeSection')" icon="i-lucide-activity">
         <div class="flex flex-col">
-          <MSettingRow
-            :label="t('settingsGame.launch.preferredIpStack')"
-          >
+          <MSettingRow :label="t('settingsGame.launch.preferredIpStack')">
             <template #label>
               <span>{{ t('settingsGame.launch.preferredIpStack') }}</span>
-              <MHelpTooltip text="配置 Java 虚拟机的网络协议栈偏好，可根据网络环境强制优先 IPv4 或 IPv6" />
+              <MHelpTooltip :text="t('settingsGame.launch.preferredIpStackHint')" />
             </template>
             <MSelect
               v-model="launchSettings.preferredIpStack"
@@ -232,9 +200,7 @@ async function saveLaunchSettings() {
             />
           </MSettingRow>
 
-          <MSettingRow
-            :label="t('settingsGame.launch.processPriority')"
-          >
+          <MSettingRow :label="t('settingsGame.launch.processPriority')">
             <MSelect
               v-model="launchSettings.processPriority"
               :options="[
@@ -248,9 +214,7 @@ async function saveLaunchSettings() {
             />
           </MSettingRow>
 
-          <MSettingRow
-            :label="t('settingsGame.launch.closeLauncher')"
-          >
+          <MSettingRow :label="t('settingsGame.launch.closeLauncher')">
             <MSelect
               v-model="launchSettings.closeLauncherOnStart"
               :options="[
@@ -264,9 +228,7 @@ async function saveLaunchSettings() {
             />
           </MSettingRow>
 
-          <MSettingRow
-            :label="t('settingsGame.launch.disableCrashAnalysis')"
-          >
+          <MSettingRow :label="t('settingsGame.launch.disableCrashAnalysis')">
             <MSwitch
               v-model="launchSettings.disableCrashAnalysis"
               @update:model-value="saveLaunchSettings"

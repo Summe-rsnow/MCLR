@@ -12,7 +12,20 @@ use specta::Type;
 use std::fs;
 use std::io::Cursor;
 use std::path::Path;
+use std::sync::LazyLock;
 
+const STEVE_BYTES: &[u8] = include_bytes!("../assets/steve.png");
+const ALEX_BYTES: &[u8] = include_bytes!("../assets/alex.png");
+
+static STEVE_HEAD: LazyLock<String> = LazyLock::new(|| {
+    let png = crop_head_png(STEVE_BYTES).expect("bundled steve skin is valid");
+    format!("data:image/png;base64,{}", BASE64.encode(&png))
+});
+
+static ALEX_HEAD: LazyLock<String> = LazyLock::new(|| {
+    let png = crop_head_png(ALEX_BYTES).expect("bundled alex skin is valid");
+    format!("data:image/png;base64,{}", BASE64.encode(&png))
+});
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CapeView {
@@ -23,9 +36,8 @@ pub struct CapeView {
 }
 
 /// Crops an 8x8 head with hat overlay from a 64x64 or 64x32 skin PNG,
-/// scales it to 64x64 (nearest-neighbor), saves to `cache/skin/head/<id>.png`,
-/// and returns the `data:image/png;base64,...` data URL.
-pub fn crop_skin_head(skin_png_bytes: &[u8], account_id: &str) -> Result<String, AuthError> {
+/// scales it to 64x64 (nearest-neighbor), and returns the raw PNG bytes.
+pub fn crop_head_png(skin_png_bytes: &[u8]) -> Result<Vec<u8>, AuthError> {
     let img = image::load_from_memory(skin_png_bytes)
         .map_err(|e| AuthError::SkinInvalidImage(format!("failed to load skin image: {e}")))?;
 
@@ -87,7 +99,23 @@ pub fn crop_skin_head(skin_png_bytes: &[u8], account_id: &str) -> Result<String,
     scaled
         .write_to(&mut buf, ImageFormat::Png)
         .map_err(|e| AuthError::SkinInvalidImage(format!("failed to encode head PNG: {e}")))?;
-    let png_bytes = buf.into_inner();
+    Ok(buf.into_inner())
+}
+
+/// Returns a base64 data URL for default Steve or Alex skin head.
+pub fn default_head_data_url(model: &str) -> String {
+    if model == "slim" {
+        ALEX_HEAD.clone()
+    } else {
+        STEVE_HEAD.clone()
+    }
+}
+
+/// Crops an 8x8 head with hat overlay from a 64x64 or 64x32 skin PNG,
+/// scales it to 64x64 (nearest-neighbor), saves to `cache/skin/head/<id>.png`,
+/// and returns the `data:image/png;base64,...` data URL.
+pub fn crop_skin_head(skin_png_bytes: &[u8], account_id: &str) -> Result<String, AuthError> {
+    let png_bytes = crop_head_png(skin_png_bytes)?;
 
     // Cache to cache/skin/head/<id>.png
     let head_dir = paths::cache_dir().join("skin").join("head");
@@ -226,5 +254,13 @@ mod tests {
 
         let res = crop_skin_head(&bytes, "test-account");
         assert!(res.is_err());
+    }
+    #[test]
+    fn test_default_head_data_url() {
+        let classic = default_head_data_url("classic");
+        let slim = default_head_data_url("slim");
+        assert!(classic.starts_with("data:image/png;base64,"));
+        assert!(slim.starts_with("data:image/png;base64,"));
+        assert_ne!(classic, slim);
     }
 }

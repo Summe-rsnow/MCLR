@@ -1,5 +1,7 @@
 //! Instance management IPC commands.
 
+use std::path::PathBuf;
+
 use mclr_core::{AppError, SettingsStore};
 use mclr_game::instance::{delete_instance_ext, ensure_game_folder};
 use mclr_game::{
@@ -95,4 +97,16 @@ pub async fn instance_open_path(
         .open_path(target.to_string_lossy().to_string(), None::<&str>)
         .map_err(|e| AppError::new("game.io").with_detail(e.to_string()))?;
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn path_open(app: AppHandle, path: String) -> Result<(), AppError> {
+    let p = PathBuf::from(&path);
+    if !p.is_dir() {
+        return Err(AppError::new("game.folderNotFound").with_param("path", path));
+    }
+    app.opener()
+        .open_path(p.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| AppError::new("game.io").with_detail(e.to_string()))
 }

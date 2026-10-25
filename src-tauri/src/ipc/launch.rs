@@ -6,26 +6,25 @@ use mclr_core::{AppError, SettingsStore, TaskCenter};
 pub use mclr_game::launch::{
     LaunchExitPayload, LaunchProcessInfo, LaunchStartResult, LaunchWatcher, LogLevel, LogLine,
 };
-use mclr_game::launch::{WatcherEvent, launch as game_launch};
+use mclr_game::launch::{LaunchPipelineParams, WatcherEvent, launch as game_launch};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use super::current_mc_folder;
 
 #[tauri::command]
 #[specta::specta]
-#[allow(clippy::too_many_arguments)]
 pub async fn launch_instance(
     http: State<'_, crate::http::HttpState>,
     app: AppHandle,
     settings_state: State<'_, SettingsStore>,
     tasks_state: State<'_, Arc<TaskCenter>>,
-    accounts_state: State<'_, Arc<AccountStore>>,
     watcher_state: State<'_, Arc<LaunchWatcher>>,
     instance_id: String,
     account_id: String,
 ) -> Result<LaunchStartResult, AppError> {
+    let accounts_state = app.state::<Arc<AccountStore>>();
     let settings = settings_state.get().await;
     let client = http.client();
     let mc_folder = current_mc_folder(&settings_state).await;
@@ -46,15 +45,15 @@ pub async fn launch_instance(
     let watcher = Arc::clone(&watcher_state);
 
     // 3. Run launch preparation and spawn
-    let launch_res = game_launch(
-        &client,
-        &settings,
-        &mc_folder,
-        &instance_id,
-        &session,
-        Some((&tc, &task_id)),
-        &watcher,
-    )
+    let launch_res = game_launch(LaunchPipelineParams {
+        client: &client,
+        settings: &settings,
+        mc_folder: &mc_folder,
+        instance_id: &instance_id,
+        session: &session,
+        task_center: Some((&tc, &task_id)),
+        watcher: &watcher,
+    })
     .await;
 
     match launch_res {

@@ -26,6 +26,7 @@
     "gameArgsPlaceholder": "例如：--demo",
     "runtimeSection": "进程与系统行为",
     "preferredIpStack": "网络协议栈偏好",
+    "preferredIpStackHint": "配置 Java 虚拟机的网络协议栈偏好，可根据网络环境强制优先 IPv4 或 IPv6",
     "ipStackAuto": "系统默认",
     "ipStackV4": "优先 IPv4",
     "ipStackV6": "优先 IPv6",

@@ -3,11 +3,12 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import { MLogo } from '../../ui'
 import TaskIndicator from '../tasks/TaskIndicator.vue'
 import QuickSettings from './QuickSettings.vue'
 
-defineProps<{}>()
+defineProps<{
+  scrolled?: boolean
+}>()
 
 const { t } = useI18n()
 const isMaximized = ref(false)
@@ -73,16 +74,13 @@ onUnmounted(() => {
 <template>
   <header
     data-tauri-drag-region
-    class="relative h-11 shrink-0 flex items-center justify-between px-3 border-b border-line bg-transparent z-40 select-none"
+    class="relative h-11 shrink-0 flex items-center justify-between px-3 z-40 select-none"
+    :class="
+      scrolled
+        ? 'bg-canvas/60 backdrop-blur-md border-b border-line/40 transition-colors duration-200'
+        : 'bg-transparent border-b border-transparent transition-colors duration-200'
+    "
   >
-    <!-- Left Logo + App Name -->
-    <div data-tauri-drag-region class="flex items-center gap-2.5">
-      <MLogo data-tauri-drag-region class="w-5 h-5 shrink-0" />
-      <span data-tauri-drag-region class="text-xs font-semibold tracking-wide text-fg">
-        {{ t('app.name') }}
-      </span>
-    </div>
-
     <!-- Center Task Indicator -->
     <div data-tauri-drag-region class="flex-1 flex items-center justify-center px-4">
       <div id="mclr-task-indicator-slot" class="flex items-center gap-2 text-xs text-fg-muted">

@@ -6,25 +6,9 @@
     "gameManage": "游戏管理",
     "misc": "综合设置",
     "language": "语言偏好",
-    "update": "检查更新",
-    "logs": "启动器日志",
-    "feedback": "反馈与建议",
-    "about": "关于 MCLR"
+    "update": "检查更新"
   },
   "gameManage": {
-    "foldersTitle": "Minecraft 游戏主目录",
-    "foldersDesc": "配置存放游戏版本、资产与配置文件的全局根目录列表",
-    "currentFolder": "当前生效主目录",
-    "currentBadge": "当前生效",
-    "addFolder": "添加游戏目录",
-    "emptyFolders": "尚未添加任何游戏目录，点击上方「添加游戏目录」选择文件夹",
-    "editRemark": "修改备注",
-    "openFolder": "打开文件夹",
-    "removeConfirmTitle": "移除游戏目录",
-    "removeConfirmDesc": "确定要移除目录「{path}」吗？（不会删除磁盘中的游戏文件）",
-    "alreadyExists": "该游戏目录已存在于列表中",
-    "switchFolder": "设为当前生效目录",
-    "removeFolder": "移除",
     "isolationTitle": "版本隔离策略",
     "isolationDesc": "新安装实例时的默认隔离选项，可避免不同游戏版本间配置文件冲突",
     "defaultIsolation": "新建实例默认隔离",
@@ -39,6 +23,7 @@
     "sortDesc": "控制实例展示界面上的默认卡片排序准则",
     "sortBy": "实例排序准则",
     "sortByName": "按实例名称字母顺序 (A - Z)",
+    "sortByLastPlayed": "按最近启动游玩时间 (最近优先)",
     "sortByVersion": "按游戏版本号从新到旧 (最新优先)",
     "sortByCategory": "按自定义分组分类排序"
   },
@@ -103,48 +88,5 @@
     "installButton": "下载并安装更新",
     "installing": "正在下载安装更新...",
     "installSuccess": "更新已准备就绪，重启启动器后应用"
-  },
-  "logs": {
-    "title": "启动器运行日志",
-    "subtitle": "诊断启动器内部运行状态，排查下载、登录与配置故障",
-    "fileSelect": "选择日志文件",
-    "filePlaceholder": "选择要查看的日志文件",
-    "refresh": "刷新日志列表",
-    "copy": "复制日志内容",
-    "copySuccess": "日志内容已复制到剪贴板",
-    "fileInfo": "文件大小：{size} | 修改时间：{time}",
-    "empty": "暂无可供查看的日志文件",
-    "noContent": "该日志文件内容为空"
-  },
-  "feedback": {
-    "title": "反馈与技术支持",
-    "subtitle": "遇到问题、崩溃或有新功能构想？欢迎与我们共同完善 MCLR",
-    "guideTitle": "提交问题前建议检查：",
-    "guide1": "请先在“关于”或“检查更新”页面确认当前已是最新版本",
-    "guide2": "游戏运行崩溃请优先使用“崩溃分析”页面查看智能诊断建议",
-    "guide3": "提交 GitHub Issue 时请尽可能附带启动器日志或复现步骤",
-    "openGithub": "前往 GitHub 提交 Issue",
-    "copyLink": "复制 GitHub Issues 地址"
-  },
-  "about": {
-    "title": "关于 MCLR 启动器",
-    "version": "版本 v{version}",
-    "license": "基于 Apache-2.0 开源协议授权发布",
-    "techStackTitle": "技术架构与基础技术栈",
-    "techStackDesc": "跨平台底层与现代响应式前端技术的紧密结合",
-    "techTauri": "Tauri 2 — 轻量安全的原生系统外壳与跨进程通信",
-    "techRust": "Rust 2024 — 高性能异步网络引擎、游戏模型解析与多线程调度",
-    "techVue": "Vue 3 & TypeScript — 响应式组件库、暗黑模式与流畅界面交互",
-    "techUno": "UnoCSS & OKLCH — 现代色彩引擎与液态云母材质渲染",
-    "pclRefTitle": "特别鸣谢与致敬",
-    "pclRefDesc": "MCLR 在功能架构、启动逻辑与体验细节上深度参考了优秀的开源启动器项目 Plain Craft Launcher 2 (PCL-CE)，向开源社区的先驱开发者们致敬！",
-    "secretsTitle": "运行服务与密钥配置状态",
-    "secretsDesc": "部分高级社区功能需要配置对应的服务密钥支持",
-    "secretMs": "微软账号登录客户端 ID",
-    "secretCurseforge": "CurseForge 开发者 API Key",
-    "secretUpdateEndpoint": "自更新检测服务端点",
-    "secretUpdatePubkey": "自更新公钥签名",
-    "fontNotice": "本软件使用 HarmonyOS Sans 字体，© Huawei Device Co., Ltd.",
-    "thirdPartyNotice": "第三方开源组件与字体协议详情请参阅项目 THIRD_PARTY_NOTICES.md 文件。"
   }
 }

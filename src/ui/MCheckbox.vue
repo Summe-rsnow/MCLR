@@ -24,11 +24,7 @@ function onChange(event: Event) {
 <template>
   <label
     class="inline-flex items-center gap-2 select-none text-sm transition-colors"
-    :class="[
-      disabled
-        ? 'opacity-50 cursor-not-allowed text-fg-subtle'
-        : 'cursor-pointer text-fg',
-    ]"
+    :class="[disabled ? 'opacity-50 cursor-not-allowed text-fg-subtle' : 'cursor-pointer text-fg']"
   >
     <input
       type="checkbox"

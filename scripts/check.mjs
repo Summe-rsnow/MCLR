@@ -28,6 +28,8 @@ if (hasCommits() && beforeBindings !== null && beforeBindings !== afterBindings)
   process.exit(1)
 }
 
+run('pnpm exec oxfmt --check src')
+run('pnpm exec oxlint')
 run('pnpm exec vue-tsc --noEmit')
 run('pnpm exec vitest run')
 run('node scripts/lint-i18n.mjs')

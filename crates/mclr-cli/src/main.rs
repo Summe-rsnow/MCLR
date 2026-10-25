@@ -386,15 +386,15 @@ async fn main() -> anyhow::Result<()> {
                 "Launching instance '{}' with offline user '{}'...",
                 instance, offline
             );
-            let result = mclr_game::launch(
-                &client,
-                &settings,
-                &default_dir,
-                &instance,
-                &session,
-                None,
-                &watcher,
-            )
+            let result = mclr_game::launch(mclr_game::LaunchPipelineParams {
+                client: &client,
+                settings: &settings,
+                mc_folder: &default_dir,
+                instance_id: &instance,
+                session: &session,
+                task_center: None,
+                watcher: &watcher,
+            })
             .await?;
             let pid = result.process_id.unwrap_or(0);
             println!("Process launched (PID: {})", pid);

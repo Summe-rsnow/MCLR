@@ -22,18 +22,17 @@ describe('SettingsAboutPage & Help Center', () => {
     setActivePinia(createPinia())
   })
 
-  it('renders app version badge v0.0.16, license, and description', () => {
+  it('renders app version badge v0.0.21, license, and description', () => {
     const wrapper = mount(SettingsAboutPage, {
       global: {
         plugins: [i18n],
       },
     })
 
-    expect(wrapper.text()).toContain('v0.0.16')
+    expect(wrapper.text()).toContain('v0.0.21')
     expect(wrapper.text()).toContain('Apache-2.0')
     expect(wrapper.text()).toContain('MCLR')
     expect(wrapper.text()).toContain('GitHub 仓库')
-    expect(wrapper.text()).toContain('问题反馈与建议')
   })
 
   it('renders FAQ & Help Guide section with four common question accordions', async () => {
@@ -85,5 +84,19 @@ describe('SettingsAboutPage & Help Center', () => {
     const crashContent = wrapper.find('[data-testid="faq-content-crash"]')
     expect(crashContent.exists()).toBe(true)
     expect(crashContent.text()).toContain('查看日志与崩溃分析')
+  })
+
+  it('renders feedback section with guidance and github issue button', () => {
+    const wrapper = mount(SettingsAboutPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    expect(wrapper.text()).toContain('问题反馈')
+    expect(wrapper.text()).toContain('提交问题前建议检查')
+    expect(wrapper.text()).toContain('前往 GitHub 提交反馈')
+    const btn = wrapper.find('[data-testid="open-github-btn"]')
+    expect(btn.exists()).toBe(true)
   })
 })

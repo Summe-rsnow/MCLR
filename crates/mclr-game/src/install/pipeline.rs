@@ -1,0 +1,203 @@
+//! Minecraft installation, repair pipeline, and stale directory cleanup.
+
+use std::path::Path;
+
+use mclr_core::settings::NetSettings;
+use mclr_core::tasks::TaskCenter;
+use mclr_net::{Downloader, SourceKind, race_get_bytes};
+use tracing::{error, info};
+use url::Url;
+
+use super::manifest::{fetch_version_manifest, load_resolved_version_json};
+use super::specs::{collect_version_download_specs, verify_specs_cached};
+use crate::error::GameError;
+use crate::instance::{InstanceConfig, InstanceInfo, classify_instance, validate_instance_name};
+use crate::version::VersionJson;
+
+/// Installs a vanilla Minecraft instance.
+///
+/// Fetches version manifest, downloads version JSON, writes instance json,
+/// and downloads all client jar, libraries, natives, assets, and logging configs.
+pub async fn install_vanilla(
+    client: &reqwest::Client,
+    net_settings: &NetSettings,
+    mc_folder: &Path,
+    mc_version: &str,
+    instance_name: &str,
+    task_ctx: Option<(&TaskCenter, &str)>,
+) -> Result<InstanceInfo, GameError> {
+    validate_instance_name(instance_name)?;
+
+    let instance_dir = mc_folder.join("versions").join(instance_name);
+    let version_json_file = instance_dir.join(format!("{instance_name}.json"));
+
+    // Resumable: if instance JSON already exists, overwrite/verify and download only missing files.
+    // 1. Fetch manifest
+    let manifest = fetch_version_manifest(client, net_settings.source_priority, false).await?;
+    let entry = manifest
+        .versions
+        .iter()
+        .find(|v| v.id == mc_version)
+        .ok_or_else(|| GameError::VersionNotFound(mc_version.to_string()))?;
+
+    let version_url = Url::parse(&entry.url)
+        .map_err(|e| GameError::InstallFailed(format!("Invalid version JSON URL: {e}")))?;
+
+    // 2. Fetch version JSON
+    let version_json_bytes = match race_get_bytes(
+        client,
+        &version_url,
+        SourceKind::VersionMeta,
+        net_settings.source_priority,
+    )
+    .await
+    {
+        Ok(b) => b,
+        Err(e) => {
+            error!("Failed to download version JSON for {mc_version} from {version_url}: {e}");
+            return Err(e.into());
+        }
+    };
+
+    let mut version_json: VersionJson =
+        serde_json::from_slice(&version_json_bytes).map_err(|e| {
+            error!("Failed to parse version JSON for {mc_version}: {e}");
+            GameError::InvalidVersionJson(e.to_string())
+        })?;
+
+    // Set id = instance_name
+    version_json.id = instance_name.to_string();
+
+    std::fs::create_dir_all(&instance_dir)?;
+    let installing_marker = instance_dir.join(".mclr-installing");
+    let _ = std::fs::write(&installing_marker, b"");
+
+    std::fs::write(
+        &version_json_file,
+        serde_json::to_string_pretty(&version_json)
+            .map_err(|e| GameError::InstallFailed(e.to_string()))?,
+    )?;
+
+    // Write initial mclr.instance.json
+    let config_path = instance_dir.join("mclr.instance.json");
+    let config = if config_path.exists() {
+        std::fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|c| serde_json::from_str::<InstanceConfig>(&c).ok())
+            .unwrap_or_default()
+    } else {
+        let mut cfg = InstanceConfig::default();
+        cfg.isolation = "on".to_string();
+        let _ = std::fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&cfg).unwrap_or_default(),
+        );
+        cfg
+    };
+
+    // 3. Collect download specs
+    let specs = collect_version_download_specs(
+        client,
+        mc_folder,
+        instance_name,
+        &version_json,
+        net_settings.source_priority,
+    )
+    .await?;
+
+    info!(
+        "Total files to verify/download for {}: {}",
+        instance_name,
+        specs.len()
+    );
+
+    let unverified_specs = verify_specs_cached(specs).await;
+    info!(
+        "Files to download after checking cache: {}",
+        unverified_specs.len()
+    );
+
+    // 4. Download files
+    if !unverified_specs.is_empty() {
+        let downloader = Downloader::new(client.clone(), net_settings.clone());
+        if let Err(e) = downloader.download_many(unverified_specs, task_ctx).await {
+            error!("Batch downloading failed for instance {instance_name}: {e}");
+            return Err(e.into());
+        }
+    }
+
+    let _ = std::fs::remove_file(installing_marker);
+
+    // 5. Build and return InstanceInfo
+    let (kind, loaders) = classify_instance(&version_json, mc_version);
+    let state = crate::instance::InstanceState::Ok;
+
+    Ok(InstanceInfo {
+        id: instance_name.to_string(),
+        name: instance_name.to_string(),
+        folder: mc_folder.to_string_lossy().to_string(),
+        path: instance_dir.to_string_lossy().to_string(),
+        mc_version: mc_version.to_string(),
+        kind,
+        loaders,
+        state,
+        config,
+        ..Default::default()
+    })
+}
+
+/// Repairs an existing Minecraft instance by checking and downloading missing/corrupted files.
+/// Returns the number of files downloaded.
+pub async fn repair_instance(
+    client: &reqwest::Client,
+    net_settings: &NetSettings,
+    mc_folder: &Path,
+    instance_id: &str,
+    task_ctx: Option<(&TaskCenter, &str)>,
+) -> Result<usize, GameError> {
+    let resolved_json = load_resolved_version_json(mc_folder, instance_id)?;
+
+    let specs = collect_version_download_specs(
+        client,
+        mc_folder,
+        instance_id,
+        &resolved_json,
+        net_settings.source_priority,
+    )
+    .await?;
+
+    let unverified_specs = verify_specs_cached(specs).await;
+
+    let count = unverified_specs.len();
+    info!("Repairing instance {instance_id}: {count} files missing or corrupted");
+
+    if count > 0 {
+        let downloader = Downloader::new(client.clone(), net_settings.clone());
+        if let Err(e) = downloader.download_many(unverified_specs, task_ctx).await {
+            error!("Batch downloading failed during repair of instance {instance_id}: {e}");
+            return Err(e.into());
+        }
+    }
+    Ok(count)
+}
+
+/// Remove incomplete instance folders (containing `.mclr-installing`) and `.mclr-staging` dirs left behind by interrupted installs.
+pub fn cleanup_stale(mc_folder: &std::path::Path) {
+    let versions_dir = mc_folder.join("versions");
+    if versions_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&versions_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() && path.join(".mclr-installing").exists() {
+                    tracing::info!("Cleaning up incomplete instance: {}", path.display());
+                    let _ = std::fs::remove_dir_all(&path);
+                }
+            }
+        }
+    }
+    let staging_dir = mc_folder.join(".mclr-staging");
+    if staging_dir.exists() {
+        tracing::info!("Cleaning up stale staging dir: {}", staging_dir.display());
+        let _ = std::fs::remove_dir_all(&staging_dir);
+    }
+}

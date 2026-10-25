@@ -61,10 +61,24 @@ export const useAccountsStore = defineStore('accounts', () => {
     accounts.value = await ipcClient.accountsRemove(id)
   }
 
-  async function addOffline(username: string, uuidMode: string, customUuid?: string) {
+  async function addOffline(
+    username: string,
+    uuidMode: string,
+    customUuid?: string,
+    _model?: 'classic' | 'slim',
+  ) {
     const newAcc = await ipcClient.accountsAddOffline(username, uuidMode, customUuid)
     await fetchAccounts()
     return newAcc
+  }
+  const addOfflineAccount = addOffline
+  async function renameOffline(id: string, username: string) {
+    const updated = await ipcClient.accountsRenameOffline(id, username)
+    const idx = accounts.value.findIndex((a) => a.id === id)
+    if (idx !== -1) {
+      accounts.value[idx] = updated
+    }
+    return updated
   }
 
   async function addMicrosoft() {
@@ -137,6 +151,8 @@ export const useAccountsStore = defineStore('accounts', () => {
     selectAccount,
     removeAccount,
     addOffline,
+    addOfflineAccount,
+    renameOffline,
     addMicrosoft,
     addAuthlib,
     selectProfile,

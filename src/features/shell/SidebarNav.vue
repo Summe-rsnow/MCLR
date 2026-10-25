@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { featureRoutes, type NavMeta } from '../../router'
 import { NAV_GROUPS } from './navGroups'
 import AccountChip from './AccountChip.vue'
+import { MLogo } from '../../ui'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -34,6 +35,15 @@ const collapsed = computed(() => {
   return isAutoCollapsed.value
 })
 
+watch(
+  collapsed,
+  (c) => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--sidebar-w', c ? '68px' : '196px')
+    }
+  },
+  { immediate: true },
+)
 function toggleCollapse() {
   const next = !collapsed.value
   savedPreference.value = next
@@ -74,7 +84,7 @@ interface NavItem {
 const allNavItems = computed(() => {
   const items: NavItem[] = []
   for (const r of featureRoutes) {
-    if (r.meta && 'nav' in r.meta && r.meta.nav) {
+    if (r.meta && 'nav' in r.meta && r.meta.nav && r.path !== '/tasks') {
       const cleanPath = r.path.replace(/\/:\w+\??.*/, '') || '/'
       items.push({
         path: cleanPath,
@@ -88,9 +98,7 @@ const allNavItems = computed(() => {
 
 const groupedNav = computed(() => {
   return NAV_GROUPS.map((g) => {
-    const items = allNavItems.value.filter(
-      (item) => (item.meta.group ?? 'system') === g.key,
-    )
+    const items = allNavItems.value.filter((item) => (item.meta.group ?? 'system') === g.key)
     return {
       ...g,
       items,
@@ -142,7 +150,11 @@ function updatePill() {
   })
 }
 
-watch(() => route?.path, () => updatePill(), { immediate: true })
+watch(
+  () => route?.path,
+  () => updatePill(),
+  { immediate: true },
+)
 watch(collapsed, () => updatePill())
 onMounted(() => {
   updatePill()
@@ -160,50 +172,75 @@ function setItemRef(path: string, el: unknown) {
 <template>
   <aside
     class="m-panel shrink-0 flex flex-col justify-between transition-all duration-200 select-none overflow-hidden"
-    :class="collapsed ? 'w-[68px] p-2' : 'w-[232px] px-2.5 py-2'"
+    :class="collapsed ? 'w-[68px] px-2 pb-2' : 'w-[196px] px-2.5 pb-2'"
   >
-    <!-- Nav Groups -->
-    <div ref="navContainerRef" class="relative flex-1 overflow-y-auto flex flex-col gap-2">
+    <div class="flex-1 min-h-0 flex flex-col">
+      <!-- Sidebar Header (Logo + App Name) -->
       <div
-        v-if="pillVisible"
-        class="absolute left-0 right-0 rounded-xl bg-primary-soft pointer-events-none transition-all duration-240"
-        :style="{
-          top: `${pillTop}px`,
-          height: `${pillHeight}px`,
-          transitionTimingFunction: 'var(--ease)',
-        }"
+        data-tauri-drag-region
+        class="h-12 shrink-0 flex items-center mb-2 data-tauri-drag-region"
+        :class="collapsed ? 'justify-center px-0' : 'px-3'"
       >
-        <!-- Left Accent Bar -->
-        <span class="absolute left-1 top-2.5 bottom-2.5 w-[3px] bg-primary rounded-full" />
+        <MLogo data-tauri-drag-region class="w-7 h-7 shrink-0 text-primary" />
+        <span
+          v-if="!collapsed"
+          data-tauri-drag-region
+          class="text-base font-bold tracking-wider text-fg ml-3 select-none"
+        >
+          {{ t('app.name') }}
+        </span>
       </div>
 
-      <div v-for="(group, gIdx) in groupedNav" :key="group.key" class="flex flex-col gap-1.5 relative z-10">
-        <div v-if="!collapsed" class="text-[11px] font-medium tracking-wide text-fg-subtle px-3 pt-2 pb-0.5">
-          {{ t(group.titleKey) }}
-        </div>
-        <div v-else-if="gIdx > 0" class="border-t border-line my-1 mx-1" />
-
-        <!-- Nav Items -->
-        <button
-          v-for="item in group.items"
-          :key="item.path"
-          :ref="(el) => setItemRef(item.path, el)"
-          type="button"
-          :title="collapsed ? t(item.meta.titleKey) : undefined"
-          class="relative h-9 rounded-xl transition-colors cursor-pointer flex items-center"
-          :class="[
-            collapsed ? 'justify-center w-full px-0' : 'gap-2.5 px-3 text-left w-full',
-            isItemActive(item.path)
-              ? 'text-primary-soft-fg font-medium'
-              : 'text-fg-muted hover:bg-sunken hover:text-fg',
-          ]"
-          @click="router?.push ? router.push(item.path) : undefined"
+      <!-- Nav Groups -->
+      <div ref="navContainerRef" class="relative flex-1 overflow-y-auto flex flex-col gap-2">
+        <div
+          v-if="pillVisible"
+          class="absolute left-0 right-0 rounded-xl bg-primary-soft pointer-events-none transition-all duration-240"
+          :style="{
+            top: `${pillTop}px`,
+            height: `${pillHeight}px`,
+            transitionTimingFunction: 'var(--ease)',
+          }"
         >
-          <span :class="item.meta.icon" class="w-5 h-5 shrink-0" />
-          <span v-if="!collapsed" class="text-xs truncate">
-            {{ t(item.meta.titleKey) }}
-          </span>
-        </button>
+          <!-- Left Accent Bar -->
+          <span class="absolute left-1 top-2.5 bottom-2.5 w-[3px] bg-primary rounded-full" />
+        </div>
+
+        <div
+          v-for="(group, gIdx) in groupedNav"
+          :key="group.key"
+          class="flex flex-col gap-1.5 relative z-10"
+        >
+          <div
+            v-if="!collapsed"
+            class="text-[11px] font-medium tracking-wide text-fg-subtle px-3 pt-2 pb-0.5"
+          >
+            {{ t(group.titleKey) }}
+          </div>
+          <div v-else-if="gIdx > 0" class="border-t border-line my-1 mx-1" />
+
+          <!-- Nav Items -->
+          <button
+            v-for="item in group.items"
+            :key="item.path"
+            :ref="(el) => setItemRef(item.path, el)"
+            type="button"
+            :title="collapsed ? t(item.meta.titleKey) : undefined"
+            class="relative h-9 rounded-xl transition-colors cursor-pointer flex items-center"
+            :class="[
+              collapsed ? 'justify-center w-full px-0' : 'gap-2.5 px-3 text-left w-full',
+              isItemActive(item.path)
+                ? 'text-primary-soft-fg font-medium'
+                : 'text-fg-muted hover:bg-sunken hover:text-fg',
+            ]"
+            @click="router?.push ? router.push(item.path) : undefined"
+          >
+            <span :class="item.meta.icon" class="w-5 h-5 shrink-0" />
+            <span v-if="!collapsed" class="text-xs truncate">
+              {{ t(item.meta.titleKey) }}
+            </span>
+          </button>
+        </div>
       </div>
     </div>
     <!-- Footer: Collapse Toggle & Account Chip -->

@@ -6,4 +6,4 @@ export const NAV_GROUPS = [
   { key: 'dev', titleKey: 'shell.navGroup.dev' },
 ] as const
 
-export type NavGroupKey = typeof NAV_GROUPS[number]['key']
+export type NavGroupKey = (typeof NAV_GROUPS)[number]['key']

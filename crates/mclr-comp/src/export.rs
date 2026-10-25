@@ -413,36 +413,23 @@ pub async fn export_modpack(
     let zip_options =
         SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
+    let export_params = ModpackExportParams {
+        instance_dir,
+        options,
+        mc_version: &mc_version,
+        loader: loader.as_deref(),
+        loader_version: loader_version.as_deref(),
+        selected_files: &selected_files,
+        zip_options,
+        task_info,
+    };
+
     match options.format {
         ModpackExportFormat::Modrinth => {
-            export_as_modrinth(
-                instance_dir,
-                options,
-                &mc_version,
-                loader.as_deref(),
-                loader_version.as_deref(),
-                &selected_files,
-                modrinth_client,
-                &mut zip,
-                zip_options,
-                task_info,
-            )
-            .await?;
+            export_as_modrinth(&export_params, modrinth_client, &mut zip).await?;
         }
         ModpackExportFormat::Curseforge => {
-            export_as_curseforge(
-                instance_dir,
-                options,
-                &mc_version,
-                loader.as_deref(),
-                loader_version.as_deref(),
-                &selected_files,
-                curseforge_client,
-                &mut zip,
-                zip_options,
-                task_info,
-            )
-            .await?;
+            export_as_curseforge(&export_params, curseforge_client, &mut zip).await?;
         }
     }
 
@@ -456,19 +443,32 @@ pub async fn export_modpack(
     Ok(out_path)
 }
 
-#[allow(clippy::too_many_arguments)]
+pub struct ModpackExportParams<'a> {
+    pub instance_dir: &'a Path,
+    pub options: &'a ModpackExportOptions,
+    pub mc_version: &'a str,
+    pub loader: Option<&'a str>,
+    pub loader_version: Option<&'a str>,
+    pub selected_files: &'a [String],
+    pub zip_options: SimpleFileOptions,
+    pub task_info: Option<(&'a TaskCenter, &'a str)>,
+}
+
 async fn export_as_modrinth<W: Write + std::io::Seek>(
-    instance_dir: &Path,
-    options: &ModpackExportOptions,
-    mc_version: &str,
-    loader: Option<&str>,
-    loader_version: Option<&str>,
-    selected_files: &[String],
+    params: &ModpackExportParams<'_>,
     modrinth_client: Option<&ModrinthClient>,
     zip: &mut ZipWriter<W>,
-    zip_options: SimpleFileOptions,
-    task_info: Option<(&TaskCenter, &str)>,
 ) -> Result<(), CompError> {
+    let ModpackExportParams {
+        instance_dir,
+        options,
+        mc_version,
+        loader,
+        loader_version,
+        selected_files,
+        zip_options,
+        task_info,
+    } = *params;
     // Partition files into: candidate community files (mods/, resourcepacks/, shaderpacks/) and others
     struct CandidateFile {
         rel_path: String,
@@ -598,19 +598,21 @@ async fn export_as_modrinth<W: Write + std::io::Seek>(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn export_as_curseforge<W: Write + std::io::Seek>(
-    instance_dir: &Path,
-    options: &ModpackExportOptions,
-    mc_version: &str,
-    loader: Option<&str>,
-    loader_version: Option<&str>,
-    selected_files: &[String],
+    params: &ModpackExportParams<'_>,
     curseforge_client: Option<&CurseForgeClient>,
     zip: &mut ZipWriter<W>,
-    zip_options: SimpleFileOptions,
-    task_info: Option<(&TaskCenter, &str)>,
 ) -> Result<(), CompError> {
+    let ModpackExportParams {
+        instance_dir,
+        options,
+        mc_version,
+        loader,
+        loader_version,
+        selected_files,
+        zip_options,
+        task_info,
+    } = *params;
     struct CandidateFile {
         rel_path: String,
         murmur2: u32,
@@ -901,17 +903,17 @@ mod tests {
         let http_client = reqwest::Client::new();
         let net_settings = mclr_core::NetSettings::default();
 
-        let imported_info = crate::modpack::import_modpack(
-            &result_path,
-            "imported-instance",
-            dest_mc.path(),
-            &http_client,
-            &net_settings,
-            None,
-            None,
-            None,
-            false,
-        )
+        let imported_info = crate::modpack::import_modpack(crate::modpack::ModpackImportContext {
+            archive_path: &result_path,
+            instance_name: "imported-instance",
+            mc_folder: dest_mc.path(),
+            client: &http_client,
+            net_settings: &net_settings,
+            java_settings: None,
+            cf_client: None,
+            task_ctx: None,
+            install_base_game: false,
+        })
         .await
         .unwrap();
 

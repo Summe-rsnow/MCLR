@@ -82,6 +82,21 @@ describe('Appearance and Personalisation feature', () => {
     expect(wrapper.text()).toContain('关闭')
   })
 
+  it('renders startup splash switch and toggles startupSplash in themeStore', async () => {
+    const store = useThemeStore()
+    expect(store.startupSplash).toBe(true)
+
+    const wrapper = mount(SettingsAppearancePage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('启动动画')
+
+    store.setStartupSplash(false)
+    expect(store.startupSplash).toBe(false)
+  })
 
   it('applies UI scale to document.documentElement', async () => {
     const store = useThemeStore()
@@ -170,5 +185,4 @@ describe('Appearance and Personalisation feature', () => {
     expect(pageWrapper.text()).toContain('未选择背景媒体或模式为无')
     expect(pageWrapper.text()).not.toContain('Sample UI Foreground Content')
   })
-
 })

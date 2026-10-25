@@ -16,7 +16,7 @@
 - **Game & Mod Loader Management (`mclr-game`, `mclr-loaders`)**:
   - Vanilla installation and incremental SHA1-verified asset/library repair.
   - Automated installers for **Fabric**, **LegacyFabric**, **Forge** (legacy & modern headless `--installClient`), **NeoForge**, **Cleanroom**, **OptiFine** (standalone & Fabric/Forge combo), **LiteLoader**, and **LabyMod 4**.
-  - Automatic Windows Java runtime scanner (Registry, `PATH`, `JAVA_HOME`, standard directories) and Mojang Java runtime downloader.
+  - Dedicated standalone **Java Management** (`/java`): automated Windows Java runtime scanner (Registry, `PATH`, `JAVA_HOME`, common directories), custom Java selection, architecture/type detection, and OS file manager path opening.
   - Full 9-stage launch pipeline with `@argfile` support for long classpaths on Java ≥ 9, native DLL management, real-time log sanitization, and custom window titles.
 - **Community Resources & Modpacks (`mclr-comp`)**:
   - Unified search, project details, and version downloads across **Modrinth** and **CurseForge** for Mods, Modpacks, Resource Packs, Shaders, Data Packs, and Worlds.
@@ -27,9 +27,11 @@
   - `servers.dat` NBT management, `_minecraft._tcp` SRV resolution, RFC 8305 Happy Eyeballs, and Server List Ping (SLP) with one-click quick-play launch.
 - **Crash Analysis (`mclr-crash`)**:
   - 4-phase heuristic analyzer covering all 45 crash causes with localized advice and one-click diagnostic `.zip` report export.
-- **Personalisation, Home, Help & Tools**:
-  - OKLCH seed-color palette generator, Light/Dark/System modes, Flat vs. Liquid Glass materials, image/slideshow/video (`<video muted loop>`) backgrounds, and background music player with auto-pause on game launch.
-  - Minecraft news feed, remote announcements, bundled Markdown Help Center, skin fetcher, cache cleaner, custom downloader, `.lnk` desktop shortcut creator, and Daily Luck.
+- **Unified Home & Launch, Tools & Personalisation**:
+  - **Unified Launch Page (`/launch`)**: Instance and account preview cards (`InstancePreviewCard`, `AccountPreviewCard`), integrated news masonry feed with fast toggle switch (`mclr.launch.showNews`, default off) to save bandwidth, and one-click launch or kill actions.
+  - **Tonal Layers & Modern Materials**: OKLCH seed-color palette generator, Light/Dark/System modes, Flat vs. Liquid Glass materials (Mica/Acrylic backdrop blur + SVG refraction filter), and single image/slideshow background customisation.
+  - **Global Overlay & Drawer Architecture**: Centralised `MOverlay` backdrop management, modal dialogs (`MDialog`), side drawers (`MDrawer`), and unified high-risk secondary confirmations (`useDialog().confirmDanger`).
+  - **Toolbox & Diagnostics**: Integrated game/launcher logs viewer with daily `.log` rotation (`/logs`), skin fetcher, multi-category cache cleaner, custom file downloader, `.lnk` desktop shortcut creator, and bundled Help Center in Settings About.
   - Self-updater (`mclr-update`) wrapping `tauri-plugin-updater`.
 
 ## Prerequisites
@@ -71,9 +73,13 @@ pnpm tauri dev
 # Regenerate TypeScript IPC bindings from Rust (tauri-specta)
 pnpm gen:bindings
 
-# Run the full verification gate (fmt, clippy, cargo test, bindings, vue-tsc, vitest, i18n lint, vite build)
-pnpm check
+# Fast lint and code formatting powered by the Oxc toolchain (oxlint & oxfmt)
+pnpm lint
+pnpm fmt
 
+# Run the full automated verification gate:
+# (cargo fmt, clippy -D warnings, cargo test, bindings diff, oxfmt, oxlint, vue-tsc, vitest, i18n lint, ui contracts, vite build)
+pnpm check
 # Build production Windows NSIS installer
 pnpm tauri build
 ```

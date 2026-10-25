@@ -38,13 +38,7 @@ const emit = defineEmits<{
   (e: 'clear'): void
 }>()
 
-let t = (key: string) => (key === 'common.browse' ? '浏览' : key)
-try {
-  const i18n = useI18n()
-  t = i18n.t
-} catch {
-  // Safe fallback if vue-i18n is not provided
-}
+const { t } = useI18n()
 
 const leftIcon = computed(() => {
   if (props.type === 'directory') return 'i-lucide-folder'
@@ -111,10 +105,7 @@ function onInput(e: Event) {
     <!-- Left Icon -->
     <span
       class="shrink-0 text-fg-subtle pointer-events-none"
-      :class="[
-        leftIcon,
-        size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4',
-      ]"
+      :class="[leftIcon, size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4']"
     />
 
     <!-- Readonly Path Display / Input -->

@@ -117,6 +117,12 @@ describe('HomePage & Home Feature', () => {
     expect(wrapper.find('[data-testid="news-container-on"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Minecraft Test Update')
     expect(wrapper.text()).toContain('Important System Announcement')
+
+    // Verify masonry columns and pagination
+    const newsCols = wrapper.find('.columns-1')
+    expect(newsCols.exists()).toBe(true)
+    const pager = wrapper.find('nav[role="navigation"]')
+    expect(pager.exists()).toBe(true)
   })
 
   it('dismisses announcement and patches settings', async () => {
@@ -135,7 +141,9 @@ describe('HomePage & Home Feature', () => {
       states: { dismissedAnnouncements: [] },
     } as unknown as Settings)
 
-    const patchSpy = vi.spyOn(ipcClient, 'settingsPatch').mockResolvedValue({} as unknown as Settings)
+    const patchSpy = vi
+      .spyOn(ipcClient, 'settingsPatch')
+      .mockResolvedValue({} as unknown as Settings)
 
     const homeStore = useHomeStore()
     homeStore.announcements = [...mockAnnouncementList]

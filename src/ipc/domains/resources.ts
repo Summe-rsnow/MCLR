@@ -91,17 +91,14 @@ export const resourcesIpc = {
       requestId: requestId ?? null,
     }),
 
-  localModsScanStart: (
-    instanceId: string,
-    requestId: string,
-  ): Promise<LocalModsScanResult> =>
+  localModsScanStart: (instanceId: string, requestId: string): Promise<LocalModsScanResult> =>
     invokeCommand<LocalModsScanResult>('local_mods_scan_start', {
       instanceId,
       requestId,
     }),
 
-  resourceToggle: (instanceId: string, path: string): Promise<void> =>
-    invokeCommand<void>('resource_toggle', { instanceId, path }),
+  resourceToggle: (instanceId: string, path: string): Promise<string> =>
+    invokeCommand<string>('resource_toggle', { instanceId, path }),
 
   resourcesDelete: (paths: string[], permanent: boolean): Promise<void> =>
     invokeCommand<void>('resources_delete', { paths, permanent }),
@@ -119,25 +116,16 @@ export const resourcesIpc = {
       policy,
     }),
 
-  resourcesExport: (
-    entries: ResourceEntry[],
-    format: 'txt' | 'csv',
-  ): Promise<string> =>
+  resourcesExport: (entries: ResourceEntry[], format: 'txt' | 'csv'): Promise<string> =>
     invokeCommand<string>('resources_export', { entries, format }),
 
   schematicInspect: (path: string): Promise<SchematicInfo> =>
     invokeCommand<SchematicInfo>('schematic_inspect', { path }),
 
-  localModsDependents: (
-    instanceId: string,
-    fileName: string,
-  ): Promise<string[]> =>
+  localModsDependents: (instanceId: string, fileName: string): Promise<string[]> =>
     invokeCommand<string[]>('local_mods_dependents', { instanceId, fileName }),
 
-  localModsUpdateMany: (
-    instanceId: string,
-    updates: LocalModUpdateItem[],
-  ): Promise<string> =>
+  localModsUpdateMany: (instanceId: string, updates: LocalModUpdateItem[]): Promise<string> =>
     invokeCommand<string>('local_mods_update_many', { instanceId, updates }),
 
   compPickTarget: (

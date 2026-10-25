@@ -31,7 +31,10 @@ const form = ref<InstanceConfig>({
   pinned: Boolean(props.instance.config?.pinned || props.instance.config?.starred),
   starred: Boolean(props.instance.config?.starred || props.instance.config?.pinned),
   cardType: props.instance.config?.cardType ?? null,
-  isolation: props.instance.config?.isolation === 'instance' ? 'on' : (props.instance.config?.isolation || 'global'),
+  isolation:
+    props.instance.config?.isolation === 'instance'
+      ? 'on'
+      : props.instance.config?.isolation || 'global',
   java: props.instance.config?.java ?? null,
   memory: props.instance.config?.memory ?? null,
   jvmArgs: props.instance.config?.jvmArgs ?? null,
@@ -56,7 +59,7 @@ watch(
         pinned: Boolean(cfg.pinned || cfg.starred),
         starred: Boolean(cfg.starred || cfg.pinned),
         cardType: cfg.cardType ?? null,
-        isolation: cfg.isolation === 'instance' ? 'on' : (cfg.isolation || 'global'),
+        isolation: cfg.isolation === 'instance' ? 'on' : cfg.isolation || 'global',
         java: cfg.java ?? null,
         memory: cfg.memory ?? null,
         jvmArgs: cfg.jvmArgs ?? null,
@@ -96,7 +99,10 @@ const loginRequirementOptions = [
   { label: t('instanceDetail.settings.loginRequirement.any'), value: 'any' },
   { label: t('instanceDetail.settings.loginRequirement.microsoft'), value: 'microsoft' },
   { label: t('instanceDetail.settings.loginRequirement.thirdParty'), value: 'thirdParty' },
-  { label: t('instanceDetail.settings.loginRequirement.microsoftOrThirdParty'), value: 'microsoftOrThirdParty' },
+  {
+    label: t('instanceDetail.settings.loginRequirement.microsoftOrThirdParty'),
+    value: 'microsoftOrThirdParty',
+  },
 ]
 const iconOptions = computed(() =>
   minecraftIconList.map((item) => ({
@@ -175,7 +181,9 @@ async function saveSettings() {
                 type="button"
                 class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer"
                 :class="[
-                  (form.icon === item.key || (!form.icon && (item.key === 'grass_block' || item.key === 'grass')) || (form.icon === 'grass' && item.key === 'grass_block'))
+                  form.icon === item.key ||
+                  (!form.icon && (item.key === 'grass_block' || item.key === 'grass')) ||
+                  (form.icon === 'grass' && item.key === 'grass_block')
                     ? 'border-primary bg-primary-soft text-primary-soft-fg ring-1 ring-primary/30'
                     : 'border-line hover:border-line-strong text-fg-muted hover:text-fg bg-sunken/40',
                 ]"
@@ -198,11 +206,7 @@ async function saveSettings() {
           :label="t('instanceDetail.settings.isolation.title')"
           :hint="t('instanceDetail.settings.isolation.hint')"
         >
-          <MSegmented
-            v-model="form.isolation"
-            :options="isolationOptions"
-            size="sm"
-          />
+          <MSegmented v-model="form.isolation" :options="isolationOptions" size="sm" />
         </MSettingRow>
 
         <MSettingRow
@@ -211,7 +215,7 @@ async function saveSettings() {
         >
           <MSelect
             :model-value="form.java || ''"
-            :options="javaList.map(j => ({ label: j.label, value: j.value || '' }))"
+            :options="javaList.map((j) => ({ label: j.label, value: j.value || '' }))"
             size="sm"
             class="w-72"
             @update:model-value="form.java = $event ? String($event) : null"

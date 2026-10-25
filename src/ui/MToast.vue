@@ -21,7 +21,7 @@ const { toasts, remove } = useToast()
             'i-lucide-alert-circle text-danger': item.type === 'danger',
           }"
         />
-        <span class="flex-1 text-fg">{{ item.message }}</span>
+        <span class="flex-1 text-fg select-text">{{ item.message }}</span>
         <button
           type="button"
           class="text-fg-muted hover:text-fg cursor-pointer p-0.5 rounded transition-colors"

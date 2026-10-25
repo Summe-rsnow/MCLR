@@ -76,7 +76,7 @@ onUnmounted(() => {
       <Transition name="fade">
         <div
           v-if="visible"
-          class="m-overlay fixed px-3 py-2 text-xs rounded-xl text-fg pointer-events-none z-[9999] w-max max-w-[280px] min-w-[120px] whitespace-normal break-words leading-relaxed shadow-lg text-left -translate-x-1/2"
+          class="m-overlay fixed px-3 py-2 text-xs rounded-xl text-fg pointer-events-none z-[9999] w-max max-w-[280px] min-w-[120px] whitespace-normal break-words leading-relaxed shadow-lg text-left -translate-x-1/2 select-text"
           :class="coords.placement === 'top' ? '-translate-y-full' : ''"
           :style="{
             top: `${coords.top}px`,

@@ -6,7 +6,7 @@ use mclr_loaders::{
 };
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 use super::current_mc_folder;
 
@@ -25,17 +25,17 @@ pub async fn loaders_versions(
 
 #[tauri::command]
 #[specta::specta]
-#[allow(clippy::too_many_arguments)]
 pub async fn loaders_install(
-    http: State<'_, crate::http::HttpState>,
+    app: AppHandle,
     state: State<'_, SettingsStore>,
-    tasks_state: State<'_, Arc<TaskCenter>>,
     mc_version: String,
     instance_name: String,
     loader: LoaderKind,
     loader_version: String,
     optifine_version: Option<String>,
 ) -> Result<String, AppError> {
+    let http = app.state::<crate::http::HttpState>();
+    let tasks_state = app.state::<Arc<TaskCenter>>();
     let settings = state.get().await;
     let client = http.client();
     let mc_folder = current_mc_folder(&state).await;

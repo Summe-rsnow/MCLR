@@ -17,6 +17,21 @@
     "old": "远古版",
     "aprilFools": "愚人节版"
   },
+  "foolNames": {
+    "2_0": "2.0 愚人节版",
+    "2_0_red": "2.0 红色版",
+    "2_0_blue": "2.0 蓝色版",
+    "2_0_purple": "2.0 紫色版",
+    "15w14a": "爱与拥抱更新",
+    "1_rv-pre1": "时尚更新",
+    "3d_shareware": "3D 共享软件",
+    "20w14infinite": "终极内容更新",
+    "22w13oneblockatatime": "一次一个方块",
+    "23w13a_or_b": "投票更新",
+    "24w14potato": "毒马铃薯更新",
+    "25w14craftmine": "Craftmine",
+    "26w14a": "2026 愚人节快照"
+  },
   "tabs": {
     "vanilla": "原版安装",
     "fabric": "Fabric",

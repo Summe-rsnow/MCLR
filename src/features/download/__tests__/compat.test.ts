@@ -37,36 +37,29 @@ describe('compat loaderVisibility', () => {
 describe('compat loaderIncompatibilities', () => {
   it('OptiFine disabled with Forge on 1.13.2 and 1.14.3, enabled on 1.14.4', () => {
     expect(
-      loaderIncompatibilities('1.13.2', { primaryLoader: 'forge' })
-        .optifineDisabledReason,
+      loaderIncompatibilities('1.13.2', { primaryLoader: 'forge' }).optifineDisabledReason,
     ).toBe('download.compat.forgeOptifineVersion')
     expect(
-      loaderIncompatibilities('1.14.3', { primaryLoader: 'forge' })
-        .optifineDisabledReason,
+      loaderIncompatibilities('1.14.3', { primaryLoader: 'forge' }).optifineDisabledReason,
     ).toBe('download.compat.forgeOptifineVersion')
     expect(
-      loaderIncompatibilities('1.14.4', { primaryLoader: 'forge' })
-        .optifineDisabledReason,
+      loaderIncompatibilities('1.14.4', { primaryLoader: 'forge' }).optifineDisabledReason,
     ).toBeUndefined()
   })
 
   it('OptiFine disabled with Fabric on >= 1.20.5, enabled on 1.20.4', () => {
     expect(
-      loaderIncompatibilities('1.20.5', { primaryLoader: 'fabric' })
-        .optifineDisabledReason,
+      loaderIncompatibilities('1.20.5', { primaryLoader: 'fabric' }).optifineDisabledReason,
     ).toBe('download.compat.fabricOptifineVersion')
     expect(
-      loaderIncompatibilities('1.20.4', { primaryLoader: 'fabric' })
-        .optifineDisabledReason,
+      loaderIncompatibilities('1.20.4', { primaryLoader: 'fabric' }).optifineDisabledReason,
     ).toBeUndefined()
   })
 
   it('NeoForge selection disables OptiFine and LiteLoader', () => {
     const incomp = loaderIncompatibilities('1.20.1', { primaryLoader: 'neoforge' })
     expect(incomp.optifineDisabledReason).toBe('download.compat.neoforgeOptifine')
-    expect(incomp.liteloaderDisabledReason).toBe(
-      'download.compat.neoforgeLiteloader',
-    )
+    expect(incomp.liteloaderDisabledReason).toBe('download.compat.neoforgeLiteloader')
   })
 })
 
@@ -107,21 +100,15 @@ describe('compat validateInstanceNameLocal', () => {
   it('validates local rules and duplicate differing only by case', () => {
     expect(validateInstanceNameLocal('')).toBe('instance.name.empty')
     expect(validateInstanceNameLocal('a'.repeat(71))).toBe('instance.name.tooLong')
-    expect(validateInstanceNameLocal(' leadingSpace')).toBe(
-      'instance.name.invalidChar',
-    )
-    expect(validateInstanceNameLocal('trailingDot.')).toBe(
-      'instance.name.trailingDot',
-    )
+    expect(validateInstanceNameLocal(' leadingSpace')).toBe('instance.name.invalidChar')
+    expect(validateInstanceNameLocal('trailingDot.')).toBe('instance.name.trailingDot')
     expect(validateInstanceNameLocal('CON')).toBe('instance.name.reserved')
     expect(validateInstanceNameLocal('aux.txt')).toBe('instance.name.reserved')
 
-    expect(
-      validateInstanceNameLocal('1.20.1-Fabric', ['1.20.1-fabric']),
-    ).toBe('instance.name.duplicate')
-    expect(
-      validateInstanceNameLocal('1.20.1-Fabric', ['1.20.1-forge']),
-    ).toBeNull()
+    expect(validateInstanceNameLocal('1.20.1-Fabric', ['1.20.1-fabric'])).toBe(
+      'instance.name.duplicate',
+    )
+    expect(validateInstanceNameLocal('1.20.1-Fabric', ['1.20.1-forge'])).toBeNull()
   })
 })
 

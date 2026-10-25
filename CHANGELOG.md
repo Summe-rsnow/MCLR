@@ -5,6 +5,93 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.21] - 2026-10-26
+
+### Added
+- **Unified Global Overlay Architecture (`MOverlay` / `MDrawer` / `MDialog`)**: Built standard overlay primitive supporting stacked Escape key dismissal, body scroll-lock, and liquid glass backdrops. Added `MDrawer` supporting right/left/bottom sliding panels with smooth spring animations.
+- **High-Risk Secondary Confirmation (`useDialog().confirmDanger`)**: Introduced semantic danger badges, warning callout cards, and mandatory acknowledgment checkboxes across all destructive operations (game kill, cache cleanup, log clearing, task cancellation, Java removal, instance deletion, and world save deletion).
+- **PCL Parity Community Resources Download Flow**:
+  - Clicking any resource card now opens an interactive **Quick Download Dialog** (`CompQuickDownloadDialog`) with instance selector, PCL canonical version chips, mod loader chips, direct version file list, and instant download actions.
+  - Added PCL-aligned actions matrix in resource detail: official project home (`项目主页`), MCMod百科 search (`MC 百科`), copy name, copy link, and favorite toggle.
+  - Modpacks now follow dedicated new instance creation flow prompting for new instance name and directly importing via `modpackInstallRemote`.
+  - Filtered target instances to modable instances only (`i.modable`) on the Mod tab.
+- **PCL Loader & Version Compatibility Matrix**:
+  - Implemented 1.20.1 NeoForge special compatibility rule: NeoForge 1.20.1 instances automatically recognize and support 1.20.1 Forge mods.
+  - Implemented Quilt -> Fabric, Cleanroom 1.12.2 -> Forge 1.12.2, and LegacyFabric -> Fabric loader compatibility.
+  - Restored global floating paginator (`MPagination`) on Community Resources.
+- **Shared UI Primitives**: Extracted standardized `MSearchBar` with clear button and debounced queries, and semantic `MStatusBadge` with pulse indicators.
+- **Rust Backend Decomposition & Pure Calculation Offload**: Decomposed oversized modules into submodules (`mclr-game::launch`, `instance`, `install`, `mclr-saves::saves`, `mclr-comp::modpack`), offloaded version compatibility engine into `mclr_game::compat`.
+
+### Fixed
+- **Mod Toggle Self-Healing**: Fixed bug where disabling a mod prevented it from being re-enabled due to stale filename paths. Added bidirectional `.disabled` resolution in Rust backend and reactive path synchronization in frontend.
+- **Daily Rolling Launcher Log Suffix**: Configured daily rolling appender with `mclr.YYYY-MM-DD.log` suffix and unified `is_launcher_log_file` matcher handling both legacy and modern log files across pruning, Toolbox cache calculation, and Logs page.
+- **Logs Page Fixed Viewport & Inner Scrolling**: Fixed outer page height on `/logs` to eliminate double scrollbars and nested clipping, wrapping inner log view in `rounded-xl overflow-hidden`.
+- **Comp Versions Accordion & Padding Overhaul**: Restored local responsive accordion state in `CompVersionsTab` and removed quadruple-nested card padding.
+- **Skeleton Shimmer Dimensions**: Fixed `MSkeleton` default inline styles stomping over flex utilities and causing crushed vertical lines.
+- **Vite File Watcher `EBUSY`**: Excluded `**/target/**` and `**/crates/**` from Chokidar file watcher to eliminate Windows build locks on `mclr.exe` and `mclr.pdb`.
+- **Zero Warnings & Zero Suppressions**: Completely removed all `#[allow(...)]` attributes across Rust crates and all `@ts-ignore` / `eslint-disable` comments across frontend.
+- **Theme Seed Palette Differentiation**: Fixed low-chroma clamp causing `slate` and `sky` to generate identical blue themes, giving `slate` an elegant neutral cool gray tone and `sky` vivid cyan-blue. Localized live preview components.
+- **Removed Folder Path from Launch Instance Card**: Cleaned up subtitle path display in `InstancePreviewCard` to match Instance Management card standards.
+
+## [0.0.20] - 2026-10-26
+
+### Added
+- **Fast Toolchain Integration (Oxc)**: Integrated Rust-powered `oxlint` and `oxfmt` with dedicated `.oxlintrc.json` and `.oxfmtrc.json` configs, adding `pnpm lint` and `pnpm fmt` scripts directly to the gate pipeline.
+- **Offline Account Default Skin Customization**: Added default skin model picker (`Steve (经典 4px)` / `Alex (纤细 3px)`) in offline account creation dialog with full persistence.
+- **Liquid Glass TitleBar on Scroll**: Window TitleBar dynamically transitions into a liquid glass frosted acrylic material with backdrop blur when the page scrolls down.
+- **Enhanced NeoForge Loader Detection**: Added support for 1.20.1 `FancyModLoader` coordinates (`net.neoforged.fancymodloader:loader:<ver>`), `--fml.neoForgeVersion` arguments, and unique loader family deduplication to eliminate multi-badge explosion.
+- **Rich Account Select Dropdown**: Home page account selector now renders avatars, localized mode badges (`[微软]`, `[离线]`, `[第三方]`), clean name-adjacent badge alignment, and far-right checkmarks.
+
+### Changed
+- **Simplified Instance Cards**: Removed redundant `Minecraft <version>` badge (displayed directly beneath instance title), eliminated bottom divider and folder path, and compacted card height to `h-36`.
+- **Removed Vanilla Rubbish Demotion**: Standard pure Vanilla instances now remain permanently classified as "常规" (`Regular`) without artificial per-drop degradation.
+- **Eliminated Horizontal Layout Shift Without Blank Gutters**: Anchored page left margin to window width (`100vw`) and sidebar width CSS variable `--sidebar-w`, achieving rock-solid zero-pixel shift when switching between long and short tabs with no right blank gutter.
+- **MSelect Scrollbar Track Padding**: Added 6px vertical track margins to dropdown listbox scrollbars, preventing scrollbar thumb clipping by rounded container corners.
+- **PCL Canonical Version Filter in Comp Search**: Standardized community platform search versions to PCL-CE canonical release list with descending sort.
+- **Material Text Refinement**: Renamed "液态玻璃" to "玻璃" in QuickSettings, and removed parentheses descriptions (`(高性能)` / `(液态亚克力/云母效果)`) in Appearance settings.
+
+## [0.0.19] - 2026-10-25
+
+### Added
+- **Unified Task Management in Logs (`/logs?tab=tasks`)**: Integrated tasks list into Logs page as a 3rd tab, retiring standalone `/tasks` route and sidebar entry while linking titlebar TaskIndicator directly to `/logs?tab=tasks`.
+- **Java Runtime Management Parity**: Added OS file manager path opening (`path_open`) and custom Java installation removal support to `JavaPage`.
+- **News Jump & Fallback State**: Added quick page jump in news paginator with friendly fallback empty state and reset action when jumping to an empty page.
+
+### Changed
+- **Settings About Version Dynamic Sync**: Dynamically read package version in `SettingsAboutPage` and removed redundant feedback button in overview header.
+- **Adaptive MSelect Width**: Updated `MSelect` to adapt naturally to selected text width with max-width constraint to prevent unnecessary text truncation.
+- **Accordion Gap & Rounding**: Fixed spacing and corner radius on version accordion content in `CompDetailPage`.
+- **DevUi Form & Segmented Alignment**: Fixed horizontal spacing between switches/checkboxes and constrained segmented control widths to card boundaries.
+- **Inline MPagination in DevUi**: Added `teleport` prop control to `MPagination` to keep showcase demos rendered inline without window float-dock pollution.
+- **Sidebar Logo Refinement**: Modernized sidebar header logo dimensions, drag region margin, and title alignment.
+- **Streamlined Community Resource Badges**: Replaced overflowing category badge pills on `CompBrowserPage` cards with clean PCL-aligned metadata layout.
+
+## [0.0.18] - 2026-10-25
+
+### Added
+- **Unified Floating Paginator (`MPagination`)**: Created floating dock pagination component supporting dynamic page numbers, boundary truncation with ellipsis, loading indicator, and page jumping with automatic viewport scrolling.
+- **Top-to-Bottom Multi-Column News Masonry**: Replaced row grid with CSS multi-column masonry (`columns-1 md:columns-2 lg:columns-3`), eliminating vertical voids across irregular card heights.
+- **Game Folders Management Dialog (`GameFoldersDialog`)**: Created dedicated folder dialog opened via toolbar cog button, supporting inline remarks, active switching, OS path reveal via Rust `path_open`, and folder removal.
+- **High-Fidelity Skeleton Matching**: Rebuilt loading skeletons across all 12 core pages and panels to mirror the exact outer containers, grid columns, card sizes, and line structures of the real data.
+- **Rich Markdown & HTML Detail Rendering (`MMarkdown`)**: Created unified renderer supporting embedded HTML tags (`<center>`, `<img>`, tables, rules), lazy image loading, referrer policy protection, and safe external URL opening.
+- **CurseForge Keyless Access via MCIM Mirror**: Added mirror candidate resolution when no official API key is provided, enabling community search without configuration while preserving official key authentication.
+- **PCL Offline Skin & Authlib Parity**: Bundled Steve & Alex default textures with automatic model resolution; added session server profile texture fetching for Authlib; added offline account renaming and UUID clipboard copying.
+- **Startup Splash Animation**: Added customizable brand splash overlay on launch with smooth pop/rise keyframes and instant bypass toggle in appearance settings (`mclr.splash`).
+- **Native Skin PNG Saving (`tools_save_skin`)**: Replaced browser anchor download with robust backend base64 decoding and asynchronous file writing.
+
+### Changed
+- **Shell Layout Modernization**: Extended navigation sidebar to the very top with integrated logo & app name; removed TitleBar bottom dividing line and left brand elements to eliminate redundant headers.
+- **Consolidated Unified Logs Page**: Merged game process stdout/stderr viewer and launcher logs into a unified tabbed page (`/logs?tab=game|launcher`) with nav label "日志".
+- **Feedback Consolidated into Settings About**: Moved issue reporting guidance and GitHub direct action into `/settings/about` immediately following the overview card.
+- **Search Spinner Feedback**: Dynamic loading indicator in community search input with spinning animation.
+- **Single Add/Create Instance & Account Actions**: Removed redundant in-row buttons in Launch selection cards in favor of clean header action buttons and guidance text.
+- **Comprehensive UI Library Showcase (`DevUiPage`)**: Reorganized component library demo into 8 clearly defined sections with pure Chinese localization strings and zero mixed-language text.
+- **Text Selectability Sweep**: Enabled `select-text` across detail headers, version numbers, paths, UUIDs, FAQ answers, toast messages, and error banners.
+
+### Removed
+- **Removed Game Folders Section from Settings System**: Cleaned up legacy settings tab entries in favor of the dedicated Instances toolbar dialog.
+- **Removed Redundant Feedback & Launcher Logs from Settings System**: Removed duplicate about, feedback, and logs tabs from Settings System.
+
 ## [0.0.17] - 2026-10-25
 
 ### Added

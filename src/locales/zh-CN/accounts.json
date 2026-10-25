@@ -1,6 +1,7 @@
 {
   "nav": "账号管理",
   "title": "账号列表",
+  "subtitle": "管理游戏登录凭据与外观披风",
   "empty": "尚未添加任何账号",
   "emptySubtitle": "添加微软、离线或第三方账号即可开始游戏",
   "addAccount": "添加账号",
@@ -16,14 +17,25 @@
   },
   "actions": {
     "refresh": "刷新凭据",
+    "refreshSuccess": "凭据刷新成功",
     "delete": "删除账号",
     "deleteConfirmTitle": "删除账号",
     "deleteConfirmMessage": "确定要移除账号「{name}」吗？如果是离线账号，角色进度与皮肤数据不会被删除。",
+    "rename": "重命名",
+    "renameTitle": "重命名离线账号",
+    "renameSuccess": "账号重命名成功",
+    "renameFailed": "账号重命名失败",
+    "copyUuid": "复制 UUID",
+    "copyUuidSuccess": "UUID 已复制到剪贴板",
+    "copyUuidFailed": "复制 UUID 失败",
     "selectProfileTitle": "选择角色档案",
     "selectProfilePrompt": "当前第三方账号拥有多个可用角色档案，请选择要绑定的角色：",
-    "openCloset": "在网页衣柜管理皮肤"
+    "openCloset": "在网页衣柜管理皮肤",
+    "profileSelected": "已选择角色「{name}」"
   },
   "dialog": {
+    "addSuccess": "添加账号成功",
+    "copiedCode": "设备代码已复制到剪贴板",
     "offlineTitle": "添加离线账号",
     "authlibTitle": "添加第三方账号",
     "msDeviceTitle": "微软设备代码登录",
@@ -37,6 +49,11 @@
     },
     "customUuid": "自定义 UUID",
     "customUuidPlaceholder": "例如：c06f8906-3c3e-4fdc-b47b-9fe3d2b27137",
+    "skinModel": "默认皮肤模型",
+    "skinModels": {
+      "classic": "Steve (经典 4px)",
+      "slim": "Alex (纤细 3px)"
+    },
     "authServer": "验证服务器地址",
     "authServerPlaceholder": "例如：https://littleskin.cn/api/yggdrasil",
     "authAccount": "邮箱或用户名",
@@ -69,6 +86,7 @@
     "uploadPathPrompt": "请输入 PNG 皮肤文件绝对路径",
     "uploadSuccess": "皮肤上传成功",
     "capes": "披风选择",
+    "capeChanged": "披风设置已更新",
     "noneCape": "不使用披风",
     "noCapes": "该账号暂无可用披风"
   }

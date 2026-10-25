@@ -71,7 +71,7 @@ const iconSizeClass = computed(() => {
         'bg-primary-soft text-primary-soft-fg hover:brightness-[.97]': variant === 'tonal',
         'border border-line-strong text-fg hover:bg-sunken': variant === 'outline',
         'bg-transparent text-fg hover:bg-sunken': variant === 'text',
-        'bg-danger text-white hover:brightness-[.95]': variant === 'danger',
+        'bg-danger text-primary-on hover:brightness-[.95]': variant === 'danger',
       },
     ]"
     @click="$emit('click', $event)"

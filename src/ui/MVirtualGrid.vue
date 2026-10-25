@@ -94,7 +94,9 @@ const totalSize = computed(() => virtualizer.value.getTotalSize())
 
 function rowItems(rowIndex: number) {
   const start = rowIndex * columns.value
-  return props.items.slice(start, start + columns.value).map((item, i) => ({ item, index: start + i, key: keyOf(item, start + i) }))
+  return props.items
+    .slice(start, start + columns.value)
+    .map((item, i) => ({ item, index: start + i, key: keyOf(item, start + i) }))
 }
 
 function measureEl(el: unknown) {

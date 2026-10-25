@@ -10,10 +10,7 @@ withDefaults(
 </script>
 
 <template>
-  <div
-    class="m-scroll overflow-y-auto p-1 -m-1"
-    :style="{ maxHeight }"
-  >
+  <div class="m-scroll overflow-y-auto p-1 -m-1" :style="{ maxHeight }">
     <slot />
   </div>
 </template>

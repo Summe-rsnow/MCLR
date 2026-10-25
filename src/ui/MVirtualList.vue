@@ -93,11 +93,7 @@ function measureEl(el: unknown) {
     :class="virtual && selfScroll ? 'overflow-y-auto' : ''"
     :style="virtual && selfScroll ? { maxHeight } : undefined"
   >
-    <div
-      v-if="!virtual"
-      class="flex flex-col"
-      :style="{ gap: gap + 'px' }"
-    >
+    <div v-if="!virtual" class="flex flex-col" :style="{ gap: gap + 'px' }">
       <template v-for="(item, index) in items" :key="keyOf(item, index)">
         <slot name="item" :item="item" :index="index" />
       </template>

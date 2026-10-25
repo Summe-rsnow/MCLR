@@ -17,6 +17,7 @@ const props = withDefaults(
     min?: number
     max?: number
     step?: number
+    loading?: boolean
   }>(),
   {
     placeholder: '',
@@ -32,6 +33,7 @@ const props = withDefaults(
     min: undefined,
     max: undefined,
     step: undefined,
+    loading: false,
   },
 )
 
@@ -139,8 +141,12 @@ function onClear() {
           <span class="i-lucide-chevron-down w-3.5 h-3.5 block" />
         </button>
       </div>
+      <span
+        v-if="loading"
+        class="mr-2 inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin text-fg-subtle shrink-0"
+      />
       <button
-        v-if="clearable && modelValue && !disabled"
+        v-else-if="clearable && modelValue && !disabled"
         type="button"
         class="mr-2 text-fg-subtle hover:text-fg cursor-pointer p-0.5 rounded shrink-0"
         @click="onClear"

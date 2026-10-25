@@ -1,8 +1,4 @@
-import type {
-  LaunchProcessInfo,
-  LaunchStartResult,
-  LogLine,
-} from '../../ipc/client'
+import type { LaunchProcessInfo, LaunchStartResult, LogLine } from '../../ipc/client'
 
 export const mockLogLines: LogLine[] = [
   {

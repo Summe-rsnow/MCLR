@@ -141,6 +141,14 @@ async instanceOpenPath(id: string, sub: string | null) : Promise<Result<null, Ap
     else return { status: "error", error: e  as any };
 }
 },
+async pathOpen(path: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("path_open", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async javaScan(forceRefresh: boolean | null) : Promise<Result<JavaInstallation[], AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("java_scan", { forceRefresh }) };
@@ -192,6 +200,14 @@ async accountsRemove(id: string) : Promise<Result<AccountView[], AppError>> {
 async accountsAddOffline(username: string, uuidMode: string, customUuid: string | null) : Promise<Result<AccountView, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("accounts_add_offline", { username, uuidMode, customUuid }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async accountsRenameOffline(id: string, username: string) : Promise<Result<AccountView, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accounts_rename_offline", { id, username }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -296,6 +312,14 @@ async installVanilla(version: string, name: string) : Promise<Result<string, App
 async installRepair(instanceId: string) : Promise<Result<string, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("install_repair", { instanceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async installVersionCompat(mcVersion: string, releaseType: string, releaseTime: string) : Promise<Result<VersionCompatInfo, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_version_compat", { mcVersion, releaseType, releaseTime }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -469,14 +493,6 @@ async compResolveDependencies(file: CompFile, instanceId: string, mcVersion: str
     else return { status: "error", error: e  as any };
 }
 },
-async resourcesList(instanceId: string, kind: ResourceKind, rel: string | null, requestId: string | null) : Promise<Result<ResourceEntry[], AppError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("resources_list", { instanceId, kind, rel, requestId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async localModsScanStart(instanceId: string, requestId: string) : Promise<Result<LocalModsScanResult, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("local_mods_scan_start", { instanceId, requestId }) };
@@ -485,7 +501,31 @@ async localModsScanStart(instanceId: string, requestId: string) : Promise<Result
     else return { status: "error", error: e  as any };
 }
 },
-async resourceToggle(instanceId: string, path: string) : Promise<Result<null, AppError>> {
+async localModsDependents(instanceId: string, fileName: string) : Promise<Result<string[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("local_mods_dependents", { instanceId, fileName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async localModsUpdateMany(instanceId: string, updates: LocalModUpdateItem[]) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("local_mods_update_many", { instanceId, updates }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async resourcesList(instanceId: string, kind: ResourceKind, rel: string | null, requestId: string | null) : Promise<Result<ResourceEntry[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("resources_list", { instanceId, kind, rel, requestId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async resourceToggle(instanceId: string, path: string) : Promise<Result<string, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("resource_toggle", { instanceId, path }) };
 } catch (e) {
@@ -520,22 +560,6 @@ async resourcesExport(entries: ResourceEntry[], format: string) : Promise<Result
 async schematicInspect(path: string) : Promise<Result<SchematicInfo, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("schematic_inspect", { path }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async localModsDependents(instanceId: string, fileName: string) : Promise<Result<string[], AppError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("local_mods_dependents", { instanceId, fileName }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async localModsUpdateMany(instanceId: string, updates: LocalModUpdateItem[]) : Promise<Result<string, AppError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("local_mods_update_many", { instanceId, updates }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -592,14 +616,6 @@ async saveDatapacksList(instanceId: string, folderName: string) : Promise<Result
 async saveDatapackToggle(instanceId: string, folderName: string, packId: string, enabled: boolean) : Promise<Result<DatapackInfo[], AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("save_datapack_toggle", { instanceId, folderName, packId, enabled }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async screenshotsList(instanceId: string) : Promise<Result<ScreenshotInfo[], AppError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("screenshots_list", { instanceId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -744,6 +760,14 @@ async announcementsFetch() : Promise<Result<AnnouncementItem[], AppError>> {
 async toolsFetchSkin(username: string) : Promise<Result<SkinFetchResult, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("tools_fetch_skin", { username }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async toolsSaveSkin(path: string, dataUrl: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("tools_save_skin", { path, dataUrl }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1009,7 +1033,6 @@ export type ResourceState = "ok" | "unavailable"
 export type SaveInfo = { folderName: string; path: string; name: string; seed: string; spawn: SaveSpawn; gameMode: number; difficulty: number; playTime: number; lastPlayed: number; dataVersion: number | null; iconPath: string | null; iconDataUrl: string | null }
 export type SaveSpawn = { x: number; y: number; z: number }
 export type SchematicInfo = { name: string; author: string | null; size: [number, number, number]; totalVolume: number; totalBlocks: number; regionCount: number; createdMs: number | null; modifiedMs: number | null }
-export type ScreenshotInfo = { fileName: string; path: string; size: number; modifiedAt: string; dataUrl: string | null }
 export type ScreenshotMeta = { fileName: string; path: string; size: number; createdMs: number; modifiedAt: string }
 export type ScreenshotsPagedResult = { items: ScreenshotMeta[]; total: number }
 /**
@@ -1041,6 +1064,7 @@ export type UiSettings = { seed: string; mode: ThemeMode; material: MaterialMode
  */
 export type UpdateCheckResult = { available: boolean; currentVersion: string; version: string | null; date: string | null; body: string | null; downloadUrl: string | null; signature: string | null }
 export type UpdateSettings = { channel: string; autoCheck: boolean; announcementUrl: string }
+export type VersionCompatInfo = { isAprilFools: boolean; foolCode: string | null; supportedLoaders: string[]; incompatiblePairs: ([string, string])[]; recommendedJava: number }
 /**
  * Entry in the official Mojang version manifest.
  */

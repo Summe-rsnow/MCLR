@@ -66,7 +66,7 @@ onUnmounted(() => {
     class="relative inline-flex items-center p-1 rounded-xl bg-sunken border border-line select-none w-fit max-w-full"
   >
     <div
-      class="pointer-events-none absolute top-1 bottom-1 left-1 rounded-lg bg-raised shadow-1 transition-all duration-200"
+      class="m-segmented-pill pointer-events-none absolute top-1 bottom-1 left-1 rounded-lg bg-raised shadow-1 transition-all duration-200"
       :style="indicatorStyle"
     />
     <button
@@ -78,9 +78,7 @@ onUnmounted(() => {
       class="relative z-1 inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 shrink-0"
       :class="[
         size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-xs',
-        modelValue === opt.value
-          ? 'text-fg font-semibold'
-          : 'text-fg-muted hover:text-fg',
+        modelValue === opt.value ? 'text-fg font-semibold' : 'text-fg-muted hover:text-fg',
       ]"
       @click="emit('update:modelValue', opt.value)"
     >

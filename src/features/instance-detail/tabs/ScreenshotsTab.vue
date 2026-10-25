@@ -4,15 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import type { ScreenshotMeta } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
-import {
-  MCard,
-  MButton,
-  MIconButton,
-  MEmpty,
-  MSkeletonList,
-  useToast,
-  useDialog,
-} from '../../../ui'
+import { MCard, MButton, MIconButton, MEmpty, MSkeleton, useToast, useDialog } from '../../../ui'
 
 const props = defineProps<{
   instanceId: string
@@ -20,7 +12,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const toast = useToast()
-const { confirm } = useDialog()
+const { confirmDanger } = useDialog()
 
 const screenshots = ref<ScreenshotMeta[]>([])
 const total = ref(0)
@@ -134,7 +126,7 @@ async function handleCopy(item: ScreenshotMeta) {
 }
 
 async function handleDelete(item: ScreenshotMeta) {
-  const ok = await confirm({
+  const ok = await confirmDanger({
     title: t('instanceDetail.screenshots.deleteConfirmTitle'),
     content: t('instanceDetail.screenshots.deleteConfirm', { name: item.fileName }),
   })
@@ -182,16 +174,14 @@ watch(
 </script>
 
 <template>
-  <div class="max-w-4xl space-y-4">
+  <div class="w-full space-y-4">
     <!-- Top Bar -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2">
         <h2 class="text-base font-bold text-fg">
           {{ t('instanceDetail.tabs.screenshots') }}
         </h2>
-        <span class="text-xs text-fg-muted font-mono">
-          ({{ total }})
-        </span>
+        <span class="text-xs text-fg-muted font-mono"> ({{ total }}) </span>
       </div>
       <div class="flex items-center gap-2">
         <MButton variant="tonal" size="sm" @click="handleOpenFolder">
@@ -206,16 +196,35 @@ watch(
     </div>
 
     <!-- Skeleton Loading Initial -->
-    <div v-if="loading && screenshots.length === 0" class="py-4">
-      <MSkeletonList :rows="6" variant="tile" />
+    <div
+      v-if="loading && screenshots.length === 0"
+      class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 py-1"
+    >
+      <MCard
+        v-for="n in 6"
+        :key="n"
+        variant="well"
+        padding="none"
+        class="overflow-hidden flex flex-col justify-between"
+      >
+        <MSkeleton height="10rem" class="w-full aspect-video rounded-none" :rounded="false" />
+        <div class="p-3 flex items-center justify-between gap-2 border-t border-line">
+          <div class="space-y-1 min-w-0">
+            <MSkeleton width="7rem" height="0.875rem" />
+            <MSkeleton width="3.5rem" height="0.75rem" />
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <MSkeleton width="1.75rem" height="1.75rem" class="rounded-lg" />
+            <MSkeleton width="1.75rem" height="1.75rem" class="rounded-lg" />
+            <MSkeleton width="1.75rem" height="1.75rem" class="rounded-lg" />
+          </div>
+        </div>
+      </MCard>
     </div>
 
     <!-- Empty State -->
     <div v-else-if="screenshots.length === 0" class="py-16">
-      <MEmpty
-        :title="t('instanceDetail.screenshots.empty')"
-        icon="i-lucide-image"
-      />
+      <MEmpty :title="t('instanceDetail.screenshots.empty')" icon="i-lucide-image" />
     </div>
 
     <!-- Screenshots Grid -->
@@ -244,14 +253,13 @@ watch(
             decoding="async"
             @load="loaded[item.path] = true"
           />
-          <div
-            v-else
-            class="w-full h-full flex items-center justify-center bg-sunken/40"
-          >
+          <div v-else class="w-full h-full flex items-center justify-center bg-sunken/40">
             <span class="w-8 h-8 i-lucide-image text-fg-muted/40" />
           </div>
 
-          <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+          <div
+            class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+          >
             <span class="w-6 h-6 i-lucide-external-link" />
           </div>
         </div>
@@ -296,9 +304,7 @@ watch(
 
     <!-- Infinite scroll sentinel -->
     <div ref="sentinelRef" class="h-8 flex items-center justify-center">
-      <span v-if="loadingMore" class="text-xs text-fg-muted animate-pulse">
-        ...
-      </span>
+      <span v-if="loadingMore" class="text-xs text-fg-muted animate-pulse"> ... </span>
     </div>
   </div>
 </template>

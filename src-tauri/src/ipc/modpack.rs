@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use mclr_comp::{
-    CompError, CompFile, CurseForgeClient, ModpackInspectResult, import_modpack, inspect_modpack,
+    CompError, CompFile, CurseForgeClient, ModpackImportContext, ModpackInspectResult,
+    import_modpack, inspect_modpack,
 };
 use mclr_core::{AppError, SettingsStore, TaskCenter};
 use mclr_net::{DownloadSpec, Downloader};
@@ -58,17 +59,17 @@ pub async fn modpack_import_file(
 
     tokio::spawn(async move {
         let _ = tc.start_task(&tid).await;
-        match import_modpack(
-            &path,
-            &instance_name,
-            &mc_folder,
-            &client,
-            &net_settings,
-            Some(&java_settings),
-            Some(&cf_client),
-            Some((&tc, &tid)),
-            true,
-        )
+        match import_modpack(ModpackImportContext {
+            archive_path: &path,
+            instance_name: &instance_name,
+            mc_folder: &mc_folder,
+            client: &client,
+            net_settings: &net_settings,
+            java_settings: Some(&java_settings),
+            cf_client: Some(&cf_client),
+            task_ctx: Some((&tc, &tid)),
+            install_base_game: true,
+        })
         .await
         {
             Ok(_) => {
@@ -156,17 +157,17 @@ pub async fn modpack_install_remote(
         }
 
         // Step 2: import the modpack
-        match import_modpack(
-            &archive_path,
-            &instance_name,
-            &mc_folder,
-            &client,
-            &net_settings,
-            Some(&java_settings),
-            Some(&cf_client),
-            Some((&tc, &tid)),
-            true,
-        )
+        match import_modpack(ModpackImportContext {
+            archive_path: &archive_path,
+            instance_name: &instance_name,
+            mc_folder: &mc_folder,
+            client: &client,
+            net_settings: &net_settings,
+            java_settings: Some(&java_settings),
+            cf_client: Some(&cf_client),
+            task_ctx: Some((&tc, &tid)),
+            install_base_game: true,
+        })
         .await
         {
             Ok(_) => {

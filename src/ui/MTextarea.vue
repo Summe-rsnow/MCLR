@@ -8,6 +8,7 @@ withDefaults(
     hint?: string
     error?: string
     disabled?: boolean
+    resize?: 'none' | 'y' | 'x' | 'both'
   }>(),
   {
     rows: 3,
@@ -16,6 +17,7 @@ withDefaults(
     hint: undefined,
     error: undefined,
     disabled: false,
+    resize: 'none',
   },
 )
 
@@ -37,12 +39,19 @@ function onInput(event: Event) {
       :rows="rows"
       :placeholder="placeholder"
       :disabled="disabled"
-      class="w-full px-3 py-2 text-sm rounded-lg bg-sunken text-fg placeholder:text-fg-subtle border outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 resize-y"
-      :class="
+      class="w-full px-3 py-2 text-sm rounded-lg bg-sunken text-fg placeholder:text-fg-subtle border outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+      :class="[
+        resize === 'y'
+          ? 'resize-y'
+          : resize === 'x'
+            ? 'resize-x'
+            : resize === 'both'
+              ? 'resize'
+              : 'resize-none',
         error
           ? 'border-danger focus:border-danger focus:ring-2 focus:ring-danger/25'
-          : 'border-line-strong focus:border-primary focus:ring-2 focus:ring-primary/25'
-      "
+          : 'border-line-strong focus:border-primary focus:ring-2 focus:ring-primary/25',
+      ]"
       @input="onInput"
     />
     <p v-if="error" class="text-xs text-danger-fg">{{ error }}</p>

@@ -19,5 +19,12 @@
   "clear": "清除",
   "browse": "浏览",
   "chooseFile": "选择文件",
-  "chooseDirectory": "选择文件夹"
+  "chooseDirectory": "选择文件夹",
+  "unselected": "未选择",
+  "noOptions": "无可用选项",
+  "pagination": {
+    "label": "分页",
+    "prev": "上一页",
+    "next": "下一页"
+  }
 }

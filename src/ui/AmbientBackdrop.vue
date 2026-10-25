@@ -4,7 +4,7 @@ import { useThemeStore } from '../stores/theme'
 
 const themeStore = useThemeStore()
 const isHidden = ref(typeof document !== 'undefined' ? document.hidden : false)
-const isFocused = ref(typeof document !== 'undefined' ? document.hasFocus?.() ?? true : true)
+const isFocused = ref(typeof document !== 'undefined' ? (document.hasFocus?.() ?? true) : true)
 
 function handleVisibilityChange() {
   if (typeof document !== 'undefined') {
@@ -18,9 +18,7 @@ function onBlur() {
   isFocused.value = false
 }
 
-const paused = computed(
-  () => isHidden.value || !isFocused.value || themeStore.motion !== 'full',
-)
+const paused = computed(() => isHidden.value || !isFocused.value || themeStore.motion !== 'full')
 
 onMounted(() => {
   if (typeof document !== 'undefined') {
@@ -52,10 +50,7 @@ const noiseDataUri =
     data-testid="ambient-backdrop"
     class="pointer-events-none fixed inset-0 z-0 overflow-hidden"
   >
-    <div
-      class="ambient-blobs absolute inset-0"
-      :class="{ 'ambient-paused': paused }"
-    >
+    <div class="ambient-blobs absolute inset-0" :class="{ 'ambient-paused': paused }">
       <div class="ambient-blob ambient-blob-1" />
       <div class="ambient-blob ambient-blob-2" />
       <div class="ambient-blob ambient-blob-3" />
@@ -90,7 +85,11 @@ const noiseDataUri =
   height: 52vh;
   left: -6%;
   top: -12%;
-  background: radial-gradient(circle at 40% 40%, rgb(var(--ambient-1, 59 130 246) / 0.55), transparent 72%);
+  background: radial-gradient(
+    circle at 40% 40%,
+    rgb(var(--ambient-1, 59 130 246) / 0.55),
+    transparent 72%
+  );
 }
 
 .ambient-blob-2 {
@@ -98,7 +97,11 @@ const noiseDataUri =
   height: 48vh;
   right: -8%;
   top: -4%;
-  background: radial-gradient(circle at 60% 40%, rgb(var(--ambient-2, 99 102 241) / 0.48), transparent 72%);
+  background: radial-gradient(
+    circle at 60% 40%,
+    rgb(var(--ambient-2, 99 102 241) / 0.48),
+    transparent 72%
+  );
   animation-delay: -13s;
 }
 
@@ -107,7 +110,11 @@ const noiseDataUri =
   height: 50vh;
   left: 32%;
   bottom: -18%;
-  background: radial-gradient(circle at 50% 60%, rgb(var(--ambient-3, 20 184 166) / 0.45), transparent 72%);
+  background: radial-gradient(
+    circle at 50% 60%,
+    rgb(var(--ambient-3, 20 184 166) / 0.45),
+    transparent 72%
+  );
   animation-delay: -27s;
 }
 

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use base64::Engine;
 use chrono::Datelike;
-use mclr_core::{AppError, SettingsStore, TaskCenter, paths};
+use mclr_core::{AppError, SettingsStore, TaskCenter, is_launcher_log_file, paths};
 use mclr_net::{DownloadSpec, Downloader};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -56,10 +56,8 @@ struct SessionProperty {
 
 #[derive(Deserialize)]
 struct SessionProfileResponse {
-    #[allow(dead_code)]
-    id: String,
-    #[allow(dead_code)]
-    name: String,
+    _id: Option<String>,
+    _name: Option<String>,
     properties: Vec<SessionProperty>,
 }
 
@@ -203,6 +201,29 @@ fn urlencoding_encode(s: &str) -> String {
     url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
 }
 
+#[tauri::command]
+#[specta::specta]
+pub async fn tools_save_skin(path: String, data_url: String) -> Result<(), AppError> {
+    const PREFIX: &str = "data:image/png;base64,";
+    let base64_data = data_url
+        .strip_prefix(PREFIX)
+        .ok_or_else(|| AppError::new("tools.invalidSkinData"))?;
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(base64_data)
+        .map_err(|e| AppError::new("tools.invalidSkinData").with_detail(e.to_string()))?;
+
+    if bytes.is_empty() {
+        return Err(AppError::new("tools.invalidSkinData"));
+    }
+
+    tokio::fs::write(&path, &bytes)
+        .await
+        .map_err(|e| AppError::new("tools.saveFailed").with_detail(e.to_string()))?;
+
+    Ok(())
+}
+
 fn compute_dir_size(dir: &Path) -> u64 {
     if !dir.exists() {
         return 0;
@@ -225,13 +246,37 @@ fn compute_dir_size(dir: &Path) -> u64 {
     total
 }
 
+fn compute_logs_size(logs_dir: &Path) -> u64 {
+    if !logs_dir.exists() {
+        return 0;
+    }
+    let mut total = 0u64;
+    let entries = match fs::read_dir(logs_dir) {
+        Ok(e) => e,
+        Err(_) => return 0,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                if is_launcher_log_file(file_name) {
+                    if let Ok(meta) = entry.metadata() {
+                        total += meta.len();
+                    }
+                }
+            }
+        }
+    }
+    total
+}
+
 fn compute_cache_sizes() -> CacheSizeInfo {
     let cache_p = paths::cache_dir();
     let logs_p = paths::logs_dir();
     let skin_p = cache_p.join("skin");
 
     let cache_bytes = compute_dir_size(&cache_p);
-    let logs_bytes = compute_dir_size(&logs_p);
+    let logs_bytes = compute_logs_size(&logs_p);
     let skin_cache_bytes = compute_dir_size(&skin_p);
     let total_bytes = cache_bytes + logs_bytes;
 
@@ -622,7 +667,7 @@ mod tests {
 
         fs::write(skin_dir.join("test_skin.png"), b"skin_bytes_data").unwrap();
         fs::write(cache_dir.join("temp.dat"), b"cache_bytes").unwrap();
-        fs::write(logs_dir.join("latest.log"), b"log_bytes").unwrap();
+        fs::write(logs_dir.join("mclr.2026-10-26.log"), b"log_bytes").unwrap();
 
         let info = compute_cache_sizes();
         assert!(info.skin_cache_bytes > 0);
@@ -677,5 +722,28 @@ mod tests {
 
         assert_eq!(audio_files.len(), 2);
         let _ = fs::remove_dir_all(&temp_path);
+    }
+
+    #[tokio::test]
+    async fn test_tools_save_skin() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("mclr_test_save_skin_{}", std::process::id()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let target = temp_dir.join("skin.png");
+        let target_str = target.to_string_lossy().to_string();
+
+        // Valid 1x1 base64 png
+        let valid_data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        let res = tools_save_skin(target_str.clone(), valid_data_url.to_string()).await;
+        assert!(res.is_ok());
+        assert!(target.exists());
+        assert!(fs::metadata(&target).unwrap().len() > 0);
+
+        // Invalid prefix
+        let err_res = tools_save_skin(target_str.clone(), "not_data_url".to_string()).await;
+        assert!(err_res.is_err());
+        assert_eq!(err_res.unwrap_err().code, "tools.invalidSkinData");
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

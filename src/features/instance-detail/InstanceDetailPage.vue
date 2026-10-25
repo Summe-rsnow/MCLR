@@ -105,18 +105,17 @@ function handleLaunch() {
   <div class="m-page">
     <!-- Header -->
     <MPageHeader
-      :title="instance ? instance.name : (currentInstanceId || t('instanceDetail.nav'))"
-      :description="instance?.mcVersion ? `${instance.mcVersion} • ${instance.loaders.length > 0 ? instance.loaders.join(', ') : 'Vanilla'}` : undefined"
+      :title="instance ? instance.name : currentInstanceId || t('instanceDetail.nav')"
+      :description="
+        instance?.mcVersion
+          ? `${instance.mcVersion} • ${instance.loaders.length > 0 ? instance.loaders.join(', ') : 'Vanilla'}`
+          : undefined
+      "
       icon="i-lucide-box"
     >
       <template #actions>
         <div class="flex items-center gap-2">
-          <MButton
-            variant="text"
-            size="sm"
-            icon="i-lucide-arrow-left"
-            @click="goBack"
-          >
+          <MButton variant="text" size="sm" icon="i-lucide-arrow-left" @click="goBack">
             {{ t('instanceDetail.back') }}
           </MButton>
           <MButton
@@ -132,8 +131,34 @@ function handleLaunch() {
       </template>
     </MPageHeader>
 
+    <!-- Header Summary Card Skeleton (when loading) -->
+    <MCard
+      v-if="!instance && instancesStore.loading"
+      padding="md"
+      class="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+    >
+      <div class="flex items-center gap-4 min-w-0">
+        <MSkeleton width="3.5rem" height="3.5rem" class="rounded-xl shrink-0" />
+        <div class="min-w-0 space-y-2">
+          <MSkeleton width="12rem" height="1.5rem" />
+          <div class="flex items-center gap-2">
+            <MSkeleton width="4rem" height="1.25rem" class="rounded-md" />
+            <MSkeleton width="4rem" height="1.25rem" class="rounded-md" />
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 self-end sm:self-auto">
+        <MSkeleton width="6rem" height="2.25rem" class="rounded-lg" />
+        <MSkeleton width="6rem" height="2.25rem" class="rounded-lg" />
+      </div>
+    </MCard>
+
     <!-- Header Summary Card -->
-    <MCard v-if="instance" padding="md" class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <MCard
+      v-else-if="instance"
+      padding="md"
+      class="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+    >
       <div class="flex items-center gap-4 min-w-0">
         <MLoaderIcon
           :kind="instance.kind || (instance.loaders?.[0]?.toLowerCase() ?? 'vanilla')"
@@ -150,45 +175,36 @@ function handleLaunch() {
               {{ t(`instances.card.state.${instance.state}`) }}
             </MBadge>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2 select-text">
             <MBadge variant="primary">
               {{ instance.mcVersion }}
             </MBadge>
-            <MBadge
-              v-for="loader in instance.loaders"
-              :key="loader"
-              variant="neutral"
-            >
+            <MBadge v-for="loader in instance.loaders" :key="loader" variant="neutral">
               {{ loader }}
             </MBadge>
-            <MBadge v-if="instance.loaders.length === 0" variant="neutral">
-              Vanilla
-            </MBadge>
+            <MBadge v-if="instance.loaders.length === 0" variant="neutral"> Vanilla </MBadge>
           </div>
         </div>
       </div>
     </MCard>
-
     <!-- Navigation Tabs -->
     <div class="border-b border-line pb-1">
-      <MTabs
-        :model-value="activeTab"
-        :tabs="tabOptions"
-        @update:model-value="onTabChange"
-      />
+      <MTabs :model-value="activeTab" :tabs="tabOptions" @update:model-value="onTabChange" />
     </div>
 
     <!-- Tab Content -->
     <div>
       <div v-if="!instance && instancesStore.loading" class="space-y-4">
-        <MSkeleton class="h-10 w-48" />
-        <MSkeleton class="h-64 w-full" />
+        <div class="flex items-center gap-2 py-2">
+          <MSkeleton v-for="n in 5" :key="n" width="5.5rem" height="2rem" class="rounded-lg" />
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <MSkeleton height="14rem" class="rounded-2xl" />
+          <MSkeleton height="14rem" class="rounded-2xl" />
+        </div>
       </div>
       <div v-else-if="!instance" class="py-20">
-        <MEmpty
-          :title="t('instanceDetail.notFound')"
-          icon="i-lucide-alert-circle"
-        >
+        <MEmpty :title="t('instanceDetail.notFound')" icon="i-lucide-alert-circle">
           <MButton variant="tonal" size="sm" icon="i-lucide-arrow-left" @click="goBack">
             {{ t('instanceDetail.back') }}
           </MButton>
@@ -197,9 +213,7 @@ function handleLaunch() {
       <div v-else class="overflow-hidden">
         <Transition :name="direction === 'forward' ? 'm-tab-forward' : 'm-tab-back'" mode="out-in">
           <div :key="activeTab">
-            <ModsDisabledTab
-              v-if="activeTab === 'mods' && instance && !instance.modable"
-            />
+            <ModsDisabledTab v-if="activeTab === 'mods' && instance && !instance.modable" />
             <component
               :is="activeComponent"
               v-else

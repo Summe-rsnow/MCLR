@@ -8,10 +8,9 @@ export interface InstanceDetailTab {
   component: Component
 }
 
-const tabModules = import.meta.glob<{ default: InstanceDetailTab }>(
-  './tabs/*.tab.ts',
-  { eager: true },
-)
+const tabModules = import.meta.glob<{ default: InstanceDetailTab }>('./tabs/*.tab.ts', {
+  eager: true,
+})
 
 export const instanceDetailTabs: InstanceDetailTab[] = Object.values(tabModules)
   .map((mod) => mod.default)

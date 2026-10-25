@@ -9,10 +9,9 @@ export interface NavMeta {
   group?: NavGroupKey
 }
 
-const routeModules = import.meta.glob<{ default: RouteRecordRaw[] }>(
-  './features/*/routes.ts',
-  { eager: true },
-)
+const routeModules = import.meta.glob<{ default: RouteRecordRaw[] }>('./features/*/routes.ts', {
+  eager: true,
+})
 
 export const featureRoutes: RouteRecordRaw[] = Object.values(routeModules).flatMap(
   (mod) => mod.default ?? [],
@@ -21,7 +20,11 @@ export const featureRoutes: RouteRecordRaw[] = Object.values(routeModules).flatM
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    ...featureRoutes,
+    ...featureRoutes.filter((r) => r.path !== '/tasks'),
+    {
+      path: '/tasks',
+      redirect: '/logs?tab=tasks',
+    },
     {
       path: '/',
       name: 'root',

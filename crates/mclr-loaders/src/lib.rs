@@ -28,13 +28,25 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum LoaderKind {
+    #[serde(alias = "fabric", alias = "Fabric")]
     Fabric,
+    #[serde(
+        alias = "legacyfabric",
+        alias = "legacy_fabric",
+        alias = "LegacyFabric"
+    )]
     LegacyFabric,
+    #[serde(alias = "liteloader", alias = "lite_loader", alias = "LiteLoader")]
     LiteLoader,
+    #[serde(alias = "labymod", alias = "laby_mod", alias = "LabyMod")]
     LabyMod,
+    #[serde(alias = "optifine", alias = "opti_fine", alias = "OptiFine")]
     OptiFine,
+    #[serde(alias = "forge", alias = "Forge")]
     Forge,
+    #[serde(alias = "neoforge", alias = "neo_forge", alias = "NeoForge")]
     NeoForge,
+    #[serde(alias = "cleanroom", alias = "Cleanroom")]
     Cleanroom,
 }
 
@@ -131,4 +143,35 @@ pub async fn install_with_loader(
         task_ctx: ctx.task_ctx,
     };
     install_instance(req, env).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_loader_kind_serde_aliases() {
+        let kinds = [
+            ("\"fabric\"", LoaderKind::Fabric),
+            ("\"Fabric\"", LoaderKind::Fabric),
+            ("\"legacyfabric\"", LoaderKind::LegacyFabric),
+            ("\"legacyFabric\"", LoaderKind::LegacyFabric),
+            ("\"liteloader\"", LoaderKind::LiteLoader),
+            ("\"liteLoader\"", LoaderKind::LiteLoader),
+            ("\"labymod\"", LoaderKind::LabyMod),
+            ("\"labyMod\"", LoaderKind::LabyMod),
+            ("\"optifine\"", LoaderKind::OptiFine),
+            ("\"optiFine\"", LoaderKind::OptiFine),
+            ("\"forge\"", LoaderKind::Forge),
+            ("\"Forge\"", LoaderKind::Forge),
+            ("\"neoforge\"", LoaderKind::NeoForge),
+            ("\"neoForge\"", LoaderKind::NeoForge),
+            ("\"cleanroom\"", LoaderKind::Cleanroom),
+            ("\"Cleanroom\"", LoaderKind::Cleanroom),
+        ];
+        for (json, expected) in kinds {
+            let parsed: LoaderKind = serde_json::from_str(json).unwrap();
+            assert_eq!(parsed, expected, "Failed for {json}");
+        }
+    }
 }

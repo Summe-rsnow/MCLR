@@ -179,7 +179,6 @@ export const useInstallStore = defineStore('install', () => {
     }
   }
 
-
   async function fetchManifest(forceRefresh = false) {
     loading.value = true
     try {
@@ -204,10 +203,7 @@ export const useInstallStore = defineStore('install', () => {
     if (!selectedVersion.value || !isNameValid.value) return null
     let taskId: string
     if (selectedLoader.value === 'none') {
-      taskId = await ipcClient.installVanilla(
-        selectedVersion.value.id,
-        instanceName.value.trim(),
-      )
+      taskId = await ipcClient.installVanilla(selectedVersion.value.id, instanceName.value.trim())
     } else {
       const optifine = selectedOptifineVersion.value ? selectedOptifineVersion.value : null
       taskId = await ipcClient.loadersInstall(

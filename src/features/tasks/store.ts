@@ -14,7 +14,9 @@ export const useTasksStore = defineStore('tasks', () => {
   let unlisten: UnlistenFn | null = null
 
   const activeTasks = computed(() =>
-    tasks.value.filter((t) => t.state === 'running' || t.state === 'waiting' || t.state === 'paused'),
+    tasks.value.filter(
+      (t) => t.state === 'running' || t.state === 'waiting' || t.state === 'paused',
+    ),
   )
 
   const activeTasksCount = computed(() => activeTasks.value.length)

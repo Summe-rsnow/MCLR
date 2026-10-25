@@ -160,6 +160,7 @@
     "backupSuccess": "备份已生成：{path}",
     "deleteConfirmTitle": "删除世界存档",
     "deleteConfirm": "确定要永久删除世界「{name}」吗？此操作无法撤销！",
+    "deleteCheckbox": "我了解此世界存档将被永久删除，无法找回",
     "deleteSuccess": "世界存档已删除",
     "importDialogTitle": "导入世界存档",
     "importPath": "Zip 压缩包路径",

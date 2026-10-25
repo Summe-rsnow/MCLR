@@ -1,3 +1,5 @@
+import { i18n } from '@/i18n'
+
 /**
  * PCL-CE parity rules for Minecraft version detection, compatibility, add-ons, and instance naming.
  * Owned by slice B1.
@@ -122,22 +124,35 @@ export function isAprilFools(id: string, releaseTime?: string): boolean {
 
 export function getMcFoolName(name: string): string {
   const lower = name.toLowerCase()
+  let code = ''
   if (lower.startsWith('2.0') || lower.startsWith('2point0')) {
-    if (lower.endsWith('red')) return '2.0 红色版'
-    if (lower.endsWith('blue')) return '2.0 蓝色版'
-    if (lower.endsWith('purple')) return '2.0 紫色版'
-    return '2.0 愚人节版'
+    if (lower.includes('red')) code = '2_0_red'
+    else if (lower.includes('blue')) code = '2_0_blue'
+    else if (lower.includes('purple')) code = '2_0_purple'
+    else code = '2_0'
+  } else if (lower === '15w14a') {
+    code = '15w14a'
+  } else if (lower === '1.rv-pre1' || lower === '1_rv-pre1') {
+    code = '1_rv-pre1'
+  } else if (lower === '3d shareware v1.34' || lower === '3d_shareware') {
+    code = '3d_shareware'
+  } else if (lower.startsWith('20w14inf') || lower === '20w14∞' || lower === '20w14infinite') {
+    code = '20w14infinite'
+  } else if (lower === '22w13oneblockatatime') {
+    code = '22w13oneblockatatime'
+  } else if (lower === '23w13a_or_b') {
+    code = '23w13a_or_b'
+  } else if (lower === '24w14potato') {
+    code = '24w14potato'
+  } else if (lower === '25w14craftmine') {
+    code = '25w14craftmine'
+  } else if (lower === '26w14a') {
+    code = '26w14a'
   }
-  if (lower === '15w14a') return '爱与拥抱更新'
-  if (lower === '1.rv-pre1') return '时尚更新'
-  if (lower === '3d shareware v1.34') return '3D 共享软件'
-  if (lower.startsWith('20w14inf') || lower === '20w14∞') return '终极内容更新'
-  if (lower === '22w13oneblockatatime') return '一次一个方块'
-  if (lower === '23w13a_or_b') return '投票更新'
-  if (lower === '24w14potato') return '毒马铃薯更新'
-  if (lower === '25w14craftmine') return 'Craftmine'
-  if (lower === '26w14a') return '2026 愚人节快照'
-  return ''
+  if (!code) return ''
+  const key = `download.foolNames.${code}`
+  const translated = i18n.global.t(key)
+  return translated === key ? '' : translated
 }
 
 export type McVersionCategory = 'release' | 'snapshot' | 'old' | 'aprilFools'
@@ -220,9 +235,7 @@ export function loaderVisibility(mcVersion: string): LoaderVisibility {
   const labymod = fit && compareVersions(mcVersion, '1.8.9') >= 0
   const optifine = compareVersions(mcVersion, '1.7.2') >= 0
   const liteloader =
-    fit &&
-    compareVersions(mcVersion, '1.5.2') >= 0 &&
-    compareVersions(mcVersion, '1.12.2') <= 0
+    fit && compareVersions(mcVersion, '1.5.2') >= 0 && compareVersions(mcVersion, '1.12.2') <= 0
 
   return {
     forge,
@@ -273,10 +286,7 @@ export function loaderIncompatibilities(
   }
 
   if (primaryLoader === 'forge') {
-    if (
-      compareVersions(mcVersion, '1.13') >= 0 &&
-      compareVersions(mcVersion, '1.14.3') <= 0
-    ) {
+    if (compareVersions(mcVersion, '1.13') >= 0 && compareVersions(mcVersion, '1.14.3') <= 0) {
       result.optifineDisabledReason = 'download.compat.forgeOptifineVersion'
     }
   }
@@ -314,10 +324,7 @@ export function defaultName(input: DefaultNameInput): string {
     name += `-LegacyFabric_${input.legacyFabricVersion}`
   }
   if (input.labymodVersion) {
-    const channel =
-      input.labymodChannel?.toLowerCase() === 'snapshot'
-        ? 'Snapshot'
-        : 'Production'
+    const channel = input.labymodChannel?.toLowerCase() === 'snapshot' ? 'Snapshot' : 'Production'
     name += `-LabyMod_${input.labymodVersion}_${channel}`
   }
   if (input.forgeVersion) {
@@ -333,10 +340,7 @@ export function defaultName(input: DefaultNameInput): string {
     name += '-LiteLoader'
   }
   if (input.optifineDisplay) {
-    const withoutMc = input.optifineDisplay.replace(
-      new RegExp(`^${input.mcVersion}\\s*`),
-      '',
-    )
+    const withoutMc = input.optifineDisplay.replace(new RegExp(`^${input.mcVersion}\\s*`), '')
     const clean = withoutMc.replace(/\s+/g, '_')
     name += `-OptiFine_${clean}`
   }

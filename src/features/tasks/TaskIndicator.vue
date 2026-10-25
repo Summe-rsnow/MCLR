@@ -57,19 +57,27 @@ function tweenValue(
   return requestAnimationFrame(tick)
 }
 
-watch(activeCount, (newVal, oldVal) => {
-  if (countRaf) cancelAnimationFrame(countRaf)
-  countRaf = tweenValue(oldVal ?? newVal, newVal, 300, (val) => {
-    displayedCount.value = val
-  })
-}, { immediate: true })
+watch(
+  activeCount,
+  (newVal, oldVal) => {
+    if (countRaf) cancelAnimationFrame(countRaf)
+    countRaf = tweenValue(oldVal ?? newVal, newVal, 300, (val) => {
+      displayedCount.value = val
+    })
+  },
+  { immediate: true },
+)
 
-watch(progressPercent, (newVal, oldVal) => {
-  if (progressRaf) cancelAnimationFrame(progressRaf)
-  progressRaf = tweenValue(oldVal ?? newVal, newVal, 300, (val) => {
-    displayedProgress.value = val
-  })
-}, { immediate: true })
+watch(
+  progressPercent,
+  (newVal, oldVal) => {
+    if (progressRaf) cancelAnimationFrame(progressRaf)
+    progressRaf = tweenValue(oldVal ?? newVal, newVal, 300, (val) => {
+      displayedProgress.value = val
+    })
+  },
+  { immediate: true },
+)
 
 onUnmounted(() => {
   if (countRaf) cancelAnimationFrame(countRaf)
@@ -77,7 +85,9 @@ onUnmounted(() => {
 })
 
 function navigateToTasks() {
-  router.push('/tasks')
+  if (router?.push) {
+    router.push('/logs?tab=tasks')
+  }
 }
 </script>
 
@@ -90,7 +100,9 @@ function navigateToTasks() {
   >
     <span class="w-3.5 h-3.5 i-lucide-loader-2 animate-spin" />
     <span>{{ t('tasks.indicator.activeTasks', { count: displayedCount }) }}</span>
-    <span class="text-fg-muted font-mono text-[11px]">{{ t('tasks.indicator.speed', { speed: aggregateSpeed }) }}</span>
+    <span class="text-fg-muted font-mono text-[11px]">{{
+      t('tasks.indicator.speed', { speed: aggregateSpeed })
+    }}</span>
     <div class="w-12 h-1.5 ml-1">
       <MProgress :value="displayedProgress" :max="100" />
     </div>

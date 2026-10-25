@@ -26,7 +26,8 @@ export const mockLauncherLogs: LauncherLogFile[] = [
 ]
 
 export const mockLogContents: Record<string, string> = {
-  'mclr-2026-10-25.log': '[2026-10-25T10:00:00Z INFO mclr_core] MCLR initialized version 0.0.11\n[2026-10-25T10:00:01Z INFO mclr_game] Found 1 installed instances\n',
+  'mclr-2026-10-25.log':
+    '[2026-10-25T10:00:00Z INFO mclr_core] MCLR initialized version 0.0.11\n[2026-10-25T10:00:01Z INFO mclr_game] Found 1 installed instances\n',
   'mclr-2026-10-24.log': '[2026-10-24T18:30:00Z INFO mclr_core] System check ok\n',
 }
 

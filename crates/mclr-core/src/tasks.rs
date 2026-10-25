@@ -135,6 +135,24 @@ impl TaskCenter {
         let _ = self.update_tx.send(diff);
         Ok(())
     }
+    /// Updates task title parameters.
+    pub async fn update_title_params(
+        &self,
+        id: &str,
+        params: HashMap<String, String>,
+    ) -> Result<(), CoreError> {
+        let mut diff = Vec::new();
+        {
+            let mut lock = self.tasks.write().await;
+            let task = lock
+                .get_mut(id)
+                .ok_or_else(|| CoreError::TaskNotFound(id.to_string()))?;
+            task.node.title_params.extend(params);
+            diff.push(task.node.clone());
+        }
+        let _ = self.update_tx.send(diff);
+        Ok(())
+    }
 
     /// Marks a task as `Success` (progress set to 1.0, speed to 0).
     pub async fn complete_task(&self, id: &str) -> Result<(), CoreError> {

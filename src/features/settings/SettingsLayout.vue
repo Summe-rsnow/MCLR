@@ -86,28 +86,12 @@ const navGroups: NavGroup[] = [
         path: '/settings/system',
         tab: 'update',
       },
-      {
-        key: 'logs',
-        titleKey: 'settings.nav.logs',
-        icon: 'i-lucide-file-text',
-        to: '/settings/system?tab=logs',
-        path: '/settings/system',
-        tab: 'logs',
-      },
     ],
   },
   {
     key: 'other',
     titleKey: 'settings.group.other',
     items: [
-      {
-        key: 'feedback',
-        titleKey: 'settings.nav.feedback',
-        icon: 'i-lucide-message-square',
-        to: '/settings/system?tab=feedback',
-        path: '/settings/system',
-        tab: 'feedback',
-      },
       {
         key: 'about',
         titleKey: 'settings.nav.aboutHelp',
@@ -124,9 +108,13 @@ function isActive(item: SubNavItem): boolean {
   if (item.path !== route.path) return false
   if (!item.tab) return true
 
-  const currentTab = (route.query?.tab as string) || (
-    route.path === '/settings/game' ? 'launch' : route.path === '/settings/system' ? 'gameManage' : ''
-  )
+  const currentTab =
+    (route.query?.tab as string) ||
+    (route.path === '/settings/game'
+      ? 'launch'
+      : route.path === '/settings/system'
+        ? 'gameManage'
+        : '')
   return currentTab === item.tab
 }
 
@@ -158,7 +146,7 @@ function navigate(item: SubNavItem) {
             :class="[
               isActive(item)
                 ? 'bg-primary-soft text-primary-soft-fg font-medium'
-                : 'text-fg-muted hover:bg-sunken hover:text-fg'
+                : 'text-fg-muted hover:bg-sunken hover:text-fg',
             ]"
             @click="navigate(item)"
           >

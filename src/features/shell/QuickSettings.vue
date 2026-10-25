@@ -19,7 +19,6 @@ const materialOptions = computed(() => [
   { label: t('shell.material.flat'), value: 'flat', icon: 'i-lucide-square' },
   { label: t('shell.material.glass'), value: 'glass', icon: 'i-lucide-sparkles' },
 ])
-
 </script>
 
 <template>
@@ -83,7 +82,6 @@ const materialOptions = computed(() => [
           </button>
         </div>
       </div>
-
     </div>
   </MPopover>
 </template>

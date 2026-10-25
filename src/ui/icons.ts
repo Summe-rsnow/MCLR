@@ -249,7 +249,10 @@ export const compTypeMeta: Record<CompTypeKey, { icon: string; hue: number }> = 
   world: { icon: 'i-lucide-globe', hue: 130 },
 }
 
-export const platformMeta: Record<'modrinth' | 'curseforge', { brand: BrandName; icon: string; label: string }> = {
+export const platformMeta: Record<
+  'modrinth' | 'curseforge',
+  { brand: BrandName; icon: string; label: string }
+> = {
   modrinth: { brand: 'modrinth', icon: 'i-simple-icons-modrinth', label: 'Modrinth' },
   curseforge: { brand: 'curseforge', icon: 'i-simple-icons-curseforge', label: 'CurseForge' },
 }

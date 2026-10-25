@@ -690,65 +690,59 @@ pub fn schematic_info(path: &Path) -> Result<SchematicInfo, CompError> {
 }
 
 /// Toggles a resource file between enabled and disabled (.disabled / .old).
-pub fn toggle_resource(path: &Path) -> Result<(), CompError> {
-    if !path.exists() {
-        return Err(CompError::FileNotFound(path.display().to_string()));
-    }
-
-    let file_name = path
-        .file_name()
-        .ok_or_else(|| CompError::FileNotFound(path.display().to_string()))?
-        .to_string_lossy();
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-
-    if let Some(base) = file_name.strip_suffix(".disabled") {
-        let target = parent.join(base);
-        if target.exists() {
-            let hash_src = file_md5(path)?;
-            let hash_dst = file_md5(&target)?;
-            if hash_src != hash_dst {
-                return Err(CompError::ToggleConflict);
-            }
-            let _ = fs::remove_file(path);
-        } else {
-            fs::rename(path, &target)?;
-        }
-    } else if let Some(base) = file_name.strip_suffix(".old") {
-        let target = parent.join(base);
-        if target.exists() {
-            let hash_src = file_md5(path)?;
-            let hash_dst = file_md5(&target)?;
-            if hash_src != hash_dst {
-                return Err(CompError::ToggleConflict);
-            }
-            let _ = fs::remove_file(path);
-        } else {
-            fs::rename(path, &target)?;
-        }
+pub fn toggle_resource(path: &Path) -> Result<String, CompError> {
+    let actual_path = if path.exists() {
+        path.to_path_buf()
     } else {
-        // Currently enabled: check if .old exists, otherwise use .disabled
-        let old_target = parent.join(format!("{file_name}.old"));
-        let disabled_target = parent.join(format!("{file_name}.disabled"));
+        let str_path = path.to_string_lossy();
+        if let Some(base) = str_path.strip_suffix(".disabled") {
+            let p = PathBuf::from(base);
+            if p.exists() {
+                p
+            } else {
+                return Err(CompError::FileNotFound(path.display().to_string()));
+            }
+        } else {
+            let disabled = PathBuf::from(format!("{str_path}.disabled"));
+            if disabled.exists() {
+                disabled
+            } else {
+                return Err(CompError::FileNotFound(path.display().to_string()));
+            }
+        }
+    };
 
-        let target = if old_target.exists() {
+    let file_name = actual_path
+        .file_name()
+        .ok_or_else(|| CompError::FileNotFound(actual_path.display().to_string()))?
+        .to_string_lossy();
+    let parent = actual_path.parent().unwrap_or_else(|| Path::new("."));
+
+    let target = if let Some(base) = file_name.strip_suffix(".disabled") {
+        parent.join(base)
+    } else if let Some(base) = file_name.strip_suffix(".old") {
+        parent.join(base)
+    } else {
+        let old_target = parent.join(format!("{file_name}.old"));
+        if old_target.exists() {
             old_target
         } else {
-            disabled_target
-        };
-
-        if target.exists() {
-            let hash_src = file_md5(path)?;
-            let hash_dst = file_md5(&target)?;
-            if hash_src != hash_dst {
-                return Err(CompError::ToggleConflict);
-            }
-            let _ = fs::remove_file(path);
-        } else {
-            fs::rename(path, &target)?;
+            parent.join(format!("{file_name}.disabled"))
         }
+    };
+
+    if target.exists() {
+        let hash_src = file_md5(&actual_path)?;
+        let hash_dst = file_md5(&target)?;
+        if hash_src != hash_dst {
+            return Err(CompError::ToggleConflict);
+        }
+        let _ = fs::remove_file(&actual_path);
+    } else {
+        fs::rename(&actual_path, &target)?;
     }
 
-    Ok(())
+    Ok(target.to_string_lossy().to_string())
 }
 
 /// Deletes resources permanently or into Recycle Bin, removing disabled/old counterparts.
@@ -958,10 +952,19 @@ mod tests {
         assert!(!file_path.exists());
         assert!(disabled_path.exists());
 
-        // Toggle back to enabled
+        // Toggle back to enabled using disabled_path
         toggle_resource(&disabled_path).unwrap();
         assert!(file_path.exists());
         assert!(!disabled_path.exists());
+
+        // Toggle to disabled again
+        let new_path_str = toggle_resource(&file_path).unwrap();
+        assert!(new_path_str.ends_with(".disabled"));
+
+        // Toggle back by passing the stale path (file_path)
+        let recovered_path = toggle_resource(&file_path).unwrap();
+        assert_eq!(recovered_path, file_path.to_string_lossy());
+        assert!(file_path.exists());
 
         // Delete permanently
         delete_resources(std::slice::from_ref(&file_path), true).unwrap();

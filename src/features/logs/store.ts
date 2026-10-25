@@ -1,12 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import {
-  ipcClient,
-  type LogLine,
-  type LogLevel,
-  type LaunchProcessInfo,
-} from '../../ipc/client'
+import { ipcClient, type LogLine, type LogLevel, type LaunchProcessInfo } from '../../ipc/client'
 
 export const useLogsStore = defineStore('logs', () => {
   const logs = ref<LogLine[]>([])
@@ -72,9 +67,8 @@ export const useLogsStore = defineStore('logs', () => {
   const activeProcess = computed(() => {
     if (selectedProcessId.value != null) {
       return (
-        runningProcesses.value.find(
-          (p) => p.processId === selectedProcessId.value && p.running,
-        ) || null
+        runningProcesses.value.find((p) => p.processId === selectedProcessId.value && p.running) ||
+        null
       )
     }
     return runningProcesses.value.find((p) => p.running) || null
@@ -184,6 +178,7 @@ export const useLogsStore = defineStore('logs', () => {
 
   return {
     logs,
+    entries: logs,
     runningProcesses,
     selectedInstanceId,
     selectedProcessId,

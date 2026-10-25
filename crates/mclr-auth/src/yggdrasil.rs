@@ -1,6 +1,9 @@
 //! Authlib-Injector / Yggdrasil authentication and API location discovery.
 
 use crate::error::AuthError;
+use crate::skin::crop_skin_head;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -257,4 +260,60 @@ pub fn resolve_connect_client_id(host: &str, shared_client_id: Option<&str>) -> 
     } else {
         String::new()
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct ProfileSessionResponse {
+    #[serde(default)]
+    properties: Vec<ProfileSessionProperty>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProfileSessionProperty {
+    name: String,
+    value: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TexturesPayload {
+    textures: TexturesMap,
+}
+
+#[derive(Debug, Deserialize)]
+struct TexturesMap {
+    #[serde(rename = "SKIN")]
+    skin: Option<SkinTexture>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SkinTexture {
+    url: String,
+}
+
+/// Fetches skin textures from Yggdrasil/Authlib session server and crops the head.
+/// Returns `None` on any failure (best-effort).
+pub async fn fetch_profile_head(client: &Client, server_root: &str, uuid: &str) -> Option<String> {
+    let root = server_root.trim_end_matches('/');
+    let url = format!("{root}/sessionserver/session/minecraft/profile/{uuid}");
+    let resp = client.get(&url).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let profile: ProfileSessionResponse = resp.json().await.ok()?;
+    let textures_prop = profile
+        .properties
+        .into_iter()
+        .find(|p| p.name == "textures")?;
+    let decoded = BASE64.decode(textures_prop.value.as_bytes()).ok()?;
+    let payload: TexturesPayload = serde_json::from_slice(&decoded).ok()?;
+    let skin = payload.textures.skin?;
+    let skin_bytes = client
+        .get(&skin.url)
+        .send()
+        .await
+        .ok()?
+        .bytes()
+        .await
+        .ok()?;
+    crop_skin_head(&skin_bytes, uuid).ok()
 }

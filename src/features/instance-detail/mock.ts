@@ -76,7 +76,8 @@ export const mockScreenshots: Record<string, ScreenshotInfo[]> = {
       path: 'C:\\Users\\User\\AppData\\Roaming\\MCLR\\.minecraft\\versions\\1.20.1-vanilla\\screenshots\\2024-05-01_12.00.00.png',
       size: 1048576,
       modifiedAt: '2024-05-01T12:00:00Z',
-      dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      dataUrl:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
     },
     {
       fileName: '2024-05-02_15.30.22.png',
@@ -148,7 +149,10 @@ export const mockServers: Record<string, ServerEntry[]> = {
 
 let savesState = JSON.parse(JSON.stringify(mockSaves)) as Record<string, SaveInfo[]>
 let datapacksState = JSON.parse(JSON.stringify(mockDatapacks)) as Record<string, DatapackInfo[]>
-let screenshotsState = JSON.parse(JSON.stringify(mockScreenshots)) as Record<string, ScreenshotInfo[]>
+let screenshotsState = JSON.parse(JSON.stringify(mockScreenshots)) as Record<
+  string,
+  ScreenshotInfo[]
+>
 let instanceFilesState = JSON.parse(JSON.stringify(mockInstanceFiles)) as Record<
   string,
   Record<string, InstanceFileItem[]>
@@ -282,7 +286,8 @@ const handlers = {
     const instId = String(args.instanceId)
     const name = String(args.name)
     const ip = String(args.ip)
-    const acceptTextures = args.acceptTextures !== undefined ? (args.acceptTextures as number | null) : null
+    const acceptTextures =
+      args.acceptTextures !== undefined ? (args.acceptTextures as number | null) : null
     if (!serversState[instId]) {
       serversState[instId] = []
     }
@@ -301,7 +306,8 @@ const handlers = {
     const index = Number(args.index)
     const name = String(args.name)
     const ip = String(args.ip)
-    const acceptTextures = args.acceptTextures !== undefined ? (args.acceptTextures as number | null) : null
+    const acceptTextures =
+      args.acceptTextures !== undefined ? (args.acceptTextures as number | null) : null
     const list = serversState[instId] || []
     if (list[index]) {
       list[index].name = name

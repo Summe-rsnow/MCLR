@@ -27,21 +27,19 @@ function navigateToAccounts() {
     @click="navigateToAccounts"
   >
     <!-- Avatar / Skin Head or Fallback Icon -->
-    <div class="relative w-8 h-8 rounded-lg overflow-hidden bg-sunken flex items-center justify-center shrink-0 border border-line">
+    <div
+      class="relative w-8 h-8 rounded-lg overflow-hidden bg-sunken flex items-center justify-center shrink-0 border border-line"
+    >
       <img
         v-if="accountsStore.selectedAccount?.skinHeadDataUrl"
         :src="accountsStore.selectedAccount.skinHeadDataUrl"
         alt="Avatar"
         class="w-full h-full object-cover [image-rendering:pixelated]"
-       loading="lazy" decoding="async"/>
-      <span
-        v-else-if="accountsStore.selectedAccount"
-        class="i-lucide-user text-fg-muted w-4 h-4"
+        loading="lazy"
+        decoding="async"
       />
-      <span
-        v-else
-        class="i-lucide-user-plus text-fg-muted w-4 h-4"
-      />
+      <span v-else-if="accountsStore.selectedAccount" class="i-lucide-user text-fg-muted w-4 h-4" />
+      <span v-else class="i-lucide-user-plus text-fg-muted w-4 h-4" />
 
       <!-- Kind Badge in Corner if selected -->
       <div
@@ -64,9 +62,16 @@ function navigateToAccounts() {
     <!-- Account Details (Hidden when collapsed) -->
     <div v-if="!collapsed" class="flex-1 min-w-0">
       <p class="text-xs font-medium text-fg truncate">
-        {{ accountsStore.selectedAccount ? accountsStore.selectedAccount.username : t('shell.account.add') }}
+        {{
+          accountsStore.selectedAccount
+            ? accountsStore.selectedAccount.username
+            : t('shell.account.add')
+        }}
       </p>
-      <p v-if="accountsStore.selectedAccount?.serverName" class="text-[10px] text-fg-muted truncate">
+      <p
+        v-if="accountsStore.selectedAccount?.serverName"
+        class="text-[10px] text-fg-muted truncate"
+      >
         {{ accountsStore.selectedAccount.serverName }}
       </p>
     </div>

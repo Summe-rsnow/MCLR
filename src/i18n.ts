@@ -3,10 +3,7 @@ import { createI18n } from 'vue-i18n'
 type MessageNode = { [key: string]: string | MessageNode }
 type LocaleMessages = Record<string, Record<string, MessageNode>>
 
-const modules = import.meta.glob<{ default: MessageNode }>(
-  './locales/*/*.json',
-  { eager: true },
-)
+const modules = import.meta.glob<{ default: MessageNode }>('./locales/*/*.json', { eager: true })
 
 const messages: LocaleMessages = {}
 

@@ -12,8 +12,10 @@ const mockProjects: CompProject[] = [
     id: 'AANobbMI',
     slug: 'sodium',
     title: 'Sodium',
-    summary: 'A modern rendering engine for Minecraft that greatly improves frame rates and reduces stutter.',
-    description: '# Sodium\n\n**Sodium** is a free and open-source rendering engine for Minecraft 1.16+ which greatly improves frame rates and reduces micro-stutter.\n\n### Features\n- Modern OpenGL rendering\n- Significantly reduced CPU overhead\n- Compatible with the Fabric ecosystem',
+    summary:
+      'A modern rendering engine for Minecraft that greatly improves frame rates and reduces stutter.',
+    description:
+      '# Sodium\n\n**Sodium** is a free and open-source rendering engine for Minecraft 1.16+ which greatly improves frame rates and reduces micro-stutter.\n\n<center><img src="https://example.com/sodium-banner.png" alt="Sodium Banner"><p><!-- banner caption --></p></center>\n\n---\n\n### Features\n- Modern OpenGL rendering\n- Significantly reduced CPU overhead\n- Compatible with the Fabric ecosystem\n\n| Setting | Default | Recommended |\n| :--- | :---: | :---: |\n| Graphics | Fast | Fancy |\n| Biome Blend | 2 | 5 |\n',
     iconUrl: 'https://cdn.modrinth.com/data/AANobbMI/icon.png',
     author: 'jellysquid3',
     downloads: 45000000,
@@ -31,7 +33,8 @@ const mockProjects: CompProject[] = [
     slug: 'iris',
     title: 'Iris Shaders',
     summary: 'A modern shaders mod for Minecraft compatible with existing Shaderspacks.',
-    description: '# Iris Shaders\n\nIris is a modern shader mod for Minecraft written to be compatible with Sodium.',
+    description:
+      '# Iris Shaders\n\nIris is a modern shader mod for Minecraft written to be compatible with Sodium.',
     iconUrl: 'https://cdn.modrinth.com/data/YL57xq9U/icon.png',
     author: 'coderbot',
     downloads: 30000000,
@@ -49,7 +52,8 @@ const mockProjects: CompProject[] = [
     slug: 'jei',
     title: 'Just Enough Items (JEI)',
     summary: 'JEI is an item and recipe viewing mod for Minecraft.',
-    description: '# Just Enough Items (JEI)\n\nJEI is an item and recipe viewing mod for Minecraft, built from the ground up for stability and performance.',
+    description:
+      '# Just Enough Items (JEI)\n\nJEI is an item and recipe viewing mod for Minecraft, built from the ground up for stability and performance.',
     iconUrl: 'https://media.forgecdn.net/avatars/28/62/635838954801524319.png',
     author: 'mezz',
     downloads: 250000000,
@@ -66,8 +70,10 @@ const mockProjects: CompProject[] = [
     id: '1KVoqpyW',
     slug: 'complementary-reimagined',
     title: 'Complementary Reimagined',
-    summary: 'A shaderpack that aims for perfection while preserving the Minecraft visual identity.',
-    description: '# Complementary Reimagined\n\nDetailed lighting, water effects, and high performance.',
+    summary:
+      'A shaderpack that aims for perfection while preserving the Minecraft visual identity.',
+    description:
+      '# Complementary Reimagined\n\nDetailed lighting, water effects, and high performance.',
     iconUrl: 'https://cdn.modrinth.com/data/1KVoqpyW/icon.png',
     author: 'EminGT',
     downloads: 8000000,
@@ -85,7 +91,8 @@ const mockProjects: CompProject[] = [
     slug: 'cobblemon-modpack',
     title: 'Cobblemon Official Modpack',
     summary: 'The official modpack for Cobblemon, featuring optimization and QoL mods.',
-    description: '# Cobblemon Official Modpack\n\nCatch Pokémon in Minecraft with open-world exploration.',
+    description:
+      '# Cobblemon Official Modpack\n\nCatch Pokémon in Minecraft with open-world exploration.',
     iconUrl: 'https://media.forgecdn.net/avatars/655/444/638045612345678901.png',
     author: 'CobblemonTeam',
     downloads: 5000000,

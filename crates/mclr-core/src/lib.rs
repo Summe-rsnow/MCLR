@@ -12,7 +12,7 @@ pub mod test_utils;
 
 pub use account_session::{AccountKind, AccountSessionProvider, ResolvedAccountSession};
 pub use error::CoreError;
-pub use logging::{init_logging, prune_old_logs};
+pub use logging::{init_logging, is_launcher_log_file, prune_old_logs};
 pub use secrets::{SecretsStatus, get_secret, secrets_status};
 pub use settings::{
     CompFavoriteEntry, CompSettings, DownloadSettings, GameFolderEntry, GameSettings, JavaSettings,
