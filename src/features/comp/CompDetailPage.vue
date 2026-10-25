@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import MarkdownIt from 'markdown-it'
@@ -19,6 +19,7 @@ import {
   MCard,
   MBadge,
   MDialog,
+  MCollapse,
   MSelect,
   MSkeleton,
   MEmpty,
@@ -59,6 +60,11 @@ const dependencies = ref<ResolvedDependencyItem[]>([])
 const selectedDepFiles = ref<Record<string, boolean>>({})
 const resolvingDependencies = ref(false)
 
+const resolveFailed = ref(false)
+const depConfirmDialogOpen = ref(false)
+const cannotInstallDialogOpen = ref(false)
+const resolveFailedDialogOpen = ref(false)
+const sessionTargetByKind: Record<string, string> = {}
 // Modpack Install Dialog state
 const modpackInstallDialogOpen = ref(false)
 const modpackTargetFile = ref<CompFile | null>(null)
@@ -112,7 +118,7 @@ const loaderFilterOptions = computed(() => {
 const instanceOptions = computed(() => {
   return instancesStore.instances.map((i) => ({
     label: `${i.name} (${i.mcVersion})`,
-    value: i.name,
+    value: i.id,
   }))
 })
 
@@ -153,7 +159,7 @@ async function resolveDependenciesForSelectedInstance(): Promise<void> {
     return
   }
   const targetInst = instancesStore.instances.find(
-    (i) => i.name === selectedTargetInstance.value,
+    (i) => i.id === selectedTargetInstance.value,
   )
   const mcVer = targetInst?.mcVersion || selectedFile.value.mcVersions[0] || '1.20.1'
   const loader = targetInst?.loaders[0] || selectedFile.value.loaders[0] || 'fabric'
@@ -177,6 +183,7 @@ async function resolveDependenciesForSelectedInstance(): Promise<void> {
   } catch (err) {
     console.error('Failed to resolve dependencies', err)
     dependencies.value = []
+    resolveFailed.value = true
   } finally {
     resolvingDependencies.value = false
   }
@@ -191,21 +198,70 @@ async function openDownloadDialog(file: CompFile): Promise<void> {
     return
   }
 
-  if (instancesStore.instances.length > 0) {
-    const match = instancesStore.instances.find((i) =>
-      file.mcVersions.includes(i.mcVersion),
+  const pType: CompType = compStore.currentProject?.compType || 'mod'
+  const preferred = sessionTargetByKind[pType] || (route.query.instance as string) || null
+
+  try {
+    const pickRes = await ipcClient.compPickTarget(
+      pType,
+      preferred,
+      file.mcVersions,
+      file.loaders,
     )
-    selectedTargetInstance.value = match ? match.name : instancesStore.instances[0].name
-  } else {
+    if (pickRes.instanceId) {
+      selectedTargetInstance.value = pickRes.instanceId
+      sessionTargetByKind[pType] = pickRes.instanceId
+    } else if (instancesStore.instances.length > 0) {
+      const match = instancesStore.instances.find((i) =>
+        file.mcVersions.includes(i.mcVersion),
+      )
+      selectedTargetInstance.value = match ? match.id : instancesStore.instances[0].id
+    } else {
+      selectedTargetInstance.value = ''
+    }
+  } catch {
     selectedTargetInstance.value = ''
   }
+
   downloadDialogOpen.value = true
   await resolveDependenciesForSelectedInstance()
 }
 
 async function startDownload(): Promise<void> {
   if (!selectedFile.value || !selectedTargetInstance.value) return
+
+  if (compStore.currentProject?.compType === 'mod') {
+    if (resolveFailed.value) {
+      resolveFailedDialogOpen.value = true
+      return
+    }
+
+    const uninstalled = dependencies.value.filter(
+      (d) => !d.installed,
+    )
+    if (uninstalled.length > 0) {
+      const cannotInstall = uninstalled.some(
+        (d) => d.file.distributionDisabled || d.file.downloadUrls.length === 0,
+      )
+      if (cannotInstall) {
+        cannotInstallDialogOpen.value = true
+        return
+      }
+      depConfirmDialogOpen.value = true
+      return
+    }
+  }
+
+  await doDownloadFiles(true)
+}
+
+async function doDownloadFiles(withDeps = true): Promise<void> {
+  if (!selectedFile.value || !selectedTargetInstance.value) return
   downloading.value = true
+  depConfirmDialogOpen.value = false
+  cannotInstallDialogOpen.value = false
+  resolveFailedDialogOpen.value = false
+
   try {
     const targetKind: CompType = compStore.currentProject?.compType || 'mod'
     await compStore.downloadFile(
@@ -214,14 +270,15 @@ async function startDownload(): Promise<void> {
       targetKind,
     )
 
-    // Also download selected dependencies
-    for (const dep of dependencies.value) {
-      if (selectedDepFiles.value[dep.file.id]) {
-        await compStore.downloadFile(
-          dep.file,
-          selectedTargetInstance.value,
-          'mod',
-        )
+    if (withDeps) {
+      for (const dep of dependencies.value) {
+        if (selectedDepFiles.value[dep.file.id]) {
+          await compStore.downloadFile(
+            dep.file,
+            selectedTargetInstance.value,
+            'mod',
+          )
+        }
       }
     }
 
@@ -239,6 +296,76 @@ async function startDownload(): Promise<void> {
     downloading.value = false
   }
 }
+
+interface FileGroup {
+  id: string
+  title: string
+  open: boolean
+  files: CompFile[]
+}
+
+const fileGroups = ref<FileGroup[]>([])
+
+watch(
+  [filteredFiles, selectedTargetInstance, () => route.query.instance],
+  () => {
+    const all = filteredFiles.value
+    if (all.length === 0) {
+      fileGroups.value = []
+      return
+    }
+
+    const targetInstId = selectedTargetInstance.value || (route.query.instance as string)
+    const targetInst = instancesStore.instances.find((i) => i.id === targetInstId)
+
+    const groups: FileGroup[] = []
+
+    if (targetInst) {
+      const mc = targetInst.mcVersion
+      const loader = targetInst.loaders[0] || ''
+      const pinned = all.filter(
+        (f) =>
+          f.mcVersions.includes(mc) &&
+          (f.loaders.length === 0 || !loader || f.loaders.some((l) => l.toLowerCase() === loader.toLowerCase())),
+      )
+      if (pinned.length > 0) {
+        groups.push({
+          id: 'pinned',
+          title: t('comp.files.selectedVersionGroup', {
+            loader: loader ? loader.toUpperCase() : '',
+            mc,
+          }),
+          open: true,
+          files: pinned,
+        })
+      }
+    }
+
+    const pinnedIds = new Set(groups.flatMap((g) => g.files.map((f) => f.id)))
+    const remaining = all.filter((f) => !pinnedIds.has(f.id))
+
+    const byVer = new Map<string, CompFile[]>()
+    for (const f of remaining) {
+      const v = f.mcVersions[0] || t('comp.files.otherVersions')
+      if (!byVer.has(v)) byVer.set(v, [])
+      byVer.get(v)!.push(f)
+    }
+
+    let isFirst = groups.length === 0
+    for (const [ver, files] of byVer.entries()) {
+      groups.push({
+        id: ver,
+        title: ver,
+        open: isFirst,
+        files,
+      })
+      isFirst = false
+    }
+
+    fileGroups.value = groups
+  },
+  { immediate: true },
+)
 
 async function startModpackInstall(): Promise<void> {
   if (!modpackTargetFile.value || !modpackInstanceName.value.trim()) return
@@ -310,7 +437,7 @@ onMounted(async () => {
               :src="compStore.currentProject.iconUrl"
               class="w-20 h-20 rounded-xl object-cover bg-sunken shrink-0"
               alt=""
-            />
+             loading="lazy" decoding="async"/>
             <div
               v-else
               class="w-20 h-20 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
@@ -414,66 +541,91 @@ onMounted(async () => {
               <MEmpty :title="t('comp.project.noFiles')" />
             </div>
 
-            <MCard
-              v-for="file in filteredFiles"
-              :key="file.id"
-              variant="well"
-              hoverable
-              class="p-4 space-y-3"
-            >
-              <div>
-                <div class="flex items-center space-x-2">
-                  <MBadge :variant="getChannelVariant(file.channel)">
-                    {{ t(`comp.files.channel.${file.channel}`) }}
-                  </MBadge>
-                  <span class="font-medium text-sm truncate max-w-[200px]" :title="file.name">
-                    {{ file.name }}
-                  </span>
-                </div>
-                <div class="text-xs text-fg-muted mt-1">
-                  {{ formatDate(file.releaseDate) }} • {{ formatFileSize(file.size) }}
-                </div>
-              </div>
+            <div v-else class="space-y-3">
+              <MCard
+                v-for="group in fileGroups"
+                :key="group.id"
+                class="overflow-hidden"
+              >
+                <button
+                  class="w-full p-3.5 flex items-center justify-between text-left font-medium text-xs text-fg hover:bg-sunken/40 transition"
+                  @click="group.open = !group.open"
+                >
+                  <div class="flex items-center space-x-2">
+                    <span
+                      class="i-lucide-chevron-right w-4 h-4 text-fg-muted transition-transform duration-200"
+                      :class="{ 'rotate-90': group.open }"
+                    />
+                    <span>{{ group.title }}</span>
+                    <MBadge variant="neutral" size="sm">{{ group.files.length }}</MBadge>
+                  </div>
+                </button>
+                <MCollapse :open="group.open">
+                  <div class="p-3.5 pt-0 space-y-3">
+                    <MCard
+                      v-for="file in group.files"
+                      :key="file.id"
+                      variant="well"
+                      hoverable
+                      class="p-4 space-y-3"
+                    >
+                      <div>
+                        <div class="flex items-center space-x-2">
+                          <MBadge :variant="getChannelVariant(file.channel)">
+                            {{ t(`comp.files.channel.${file.channel}`) }}
+                          </MBadge>
+                          <span class="font-medium text-sm truncate max-w-[200px]" :title="file.name">
+                            {{ file.name }}
+                          </span>
+                        </div>
+                        <div class="text-xs text-fg-muted mt-1">
+                          {{ formatDate(file.releaseDate) }} • {{ formatFileSize(file.size) }}
+                        </div>
+                      </div>
 
-              <div class="flex flex-wrap gap-1">
-                <MBadge
-                  v-for="v in file.mcVersions"
-                  :key="v"
-                  variant="neutral"
-                >
-                  {{ v }}
-                </MBadge>
-                <MBadge
-                  v-for="l in file.loaders"
-                  :key="l"
-                  variant="neutral"
-                >
-                  {{ l }}
-                </MBadge>
-              </div>
+                      <div class="flex flex-wrap gap-1">
+                        <MBadge
+                          v-for="v in file.mcVersions"
+                          :key="v"
+                          variant="neutral"
+                        >
+                          {{ v }}
+                        </MBadge>
+                        <MBadge
+                          v-for="l in file.loaders"
+                          :key="l"
+                          variant="neutral"
+                        >
+                          {{ l }}
+                        </MBadge>
+                      </div>
 
-              <div class="pt-2 border-t border-line flex items-center justify-end">
-                <div v-if="file.distributionDisabled" class="flex items-center space-x-2">
-                  <span class="text-xs text-danger">{{ t('comp.files.distributionDisabled') }}</span>
-                  <MButton
-                    variant="tonal"
-                    size="sm"
-                    @click="openExternalUrl(compStore.currentProject?.websiteUrl)"
-                  >
-                    {{ t('comp.files.openWebsite') }}
-                  </MButton>
-                </div>
-                <MButton
-                  v-else
-                  variant="primary"
-                  size="sm"
-                  @click="openDownloadDialog(file)"
-                >
-                  <i class="i-lucide-download mr-1" />
-                  {{ t('comp.files.download') }}
-                </MButton>
-              </div>
-            </MCard>
+                      <div class="pt-2 border-t border-line flex items-center justify-end">
+                        <div v-if="file.distributionDisabled" class="flex items-center space-x-2">
+                          <span class="text-xs text-danger">{{ t('comp.files.distributionDisabled') }}</span>
+                          <MButton
+                            variant="tonal"
+                            size="sm"
+                            @click="openExternalUrl(compStore.currentProject?.websiteUrl)"
+                          >
+                            {{ t('comp.files.openWebsite') }}
+                          </MButton>
+                        </div>
+                        <MButton
+                          v-else
+                          variant="primary"
+                          size="sm"
+                          @click="openDownloadDialog(file)"
+                        >
+                          <span class="i-lucide-download mr-1 w-3.5 h-3.5" />
+                          {{ t('comp.files.download') }}
+                        </MButton>
+                      </div>
+                    </MCard>
+                  </div>
+                </MCollapse>
+              </MCard>
+            </div>
           </div>
         </div>
       </div>
@@ -603,6 +755,75 @@ onMounted(async () => {
             @click="startModpackInstall"
           >
             {{ t('comp.modpackInstallDialog.install') }}
+          </MButton>
+        </div>
+      </template>
+    </MDialog>
+
+    <!-- Resolve Failed Dialog -->
+    <MDialog
+      :open="resolveFailedDialogOpen"
+      :title="t('comp.dependency.resolveFailedTitle')"
+      @update:open="resolveFailedDialogOpen = $event"
+      @cancel="resolveFailedDialogOpen = false"
+    >
+      <div class="py-2 text-xs text-fg">
+        {{ t('comp.dependency.resolveFailedTitle') }}
+      </div>
+      <template #footer>
+        <div class="flex items-center justify-end space-x-3">
+          <MButton variant="text" @click="resolveFailedDialogOpen = false">
+            {{ t('comp.downloadDialog.cancel') }}
+          </MButton>
+          <MButton variant="primary" @click="doDownloadFiles(false)">
+            {{ t('comp.dependency.continueDownload') }}
+          </MButton>
+        </div>
+      </template>
+    </MDialog>
+
+    <!-- Cannot Install Required Dependencies Dialog -->
+    <MDialog
+      :open="cannotInstallDialogOpen"
+      :title="t('comp.dependency.cannotInstallTitle')"
+      @update:open="cannotInstallDialogOpen = $event"
+      @cancel="cannotInstallDialogOpen = false"
+    >
+      <div class="py-2 text-xs text-fg">
+        {{ t('comp.dependency.cannotInstallTitle') }}
+      </div>
+      <template #footer>
+        <div class="flex items-center justify-end space-x-3">
+          <MButton variant="text" @click="cannotInstallDialogOpen = false">
+            {{ t('comp.downloadDialog.cancel') }}
+          </MButton>
+          <MButton variant="primary" @click="doDownloadFiles(false)">
+            {{ t('comp.dependency.continueDownload') }}
+          </MButton>
+        </div>
+      </template>
+    </MDialog>
+
+    <!-- Confirm Dependencies Dialog -->
+    <MDialog
+      :open="depConfirmDialogOpen"
+      :title="t('comp.dependency.confirmTitle')"
+      @update:open="depConfirmDialogOpen = $event"
+      @cancel="depConfirmDialogOpen = false"
+    >
+      <div class="py-2 text-xs text-fg">
+        {{ t('comp.dependency.confirmTitle') }}
+      </div>
+      <template #footer>
+        <div class="flex items-center justify-end space-x-2">
+          <MButton variant="text" @click="depConfirmDialogOpen = false">
+            {{ t('comp.downloadDialog.cancel') }}
+          </MButton>
+          <MButton variant="tonal" @click="doDownloadFiles(false)">
+            {{ t('comp.dependency.installModOnly') }}
+          </MButton>
+          <MButton variant="primary" @click="doDownloadFiles(true)">
+            {{ t('comp.dependency.installWithDeps') }}
           </MButton>
         </div>
       </template>

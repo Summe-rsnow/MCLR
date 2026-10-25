@@ -1,6 +1,7 @@
 //! Global application settings model, persistence, and RFC 7386 JSON Merge Patch.
 
 pub mod comp;
+pub mod download;
 pub mod game;
 pub mod java;
 pub mod language;
@@ -14,7 +15,8 @@ pub mod update;
 use crate::error::CoreError;
 use crate::paths;
 pub use comp::{CompFavoriteEntry, CompSettings};
-pub use game::{GameFolderEntry, GameSettings};
+pub use download::DownloadSettings;
+pub use game::{DefaultIsolation, GameFolderEntry, GameSettings};
 pub use java::JavaSettings;
 pub use language::LanguageSettings;
 pub use launch::LaunchSettings;
@@ -45,6 +47,7 @@ pub struct Settings {
     pub java: JavaSettings,
     pub launch: LaunchSettings,
     pub comp: CompSettings,
+    pub download: DownloadSettings,
     pub update: UpdateSettings,
     pub states: StatesSettings,
 }
@@ -61,6 +64,7 @@ impl Default for Settings {
             java: JavaSettings::default(),
             launch: LaunchSettings::default(),
             comp: CompSettings::default(),
+            download: DownloadSettings::default(),
             update: UpdateSettings::default(),
             states: StatesSettings::default(),
         }

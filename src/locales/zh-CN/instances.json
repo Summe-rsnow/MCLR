@@ -1,10 +1,32 @@
 {
   "nav": "游戏实例",
   "search": "搜索实例名称、版本...",
-  "empty": "未找到匹配的 Minecraft 实例",
+  "empty": {
+    "title": "未找到可用实例",
+    "subtitle": "请点击下方按钮前往下载和配置您的第一个 Minecraft 游戏版本",
+    "action": "下载游戏",
+    "filtered": "没有匹配的实例"
+  },
   "emptyFolder": "当前目录暂无实例",
   "emptyFolderSubtitle": "点击下载或导入安装新版本",
   "refresh": "刷新列表",
+  "groups": {
+    "star": "收藏",
+    "api": "可安装 Mod",
+    "regular": "常规",
+    "rubbish": "不常用",
+    "fool": "愚人节版本",
+    "error": "错误的实例",
+    "hidden": "隐藏的实例"
+  },
+  "toolbar": {
+    "showHidden": "显示隐藏的实例",
+    "sort": "排序",
+    "search": "搜索实例名称、版本...",
+    "sortName": "名称",
+    "sortVersion": "版本",
+    "sortCategory": "分类"
+  },
   "folder": {
     "current": "游戏目录",
     "manage": "管理目录",
@@ -38,8 +60,19 @@
     "rename": "重命名",
     "duplicate": "复制实例",
     "delete": "删除",
+    "deletePermanent": "永久删除",
     "deleteConfirmTitle": "删除实例",
     "deleteConfirmMessage": "确定要将实例「{name}」放入回收站吗？此操作可以从系统回收站恢复。",
+    "deletePermanentConfirm": "确定要永久删除实例「{name}」吗？此操作无法撤销！",
+    "deleteIsolatedWarning": "警告：该实例已开启独立文件隔离，删除操作将一并移除隔离的模组、材质包和存档数据！",
+    "isolationOn": "隔离",
+    "star": "加入收藏",
+    "unstar": "取消收藏",
+    "hide": "隐藏实例",
+    "unhide": "取消隐藏",
+    "modsQuick": "模组管理",
+    "resourcepacksQuick": "材质包管理",
+    "screenshotsQuick": "游戏截图",
     "importModpack": "导入整合包",
     "create": "安装新版本"
   },

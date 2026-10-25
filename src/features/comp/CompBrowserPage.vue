@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCompStore } from './store'
+import { useInstancesStore } from '../instances/store'
 import type { CompType, CompPlatform, CompSort } from '../../ipc/client'
 import {
   MTabs,
@@ -28,6 +29,32 @@ const route = useRoute()
 const { t } = useI18n()
 const compStore = useCompStore()
 
+const instancesStore = useInstancesStore()
+
+const targetInstanceId = ref<string>('')
+const targetInstance = computed(() => {
+  if (!targetInstanceId.value) return null
+  return (
+    instancesStore.instances.find(
+      (i) => i.id === targetInstanceId.value || i.name === targetInstanceId.value,
+    ) || null
+  )
+})
+
+function isForgeUnder114(mcVer: string): boolean {
+  const parts = mcVer.split('.').map((p) => parseInt(p, 10))
+  if (parts.length >= 2 && parts[0] === 1) {
+    return (parts[1] ?? 0) < 14
+  }
+  return false
+}
+
+function clearTargetInstance() {
+  targetInstanceId.value = ''
+  const q = { ...route.query }
+  delete q.instance
+  router.replace({ query: q }).catch(() => {})
+}
 const tabs = computed(() => [
   { key: 'mod', label: t('comp.tabs.mod') },
   { key: 'modpack', label: t('comp.tabs.modpack') },
@@ -130,7 +157,9 @@ function onLoaderChange(val: string | number): void {
 }
 
 function navigateToProject(platform: string, id: string): void {
-  if (router) router.push(`/comp/project/${platform}/${id}`).catch(() => {})
+  const q: Record<string, string> = {}
+  if (targetInstanceId.value) q.instance = targetInstanceId.value
+  if (router) router.push({ path: `/comp/project/${platform}/${id}`, query: q }).catch(() => {})
 }
 
 function formatNumber(num: number): string {
@@ -144,6 +173,27 @@ function formatNumber(num: number): string {
 }
 
 onMounted(async () => {
+  if (instancesStore.instances.length === 0 && typeof instancesStore.fetchInstances === 'function') {
+    await instancesStore.fetchInstances()
+  }
+
+  if (route?.query?.instance) {
+    targetInstanceId.value = String(route.query.instance)
+    const inst = targetInstance.value
+    if (inst) {
+      compStore.mcVersion = inst.mcVersion || null
+      const primaryLoader = inst.loaders[0]?.toLowerCase()
+      if (primaryLoader === 'forge' && isForgeUnder114(inst.mcVersion)) {
+        compStore.loader = null
+      } else {
+        compStore.loader = primaryLoader || null
+      }
+    }
+  }
+
+  if (route?.query?.q) {
+    compStore.query = String(route.query.q)
+  }
   await compStore.loadFavorites()
   const path = route?.path || '/comp/mod'
   if (path === '/comp/favorites') {
@@ -218,6 +268,19 @@ watch(
       padding="sm"
       class="flex flex-wrap items-center gap-3 sticky top-0 z-10"
     >
+      <div
+        v-if="targetInstance"
+        class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/30 text-xs text-primary font-medium shrink-0"
+      >
+        <span class="i-lucide-download w-3.5 h-3.5" />
+        <span>{{ t('comp.downloadForInstance', { instance: targetInstance.name }) }}</span>
+        <button
+          class="hover:opacity-75 transition ml-1"
+          @click="clearTargetInstance"
+        >
+          <span class="i-lucide-x w-3.5 h-3.5" />
+        </button>
+      </div>
       <MSegmented
         :model-value="compStore.platform"
         :options="platformOptions"
@@ -279,7 +342,7 @@ watch(
               :src="fav.iconUrl"
               class="w-14 h-14 rounded-xl object-cover bg-sunken shrink-0"
               alt=""
-            />
+             loading="lazy" decoding="async"/>
             <div
               v-else
               class="w-14 h-14 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
@@ -348,7 +411,7 @@ watch(
                   :src="project.iconUrl"
                   class="w-14 h-14 rounded-xl object-cover bg-sunken shrink-0"
                   alt=""
-                />
+                 loading="lazy" decoding="async"/>
                 <div
                   v-else
                   class="w-14 h-14 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"

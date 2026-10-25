@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import {
@@ -58,6 +58,27 @@ const javaSettings = ref<JavaSettings>({
   preferJdk: false,
 })
 const javaInstallations = ref<JavaInstallation[]>([])
+const hasScannedJava = ref(false)
+
+async function ensureJavaScanned(force = false) {
+  if (hasScannedJava.value && !force) return
+  hasScannedJava.value = true
+  try {
+    javaInstallations.value = await ipcClient.javaScan(force)
+  } catch (err) {
+    console.warn('Failed to scan Java in SettingsGamePage:', err)
+  }
+}
+
+watch(
+  activeTab,
+  (tab) => {
+    if (tab === 'java') {
+      ensureJavaScanned()
+    }
+  },
+  { immediate: true },
+)
 
 onMounted(async () => {
   try {
@@ -70,12 +91,6 @@ onMounted(async () => {
     }
   } catch (err) {
     console.warn('Failed to load settings in SettingsGamePage:', err)
-  }
-
-  try {
-    javaInstallations.value = await ipcClient.javaScan()
-  } catch (err) {
-    console.warn('Failed to scan Java in SettingsGamePage:', err)
   }
 })
 
@@ -110,7 +125,7 @@ async function saveJavaSettings() {
 async function onScanJava() {
   isScanning.value = true
   try {
-    javaInstallations.value = await ipcClient.javaScan()
+    javaInstallations.value = await ipcClient.javaScan(true)
     toast.success(t('settingsGame.java.scanComplete', { count: javaInstallations.value.length }))
   } catch (err) {
     toast.danger(`${t('common.error')}: ${String(err)}`)

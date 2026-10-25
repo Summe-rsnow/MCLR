@@ -6,6 +6,7 @@
   "tabs": {
     "overview": "概览",
     "settings": "配置",
+    "install": "自动安装",
     "mods": "模组",
     "resourcepacks": "材质包",
     "shaders": "光影包",
@@ -33,14 +34,19 @@
     "delete": "删除实例",
     "deleteConfirmTitle": "删除实例",
     "deleteConfirm": "确定要将实例「{name}」放入回收站吗？",
-    "deleteSuccess": "实例已移入回收站",
-    "renameTitle": "修改实例名称",
+    "deleteIsolatedWarning": "警告：该实例已开启独立文件隔离，删除操作将一并移除隔离的模组、材质包和存档数据！",
+    "deletePermanentConfirm": "确定要永久删除实例「{name}」吗？此操作无法撤销！",
+    "deleteSuccess": "实例已删除",
     "renameSuccess": "重命名成功",
     "iconGrass": "草方块",
     "iconChest": "箱子",
     "iconDiamond": "钻石",
     "iconSword": "剑",
-    "iconFurnace": "熔炉"
+    "iconFurnace": "熔炉",
+    "renameTitle": "重命名实例",
+    "cardTypeLabel": "分类覆盖",
+    "cardTypeHint": "手动指定该实例归属的分组卡片，或使用系统自动分类",
+    "cardTypeAuto": "自动分类"
   },
   "settings": {
     "title": "实例独立配置",
@@ -50,10 +56,10 @@
     "isolation": {
       "title": "版本隔离",
       "hint": "开启后，当前实例将使用自身独立的 mods、saves、config 等文件夹",
-      "global": "遵循全局默认",
-      "instance": "启用独立隔离",
-      "on": "启用独立隔离",
-      "off": "共用主目录"
+      "global": "全局默认",
+      "on": "隔离",
+      "off": "不隔离",
+      "instance": "隔离"
     },
     "loginRequirement": {
       "title": "登录账号要求",
@@ -87,7 +93,10 @@
       "title": "启动直连服务器地址",
       "placeholder": "例如：mc.hypixel.net",
       "hint": "启动游戏后直接跳过主菜单进入指定服务器"
-    }
+    },
+    "useGlobal": "使用全局设置",
+    "javaLabel": "Java 运行环境",
+    "javaHint": "选择启动此实例所使用的 Java 虚拟机，或使用全局设置"
   },
   "files": {
     "empty": "暂无文件",
@@ -161,7 +170,10 @@
     "deleteConfirmTitle": "删除截图",
     "deleteConfirm": "确定要删除截图「{name}」吗？",
     "deleteSuccess": "截图已删除",
-    "preview": "查看大图"
+    "preview": "查看大图",
+    "copy": "复制截图",
+    "copySuccess": "截图已复制到剪贴板",
+    "reveal": "打开所在位置"
   },
   "servers": {
     "empty": "暂无保存的多人服务器",
@@ -191,8 +203,7 @@
     "deleteConfirm": "确定要删除服务器「{name}」吗？",
     "deleteSuccess": "服务器已删除",
     "saveSuccess": "保存成功"
-  }
-  ,
+  },
   "export": {
     "title": "导出整合包",
     "description": "将当前实例的模组、配置文件及自定义资源打包为标准整合包格式。",
@@ -232,5 +243,11 @@
       "outputPathRequired": "请指定输出文件路径",
       "filesRequired": "请至少选择一个包含的文件或目录"
     }
+  },
+  "modsDisabled": {
+    "title": "该实例不可使用模组",
+    "description": "当前版本为原版或不支持加载模组。若需使用模组，请下载安装带有 Mod 加载器（如 Fabric、Forge、NeoForge 等）的实例。",
+    "downloadModable": "下载可安装 Mod 的实例",
+    "chooseOther": "选择其他实例"
   }
 }

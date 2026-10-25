@@ -1241,6 +1241,7 @@ pub async fn import_modpack(
             loaders: plan.inspect.loader.into_iter().collect(),
             state: InstanceState::Ok,
             config: cfg,
+            ..Default::default()
         })
     }
 }

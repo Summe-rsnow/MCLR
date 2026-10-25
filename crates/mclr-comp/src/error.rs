@@ -49,6 +49,12 @@ pub enum CompError {
 
     #[error("invalid query or parameters: {0}")]
     InvalidParams(String),
+
+    #[error("toggle conflict: both enabled and disabled files exist with different contents")]
+    ToggleConflict,
+
+    #[error("instance is not modable")]
+    NotModable,
 }
 
 impl CompError {
@@ -68,6 +74,8 @@ impl CompError {
             CompError::ProjectNotFound(_) => "comp.projectNotFound",
             CompError::FileNotFound(_) => "comp.fileNotFound",
             CompError::InvalidParams(_) => "comp.invalidParams",
+            CompError::ToggleConflict => "resource.toggleConflict",
+            CompError::NotModable => "resource.notModable",
         }
     }
 }

@@ -30,6 +30,17 @@ async windowSetMaterial(glass: boolean) : Promise<Result<null, AppError>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Allow a user-picked directory (background image / music folder) recursively.
+ */
+async assetsAllow(path: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("assets_allow", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async settingsGet() : Promise<Result<Settings, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("settings_get") };
@@ -102,9 +113,9 @@ async instanceDuplicate(id: string, newName: string) : Promise<Result<InstanceIn
     else return { status: "error", error: e  as any };
 }
 },
-async instanceDelete(id: string) : Promise<Result<null, AppError>> {
+async instanceDelete(id: string, permanent: boolean | null) : Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("instance_delete", { id }) };
+    return { status: "ok", data: await TAURI_INVOKE("instance_delete", { id, permanent }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -118,17 +129,29 @@ async instanceUpdateConfig(id: string, config: InstanceConfig) : Promise<Result<
     else return { status: "error", error: e  as any };
 }
 },
-async instanceOpenFolder(id: string) : Promise<Result<null, AppError>> {
+/**
+ * Open the game directory (or one of its well-known sub-folders) in the OS file manager.
+ * `sub` ∈ `mods|resourcepacks|shaderpacks|schematics|saves|screenshots|""`; missing folders are created.
+ */
+async instanceOpenPath(id: string, sub: string | null) : Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("instance_open_folder", { id }) };
+    return { status: "ok", data: await TAURI_INVOKE("instance_open_path", { id, sub }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async javaScan() : Promise<Result<JavaInstallation[], AppError>> {
+async javaScan(forceRefresh: boolean | null) : Promise<Result<JavaInstallation[], AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("java_scan") };
+    return { status: "ok", data: await TAURI_INVOKE("java_scan", { forceRefresh }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async javaList() : Promise<Result<JavaInstallation[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("java_list") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -230,6 +253,38 @@ async installManifest(forceRefresh: boolean) : Promise<Result<VersionManifestLis
     else return { status: "error", error: e  as any };
 }
 },
+async installCreate(req: InstallRequest) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_create", { req }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async installExtras(mcVersion: string, fabric: boolean, legacyFabric: boolean, optifabric: boolean) : Promise<Result<ExtraCandidates, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_extras", { mcVersion, fabric, legacyFabric, optifabric }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async installCurrentInfo(instanceId: string) : Promise<Result<CurrentInstallInfo, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_current_info", { instanceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async installValidateName(name: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_validate_name", { name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async installVanilla(version: string, name: string) : Promise<Result<string, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("install_vanilla", { version, name }) };
@@ -326,6 +381,14 @@ async compDownload(file: CompFile, targetInstance: string, kind: CompType) : Pro
     else return { status: "error", error: e  as any };
 }
 },
+async compPickTarget(projectType: CompType, preferredInstanceId: string | null, mcVersions: string[], loaders: string[]) : Promise<Result<CompPickTargetResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("comp_pick_target", { projectType, preferredInstanceId, mcVersions, loaders }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async modpackInspect(archivePath: string) : Promise<Result<ModpackInspectResult, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("modpack_inspect", { archivePath }) };
@@ -406,6 +469,78 @@ async compResolveDependencies(file: CompFile, instanceId: string, mcVersion: str
     else return { status: "error", error: e  as any };
 }
 },
+async resourcesList(instanceId: string, kind: ResourceKind, rel: string | null, requestId: string | null) : Promise<Result<ResourceEntry[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("resources_list", { instanceId, kind, rel, requestId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async localModsScanStart(instanceId: string, requestId: string) : Promise<Result<LocalModsScanResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("local_mods_scan_start", { instanceId, requestId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async resourceToggle(instanceId: string, path: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("resource_toggle", { instanceId, path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async resourcesDelete(paths: string[], permanent: boolean) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("resources_delete", { paths, permanent }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async resourcesImport(instanceId: string, kind: ResourceKind, sources: string[], policy: OverwritePolicy) : Promise<Result<ImportResourcesResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("resources_import", { instanceId, kind, sources, policy }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async resourcesExport(entries: ResourceEntry[], format: string) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("resources_export", { entries, format }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async schematicInspect(path: string) : Promise<Result<SchematicInfo, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("schematic_inspect", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async localModsDependents(instanceId: string, fileName: string) : Promise<Result<string[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("local_mods_dependents", { instanceId, fileName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async localModsUpdateMany(instanceId: string, updates: LocalModUpdateItem[]) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("local_mods_update_many", { instanceId, updates }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async savesList(instanceId: string) : Promise<Result<SaveInfo[], AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("saves_list", { instanceId }) };
@@ -470,33 +605,49 @@ async screenshotsList(instanceId: string) : Promise<Result<ScreenshotInfo[], App
     else return { status: "error", error: e  as any };
 }
 },
-async screenshotDelete(instanceId: string, fileName: string) : Promise<Result<null, AppError>> {
+async screenshotsListPaged(instanceId: string, offset: number, limit: number) : Promise<Result<ScreenshotsPagedResult, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("screenshot_delete", { instanceId, fileName }) };
+    return { status: "ok", data: await TAURI_INVOKE("screenshots_list_paged", { instanceId, offset, limit }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async instanceFilesList(instanceId: string, folderKind: string) : Promise<Result<InstanceFileItem[], AppError>> {
+async screenshotThumb(path: string) : Promise<Result<string, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("instance_files_list", { instanceId, folderKind }) };
+    return { status: "ok", data: await TAURI_INVOKE("screenshot_thumb", { path }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async instanceFileToggle(instanceId: string, folderKind: string, fileName: string, enabled: boolean) : Promise<Result<InstanceFileItem, AppError>> {
+async screenshotDelete(path: string) : Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("instance_file_toggle", { instanceId, folderKind, fileName, enabled }) };
+    return { status: "ok", data: await TAURI_INVOKE("screenshot_delete", { path }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async instanceFileDelete(instanceId: string, folderKind: string, fileName: string) : Promise<Result<null, AppError>> {
+async screenshotReveal(path: string) : Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("instance_file_delete", { instanceId, folderKind, fileName }) };
+    return { status: "ok", data: await TAURI_INVOKE("screenshot_reveal", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async screenshotOpen(path: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("screenshot_open", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async screenshotCopy(path: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("screenshot_copy", { path }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -713,11 +864,16 @@ export type AuthlibLoginResponse = { account: AccountView | null; pendingSession
 export type AuthlibProfileView = { id: string; name: string }
 export type CacheSizeInfo = { cacheBytes: number; logsBytes: number; skinCacheBytes: number; totalBytes: number }
 export type CapeView = { id: string; alias: string; url: string; active: boolean }
+/**
+ * Card category for grouping Minecraft instances (PCL parity).
+ */
+export type CardKind = "star" | "api" | "regular" | "rubbish" | "fool" | "error" | "hidden"
 export type CompDependency = { projectId: string; kind: CompDependencyKind }
 export type CompDependencyKind = "required" | "optional" | "incompatible" | "embedded"
 export type CompFavoriteEntry = { platform: string; projectId: string; slug: string; title: string; iconUrl: string | null; compType: string }
 export type CompFile = { id: string; projectId: string; platform: CompPlatform; name: string; fileName: string; mcVersions: string[]; loaders: string[]; channel: CompReleaseChannel; releaseDate: string; size: number; hashes: CompFileHashes; downloadUrls: string[]; distributionDisabled: boolean; dependencies: CompDependency[] }
 export type CompFileHashes = { sha1: string | null; sha512: string | null; murmur2: number | null }
+export type CompPickTargetResult = { instanceId: string | null; dir: string | null }
 export type CompPlatform = "modrinth" | "curseforge"
 export type CompProject = { platform: CompPlatform; id: string; slug: string; title: string; summary: string; description: string | null; iconUrl: string | null; author: string; downloads: number; follows: number; categories: string[]; mcVersions: string[]; loaders: string[]; compType: CompType; updatedAt: string; websiteUrl: string | null }
 export type CompReleaseChannel = "release" | "beta" | "alpha"
@@ -738,23 +894,38 @@ export type CrashConfidence = "high" | "medium" | "low"
  * Aggregated result of analyzing crash logs for an instance.
  */
 export type CrashResult = { instanceId: string; analyzedAt: string; causes: CrashCauseFinding[]; summaryLogLines: string[]; reportFiles: string[] }
+export type CurrentExtras = { fabricApi: string | null; legacyFabricApi: string | null; optifabric: string | null }
+export type CurrentInstallInfo = { loaders: string[]; extras: CurrentExtras }
 export type DailyLuckResult = { date: string; username: string; score: number; levelKey: string }
 export type DatapackInfo = { id: string; fileName: string; description: string; packFormat: number; enabled: boolean; builtIn: boolean }
+/**
+ * Global default for instances whose own isolation is `"global"`.
+ */
+export type DefaultIsolation = "off" | "modded" | "nonRelease" | "moddedOrNonRelease" | 
+/**
+ * Legacy `config.json` files stored `"on"`.
+ */
+"all"
+export type DownloadSettings = { autoSelectInstance: boolean }
 /**
  * Candidate file or folder that can be selected for modpack export.
  */
 export type ExportCandidateEntry = { relPath: string; isDir: boolean; size: number; defaultSelected: boolean }
+export type ExtraCandidates = { fabricApi: CompFile[]; legacyFabricApi: CompFile[]; optiFabric: CompFile[] }
+export type ExtraMod = { fileName: string; urls: string[]; sha1: string | null; size: number | null }
 export type GameFolderEntry = { name: string; path: string }
-export type GameSettings = { folders: GameFolderEntry[]; currentFolder: string; defaultIsolation: string; sortBy: string }
+export type GameSettings = { folders: GameFolderEntry[]; currentFolder: string; defaultIsolation: DefaultIsolation; sortBy: string }
+export type ImportResourcesResult = { imported: string[]; conflicts: string[] }
+export type InstallMode = { type: "create" } | { type: "modify"; remove_mod_files?: string[] }
+export type InstallRequest = { mcVersion: string; instanceName: string; forge: string | null; neoforge: string | null; cleanroom: string | null; fabric: string | null; legacyFabric: string | null; labymod: LabyModSel | null; liteloader: string | null; optifine: string | null; extraMods: ExtraMod[]; mode: InstallMode }
 /**
  * Per-instance configuration stored in `<instance_dir>/mclr.instance.json`.
  */
-export type InstanceConfig = { icon: string; category: string; pinned: boolean; isolation: string; java: string | null; memory: number | null; jvmArgs: string | null; gameArgs: string | null; windowTitle: string | null; preLaunchCommand: string | null; loginRequirement: string; serverQuickPlay: string | null }
-export type InstanceFileItem = { fileName: string; path: string; enabled: boolean; size: number; modifiedAt: string }
+export type InstanceConfig = { icon: string; category?: string; pinned?: boolean; starred?: boolean; cardType?: CardKind | null; isolation: string; java: string | null; memory: number | null; jvmArgs: string | null; gameArgs: string | null; windowTitle: string | null; preLaunchCommand: string | null; loginRequirement: string; serverQuickPlay: string | null }
 /**
  * Information describing a Minecraft instance.
  */
-export type InstanceInfo = { id: string; name: string; folder: string; path: string; mcVersion: string; kind: InstanceKind; loaders: string[]; state: InstanceState; config: InstanceConfig }
+export type InstanceInfo = { id: string; name: string; folder: string; path: string; mcVersion: string; kind: InstanceKind; loaders: string[]; state: InstanceState; config: InstanceConfig; modable?: boolean; card?: CardKind; releaseTime?: string | null; loaderVersions?: Partial<{ [key in string]: string }> }
 /**
  * Classification of a Minecraft instance.
  */
@@ -773,6 +944,7 @@ export type JarInJarNode = { id: string; name: string; version: string; path: st
 export type JavaInstallation = { path: string; home: string; version: string; major: number; implementor: string; arch: string; isJdk: boolean; source: string }
 export type JavaSettings = { custom: string[]; select: string; preferJdk: boolean }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
+export type LabyModSel = { channel: string; commitRef: string; baseVersion: string }
 export type LanguageSettings = { locale: string; formatCulture: string }
 /**
  * Runtime metadata for a launched Minecraft process.
@@ -793,6 +965,8 @@ export type LoaderVersionEntry = { loader: LoaderKind; mcVersion: string; versio
  * Information about a locally installed mod in the instance's `mods` folder.
  */
 export type LocalModInfo = { fileName: string; path: string; enabled: boolean; modId: string; name: string; version: string; description: string | null; authors: string[]; loader: string; sha1: string; murmur2: number; size: number; projectId: string | null; updateFile: CompFile | null }
+export type LocalModUpdateItem = { currentFileName: string; newFile: CompFile }
+export type LocalModsScanResult = { entries: ResourceEntry[] }
 /**
  * Log severity classification.
  */
@@ -823,14 +997,21 @@ export type NetSettings = { proxyMode: ProxyMode; proxyUrl: string; doh: boolean
  * Minecraft news item surfaced on the launcher homepage.
  */
 export type NewsItem = { id: string; title: string; summary: string; date: string; category: string; imageUrl: string | null; articleUrl: string }
+export type OverwritePolicy = "ask" | "overwrite" | "skip"
 export type ProxyMode = "none" | "system" | "custom"
 /**
  * A resolved dependency item containing project metadata, the chosen file, and whether it is already installed.
  */
 export type ResolvedDependencyItem = { project: CompProject; file: CompFile; installed: boolean }
-export type SaveInfo = { folderName: string; path: string; name: string; seed: string; spawn: SaveSpawn; gameMode: number; difficulty: number; playTime: number; lastPlayed: number; dataVersion: number | null; iconDataUrl: string | null }
+export type ResourceEntry = { path: string; relPath: string; fileName: string; isDir: boolean; size: number; createdMs: number | null; modifiedMs: number | null; enabled: boolean; state: ResourceState; title: string | null; description: string | null; version: string | null; icon: string | null; tags: string[]; modId: string | null; projectId: string | null; latestFile: CompFile | null; updateAvailable: boolean; dependents: string[] }
+export type ResourceKind = "mod" | "resourcePack" | "shader" | "schematic"
+export type ResourceState = "ok" | "unavailable"
+export type SaveInfo = { folderName: string; path: string; name: string; seed: string; spawn: SaveSpawn; gameMode: number; difficulty: number; playTime: number; lastPlayed: number; dataVersion: number | null; iconPath: string | null; iconDataUrl: string | null }
 export type SaveSpawn = { x: number; y: number; z: number }
+export type SchematicInfo = { name: string; author: string | null; size: [number, number, number]; totalVolume: number; totalBlocks: number; regionCount: number; createdMs: number | null; modifiedMs: number | null }
 export type ScreenshotInfo = { fileName: string; path: string; size: number; modifiedAt: string; dataUrl: string | null }
+export type ScreenshotMeta = { fileName: string; path: string; size: number; createdMs: number; modifiedAt: string }
+export type ScreenshotsPagedResult = { items: ScreenshotMeta[]; total: number }
 /**
  * Presence status of optional launcher secrets.
  */
@@ -840,7 +1021,7 @@ export type ServerPingResult = { ip: string; resolvedAddr: string; online: boole
 /**
  * Complete MCLR user settings.
  */
-export type Settings = { schemaVersion: number; ui: UiSettings; language: LanguageSettings; system: SystemSettings; net: NetSettings; game: GameSettings; java: JavaSettings; launch: LaunchSettings; comp: CompSettings; update: UpdateSettings; states: StatesSettings }
+export type Settings = { schemaVersion: number; ui: UiSettings; language: LanguageSettings; system: SystemSettings; net: NetSettings; game: GameSettings; java: JavaSettings; launch: LaunchSettings; comp: CompSettings; download: DownloadSettings; update: UpdateSettings; states: StatesSettings }
 export type SkinFetchResult = { username: string; uuid: string; skinUrl: string; skinDataUrl: string; headDataUrl: string; slim: boolean }
 export type SourcePriority = "mirrorFirst" | "smart" | "officialFirst"
 export type StatesSettings = { dismissedAnnouncements: string[] }

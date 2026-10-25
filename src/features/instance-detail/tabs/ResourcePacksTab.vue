@@ -1,18 +1,13 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-import InstanceFilesTab from './InstanceFilesTab.vue'
+import ResourceList from '../../resources/ResourceList.vue'
 
 defineProps<{
   instanceId: string
 }>()
-
-const { t } = useI18n()
 </script>
 
 <template>
-  <InstanceFilesTab
-    :instance-id="instanceId"
-    folder-kind="resourcepacks"
-    :title="t('instanceDetail.tabs.resourcepacks')"
-  />
+  <div class="h-full">
+    <ResourceList :instance-id="instanceId" kind="resourcePack" />
+  </div>
 </template>

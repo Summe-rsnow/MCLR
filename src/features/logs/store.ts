@@ -19,8 +19,34 @@ export const useLogsStore = defineStore('logs', () => {
   const loading = ref(false)
 
   let unlistenLog: UnlistenFn | null = null
+  let unlistenBatch: UnlistenFn | null = null
   let unlistenStarted: UnlistenFn | null = null
   let unlistenExit: UnlistenFn | null = null
+
+  const pendingQueue: LogLine[] = []
+  let rafHandle: number | null = null
+
+  function flushLogs() {
+    if (pendingQueue.length > 0) {
+      logs.value.push(...pendingQueue)
+      pendingQueue.length = 0
+      if (logs.value.length > 10000) {
+        logs.value.splice(0, logs.value.length - 10000)
+      }
+    }
+    rafHandle = null
+  }
+
+  function enqueueLogs(lines: LogLine[]) {
+    pendingQueue.push(...lines)
+    if (rafHandle === null) {
+      if (typeof requestAnimationFrame !== 'undefined') {
+        rafHandle = requestAnimationFrame(flushLogs)
+      } else {
+        flushLogs()
+      }
+    }
+  }
 
   const filteredLogs = computed(() => {
     let result = logs.value
@@ -59,12 +85,15 @@ export const useLogsStore = defineStore('logs', () => {
 
     try {
       unlistenLog = await listen<LogLine>('launch://log', (event) => {
-        logs.value.push(event.payload)
-        // Cap in-memory log buffer to last 10,000 lines for performance
-        if (logs.value.length > 10000) {
-          logs.value.splice(0, logs.value.length - 10000)
-        }
+        enqueueLogs([event.payload])
       })
+
+      unlistenBatch = await listen<{ instanceId: string; lines: LogLine[] }>(
+        'launch://logBatch',
+        (event) => {
+          enqueueLogs(event.payload.lines)
+        },
+      )
 
       unlistenStarted = await listen<LaunchProcessInfo>('launch://started', (event) => {
         const proc = event.payload
@@ -97,6 +126,15 @@ export const useLogsStore = defineStore('logs', () => {
       unlistenLog()
       unlistenLog = null
     }
+    if (unlistenBatch) {
+      unlistenBatch()
+      unlistenBatch = null
+    }
+    if (rafHandle !== null && typeof cancelAnimationFrame !== 'undefined') {
+      cancelAnimationFrame(rafHandle)
+      rafHandle = null
+    }
+    pendingQueue.length = 0
     if (unlistenStarted) {
       unlistenStarted()
       unlistenStarted = null
@@ -127,6 +165,11 @@ export const useLogsStore = defineStore('logs', () => {
   }
 
   function clearLogs(): void {
+    if (rafHandle !== null && typeof cancelAnimationFrame !== 'undefined') {
+      cancelAnimationFrame(rafHandle)
+      rafHandle = null
+    }
+    pendingQueue.length = 0
     logs.value = []
   }
 

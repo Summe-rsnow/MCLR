@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { featureRoutes, type NavMeta } from '../../router'
@@ -101,6 +101,49 @@ function isItemActive(itemPath: string): boolean {
   if (!route?.path) return false
   return route.path === itemPath || route.path.startsWith(itemPath + '/')
 }
+
+const navContainerRef = ref<HTMLElement | null>(null)
+const itemRefs = ref<Record<string, HTMLElement | null>>({})
+const pillTop = ref(0)
+const pillHeight = ref(36)
+const pillVisible = ref(false)
+
+function updatePill() {
+  nextTick(() => {
+    const container = navContainerRef.value
+    if (!container) {
+      pillVisible.value = false
+      return
+    }
+    const activeItem = allNavItems.value.find((item) => isItemActive(item.path))
+    if (!activeItem) {
+      pillVisible.value = false
+      return
+    }
+    const el = itemRefs.value[activeItem.path]
+    if (el) {
+      pillTop.value = el.offsetTop
+      pillHeight.value = el.offsetHeight || 36
+      pillVisible.value = true
+    } else {
+      pillVisible.value = false
+    }
+  })
+}
+
+watch(() => route?.path, () => updatePill(), { immediate: true })
+watch(collapsed, () => updatePill())
+onMounted(() => {
+  updatePill()
+})
+
+function setItemRef(path: string, el: unknown) {
+  if (el) {
+    itemRefs.value[path] = el as HTMLElement
+  } else {
+    delete itemRefs.value[path]
+  }
+}
 </script>
 
 <template>
@@ -109,8 +152,22 @@ function isItemActive(itemPath: string): boolean {
     :class="collapsed ? 'w-[68px] p-2' : 'w-[232px] px-2.5 py-2'"
   >
     <!-- Nav Groups -->
-    <div class="flex-1 overflow-y-auto flex flex-col gap-0.5">
-      <div v-for="(group, gIdx) in groupedNav" :key="group.key" class="flex flex-col">
+    <div ref="navContainerRef" class="relative flex-1 overflow-y-auto flex flex-col gap-0.5">
+      <!-- Active Sliding Background Pill -->
+      <div
+        v-if="pillVisible"
+        class="absolute left-0 right-0 rounded-xl bg-primary-soft pointer-events-none transition-all duration-240"
+        :style="{
+          top: `${pillTop}px`,
+          height: `${pillHeight}px`,
+          transitionTimingFunction: 'var(--ease)',
+        }"
+      >
+        <!-- Left Accent Bar -->
+        <span class="absolute left-1 top-2.5 bottom-2.5 w-[3px] bg-primary rounded-full" />
+      </div>
+
+      <div v-for="(group, gIdx) in groupedNav" :key="group.key" class="flex flex-col relative z-10">
         <!-- Group Header or Divider -->
         <div v-if="!collapsed" class="text-[11px] font-medium tracking-wide text-fg-subtle px-3 pt-2 pb-0.5">
           {{ t(group.titleKey) }}
@@ -121,23 +178,18 @@ function isItemActive(itemPath: string): boolean {
         <button
           v-for="item in group.items"
           :key="item.path"
+          :ref="(el) => setItemRef(item.path, el)"
           type="button"
           :title="collapsed ? t(item.meta.titleKey) : undefined"
-          class="relative h-9 rounded-xl transition-all cursor-pointer flex items-center"
+          class="relative h-9 rounded-xl transition-colors cursor-pointer flex items-center"
           :class="[
             collapsed ? 'justify-center w-full px-0' : 'gap-2.5 px-3 text-left w-full',
             isItemActive(item.path)
-              ? 'bg-primary-soft text-primary-soft-fg font-medium m-refract'
+              ? 'text-primary-soft-fg font-medium'
               : 'text-fg-muted hover:bg-sunken hover:text-fg',
           ]"
           @click="router?.push ? router.push(item.path) : undefined"
         >
-          <!-- Active Pill Indicator Bar on left edge -->
-          <span
-            v-if="isItemActive(item.path)"
-            class="absolute left-1 top-2.5 bottom-2.5 w-[3px] bg-primary rounded-full"
-          />
-
           <span :class="item.meta.icon" class="w-5 h-5 shrink-0" />
           <span v-if="!collapsed" class="text-xs truncate">
             {{ t(item.meta.titleKey) }}
@@ -145,7 +197,6 @@ function isItemActive(itemPath: string): boolean {
         </button>
       </div>
     </div>
-
     <!-- Footer: Collapse Toggle & Account Chip -->
     <div class="pt-2 border-t border-line flex flex-col gap-2 shrink-0">
       <!-- Collapse toggle button -->

@@ -1,0 +1,295 @@
+/**
+ * PCL-CE parity rules for Minecraft version detection, compatibility, add-ons, and instance naming.
+ * Owned by slice B1.
+ */
+
+const FORBIDDEN_CHARS = ['\\', '/', ':', '*', '?', '"', '<', '>', '|', '!', ';']
+
+const RESERVED_DOS_NAMES: Record<string, true> = {
+  CON: true,
+  PRN: true,
+  AUX: true,
+  NUL: true,
+  COM1: true,
+  COM2: true,
+  COM3: true,
+  COM4: true,
+  COM5: true,
+  COM6: true,
+  COM7: true,
+  COM8: true,
+  COM9: true,
+  LPT1: true,
+  LPT2: true,
+  LPT3: true,
+  LPT4: true,
+  LPT5: true,
+  LPT6: true,
+  LPT7: true,
+  LPT8: true,
+  LPT9: true,
+}
+
+export function compareVersions(v1: string, v2: string): number {
+  const p1 = v1.split(/[-_.]/).map((p) => {
+    const n = parseInt(p, 10)
+    return isNaN(n) ? p : n
+  })
+  const p2 = v2.split(/[-_.]/).map((p) => {
+    const n = parseInt(p, 10)
+    return isNaN(n) ? p : n
+  })
+  const len = Math.max(p1.length, p2.length)
+  for (let i = 0; i < len; i++) {
+    const a = p1[i] ?? 0
+    const b = p2[i] ?? 0
+    if (typeof a === 'number' && typeof b === 'number') {
+      if (a !== b) return a - b
+    } else {
+      const sa = String(a)
+      const sb = String(b)
+      if (sa !== sb) return sa.localeCompare(sb)
+    }
+  }
+  return 0
+}
+
+export function dropOf(mcVersion: string): number {
+  if (mcVersion.startsWith('1.')) {
+    const parts = mcVersion.split('.')
+    const minor = parseInt(parts[1], 10)
+    return isNaN(minor) ? 0 : minor * 10
+  }
+  const match2Digit = mcVersion.match(/^(\d{2})\.\d+/)
+  if (match2Digit) {
+    return parseInt(match2Digit[1], 10) * 10
+  }
+  const matchSnap = mcVersion.match(/^(\d{2})w/)
+  if (matchSnap) {
+    const yr = parseInt(matchSnap[1], 10)
+    if (yr >= 24) return 210
+    if (yr === 23) return 200
+    if (yr === 22) return 190
+    if (yr === 21) return 180
+    if (yr === 20) return 160
+    if (yr === 19) return 150
+    if (yr === 18) return 130
+    if (yr === 17) return 120
+    if (yr === 16) return 110
+    if (yr === 15) return 90
+  }
+  return 0
+}
+
+export function isFormatFit(id: string): boolean {
+  return /^(1\.\d+(\.\d+)?|\d{2}\.\d+(\.\d+)?)$/.test(id)
+}
+
+const APRIL_FOOLS_IDS: Record<string, true> = {
+  '15w14a': true,
+  '1.rv-pre1': true,
+  '3D Shareware v1.34': true,
+  '20w14∞': true,
+  '22w13oneblockatatime': true,
+  '23w13a_or_b': true,
+  '24w14potato': true,
+  '25w14craftmine': true,
+  '26w14a': true,
+}
+
+export function isAprilFools(id: string, releaseTime?: string): boolean {
+  if (id.startsWith('2.0') || APRIL_FOOLS_IDS[id]) {
+    return true
+  }
+  if (releaseTime) {
+    const date = new Date(releaseTime)
+    const shifted = new Date(date.getTime() + 2 * 3600 * 1000)
+    if (shifted.getUTCMonth() === 3 && shifted.getUTCDate() === 1) {
+      return true
+    }
+  }
+  return false
+}
+
+export interface LoaderVisibility {
+  forge: boolean
+  neoforge: boolean
+  cleanroom: boolean
+  fabric: boolean
+  legacyFabric: boolean
+  labymod: boolean
+  optifine: boolean
+  liteloader: boolean
+}
+
+export function loaderVisibility(mcVersion: string): LoaderVisibility {
+  const drop = dropOf(mcVersion)
+  const fit = isFormatFit(mcVersion)
+
+  const forge = fit && compareVersions(mcVersion, '1.5.2') >= 0
+  const neoforge = fit && compareVersions(mcVersion, '1.20.1') >= 0
+  const cleanroom = mcVersion === '1.12.2'
+  const fabric = drop >= 130
+  const legacyFabric = drop >= 30 && drop <= 130
+  const labymod = fit && compareVersions(mcVersion, '1.8.9') >= 0
+  const optifine = compareVersions(mcVersion, '1.7.2') >= 0
+  const liteloader =
+    fit &&
+    compareVersions(mcVersion, '1.5.2') >= 0 &&
+    compareVersions(mcVersion, '1.12.2') <= 0
+
+  return {
+    forge,
+    neoforge,
+    cleanroom,
+    fabric,
+    legacyFabric,
+    labymod,
+    optifine,
+    liteloader,
+  }
+}
+
+export interface LoaderIncompatibilities {
+  optifineDisabledReason?: string
+  liteloaderDisabledReason?: string
+}
+
+export function loaderIncompatibilities(
+  mcVersion: string,
+  selected: {
+    primaryLoader?:
+      | 'forge'
+      | 'neoforge'
+      | 'cleanroom'
+      | 'fabric'
+      | 'legacyFabric'
+      | 'labymod'
+      | null
+    optifine?: boolean
+    liteloader?: boolean
+  },
+): LoaderIncompatibilities {
+  const result: LoaderIncompatibilities = {}
+  const { primaryLoader } = selected
+
+  if (
+    primaryLoader === 'neoforge' ||
+    primaryLoader === 'cleanroom' ||
+    primaryLoader === 'labymod'
+  ) {
+    result.optifineDisabledReason = `download.compat.${primaryLoader}Optifine`
+    result.liteloaderDisabledReason = `download.compat.${primaryLoader}Liteloader`
+  }
+
+  if (primaryLoader === 'legacyFabric') {
+    result.liteloaderDisabledReason = 'download.compat.legacyFabricLiteloader'
+  }
+
+  if (primaryLoader === 'forge') {
+    if (
+      compareVersions(mcVersion, '1.13') >= 0 &&
+      compareVersions(mcVersion, '1.14.3') <= 0
+    ) {
+      result.optifineDisabledReason = 'download.compat.forgeOptifineVersion'
+    }
+  }
+
+  if (primaryLoader === 'fabric') {
+    if (compareVersions(mcVersion, '1.20.5') >= 0) {
+      result.optifineDisabledReason = 'download.compat.fabricOptifineVersion'
+    }
+  }
+
+  return result
+}
+
+export interface DefaultNameInput {
+  mcVersion: string
+  fabricVersion?: string | null
+  legacyFabricVersion?: string | null
+  labymodVersion?: string | null
+  labymodChannel?: string | null
+  forgeVersion?: string | null
+  neoforgeVersion?: string | null
+  cleanroomVersion?: string | null
+  liteloader?: boolean
+  optifineDisplay?: string | null
+}
+
+export function defaultName(input: DefaultNameInput): string {
+  let name = input.mcVersion
+
+  if (input.fabricVersion) {
+    const cleanVer = input.fabricVersion.split('+build')[0].split('+')[0]
+    name += `-Fabric_${cleanVer}`
+  }
+  if (input.legacyFabricVersion) {
+    name += `-LegacyFabric_${input.legacyFabricVersion}`
+  }
+  if (input.labymodVersion) {
+    const channel =
+      input.labymodChannel?.toLowerCase() === 'snapshot'
+        ? 'Snapshot'
+        : 'Production'
+    name += `-LabyMod_${input.labymodVersion}_${channel}`
+  }
+  if (input.forgeVersion) {
+    name += `-Forge_${input.forgeVersion}`
+  }
+  if (input.neoforgeVersion) {
+    name += `-NeoForge_${input.neoforgeVersion}`
+  }
+  if (input.cleanroomVersion) {
+    name += `-Cleanroom_${input.cleanroomVersion}`
+  }
+  if (input.liteloader) {
+    name += '-LiteLoader'
+  }
+  if (input.optifineDisplay) {
+    const withoutMc = input.optifineDisplay.replace(
+      new RegExp(`^${input.mcVersion}\\s*`),
+      '',
+    )
+    const clean = withoutMc.replace(/\s+/g, '_')
+    name += `-OptiFine_${clean}`
+  }
+
+  return name
+}
+
+export function validateInstanceNameLocal(
+  name: string,
+  existingNames: string[] = [],
+): string | null {
+  if (!name || name.length === 0) {
+    return 'instance.name.empty'
+  }
+  if (name.length > 70) {
+    return 'instance.name.tooLong'
+  }
+  if (name.startsWith(' ') || name.endsWith(' ')) {
+    return 'instance.name.invalidChar'
+  }
+  for (const char of FORBIDDEN_CHARS) {
+    if (name.includes(char)) {
+      return 'instance.name.invalidChar'
+    }
+  }
+  if (name.endsWith('.')) {
+    return 'instance.name.trailingDot'
+  }
+
+  const upper = name.toUpperCase()
+  const base = upper.split('.')[0]
+  if (RESERVED_DOS_NAMES[upper] || RESERVED_DOS_NAMES[base]) {
+    return 'instance.name.reserved'
+  }
+
+  const lowerName = name.toLowerCase()
+  if (existingNames.some((ex) => ex.toLowerCase() === lowerName)) {
+    return 'instance.name.duplicate'
+  }
+
+  return null
+}

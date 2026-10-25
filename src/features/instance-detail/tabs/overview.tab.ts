@@ -1,4 +1,4 @@
-import OverviewTab from './OverviewTab.vue'
+import { defineAsyncComponent } from 'vue'
 import type { InstanceDetailTab } from '../tabs'
 
 const tab: InstanceDetailTab = {
@@ -6,7 +6,7 @@ const tab: InstanceDetailTab = {
   titleKey: 'instanceDetail.tabs.overview',
   icon: 'i-lucide-info',
   order: 10,
-  component: OverviewTab,
+  component: defineAsyncComponent(() => import('./OverviewTab.vue')),
 }
 
 export default tab

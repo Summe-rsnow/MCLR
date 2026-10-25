@@ -7,10 +7,10 @@ use crate::{LoaderInstallContext, LoaderInstaller, LoaderKind, LoaderVersionEntr
 use async_trait::async_trait;
 use mclr_core::paths;
 use mclr_core::settings::SourcePriority;
-use mclr_game::install::{install_vanilla, maven_coordinate_to_path, repair_instance};
-use mclr_game::instance::{InstanceConfig, InstanceInfo, InstanceState, classify_instance};
+use mclr_game::install::maven_coordinate_to_path;
+use mclr_game::instance::InstanceInfo;
 use mclr_game::launch::version_java_constraint;
-use mclr_game::version::{Library, VersionJson, merge_version_json};
+use mclr_game::version::{Library, VersionJson};
 use mclr_game::{scan_java, select_java};
 use mclr_net::{DownloadSpec, Downloader, SourceKind, SourceOrigin, rewrite_url};
 use serde::Deserialize;
@@ -76,40 +76,6 @@ fn is_file_valid(path: &Path, expected_size: Option<u64>, expected_sha1: Option<
         }
     }
     true
-}
-
-fn ensure_base_vanilla_files(
-    mc_folder: &Path,
-    mc_version: &str,
-    instance_name: &str,
-) -> Result<(), std::io::Error> {
-    let base_dir = mc_folder.join("versions").join(mc_version);
-    let base_json = base_dir.join(format!("{}.json", mc_version));
-    let base_jar = base_dir.join(format!("{}.jar", mc_version));
-
-    let inst_dir = mc_folder.join("versions").join(instance_name);
-    let inst_json = inst_dir.join(format!("{}.json", instance_name));
-    let inst_jar = inst_dir.join(format!("{}.jar", instance_name));
-
-    if !base_dir.exists() {
-        std::fs::create_dir_all(&base_dir)?;
-    }
-
-    if !base_json.exists() && inst_json.exists() {
-        std::fs::copy(&inst_json, &base_json)?;
-    }
-    if !base_jar.exists() && inst_jar.exists() {
-        std::fs::copy(&inst_jar, &base_jar)?;
-    }
-    Ok(())
-}
-
-fn ensure_launcher_profiles(mc_folder: &Path) -> Result<(), std::io::Error> {
-    let launcher_profiles = mc_folder.join("launcher_profiles.json");
-    if !launcher_profiles.exists() {
-        std::fs::write(&launcher_profiles, r#"{"profiles":{}}"#)?;
-    }
-    Ok(())
 }
 
 fn build_library_urls(original_url: &str, rel_path: &str, priority: SourcePriority) -> Vec<Url> {
@@ -475,49 +441,129 @@ fn find_and_load_generated_forge_json(
     ))
 }
 
-fn finalize_merged_instance(
-    mc_folder: &Path,
-    instance_name: &str,
-    forge_json: VersionJson,
-    vanilla_json: VersionJson,
-) -> Result<VersionJson, LoaderError> {
-    let mut merged = merge_version_json(forge_json, vanilla_json);
-    merged.id = instance_name.to_string();
-    merged.inherits_from = None;
-
-    let instance_dir = mc_folder.join("versions").join(instance_name);
-    std::fs::create_dir_all(&instance_dir)?;
-    let json_path = instance_dir.join(format!("{}.json", instance_name));
-    let json_str = serde_json::to_string_pretty(&merged)?;
-    std::fs::write(&json_path, json_str)?;
-
-    Ok(merged)
-}
-
-fn build_instance_info(
-    mc_folder: &Path,
-    instance_name: &str,
-    mc_version: &str,
-    version_json: &VersionJson,
-) -> InstanceInfo {
-    let (kind, loaders) = classify_instance(version_json, mc_version);
-    let instance_dir = mc_folder.join("versions").join(instance_name);
-    InstanceInfo {
-        id: instance_name.to_string(),
-        name: instance_name.to_string(),
-        folder: mc_folder.to_string_lossy().to_string(),
-        path: instance_dir.to_string_lossy().to_string(),
-        mc_version: mc_version.to_string(),
-        kind,
-        loaders,
-        state: InstanceState::Ok,
-        config: InstanceConfig::default(),
-    }
-}
-
 // ============================================================================
 // Forge Installer
 // ============================================================================
+
+impl ForgeInstaller {
+    pub async fn stage(
+        ctx: &crate::pipeline::StageCtx<'_>,
+        loader_version: &str,
+    ) -> Result<crate::pipeline::Staged, LoaderError> {
+        let cache_file = paths::cache_dir().join(format!(
+            "forge-{}-{}-installer.jar",
+            ctx.mc_version, loader_version
+        ));
+        let urls = vec![
+            Url::parse(&format!(
+                "https://bmclapi2.bangbang93.com/forge/download?mcversion={}&version={}&category=installer&format=jar",
+                ctx.mc_version, loader_version
+            ))
+            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
+            Url::parse(&format!(
+                "https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/{mc}-{ver}/forge-{mc}-{ver}-installer.jar",
+                mc = ctx.mc_version,
+                ver = loader_version
+            ))
+            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
+            Url::parse(&format!(
+                "https://maven.minecraftforge.net/net/minecraftforge/forge/{mc}-{ver}/forge-{mc}-{ver}-installer.jar",
+                mc = ctx.mc_version,
+                ver = loader_version
+            ))
+            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
+        ];
+
+        let installer_path =
+            download_installer_jar(ctx.client, ctx.net_settings, urls, cache_file, ctx.task_ctx)
+                .await?;
+
+        let file = std::fs::File::open(&installer_path)?;
+        let mut archive = zip::ZipArchive::new(file)?;
+
+        let mut install_profile_val: Option<serde_json::Value> = None;
+        if let Ok(mut ip_file) = archive.by_name("install_profile.json") {
+            let mut content = String::new();
+            if ip_file.read_to_string(&mut content).is_ok() {
+                install_profile_val = serde_json::from_str::<serde_json::Value>(&content).ok();
+            }
+        }
+
+        let is_legacy = install_profile_val.as_ref().is_some_and(|val| {
+            val.get("install").and_then(|v| v.as_object()).is_some()
+                && val.get("versionInfo").and_then(|v| v.as_object()).is_some()
+        });
+
+        let version_json = if is_legacy {
+            let val = install_profile_val.as_ref().unwrap();
+            let install_obj = val["install"].as_object().unwrap();
+            let file_path = install_obj
+                .get("filePath")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let maven_path_coord = install_obj
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            let rel_maven_path = maven_coordinate_to_path(maven_path_coord);
+            let dest = ctx
+                .staging_dir
+                .join("libraries")
+                .join(rel_maven_path.replace('/', std::path::MAIN_SEPARATOR_STR));
+            if let Some(parent) = dest.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+
+            let trimmed = file_path.trim_start_matches('/');
+            let name_to_find = if archive.by_name(file_path).is_ok() {
+                file_path
+            } else {
+                trimmed
+            };
+            if let Ok(mut zip_entry) = archive.by_name(name_to_find) {
+                let mut out = std::fs::File::create(&dest)?;
+                std::io::copy(&mut zip_entry, &mut out)?;
+            }
+
+            let forge_json: VersionJson = serde_json::from_value(val["versionInfo"].clone())?;
+            forge_json
+        } else {
+            extract_maven_entries_from_zip(&mut archive, ctx.staging_dir)?;
+            predownload_installer_libraries(
+                ctx.client,
+                ctx.net_settings,
+                &mut archive,
+                ctx.staging_dir,
+                ctx.task_ctx,
+            )
+            .await?;
+
+            let dummy_json = VersionJson::default();
+            let constraint = version_java_constraint(&dummy_json, ctx.mc_version);
+            let installed_javas = scan_java(&ctx.java_settings.custom);
+            let java_inst = select_java(&installed_javas, &constraint, ctx.java_settings)
+                .ok_or(LoaderError::JavaNotFound)?;
+            let java_exe = PathBuf::from(&java_inst.path);
+
+            let mut known_versions = Vec::new();
+            if let Ok(entries) = std::fs::read_dir(ctx.staging_dir.join("versions")) {
+                for entry in entries.flatten() {
+                    known_versions.push(entry.file_name().to_string_lossy().to_string());
+                }
+            }
+
+            run_headless_installer_jar(&java_exe, &installer_path, ctx.staging_dir)?;
+
+            find_and_load_generated_forge_json(ctx.staging_dir, &installer_path, &known_versions)?
+        };
+
+        Ok(crate::pipeline::Staged {
+            version_json,
+            mods: Vec::new(),
+        })
+    }
+}
 
 pub struct ForgeInstaller;
 
@@ -590,172 +636,89 @@ impl LoaderInstaller for ForgeInstaller {
     }
 
     async fn install(&self, ctx: LoaderInstallContext<'_>) -> Result<InstanceInfo, LoaderError> {
-        // 1. Install base vanilla
-        install_vanilla(
-            ctx.client,
-            ctx.net_settings,
-            &ctx.mc_folder,
-            &ctx.mc_version,
-            &ctx.instance_name,
-            ctx.task_ctx,
-        )
-        .await?;
-
-        // 2. Ensure base vanilla files (versions/<mc>/<mc>.{json,jar})
-        ensure_base_vanilla_files(&ctx.mc_folder, &ctx.mc_version, &ctx.instance_name)?;
-
-        // 3. Ensure launcher_profiles.json exists
-        ensure_launcher_profiles(&ctx.mc_folder)?;
-
-        // 4. Download installer jar
-        let cache_file = paths::cache_dir().join(format!(
-            "forge-{}-{}-installer.jar",
-            ctx.mc_version, ctx.loader_version
-        ));
-        let urls = vec![
-            Url::parse(&format!(
-                "https://bmclapi2.bangbang93.com/forge/download?mcversion={}&version={}&category=installer&format=jar",
-                ctx.mc_version, ctx.loader_version
-            ))
-            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
-            Url::parse(&format!(
-                "https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/{mc}-{ver}/forge-{mc}-{ver}-installer.jar",
-                mc = ctx.mc_version,
-                ver = ctx.loader_version
-            ))
-            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
-            Url::parse(&format!(
-                "https://maven.minecraftforge.net/net/minecraftforge/forge/{mc}-{ver}/forge-{mc}-{ver}-installer.jar",
-                mc = ctx.mc_version,
-                ver = ctx.loader_version
-            ))
-            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
-        ];
-
-        let installer_path =
-            download_installer_jar(ctx.client, ctx.net_settings, urls, cache_file, ctx.task_ctx)
-                .await?;
-
-        // 5. Inspect installer zip
-        let file = std::fs::File::open(&installer_path)?;
-        let mut archive = zip::ZipArchive::new(file)?;
-
-        let mut install_profile_val: Option<serde_json::Value> = None;
-        if let Ok(mut ip_file) = archive.by_name("install_profile.json") {
-            let mut content = String::new();
-            if ip_file.read_to_string(&mut content).is_ok() {
-                install_profile_val = serde_json::from_str::<serde_json::Value>(&content).ok();
-            }
-        }
-
-        let is_legacy = install_profile_val.as_ref().is_some_and(|val| {
-            val.get("install").and_then(|v| v.as_object()).is_some()
-                && val.get("versionInfo").and_then(|v| v.as_object()).is_some()
-        });
-
-        let base_json_path = ctx
-            .mc_folder
-            .join("versions")
-            .join(&ctx.mc_version)
-            .join(format!("{}.json", ctx.mc_version));
-        let vanilla_json_content = std::fs::read_to_string(&base_json_path)?;
-        let vanilla_json: VersionJson = serde_json::from_str(&vanilla_json_content)?;
-
-        let merged = if is_legacy {
-            let val = install_profile_val.as_ref().unwrap();
-            let install_obj = val["install"].as_object().unwrap();
-            let file_path = install_obj
-                .get("filePath")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let maven_path_coord = install_obj
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-
-            // Extract file_path to libraries/<maven_path>
-            let rel_maven_path = maven_coordinate_to_path(maven_path_coord);
-            let dest = ctx
-                .mc_folder
-                .join("libraries")
-                .join(rel_maven_path.replace('/', std::path::MAIN_SEPARATOR_STR));
-            if let Some(parent) = dest.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-
-            let trimmed = file_path.trim_start_matches('/');
-            let name_to_find = if archive.by_name(file_path).is_ok() {
-                file_path
-            } else {
-                trimmed
-            };
-            let mut zip_entry = archive.by_name(name_to_find)?;
-            let mut out = std::fs::File::create(&dest)?;
-            std::io::copy(&mut zip_entry, &mut out)?;
-
-            // Parse versionInfo
-            let forge_json: VersionJson = serde_json::from_value(val["versionInfo"].clone())?;
-            finalize_merged_instance(&ctx.mc_folder, &ctx.instance_name, forge_json, vanilla_json)?
-        } else {
-            // Modern Forge >= 1.13
-            extract_maven_entries_from_zip(&mut archive, &ctx.mc_folder)?;
-            predownload_installer_libraries(
-                ctx.client,
-                ctx.net_settings,
-                &mut archive,
-                &ctx.mc_folder,
-                ctx.task_ctx,
-            )
-            .await?;
-
-            // Find Java
-            let constraint = version_java_constraint(&vanilla_json, &ctx.mc_version);
-            let installed_javas = scan_java(&ctx.java_settings.custom);
-            let java_inst = select_java(&installed_javas, &constraint, ctx.java_settings)
-                .ok_or(LoaderError::JavaNotFound)?;
-            let java_exe = PathBuf::from(&java_inst.path);
-
-            // Snapshot existing versions before running installer
-            let mut known_versions = Vec::new();
-            if let Ok(entries) = std::fs::read_dir(ctx.mc_folder.join("versions")) {
-                for entry in entries.flatten() {
-                    known_versions.push(entry.file_name().to_string_lossy().to_string());
-                }
-            }
-
-            // Run headless installer
-            run_headless_installer_jar(&java_exe, &installer_path, &ctx.mc_folder)?;
-
-            // Locate generated JSON and merge
-            let forge_json = find_and_load_generated_forge_json(
-                &ctx.mc_folder,
-                &installer_path,
-                &known_versions,
-            )?;
-            finalize_merged_instance(&ctx.mc_folder, &ctx.instance_name, forge_json, vanilla_json)?
-        };
-
-        repair_instance(
-            ctx.client,
-            ctx.net_settings,
-            &ctx.mc_folder,
-            &ctx.instance_name,
-            ctx.task_ctx,
-        )
-        .await?;
-
-        Ok(build_instance_info(
-            &ctx.mc_folder,
-            &ctx.instance_name,
-            &ctx.mc_version,
-            &merged,
-        ))
+        crate::install_with_loader(LoaderKind::Forge, ctx).await
     }
 }
 
 // ============================================================================
 // NeoForge Installer
 // ============================================================================
+
+impl NeoForgeInstaller {
+    pub async fn stage(
+        ctx: &crate::pipeline::StageCtx<'_>,
+        loader_version: &str,
+    ) -> Result<crate::pipeline::Staged, LoaderError> {
+        let cache_file = paths::cache_dir().join(format!(
+            "neoforge-{}-{}-installer.jar",
+            ctx.mc_version, loader_version
+        ));
+        let ver = loader_version;
+        let mut urls = vec![
+            Url::parse(&format!(
+                "https://bmclapi2.bangbang93.com/neoforge/version/{ver}/download/installer.jar"
+            ))
+            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
+            Url::parse(&format!(
+                "https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/{ver}/neoforge-{ver}-installer.jar"
+            ))
+            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
+            Url::parse(&format!(
+                "https://maven.neoforged.net/releases/net/neoforged/neoforge/{ver}/neoforge-{ver}-installer.jar"
+            ))
+            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
+        ];
+
+        if ctx.mc_version == "1.20.1" {
+            if let Ok(legacy_u) = Url::parse(&format!(
+                "https://maven.neoforged.net/releases/net/neoforged/forge/{ver}/forge-{ver}-installer.jar"
+            )) {
+                urls.push(legacy_u);
+            }
+        }
+
+        let installer_path =
+            download_installer_jar(ctx.client, ctx.net_settings, urls, cache_file, ctx.task_ctx)
+                .await?;
+
+        let file = std::fs::File::open(&installer_path)?;
+        let mut archive = zip::ZipArchive::new(file)?;
+
+        extract_maven_entries_from_zip(&mut archive, ctx.staging_dir)?;
+        predownload_installer_libraries(
+            ctx.client,
+            ctx.net_settings,
+            &mut archive,
+            ctx.staging_dir,
+            ctx.task_ctx,
+        )
+        .await?;
+
+        let dummy_json = VersionJson::default();
+        let constraint = version_java_constraint(&dummy_json, ctx.mc_version);
+        let installed_javas = scan_java(&ctx.java_settings.custom);
+        let java_inst = select_java(&installed_javas, &constraint, ctx.java_settings)
+            .ok_or(LoaderError::JavaNotFound)?;
+        let java_exe = PathBuf::from(&java_inst.path);
+
+        let mut known_versions = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(ctx.staging_dir.join("versions")) {
+            for entry in entries.flatten() {
+                known_versions.push(entry.file_name().to_string_lossy().to_string());
+            }
+        }
+
+        run_headless_installer_jar(&java_exe, &installer_path, ctx.staging_dir)?;
+
+        let neoforge_json =
+            find_and_load_generated_forge_json(ctx.staging_dir, &installer_path, &known_versions)?;
+
+        Ok(crate::pipeline::Staged {
+            version_json: neoforge_json,
+            mods: Vec::new(),
+        })
+    }
+}
 
 pub struct NeoForgeInstaller;
 
@@ -847,119 +810,85 @@ impl LoaderInstaller for NeoForgeInstaller {
     }
 
     async fn install(&self, ctx: LoaderInstallContext<'_>) -> Result<InstanceInfo, LoaderError> {
-        // 1. Install base vanilla
-        install_vanilla(
-            ctx.client,
-            ctx.net_settings,
-            &ctx.mc_folder,
-            &ctx.mc_version,
-            &ctx.instance_name,
-            ctx.task_ctx,
-        )
-        .await?;
-
-        // 2. Ensure base vanilla files
-        ensure_base_vanilla_files(&ctx.mc_folder, &ctx.mc_version, &ctx.instance_name)?;
-
-        // 3. Ensure launcher_profiles.json
-        ensure_launcher_profiles(&ctx.mc_folder)?;
-
-        // 4. Download NeoForge installer jar
-        let cache_file = paths::cache_dir().join(format!(
-            "neoforge-{}-{}-installer.jar",
-            ctx.mc_version, ctx.loader_version
-        ));
-        let ver = &ctx.loader_version;
-        let mut urls = vec![
-            Url::parse(&format!(
-                "https://bmclapi2.bangbang93.com/neoforge/version/{ver}/download/installer.jar"
-            ))
-            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
-            Url::parse(&format!(
-                "https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/{ver}/neoforge-{ver}-installer.jar"
-            ))
-            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
-            Url::parse(&format!(
-                "https://maven.neoforged.net/releases/net/neoforged/neoforge/{ver}/neoforge-{ver}-installer.jar"
-            ))
-            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
-        ];
-
-        if ctx.mc_version == "1.20.1" {
-            if let Ok(legacy_u) = Url::parse(&format!(
-                "https://maven.neoforged.net/releases/net/neoforged/forge/{ver}/forge-{ver}-installer.jar"
-            )) {
-                urls.push(legacy_u);
-            }
-        }
-
-        let installer_path =
-            download_installer_jar(ctx.client, ctx.net_settings, urls, cache_file, ctx.task_ctx)
-                .await?;
-
-        // 5. Modern installer flow
-        let file = std::fs::File::open(&installer_path)?;
-        let mut archive = zip::ZipArchive::new(file)?;
-
-        extract_maven_entries_from_zip(&mut archive, &ctx.mc_folder)?;
-        predownload_installer_libraries(
-            ctx.client,
-            ctx.net_settings,
-            &mut archive,
-            &ctx.mc_folder,
-            ctx.task_ctx,
-        )
-        .await?;
-
-        let base_json_path = ctx
-            .mc_folder
-            .join("versions")
-            .join(&ctx.mc_version)
-            .join(format!("{}.json", ctx.mc_version));
-        let vanilla_json_content = std::fs::read_to_string(&base_json_path)?;
-        let vanilla_json: VersionJson = serde_json::from_str(&vanilla_json_content)?;
-
-        let constraint = version_java_constraint(&vanilla_json, &ctx.mc_version);
-        let installed_javas = scan_java(&ctx.java_settings.custom);
-        let java_inst = select_java(&installed_javas, &constraint, ctx.java_settings)
-            .ok_or(LoaderError::JavaNotFound)?;
-        let java_exe = PathBuf::from(&java_inst.path);
-
-        let mut known_versions = Vec::new();
-        if let Ok(entries) = std::fs::read_dir(ctx.mc_folder.join("versions")) {
-            for entry in entries.flatten() {
-                known_versions.push(entry.file_name().to_string_lossy().to_string());
-            }
-        }
-
-        run_headless_installer_jar(&java_exe, &installer_path, &ctx.mc_folder)?;
-
-        let forge_json =
-            find_and_load_generated_forge_json(&ctx.mc_folder, &installer_path, &known_versions)?;
-        let merged =
-            finalize_merged_instance(&ctx.mc_folder, &ctx.instance_name, forge_json, vanilla_json)?;
-
-        repair_instance(
-            ctx.client,
-            ctx.net_settings,
-            &ctx.mc_folder,
-            &ctx.instance_name,
-            ctx.task_ctx,
-        )
-        .await?;
-
-        Ok(build_instance_info(
-            &ctx.mc_folder,
-            &ctx.instance_name,
-            &ctx.mc_version,
-            &merged,
-        ))
+        crate::install_with_loader(LoaderKind::NeoForge, ctx).await
     }
 }
 
 // ============================================================================
 // Cleanroom Installer
 // ============================================================================
+
+impl CleanroomInstaller {
+    pub async fn stage(
+        ctx: &crate::pipeline::StageCtx<'_>,
+        loader_version: &str,
+    ) -> Result<crate::pipeline::Staged, LoaderError> {
+        let cache_file = paths::cache_dir().join(format!(
+            "cleanroom-{}-{}-installer.jar",
+            ctx.mc_version, loader_version
+        ));
+        let ver = loader_version;
+        let urls = vec![
+            Url::parse(&format!(
+                "https://github.com/CleanroomMC/Cleanroom/releases/download/{ver}/cleanroom-{ver}-installer.jar"
+            ))
+            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
+            Url::parse(&format!(
+                "https://github.com/CleanroomMC/Cleanroom/releases/download/v{ver}/cleanroom-{ver}-installer.jar"
+            ))
+            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
+            Url::parse(&format!(
+                "https://github.com/CleanroomMC/Cleanroom/releases/download/{ver}/Cleanroom-{ver}-installer.jar"
+            ))
+            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
+            Url::parse(&format!(
+                "https://github.com/CleanroomMC/Cleanroom/releases/download/v{ver}/Cleanroom-{ver}-installer.jar"
+            ))
+            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
+        ];
+
+        let installer_path =
+            download_installer_jar(ctx.client, ctx.net_settings, urls, cache_file, ctx.task_ctx)
+                .await?;
+
+        let file = std::fs::File::open(&installer_path)?;
+        let mut archive = zip::ZipArchive::new(file)?;
+
+        extract_maven_entries_from_zip(&mut archive, ctx.staging_dir)?;
+        predownload_installer_libraries(
+            ctx.client,
+            ctx.net_settings,
+            &mut archive,
+            ctx.staging_dir,
+            ctx.task_ctx,
+        )
+        .await?;
+
+        let dummy_json = VersionJson::default();
+        let constraint = version_java_constraint(&dummy_json, ctx.mc_version);
+        let installed_javas = scan_java(&ctx.java_settings.custom);
+        let java_inst = select_java(&installed_javas, &constraint, ctx.java_settings)
+            .ok_or(LoaderError::JavaNotFound)?;
+        let java_exe = PathBuf::from(&java_inst.path);
+
+        let mut known_versions = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(ctx.staging_dir.join("versions")) {
+            for entry in entries.flatten() {
+                known_versions.push(entry.file_name().to_string_lossy().to_string());
+            }
+        }
+
+        run_headless_installer_jar(&java_exe, &installer_path, ctx.staging_dir)?;
+
+        let cleanroom_json =
+            find_and_load_generated_forge_json(ctx.staging_dir, &installer_path, &known_versions)?;
+
+        Ok(crate::pipeline::Staged {
+            version_json: cleanroom_json,
+            mods: Vec::new(),
+        })
+    }
+}
 
 pub struct CleanroomInstaller;
 
@@ -1048,109 +977,7 @@ impl LoaderInstaller for CleanroomInstaller {
     }
 
     async fn install(&self, ctx: LoaderInstallContext<'_>) -> Result<InstanceInfo, LoaderError> {
-        // 1. Install base vanilla
-        install_vanilla(
-            ctx.client,
-            ctx.net_settings,
-            &ctx.mc_folder,
-            &ctx.mc_version,
-            &ctx.instance_name,
-            ctx.task_ctx,
-        )
-        .await?;
-
-        // 2. Ensure base vanilla files
-        ensure_base_vanilla_files(&ctx.mc_folder, &ctx.mc_version, &ctx.instance_name)?;
-
-        // 3. Ensure launcher_profiles.json
-        ensure_launcher_profiles(&ctx.mc_folder)?;
-
-        // 4. Download Cleanroom installer jar
-        let cache_file = paths::cache_dir().join(format!(
-            "cleanroom-{}-{}-installer.jar",
-            ctx.mc_version, ctx.loader_version
-        ));
-        let ver = &ctx.loader_version;
-        let urls = vec![
-            Url::parse(&format!(
-                "https://github.com/CleanroomMC/Cleanroom/releases/download/{ver}/cleanroom-{ver}-installer.jar"
-            ))
-            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
-            Url::parse(&format!(
-                "https://github.com/CleanroomMC/Cleanroom/releases/download/v{ver}/cleanroom-{ver}-installer.jar"
-            ))
-            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
-            Url::parse(&format!(
-                "https://github.com/CleanroomMC/Cleanroom/releases/download/{ver}/Cleanroom-{ver}-installer.jar"
-            ))
-            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
-            Url::parse(&format!(
-                "https://github.com/CleanroomMC/Cleanroom/releases/download/v{ver}/Cleanroom-{ver}-installer.jar"
-            ))
-            .map_err(|e| LoaderError::Metadata(e.to_string()))?,
-        ];
-
-        let installer_path =
-            download_installer_jar(ctx.client, ctx.net_settings, urls, cache_file, ctx.task_ctx)
-                .await?;
-
-        // 5. Modern installer flow
-        let file = std::fs::File::open(&installer_path)?;
-        let mut archive = zip::ZipArchive::new(file)?;
-
-        extract_maven_entries_from_zip(&mut archive, &ctx.mc_folder)?;
-        predownload_installer_libraries(
-            ctx.client,
-            ctx.net_settings,
-            &mut archive,
-            &ctx.mc_folder,
-            ctx.task_ctx,
-        )
-        .await?;
-
-        let base_json_path = ctx
-            .mc_folder
-            .join("versions")
-            .join(&ctx.mc_version)
-            .join(format!("{}.json", ctx.mc_version));
-        let vanilla_json_content = std::fs::read_to_string(&base_json_path)?;
-        let vanilla_json: VersionJson = serde_json::from_str(&vanilla_json_content)?;
-
-        let constraint = version_java_constraint(&vanilla_json, &ctx.mc_version);
-        let installed_javas = scan_java(&ctx.java_settings.custom);
-        let java_inst = select_java(&installed_javas, &constraint, ctx.java_settings)
-            .ok_or(LoaderError::JavaNotFound)?;
-        let java_exe = PathBuf::from(&java_inst.path);
-
-        let mut known_versions = Vec::new();
-        if let Ok(entries) = std::fs::read_dir(ctx.mc_folder.join("versions")) {
-            for entry in entries.flatten() {
-                known_versions.push(entry.file_name().to_string_lossy().to_string());
-            }
-        }
-
-        run_headless_installer_jar(&java_exe, &installer_path, &ctx.mc_folder)?;
-
-        let forge_json =
-            find_and_load_generated_forge_json(&ctx.mc_folder, &installer_path, &known_versions)?;
-        let merged =
-            finalize_merged_instance(&ctx.mc_folder, &ctx.instance_name, forge_json, vanilla_json)?;
-
-        repair_instance(
-            ctx.client,
-            ctx.net_settings,
-            &ctx.mc_folder,
-            &ctx.instance_name,
-            ctx.task_ctx,
-        )
-        .await?;
-
-        Ok(build_instance_info(
-            &ctx.mc_folder,
-            &ctx.instance_name,
-            &ctx.mc_version,
-            &merged,
-        ))
+        crate::install_with_loader(LoaderKind::Cleanroom, ctx).await
     }
 }
 
@@ -1284,9 +1111,9 @@ mod tests {
         let forge_json: VersionJson =
             serde_json::from_value(ip_val["versionInfo"].clone()).unwrap();
         let vanilla_v_json: VersionJson = serde_json::from_value(vanilla_json).unwrap();
-        let merged =
-            finalize_merged_instance(mc_folder, "test-instance", forge_json, vanilla_v_json)
-                .unwrap();
+        let mut merged = mclr_game::version::merge_version_json(forge_json, vanilla_v_json);
+        merged.id = "test-instance".to_string();
+        merged.inherits_from = None;
 
         assert_eq!(merged.id, "test-instance");
         assert_eq!(merged.inherits_from, None);
@@ -1294,12 +1121,6 @@ mod tests {
             merged.main_class,
             Some("net.minecraft.launchwrapper.Launch".to_string())
         );
-
-        let final_path = mc_folder
-            .join("versions")
-            .join("test-instance")
-            .join("test-instance.json");
-        assert!(final_path.exists());
     }
 
     #[test]

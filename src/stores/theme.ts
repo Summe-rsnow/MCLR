@@ -10,12 +10,31 @@ import { ipcClient } from '../ipc/client'
 
 export type BackgroundMode = 'none' | 'image' | 'slideshow' | 'video'
 export type MusicPlayMode = 'loop' | 'shuffle'
+export type MotionMode = 'full' | 'reduced' | 'off'
+const MOTION_KEY = 'mclr.motion'
 
 export const useThemeStore = defineStore('theme', () => {
   // Theme & Material
   const seed = ref<string>('#3b82f6')
   const mode = ref<ThemeMode>('system')
   const material = ref<MaterialMode>('flat')
+  const motion = ref<MotionMode>(initialMotion())
+
+  function initialMotion(): MotionMode {
+    try {
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(MOTION_KEY) : null
+      if (saved === 'full' || saved === 'reduced' || saved === 'off') return saved
+    } catch {
+      // ignore
+    }
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) {
+      return 'reduced'
+    }
+    return 'full'
+  }
 
   // Typography & Scale
   const scale = ref<number>(1.0)
@@ -157,7 +176,24 @@ export const useThemeStore = defineStore('theme', () => {
     }
   }
 
+  function setMotion(newMotion: MotionMode) {
+    motion.value = newMotion
+    applyMotion()
+    try {
+      localStorage.setItem(MOTION_KEY, newMotion)
+    } catch {
+      // ignore
+    }
+  }
+
+  function applyMotion() {
+    if (typeof document !== 'undefined' && document.documentElement) {
+      document.documentElement.dataset.motion = motion.value
+    }
+  }
+
   function apply() {
+    applyMotion()
     const config: ThemeConfig = {
       seed: seed.value,
       mode: mode.value,
@@ -206,6 +242,7 @@ export const useThemeStore = defineStore('theme', () => {
     seed,
     mode,
     material,
+    motion,
     scale,
     fontFamily,
     backgroundMode,
@@ -223,6 +260,7 @@ export const useThemeStore = defineStore('theme', () => {
     setSeed,
     setMode,
     setMaterial,
+    setMotion,
     setScale,
     setFontFamily,
     setBackgroundMode,

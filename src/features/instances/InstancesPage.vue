@@ -3,19 +3,21 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useInstancesStore } from './store'
-import type { InstanceInfo } from '../../ipc/client'
+import type { InstanceInfo, CardKind } from '../../ipc/client'
 import {
   MPageHeader,
   MInput,
   MButton,
   MIconButton,
   MSelect,
-  MSegmented,
+  MSwitch,
   MCard,
   MBadge,
   MDialog,
   MContextMenu,
   MEmpty,
+  MSkeletonList,
+  MCollapse,
   MLoaderIcon,
   useDialog,
   type ContextMenuItem,
@@ -33,7 +35,6 @@ onMounted(async () => {
   await instancesStore.fetchInstances()
 })
 
-// Folder options for MSelect
 const folderOptions = computed(() =>
   instancesStore.folders.map((f) => ({
     label: f.name,
@@ -41,13 +42,29 @@ const folderOptions = computed(() =>
   })),
 )
 
-// Filter tabs
-const filterOptions = computed(() => [
-  { label: t('instances.filter.all'), value: 'all' },
-  { label: t('instances.filter.pinned'), value: 'pinned' },
-  { label: t('instances.filter.vanilla'), value: 'vanilla' },
-  { label: t('instances.filter.modded'), value: 'modded' },
+const sortOptions = computed(() => [
+  { label: `${t('instances.toolbar.sort')}: ${t('instances.toolbar.sortName')}`, value: 'name' },
+  { label: `${t('instances.toolbar.sort')}: ${t('instances.toolbar.sortVersion')}`, value: 'version' },
+  { label: `${t('instances.toolbar.sort')}: ${t('instances.toolbar.sortCategory')}`, value: 'category' },
 ])
+
+// Collapse state for card groups (default collapsed: rubbish, error, fool)
+const collapsedGroups = ref<Record<string, boolean>>({
+  rubbish: true,
+  error: true,
+  fool: true,
+})
+
+function isGroupCollapsed(key: CardKind): boolean {
+  if (instancesStore.cardGroups.length <= 1) {
+    return false
+  }
+  return !!collapsedGroups.value[key]
+}
+
+function toggleGroupCollapse(key: CardKind) {
+  collapsedGroups.value[key] = !isGroupCollapsed(key)
+}
 
 // Add Folder Dialog State
 const showAddFolderDialog = ref(false)
@@ -77,7 +94,6 @@ const showRenameDialog = ref(false)
 const targetInstance = ref<InstanceInfo | null>(null)
 const instanceNewName = ref('')
 const instanceNameError = ref('')
-
 const invalidNameRegex = /[\\/:*?"<>|!;]/
 
 function openRenameDialog(inst: InstanceInfo) {
@@ -89,7 +105,7 @@ function openRenameDialog(inst: InstanceInfo) {
 
 async function handleRename() {
   const name = instanceNewName.value.trim()
-  if (!name || invalidNameRegex.test(name)) {
+  if (!name || invalidNameRegex.test(name) || name.endsWith('.') || name.length > 70) {
     instanceNameError.value = t('instances.dialog.nameError')
     return
   }
@@ -111,7 +127,7 @@ function openDuplicateDialog(inst: InstanceInfo) {
 
 async function handleDuplicate() {
   const name = instanceNewName.value.trim()
-  if (!name || invalidNameRegex.test(name)) {
+  if (!name || invalidNameRegex.test(name) || name.endsWith('.') || name.length > 70) {
     instanceNameError.value = t('instances.dialog.nameError')
     return
   }
@@ -122,18 +138,29 @@ async function handleDuplicate() {
 }
 
 // Delete instance with confirmation
-async function handleDelete(inst: InstanceInfo) {
+async function handleDelete(inst: InstanceInfo, permanent = false) {
+  let message = permanent
+    ? t('instances.actions.deletePermanentConfirm', { name: inst.name })
+    : t('instances.actions.deleteConfirmMessage', { name: inst.name })
+
+  if (inst.config?.isolation === 'on') {
+    message += `\n\n${t('instances.actions.deleteIsolatedWarning')}`
+  }
+
   const ok = await confirm({
-    title: t('instances.actions.deleteConfirmTitle'),
-    content: t('instances.actions.deleteConfirmMessage', { name: inst.name }),
-    confirmText: t('common.delete'),
+    title: permanent
+      ? t('instances.actions.deletePermanent')
+      : t('instances.actions.deleteConfirmTitle'),
+    content: message,
+    confirmText: permanent ? t('instances.actions.deletePermanent') : t('common.delete'),
     cancelText: t('common.cancel'),
   })
   if (ok) {
-    await instancesStore.remove(inst.id)
+    await instancesStore.remove(inst.id, permanent)
   }
 }
 
+// Context Menu State
 const contextMenuOpen = ref(false)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
@@ -143,6 +170,10 @@ function onContextMenu(e: MouseEvent, inst: InstanceInfo) {
   e.preventDefault()
   contextMenuX.value = e.clientX
   contextMenuY.value = e.clientY
+  const isStarred = inst.config?.starred || inst.config?.pinned
+  const isHidden = inst.card === 'hidden' || inst.config?.cardType === 'hidden'
+  const isPermanent = e.shiftKey
+
   activeContextItems.value = [
     {
       key: 'manage',
@@ -150,14 +181,14 @@ function onContextMenu(e: MouseEvent, inst: InstanceInfo) {
       icon: 'i-lucide-settings-2',
     },
     {
-      key: 'pin',
-      label: inst.config?.pinned ? t('instances.card.unpin') : t('instances.card.pin'),
-      icon: inst.config?.pinned ? 'i-lucide-pin-off' : 'i-lucide-pin',
-    },
-    {
       key: 'openFolder',
       label: t('instances.actions.openFolder'),
       icon: 'i-lucide-folder-open',
+    },
+    {
+      key: 'star',
+      label: isStarred ? t('instances.actions.unstar') : t('instances.actions.star'),
+      icon: isStarred ? 'i-lucide-star-off' : 'i-lucide-star',
     },
     {
       key: 'rename',
@@ -170,8 +201,15 @@ function onContextMenu(e: MouseEvent, inst: InstanceInfo) {
       icon: 'i-lucide-copy',
     },
     {
-      key: 'delete',
-      label: t('instances.actions.delete'),
+      key: 'hide',
+      label: isHidden ? t('instances.actions.unhide') : t('instances.actions.hide'),
+      icon: isHidden ? 'i-lucide-eye' : 'i-lucide-eye-off',
+    },
+    {
+      key: isPermanent ? 'deletePermanent' : 'delete',
+      label: isPermanent
+        ? t('instances.actions.deletePermanent')
+        : t('instances.actions.delete'),
       icon: 'i-lucide-trash-2',
       danger: true,
     },
@@ -185,13 +223,13 @@ function handleContextMenuSelect(key: string) {
   const inst = targetInstance.value
   switch (key) {
     case 'manage':
-      navigateToDetail(inst.id)
-      break
-    case 'pin':
-      instancesStore.togglePin(inst.id)
+      navigateToDetail(inst.id, 'settings')
       break
     case 'openFolder':
       instancesStore.openFolder(inst.id)
+      break
+    case 'star':
+      instancesStore.toggleStar(inst.id)
       break
     case 'rename':
       openRenameDialog(inst)
@@ -199,8 +237,14 @@ function handleContextMenuSelect(key: string) {
     case 'duplicate':
       openDuplicateDialog(inst)
       break
+    case 'hide':
+      instancesStore.toggleHide(inst.id)
+      break
     case 'delete':
-      handleDelete(inst)
+      handleDelete(inst, false)
+      break
+    case 'deletePermanent':
+      handleDelete(inst, true)
       break
   }
 }
@@ -219,8 +263,9 @@ function getLoaderBadgeVariant(kind: string): 'primary' | 'warning' | 'neutral' 
   }
 }
 
-function navigateToDetail(id: string) {
-  router.push(`/instances/${encodeURIComponent(id)}`)
+function navigateToDetail(id: string, tab?: string) {
+  const query = tab ? `?tab=${tab}` : ''
+  router.push(`/instances/${encodeURIComponent(id)}${query}`)
 }
 </script>
 
@@ -253,14 +298,14 @@ function navigateToDetail(id: string) {
             icon="i-lucide-rotate-cw"
             size="sm"
             :title="t('instances.refresh')"
-            :loading="instancesStore.loading"
-            @click="instancesStore.fetchInstances"
+            :loading="instancesStore.loading || instancesStore.refreshing"
+            @click="() => instancesStore.fetchInstances()"
           />
         </div>
       </template>
     </MPageHeader>
 
-    <!-- Toolbar: Folder, Search, Category -->
+    <!-- Toolbar: Folder, Search, Sort, ShowHidden -->
     <MCard padding="sm" class="flex flex-wrap items-center justify-between gap-4">
       <!-- Folder Select -->
       <div class="flex items-center gap-2">
@@ -282,9 +327,9 @@ function navigateToDetail(id: string) {
         />
       </div>
 
-      <!-- Search & Filters -->
+      <!-- Search, Sort & Show Hidden -->
       <div class="flex flex-wrap items-center gap-3">
-        <div class="w-48 sm:w-64">
+        <div class="w-48 sm:w-60">
           <MInput
             v-model="instancesStore.searchQuery"
             :placeholder="t('instances.search')"
@@ -294,52 +339,87 @@ function navigateToDetail(id: string) {
           />
         </div>
 
-        <MSegmented
-          v-model="instancesStore.filterType"
-          :options="filterOptions"
-          size="sm"
-        />
+        <div class="w-36">
+          <MSelect
+            v-model="instancesStore.sortBy"
+            :options="sortOptions"
+            size="sm"
+          />
+        </div>
+
+        <div class="flex items-center gap-2 pl-2 border-l border-line/50">
+          <span class="text-xs text-fg-muted">{{ t('instances.toolbar.showHidden') }}</span>
+          <MSwitch v-model="instancesStore.showHidden" size="sm" />
+        </div>
       </div>
     </MCard>
 
+    <!-- Skeleton Loading while initializing -->
+    <div v-if="!instancesStore.initialized" class="py-6">
+      <MSkeletonList variant="card" :rows="6" />
+    </div>
+
     <!-- Empty State -->
-    <div v-if="instancesStore.filteredInstances.length === 0" class="py-16">
+    <div v-else-if="instancesStore.filteredInstances.length === 0" class="py-16">
       <MEmpty
-        :title="instancesStore.instances.length === 0 ? t('instances.emptyFolder') : t('instances.empty')"
-        :description="instancesStore.instances.length === 0 ? t('instances.emptyFolderSubtitle') : ''"
+        :title="instancesStore.instances.length === 0 ? t('instances.empty.title') : t('instances.empty.filtered')"
+        :description="instancesStore.instances.length === 0 ? t('instances.empty.subtitle') : ''"
         icon="i-lucide-boxes"
       >
         <MButton
+          v-if="instancesStore.instances.length === 0"
           variant="primary"
           size="sm"
-          icon="i-lucide-plus"
+          icon="i-lucide-download"
           @click="router.push('/download')"
         >
-          {{ t('instances.actions.create') }}
+          {{ t('instances.empty.action') }}
         </MButton>
       </MEmpty>
     </div>
 
-    <!-- Instance Cards Container -->
+    <!-- Card Groups -->
     <div v-else class="space-y-6">
-      <!-- Pinned Section -->
-      <div v-if="instancesStore.groupedInstances.pinned.length > 0" class="space-y-3">
-        <div class="flex items-center gap-2 text-xs font-bold text-fg-muted uppercase tracking-wider">
-          <span class="w-3.5 h-3.5 i-lucide-pin text-primary" />
-          <span>{{ t('instances.filter.pinned') }}</span>
-          <span class="text-[10px] text-fg-muted/70">({{ instancesStore.groupedInstances.pinned.length }})</span>
-        </div>
+      <div
+        v-for="group in instancesStore.cardGroups"
+        :key="group.key"
+        class="space-y-3"
+      >
+        <!-- Group Header Collapse Trigger -->
+        <button
+          type="button"
+          class="flex items-center gap-2 text-xs font-bold text-fg-muted uppercase tracking-wider hover:text-fg transition-colors cursor-pointer select-none"
+          @click="toggleGroupCollapse(group.key)"
+        >
+          <span
+            class="w-3.5 h-3.5 i-lucide-chevron-right transition-transform duration-200"
+            :class="{ 'rotate-90': !isGroupCollapsed(group.key) }"
+          />
+          <span
+            v-if="group.key === 'star'"
+            class="w-3.5 h-3.5 i-lucide-star text-amber-400"
+          />
+          <span>{{ t(group.titleKey) }}</span>
+          <span class="text-[10px] text-fg-muted/70">({{ group.items.length }})</span>
+        </button>
 
-        <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-          <template v-for="inst in instancesStore.groupedInstances.pinned" :key="inst.id">
+        <!-- Group Content in MCollapse -->
+        <MCollapse :open="!isGroupCollapsed(group.key)">
+          <TransitionGroup
+            name="m-list"
+            tag="div"
+            class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4"
+          >
             <MCard
+              v-for="inst in group.items"
+              :key="inst.id"
               hoverable
               padding="sm"
-              class="relative flex flex-col justify-between h-36 cursor-pointer group"
+              class="relative flex flex-col justify-between h-40 cursor-pointer group"
               @click="navigateToDetail(inst.id)"
               @contextmenu="onContextMenu($event, inst)"
             >
-              <!-- Top Card Info -->
+              <!-- Top Row Info -->
               <div class="flex items-start justify-between gap-2">
                 <div class="flex items-center gap-3 min-w-0">
                   <MLoaderIcon
@@ -351,160 +431,113 @@ function navigateToDetail(id: string) {
                     <div class="font-bold text-sm text-fg truncate group-hover:text-primary transition-colors">
                       {{ inst.name }}
                     </div>
-                    <div class="text-xs text-fg-muted font-mono">
+                    <div class="text-xs text-fg-muted font-mono truncate">
                       {{ inst.mcVersion }}
                     </div>
                   </div>
                 </div>
 
+                <!-- Star / More Options -->
                 <div class="flex items-center gap-1">
                   <button
                     type="button"
-                    class="text-primary hover:text-primary/80 transition-colors p-1"
-                    :title="t('instances.card.unpin')"
-                    @click.stop="instancesStore.togglePin(inst.id)"
+                    class="p-1 transition-colors rounded-lg hover:bg-sunken"
+                    :class="inst.config?.starred || inst.config?.pinned ? 'text-amber-400' : 'text-fg-muted/40 hover:text-fg-muted'"
+                    :title="inst.config?.starred || inst.config?.pinned ? t('instances.actions.unstar') : t('instances.actions.star')"
+                    @click.stop="instancesStore.toggleStar(inst.id)"
                   >
-                    <span class="w-4 h-4 i-lucide-pin" />
+                    <span
+                      class="w-4 h-4"
+                      :class="inst.config?.starred || inst.config?.pinned ? 'i-lucide-star fill-current' : 'i-lucide-star'"
+                    />
+                  </button>
+
+                  <button
+                    type="button"
+                    class="p-1 text-fg-muted hover:text-fg transition-colors rounded-lg hover:bg-sunken"
+                    :title="t('instances.card.more')"
+                    @click.stop="onContextMenu($event, inst)"
+                  >
+                    <span class="w-4 h-4 i-lucide-more-vertical" />
                   </button>
                 </div>
               </div>
 
-              <!-- Bottom Badges & Status -->
-              <div class="flex items-center justify-between gap-2 pt-2 border-t border-line">
-                <div class="flex flex-wrap items-center gap-1.5 overflow-hidden">
-                  <MBadge v-if="inst.state !== 'ok'" variant="danger">
-                    {{ t(`instances.card.state.${inst.state}`) }}
-                  </MBadge>
-                  <MBadge
-                    v-for="loader in inst.loaders"
-                    :key="loader"
-                    :variant="getLoaderBadgeVariant(inst.kind)"
-                  >
-                    {{ loader }}
-                  </MBadge>
-                  <MBadge v-if="inst.loaders.length === 0" variant="neutral">
-                    Vanilla
-                  </MBadge>
-                </div>
+              <!-- Badges / Loaders Row -->
+              <div class="flex flex-wrap items-center gap-1.5 my-2">
+                <MBadge
+                  v-if="inst.state !== 'ok'"
+                  variant="danger"
+                  size="sm"
+                >
+                  {{ t(`instances.card.state.${inst.state}`) }}
+                </MBadge>
+                <MBadge
+                  v-else-if="inst.loaders && inst.loaders.length > 0"
+                  v-for="loader in inst.loaders"
+                  :key="loader"
+                  :variant="getLoaderBadgeVariant(inst.kind)"
+                  size="sm"
+                >
+                  {{ loader }}
+                </MBadge>
+                <MBadge
+                  v-else
+                  variant="neutral"
+                  size="sm"
+                >
+                  {{ inst.kind }}
+                </MBadge>
+                <MBadge
+                  v-if="inst.config?.isolation === 'on'"
+                  variant="info"
+                  size="sm"
+                >
+                  {{ t('instances.actions.isolationOn') }}
+                </MBadge>
+              </div>
 
-                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <MIconButton
-                    icon="i-lucide-settings-2"
-                    size="sm"
-                    :title="t('instances.actions.manage')"
-                    @click.stop="navigateToDetail(inst.id)"
-                  />
-                  <MIconButton
-                    icon="i-lucide-folder-open"
-                    size="sm"
-                    :title="t('instances.actions.openFolder')"
-                    @click.stop="instancesStore.openFolder(inst.id)"
-                  />
-                  <MIconButton
-                    icon="i-lucide-edit-2"
-                    size="sm"
-                    :title="t('instances.actions.rename')"
-                    @click.stop="openRenameDialog(inst)"
-                  />
+              <!-- Bottom Row: Quick Access Icon Buttons -->
+              <div class="flex items-center justify-between pt-2 border-t border-line/40 text-xs text-fg-muted">
+                <span class="truncate max-w-[120px]">{{ inst.folder }}</span>
+
+                <div class="flex items-center gap-1">
+                  <!-- Mods quick entry (only if modable) -->
+                  <button
+                    v-if="inst.modable"
+                    type="button"
+                    class="p-1 rounded text-fg-muted hover:text-primary hover:bg-primary/10 transition-colors"
+                    :title="t('instances.actions.modsQuick')"
+                    @click.stop="navigateToDetail(inst.id, 'mods')"
+                  >
+                    <span class="w-3.5 h-3.5 i-lucide-puzzle" />
+                  </button>
+
+                  <!-- Resourcepacks quick entry -->
+                  <button
+                    type="button"
+                    class="p-1 rounded text-fg-muted hover:text-primary hover:bg-primary/10 transition-colors"
+                    :title="t('instances.actions.resourcepacksQuick')"
+                    @click.stop="navigateToDetail(inst.id, 'resourcepacks')"
+                  >
+                    <span class="w-3.5 h-3.5 i-lucide-palette" />
+                  </button>
+
+                  <!-- Screenshots quick entry -->
+                  <button
+                    type="button"
+                    class="p-1 rounded text-fg-muted hover:text-primary hover:bg-primary/10 transition-colors"
+                    :title="t('instances.actions.screenshotsQuick')"
+                    @click.stop="navigateToDetail(inst.id, 'screenshots')"
+                  >
+                    <span class="w-3.5 h-3.5 i-lucide-image" />
+                  </button>
                 </div>
               </div>
             </MCard>
-          </template>
-        </div>
+          </TransitionGroup>
+        </MCollapse>
       </div>
-
-      <!-- Categories Sections -->
-      <template v-for="cat in instancesStore.groupedInstances.categories" :key="cat.name">
-        <div v-if="cat.items.length > 0" class="space-y-3">
-          <div class="flex items-center gap-2 text-xs font-bold text-fg-muted uppercase tracking-wider">
-            <span class="w-3.5 h-3.5 i-lucide-tag" />
-            <span>{{ cat.name }}</span>
-            <span class="text-[10px] text-fg-muted/70">({{ cat.items.length }})</span>
-          </div>
-
-          <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-            <template v-for="inst in cat.items" :key="inst.id">
-              <MCard
-                hoverable
-                padding="sm"
-                class="relative flex flex-col justify-between h-36 cursor-pointer group"
-                @click="navigateToDetail(inst.id)"
-                @contextmenu="onContextMenu($event, inst)"
-              >
-                <!-- Top Card Info -->
-                <div class="flex items-start justify-between gap-2">
-                  <div class="flex items-center gap-3 min-w-0">
-                    <MLoaderIcon
-                      :kind="inst.kind || (inst.loaders?.[0]?.toLowerCase() ?? 'vanilla')"
-                      :size="40"
-                      class="shrink-0"
-                    />
-                    <div class="min-w-0">
-                      <div class="font-bold text-sm text-fg truncate group-hover:text-primary transition-colors">
-                        {{ inst.name }}
-                      </div>
-                      <div class="text-xs text-fg-muted font-mono">
-                        {{ inst.mcVersion }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="flex items-center gap-1">
-                    <button
-                      type="button"
-                      class="text-fg-muted/40 hover:text-primary transition-colors p-1"
-                      :title="t('instances.card.pin')"
-                      @click.stop="instancesStore.togglePin(inst.id)"
-                    >
-                      <span class="w-4 h-4 i-lucide-pin" />
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Bottom Badges & Status -->
-                <div class="flex items-center justify-between gap-2 pt-2 border-t border-line">
-                  <div class="flex flex-wrap items-center gap-1.5 overflow-hidden">
-                    <MBadge v-if="inst.state !== 'ok'" variant="danger">
-                      {{ t(`instances.card.state.${inst.state}`) }}
-                    </MBadge>
-                    <MBadge
-                      v-for="loader in inst.loaders"
-                      :key="loader"
-                      :variant="getLoaderBadgeVariant(inst.kind)"
-                    >
-                      {{ loader }}
-                    </MBadge>
-                    <MBadge v-if="inst.loaders.length === 0" variant="neutral">
-                      Vanilla
-                    </MBadge>
-                  </div>
-
-                  <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <MIconButton
-                      icon="i-lucide-settings-2"
-                      size="sm"
-                      :title="t('instances.actions.manage')"
-                      @click.stop="navigateToDetail(inst.id)"
-                    />
-                    <MIconButton
-                      icon="i-lucide-folder-open"
-                      size="sm"
-                      :title="t('instances.actions.openFolder')"
-                      @click.stop="instancesStore.openFolder(inst.id)"
-                    />
-                    <MIconButton
-                      icon="i-lucide-edit-2"
-                      size="sm"
-                      :title="t('instances.actions.rename')"
-                      @click.stop="openRenameDialog(inst)"
-                    />
-                  </div>
-                </div>
-              </MCard>
-            </template>
-          </div>
-        </div>
-      </template>
     </div>
 
     <!-- Rename Dialog -->
@@ -513,24 +546,22 @@ function navigateToDetail(id: string) {
       :title="t('instances.dialog.renameTitle')"
       @update:open="showRenameDialog = $event"
     >
-      <div class="py-2 space-y-4">
+      <div class="space-y-4 py-2">
         <MInput
           v-model="instanceNewName"
           :label="t('instances.dialog.nameLabel')"
           :placeholder="t('instances.dialog.namePlaceholder')"
           :error="instanceNameError"
-          size="sm"
-          autofocus
           @keyup.enter="handleRename"
         />
       </div>
       <template #footer>
-        <div class="flex items-center justify-end gap-2">
-          <MButton variant="text" size="sm" @click="showRenameDialog = false">
+        <div class="flex justify-end gap-2">
+          <MButton variant="tonal" @click="showRenameDialog = false">
             {{ t('common.cancel') }}
           </MButton>
-          <MButton variant="primary" size="sm" @click="handleRename">
-            {{ t('common.save') }}
+          <MButton variant="primary" @click="handleRename">
+            {{ t('common.confirm') }}
           </MButton>
         </div>
       </template>
@@ -542,24 +573,22 @@ function navigateToDetail(id: string) {
       :title="t('instances.dialog.duplicateTitle')"
       @update:open="showDuplicateDialog = $event"
     >
-      <div class="py-2 space-y-4">
+      <div class="space-y-4 py-2">
         <MInput
           v-model="instanceNewName"
           :label="t('instances.dialog.nameLabel')"
           :placeholder="t('instances.dialog.namePlaceholder')"
           :error="instanceNameError"
-          size="sm"
-          autofocus
           @keyup.enter="handleDuplicate"
         />
       </div>
       <template #footer>
-        <div class="flex items-center justify-end gap-2">
-          <MButton variant="text" size="sm" @click="showDuplicateDialog = false">
+        <div class="flex justify-end gap-2">
+          <MButton variant="tonal" @click="showDuplicateDialog = false">
             {{ t('common.cancel') }}
           </MButton>
-          <MButton variant="primary" size="sm" @click="handleDuplicate">
-            {{ t('common.save') }}
+          <MButton variant="primary" @click="handleDuplicate">
+            {{ t('common.confirm') }}
           </MButton>
         </div>
       </template>
@@ -571,28 +600,27 @@ function navigateToDetail(id: string) {
       :title="t('instances.folder.addDialogTitle')"
       @update:open="showAddFolderDialog = $event"
     >
-      <div class="py-2 space-y-4">
+      <div class="space-y-4 py-2">
         <MInput
           v-model="newFolderName"
           :label="t('instances.folder.nameLabel')"
           :placeholder="t('instances.folder.namePlaceholder')"
-          size="sm"
         />
         <MInput
           v-model="newFolderPath"
           :label="t('instances.folder.pathLabel')"
           :placeholder="t('instances.folder.pathPlaceholder')"
           :error="folderPathError"
-          size="sm"
+          @keyup.enter="handleAddFolder"
         />
       </div>
       <template #footer>
-        <div class="flex items-center justify-end gap-2">
-          <MButton variant="text" size="sm" @click="showAddFolderDialog = false">
+        <div class="flex justify-end gap-2">
+          <MButton variant="tonal" @click="showAddFolderDialog = false">
             {{ t('common.cancel') }}
           </MButton>
-          <MButton variant="primary" size="sm" @click="handleAddFolder">
-            {{ t('common.add') }}
+          <MButton variant="primary" @click="handleAddFolder">
+            {{ t('common.confirm') }}
           </MButton>
         </div>
       </template>
@@ -600,19 +628,17 @@ function navigateToDetail(id: string) {
 
     <!-- Context Menu Component -->
     <MContextMenu
-      :open="contextMenuOpen"
+      v-model="contextMenuOpen"
+      :items="activeContextItems"
       :x="contextMenuX"
       :y="contextMenuY"
-      :items="activeContextItems"
-      @update:open="contextMenuOpen = $event"
       @select="handleContextMenuSelect"
     />
 
     <!-- Modpack Import Dialog -->
     <ModpackImportDialog
-      :open="showImportModpackDialog"
-      @update:open="showImportModpackDialog = $event"
-      @imported="instancesStore.fetchInstances"
+      v-model:open="showImportModpackDialog"
+      @imported="() => instancesStore.fetchInstances()"
     />
   </div>
 </template>

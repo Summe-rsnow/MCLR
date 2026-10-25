@@ -75,7 +75,7 @@ onUnmounted(() => {
           opacity: themeStore.backgroundOpacity,
         }"
         alt="Background"
-      />
+       loading="lazy" decoding="async"/>
     </div>
 
     <!-- Hidden HTMLAudioElement for Background Music -->

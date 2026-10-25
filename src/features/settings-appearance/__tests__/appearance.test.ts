@@ -60,6 +60,26 @@ describe('Appearance and Personalisation feature', () => {
     await store.setMaterial('glass')
     expect(store.material).toBe('glass')
   })
+  it('updates motion mode in useThemeStore and renders segmented control', async () => {
+    const store = useThemeStore()
+    expect(store.motion).toBe('full')
+    store.setMotion('reduced')
+    expect(store.motion).toBe('reduced')
+    store.setMotion('off')
+    expect(store.motion).toBe('off')
+
+    const wrapper = mount(SettingsAppearancePage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('动画效果')
+    expect(wrapper.text()).toContain('完整')
+    expect(wrapper.text()).toContain('精简')
+    expect(wrapper.text()).toContain('关闭')
+  })
+
 
   it('applies fontFamily and UI scale to document.documentElement', async () => {
     const store = useThemeStore()

@@ -8,6 +8,13 @@
     "background": "背景设置",
     "music": "背景音乐"
   },
+  "motion": {
+    "label": "动画效果",
+    "desc": "控制界面过渡、列表交错与环境背景动画",
+    "full": "完整",
+    "reduced": "精简",
+    "off": "关闭"
+  },
   "theme": {
     "seedColor": "强调色 (种子颜色)",
     "mode": "色彩模式",

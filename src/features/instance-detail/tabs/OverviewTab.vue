@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { InstanceInfo } from '../../../ipc/client'
@@ -12,6 +12,7 @@ import {
   MBadge,
   MDialog,
   MInput,
+  MSelect,
   useToast,
   useDialog,
 } from '../../../ui'
@@ -28,10 +29,32 @@ const instancesStore = useInstancesStore()
 
 const showRenameModal = ref(false)
 const newName = ref('')
+const renameError = ref('')
 const repairing = ref(false)
+
+const cardTypeOptions = computed(() => [
+  { label: t('instanceDetail.overview.cardTypeAuto'), value: '' },
+  { label: t('instances.groups.star'), value: 'star' },
+  { label: t('instances.groups.api'), value: 'api' },
+  { label: t('instances.groups.regular'), value: 'regular' },
+  { label: t('instances.groups.rubbish'), value: 'rubbish' },
+  { label: t('instances.groups.fool'), value: 'fool' },
+  { label: t('instances.groups.hidden'), value: 'hidden' },
+])
+
+function validateName(val: string): string {
+  const name = val.trim()
+  if (!name) return t('error.instance.name.empty')
+  if (val.startsWith(' ') || val.endsWith(' ')) return t('error.instance.name.invalidChar')
+  if (val.endsWith('.')) return t('error.instance.name.trailingDot')
+  if (val.length > 70) return t('error.instance.name.tooLong')
+  if (/[\\/:*?"<>|!;]/.test(val)) return t('error.instance.name.invalidChar')
+  return ''
+}
 
 function openRename() {
   newName.value = props.instance.name
+  renameError.value = ''
   showRenameModal.value = true
 }
 
@@ -39,6 +62,11 @@ async function handleRename() {
   const trimmed = newName.value.trim()
   if (!trimmed || trimmed === props.instance.name) {
     showRenameModal.value = false
+    return
+  }
+  const err = validateName(newName.value)
+  if (err) {
+    renameError.value = err
     return
   }
   try {
@@ -49,10 +77,9 @@ async function handleRename() {
     toast.danger(String(e))
   }
 }
-
 async function handleOpenFolder() {
   try {
-    await ipcClient.instanceOpenFolder(props.instance.id)
+    await ipcClient.instanceOpenPath(props.instance.id, '')
   } catch (e: unknown) {
     toast.danger(String(e))
   }
@@ -76,15 +103,27 @@ async function handleRepair() {
   }
 }
 
-async function handleDelete() {
+async function handleDelete(e?: MouseEvent) {
+  const isPermanent = e?.shiftKey
+  let content = isPermanent
+    ? t('instances.actions.deletePermanentConfirm', { name: props.instance.name })
+    : t('instanceDetail.overview.deleteConfirm', { name: props.instance.name })
+
+  if (props.instance.config?.isolation === 'on') {
+    content += `\n\n${t('instanceDetail.overview.deleteIsolatedWarning')}`
+  }
+
   const ok = await confirm({
-    title: t('instanceDetail.overview.deleteConfirmTitle'),
-    content: t('instanceDetail.overview.deleteConfirm', { name: props.instance.name }),
+    title: isPermanent
+      ? t('instances.actions.deletePermanent')
+      : t('instanceDetail.overview.deleteConfirmTitle'),
+    content,
+    confirmText: isPermanent ? t('instances.actions.deletePermanent') : t('common.delete'),
   })
   if (!ok) return
 
   try {
-    await instancesStore.remove(props.instance.id)
+    await instancesStore.remove(props.instance.id, isPermanent)
     toast.success(t('instanceDetail.overview.deleteSuccess'))
     router.push('/instances')
   } catch (e: unknown) {
@@ -92,6 +131,30 @@ async function handleDelete() {
   }
 }
 
+async function toggleStar() {
+  try {
+    await instancesStore.toggleStar(props.instance.id)
+    toast.success(t('common.save'))
+  } catch (e: unknown) {
+    toast.danger(String(e))
+  }
+}
+
+async function setCardType(val: string) {
+  try {
+    const updated = await ipcClient.instanceUpdateConfig(props.instance.id, {
+      ...props.instance.config,
+      cardType: (val || null) as any,
+    })
+    const idx = instancesStore.instances.findIndex((i) => i.id === props.instance.id)
+    if (idx >= 0) {
+      instancesStore.instances[idx] = updated
+    }
+    toast.success(t('common.save'))
+  } catch (e: unknown) {
+    toast.danger(String(e))
+  }
+}
 async function setIcon(iconKey: string) {
   try {
     const updated = await ipcClient.instanceUpdateConfig(props.instance.id, {
@@ -155,6 +218,16 @@ const presetIcons = [
           </div>
         </MSettingRow>
 
+        <MSettingRow :label="t('instanceDetail.overview.cardTypeLabel')" :hint="t('instanceDetail.overview.cardTypeHint')">
+          <MSelect
+            :model-value="instance.config?.cardType || ''"
+            :options="cardTypeOptions"
+            size="sm"
+            class="w-48"
+            @update:model-value="setCardType(String($event))"
+          />
+        </MSettingRow>
+
         <MSettingRow :label="t('instanceDetail.overview.path')">
           <span class="font-mono text-xs text-fg-muted break-all text-right max-w-md">{{ instance.path }}</span>
         </MSettingRow>
@@ -185,6 +258,15 @@ const presetIcons = [
     <!-- Actions Section -->
     <MSection :title="t('instanceDetail.overview.actions')" icon="i-lucide-wrench">
       <div class="flex flex-wrap gap-3">
+        <MButton
+          :variant="instance.config?.starred || instance.config?.pinned ? 'primary' : 'tonal'"
+          size="sm"
+          :icon="instance.config?.starred || instance.config?.pinned ? 'i-lucide-star-off' : 'i-lucide-star'"
+          @click="toggleStar"
+        >
+          {{ instance.config?.starred || instance.config?.pinned ? t('instances.actions.unstar') : t('instances.actions.star') }}
+        </MButton>
+
         <MButton variant="tonal" size="sm" icon="i-lucide-folder-open" @click="handleOpenFolder">
           {{ t('instanceDetail.overview.openFolder') }}
         </MButton>
@@ -199,7 +281,7 @@ const presetIcons = [
           {{ t('instanceDetail.overview.repair') }}
         </MButton>
 
-        <MButton variant="danger" size="sm" icon="i-lucide-trash-2" @click="handleDelete">
+        <MButton variant="danger" size="sm" icon="i-lucide-trash-2" @click="handleDelete($event)">
           {{ t('instanceDetail.overview.delete') }}
         </MButton>
       </div>
@@ -215,8 +297,10 @@ const presetIcons = [
         <MInput
           v-model="newName"
           :label="t('instanceDetail.overview.name')"
+          :error="renameError || validateName(newName)"
           size="sm"
           autofocus
+          @input="renameError = validateName(newName)"
           @keyup.enter="handleRename"
         />
       </div>

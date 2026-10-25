@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createRouter, createWebHistory } from 'vue-router'
 import { createI18n } from 'vue-i18n'
 import { useInstancesStore } from '../store'
 import InstancesPage from '../InstancesPage.vue'
@@ -20,6 +21,15 @@ const i18n = createI18n({
       comp: zhCnComp,
     },
   },
+})
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [
+    { path: '/', component: { template: '<div>home</div>' } },
+    { path: '/download', component: { template: '<div>download</div>' } },
+    { path: '/instances/:id', component: { template: '<div>detail</div>' } },
+  ],
 })
 
 describe('Instances feature', () => {
@@ -74,7 +84,7 @@ describe('Instances feature', () => {
   it('renders InstancesPage correctly', async () => {
     const wrapper = mount(InstancesPage, {
       global: {
-        plugins: [i18n],
+        plugins: [i18n, router],
       },
     })
 

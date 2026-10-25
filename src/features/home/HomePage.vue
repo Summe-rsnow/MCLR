@@ -12,7 +12,7 @@ import {
   MInput,
   MBadge,
   MEmpty,
-  MSkeleton,
+  MSkeletonList,
   MScroll,
   MPageHeader,
   MSegmented,
@@ -34,6 +34,7 @@ const helpDocsMap = import.meta.glob<string>('../../help/zh-CN/*.md', {
   eager: true,
 })
 
+
 const md = new MarkdownIt({
   html: false,
   linkify: true,
@@ -44,6 +45,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const homeStore = useHomeStore()
+
 
 const activeTab = ref<'news' | 'help'>('news')
 const selectedCategory = ref<string>('all')
@@ -79,7 +81,6 @@ const currentHelpMarkdown = computed(() => {
   const key = `../../help/zh-CN/${targetId}.md`
   return helpDocsMap[key] || ''
 })
-
 const renderedHelpHtml = computed(() => {
   if (!currentHelpMarkdown.value) {
     return ''
@@ -214,12 +215,8 @@ onMounted(() => {
 
       <!-- News Container -->
       <div class="flex-1 flex flex-col overflow-hidden">
-        <div v-if="homeStore.loadingNews && homeStore.news.length === 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-1">
-          <div v-for="i in 6" :key="i" class="p-4 rounded-xl border border-line flex flex-col gap-3">
-            <MSkeleton class="w-full h-36 rounded-lg" />
-            <MSkeleton class="w-2/3 h-5 rounded" />
-            <MSkeleton class="w-full h-12 rounded" />
-          </div>
+        <div v-if="homeStore.loadingNews && homeStore.news.length === 0" class="p-1">
+          <MSkeletonList :rows="6" variant="card" />
         </div>
 
         <div v-else-if="homeStore.newsError && homeStore.news.length === 0" class="flex-1 flex items-center justify-center">
@@ -237,10 +234,11 @@ onMounted(() => {
         <MScroll v-else class="flex-1 pr-1">
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
             <MCard
-              v-for="item in homeStore.news"
+              v-for="(item, index) in homeStore.news"
               :key="item.id"
               hoverable
-              class="flex flex-col h-full cursor-pointer overflow-hidden group"
+              class="flex flex-col h-full cursor-pointer overflow-hidden group m-stagger"
+              :style="{ '--i': index }"
               @click="openExternal(item.articleUrl)"
             >
               <!-- Cover Image -->
@@ -251,7 +249,7 @@ onMounted(() => {
                   alt="cover"
                   class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   loading="lazy"
-                />
+                 decoding="async"/>
                 <div v-else class="w-full h-full flex items-center justify-center text-fg-muted/40">
                   <span class="i-lucide-newspaper w-12 h-12" />
                 </div>

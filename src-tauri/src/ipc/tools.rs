@@ -7,7 +7,7 @@ use std::sync::Arc;
 use base64::Engine;
 use chrono::Datelike;
 use mclr_core::{AppError, SettingsStore, TaskCenter, paths};
-use mclr_net::{DownloadSpec, Downloader, build_http_client};
+use mclr_net::{DownloadSpec, Downloader};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
@@ -90,7 +90,7 @@ struct SkinMetadata {
 #[tauri::command]
 #[specta::specta]
 pub async fn tools_fetch_skin(
-    settings_state: State<'_, SettingsStore>,
+    http: State<'_, crate::http::HttpState>,
     username: String,
 ) -> Result<SkinFetchResult, AppError> {
     let username_trimmed = username.trim();
@@ -98,8 +98,7 @@ pub async fn tools_fetch_skin(
         return Err(AppError::new("tools.skin.invalidUsername"));
     }
 
-    let settings = settings_state.get().await;
-    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+    let client = http.client();
 
     let mojang_url = format!(
         "https://api.mojang.com/users/profiles/minecraft/{}",
@@ -179,8 +178,9 @@ pub async fn tools_fetch_skin(
     let skin_base64 = base64::engine::general_purpose::STANDARD.encode(&skin_bytes);
     let skin_data_url = format!("data:image/png;base64,{skin_base64}");
 
+    let id_for_crop = mojang_profile.id.clone();
     let head_data_url =
-        mclr_auth::crop_skin_head(&skin_bytes, &mojang_profile.id).map_err(AppError::from)?;
+        super::run_blocking(move || mclr_auth::crop_skin_head(&skin_bytes, &id_for_crop)).await?;
 
     let is_slim = skin
         .metadata
@@ -298,6 +298,7 @@ pub async fn tools_cache_clear(
 #[tauri::command]
 #[specta::specta]
 pub async fn tools_custom_download(
+    http: State<'_, crate::http::HttpState>,
     settings_state: State<'_, SettingsStore>,
     tasks_state: State<'_, Arc<TaskCenter>>,
     url: String,
@@ -310,7 +311,8 @@ pub async fn tools_custom_download(
     if let Some(parent) = dest.parent()
         && !parent.as_os_str().is_empty()
     {
-        fs::create_dir_all(parent)
+        tokio::fs::create_dir_all(parent)
+            .await
             .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?;
     }
 
@@ -327,7 +329,7 @@ pub async fn tools_custom_download(
         .await;
 
     let settings = settings_state.get().await;
-    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+    let client = http.client();
     let downloader = Downloader::new(client, settings.net.clone());
 
     let spec = DownloadSpec {

@@ -4,6 +4,16 @@
   "search": "搜索 Minecraft 版本号...",
   "empty": "未找到符合条件的 Minecraft 版本",
   "refresh": "刷新版本清单",
+  "step1": "选择 Minecraft 版本",
+  "step2": "配置模组与加载器",
+  "backToVersions": "返回重新选择版本",
+  "groups": {
+    "latest": "最新发布",
+    "release": "正式版",
+    "snapshot": "快照 / 预览版",
+    "old": "远古历史版本",
+    "aprilFools": "愚人节彩蛋版本"
+  },
   "tabs": {
     "vanilla": "原版安装",
     "fabric": "Fabric",
@@ -28,6 +38,70 @@
     "oldBeta": "Beta 阶段",
     "oldAlpha": "Alpha 阶段",
     "releasedAt": "发布于 {date}"
+  },
+  "compat": {
+    "neoforgeOptifine": "NeoForge 与 OptiFine 互不兼容",
+    "neoforgeLiteloader": "NeoForge 与 LiteLoader 互不兼容",
+    "cleanroomOptifine": "Cleanroom 与 OptiFine 互不兼容",
+    "cleanroomLiteloader": "Cleanroom 与 LiteLoader 互不兼容",
+    "labymodOptifine": "LabyMod 与 OptiFine 互不兼容",
+    "labymodLiteloader": "LabyMod 与 LiteLoader 互不兼容",
+    "legacyFabricLiteloader": "LegacyFabric 与 LiteLoader 互不兼容",
+    "forgeOptifineVersion": "Minecraft 1.13 ~ 1.14.3 下 Forge 与 OptiFine 不兼容",
+    "fabricOptifineVersion": "Minecraft 1.20.5 及以上 Fabric 与 OptiFine 不兼容"
+  },
+  "addons": {
+    "title": "必备前置与兼容补丁",
+    "fabricApi": "Fabric API",
+    "fabricApiDesc": "大多数 Fabric 模组所必需的核心前置库",
+    "legacyFabricApi": "Legacy Fabric API",
+    "legacyFabricApiDesc": "Legacy Fabric 运行环境的核心前置库",
+    "optifabric": "OptiFabric",
+    "optifabricDesc": "让 OptiFine 能够在 Fabric 环境下平稳运行"
+  },
+  "hints": {
+    "fabricApiMissing": "未选择 Fabric API，绝大多数 Fabric 模组将无法正常启动",
+    "legacyFabricApiMissing": "未选择 Legacy Fabric API，部分模组可能运行异常",
+    "optifabricMissing": "同时使用 Fabric 与 OptiFine 时必须搭载 OptiFabric 模组",
+    "optifineModWarning": "在现代 Minecraft 版本中，OptiFine 与模组共存可能出现渲染异常或崩溃风险"
+  },
+  "configurator": {
+    "primaryLoader": "主要加载器 (单选)",
+    "additional": "搭配增强",
+    "addons": "前置组件",
+    "instanceName": "实例名称",
+    "namePlaceholder": "请输入实例名称",
+    "autoNamed": "自动命名",
+    "manuallyEdited": "自定义",
+    "installAction": "开始安装",
+    "resetAction": "重置实例",
+    "modifyAction": "修改实例",
+    "installSuccess": "已创建安装任务，正在后台安装实例 {name}",
+    "viewTasks": "前往任务中心",
+    "targetVersion": "目标游戏版本：",
+    "changeVersion": "更改版本",
+    "vanillaPure": "原版纯净",
+    "vanillaSummary": "Vanilla (纯净原版)",
+    "selected": "已选择",
+    "versionSelect": "版本选择",
+    "fetchingVersions": "正在拉取可用版本...",
+    "recommended": "(推荐)",
+    "testing": "(测试)",
+    "optifineTitle": "OptiFine 搭配增强",
+    "optifineDesc": "高清修复与着色器支持",
+    "liteloaderTitle": "LiteLoader 轻量加载器",
+    "liteloaderDesc": "适用于 1.12.2 及以下旧版本",
+    "matchedBest": "已匹配最佳文件",
+    "summaryLabel": "当前配置摘要",
+    "releaseBadge": "正式版",
+    "snapshotBadge": "快照"
+  },
+  "modify": {
+    "tabTitle": "自动安装",
+    "quiltUnsupported": "当前实例使用 Quilt 加载器，暂不支持通过配置器修改。",
+    "diffLabel": "变更预览：",
+    "noDiff": "当前配置未发生变化",
+    "modifySuccess": "已提交实例修改任务 {name}"
   },
   "dialog": {
     "installTitle": "安装原版 Minecraft",
@@ -58,17 +132,5 @@
     "noVersions": "该版本暂无可用加载器构建",
     "stable": "稳定版",
     "preview": "测试版"
-  },
-  "loaderPage": {
-    "title": "{name} 加载器安装",
-    "subtitle": "浏览并安装适用于各 Minecraft 版本的 {name} 运行环境",
-    "selectMc": "选择 Minecraft 目标版本",
-    "mcPlaceholder": "请选择或搜索 Minecraft 版本",
-    "refreshVersions": "刷新构建版本",
-    "versionList": "可安装版本列表",
-    "emptyVersions": "所选 Minecraft 版本没有可用的 {name} 构建",
-    "installButton": "安装此版本",
-    "badgeStable": "推荐稳定版",
-    "badgeSnapshot": "快照测试版"
   }
 }

@@ -7,10 +7,12 @@
 )]
 
 pub mod error;
+pub mod gamedir;
 pub mod install;
 pub mod instance;
 pub mod java;
 pub mod launch;
+pub mod naming;
 pub mod version;
 
 pub use error::GameError;

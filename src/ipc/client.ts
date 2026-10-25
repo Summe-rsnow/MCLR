@@ -1,5 +1,13 @@
 import { commands, type AppError, type AppInfo, type Result } from './bindings'
 import { invoke as TAURI_INVOKE } from '@tauri-apps/api/core'
+import { installIpc } from './domains/install'
+import { instancesIpc } from './domains/instances'
+import { resourcesIpc } from './domains/resources'
+import { mediaIpc } from './domains/media'
+export * from './domains/install'
+export * from './domains/instances'
+export * from './domains/resources'
+export * from './domains/media'
 
 export class AppErrorEx extends Error {
   readonly code: string
@@ -67,10 +75,14 @@ export type InstanceKind =
 
 export type InstanceState = 'ok' | 'broken' | 'incomplete'
 
+export type CardKind = 'star' | 'api' | 'regular' | 'rubbish' | 'fool' | 'error' | 'hidden'
+
 export interface InstanceConfig {
   icon: string
   category: string
   pinned: boolean
+  starred?: boolean
+  cardType?: CardKind | null
   isolation: string
   java?: string | null
   memory?: number | null
@@ -92,6 +104,10 @@ export interface InstanceInfo {
   loaders: string[]
   state: InstanceState
   config: InstanceConfig
+  modable: boolean
+  card: CardKind
+  releaseTime?: string | null
+  loaderVersions: Record<string, string>
 }
 
 export interface JavaInstallation {
@@ -445,6 +461,7 @@ export interface SaveInfo {
   lastPlayed: number
   dataVersion?: number | null
   iconDataUrl?: string | null
+  iconPath?: string | null
 }
 
 export interface DatapackInfo {
@@ -597,6 +614,7 @@ export interface AuthlibLoginResponse {
 export interface VersionManifestEntry {
   id: string
   versionType: string
+  type?: string
   url: string
   releaseTime: string
 }
@@ -625,7 +643,7 @@ export interface LoaderVersionEntry {
   releaseTime?: string | null
 }
 
-async function invokeCommand<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+export async function invokeCommand<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return await TAURI_INVOKE<T>(cmd, args)
   } catch (err: unknown) {
@@ -648,17 +666,7 @@ export const ipcClient = {
   taskCancel: (id: string): Promise<void> => invokeCommand<void>('task_cancel', { id }),
   taskPause: (id: string): Promise<void> => invokeCommand<void>('task_pause', { id }),
   taskResume: (id: string): Promise<void> => invokeCommand<void>('task_resume', { id }),
-  instancesList: (): Promise<InstanceInfo[]> => invokeCommand<InstanceInfo[]>('instances_list'),
-  instanceRename: (id: string, newName: string): Promise<InstanceInfo> =>
-    invokeCommand<InstanceInfo>('instance_rename', { id, newName }),
-  instanceDuplicate: (id: string, newName: string): Promise<InstanceInfo> =>
-    invokeCommand<InstanceInfo>('instance_duplicate', { id, newName }),
-  instanceDelete: (id: string): Promise<void> => invokeCommand<void>('instance_delete', { id }),
-  instanceUpdateConfig: (id: string, config: InstanceConfig): Promise<InstanceInfo> =>
-    invokeCommand<InstanceInfo>('instance_update_config', { id, config }),
-  instanceOpenFolder: (id: string): Promise<void> =>
-    invokeCommand<void>('instance_open_folder', { id }),
-  javaScan: (): Promise<JavaInstallation[]> => invokeCommand<JavaInstallation[]>('java_scan'),
+
   javaDownload: (component: string): Promise<string> =>
     invokeCommand<string>('java_download', { component }),
   // Accounts
@@ -846,8 +854,7 @@ export const ipcClient = {
   // Screenshots & Instance Files
   screenshotsList: (instanceId: string): Promise<ScreenshotInfo[]> =>
     invokeCommand<ScreenshotInfo[]>('screenshots_list', { instanceId }),
-  screenshotDelete: (instanceId: string, fileName: string): Promise<void> =>
-    invokeCommand<void>('screenshot_delete', { instanceId, fileName }),
+
   instanceFilesList: (instanceId: string, folderKind: string): Promise<InstanceFileItem[]> =>
     invokeCommand<InstanceFileItem[]>('instance_files_list', { instanceId, folderKind }),
   instanceFileToggle: (
@@ -968,4 +975,10 @@ export const ipcClient = {
     invokeCommand<LauncherLogFile[]>('launcher_logs_list'),
   launcherLogRead: (fileName: string): Promise<string> =>
     invokeCommand<string>('launcher_log_read', { fileName }),
+  assetsAllow: (path: string): Promise<void> =>
+    invokeCommand<void>('assets_allow', { path }),
+  ...installIpc,
+  ...instancesIpc,
+  ...resourcesIpc,
+  ...mediaIpc,
 }

@@ -8,7 +8,6 @@ import InstanceDetailPage from '../InstanceDetailPage.vue'
 import SettingsTab from '../tabs/SettingsTab.vue'
 import SavesTab from '../tabs/SavesTab.vue'
 import ServersTab from '../tabs/ServersTab.vue'
-import InstanceFilesTab from '../tabs/InstanceFilesTab.vue'
 import ExportTab from '../tabs/ExportTab.vue'
 import { lastExportedModpackOptions } from '../mock'
 import { setupMockIpc } from '../../../ipc/mock'
@@ -66,21 +65,44 @@ describe('Instance Detail feature', () => {
     await router.isReady()
   })
 
-  it('glob tab registry loads all 10 sub-tabs in order', () => {
-    expect(instanceDetailTabs.length).toBe(10)
+  it('glob tab registry loads all sub-tabs in order', () => {
+    expect(instanceDetailTabs.length).toBe(11)
     const keys = instanceDetailTabs.map((t) => t.key)
     expect(keys).toEqual([
       'overview',
+      'install',
       'settings',
+      'export',
+      'saves',
+      'screenshots',
       'mods',
       'resourcepacks',
       'shaders',
       'schematics',
-      'saves',
-      'screenshots',
       'servers',
-      'export',
     ])
+  })
+
+  it('renders ModsDisabledTab when instance is not modable on mods tab', async () => {
+    const store = useInstancesStore()
+    await store.fetchInstances()
+
+    const wrapper = mount(InstanceDetailPage, {
+      props: { id: '1.20.1-vanilla' },
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    const buttons = wrapper.findAll('button')
+    const modsButton = buttons.find((b) => b.text().includes('模组'))
+    if (modsButton) {
+      await modsButton.trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain('该实例不可使用模组')
+      expect(wrapper.text()).toContain('下载可安装 Mod 的实例')
+    }
   })
 
   it('renders InstanceDetailPage and switches tabs', async () => {
@@ -217,32 +239,6 @@ describe('Instance Detail feature', () => {
     expect(updated.config?.windowTitle).toBe('Custom Title')
   })
 
-  it('instance files tab displays files and supports toggle and delete', async () => {
-    const wrapper = mount(InstanceFilesTab, {
-      props: {
-        instanceId: '1.20.1-vanilla',
-        folderKind: 'resourcepacks',
-        title: '材质包',
-      },
-      global: {
-        plugins: [i18n, router],
-      },
-    })
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Faithful_32x.zip')
-
-    // Test toggle via client
-    const toggled = await ipcClient.instanceFileToggle(
-      '1.20.1-vanilla',
-      'resourcepacks',
-      'Faithful_32x.zip',
-      false,
-    )
-    expect(toggled.enabled).toBe(false)
-    expect(toggled.fileName).toBe('Faithful_32x.zip.disabled')
-  })
-
   it('export tab loads candidate files and submits modpack export', async () => {
     const wrapper = mount(ExportTab, {
       props: {
@@ -256,6 +252,9 @@ describe('Instance Detail feature', () => {
           kind: 'vanilla',
           loaders: [],
           state: 'ok',
+          modable: false,
+          card: 'regular',
+          loaderVersions: {},
           config: {
             icon: 'grass_block',
             category: 'Default',

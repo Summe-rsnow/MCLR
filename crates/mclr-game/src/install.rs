@@ -657,7 +657,139 @@ pub async fn install_vanilla(
         loaders,
         state,
         config,
+        ..Default::default()
     })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct VerifiedCacheEntry {
+    pub size: u64,
+    #[serde(rename = "mtimeMs")]
+    pub mtime_ms: u64,
+}
+
+pub type VerifiedCache = HashMap<String, VerifiedCacheEntry>;
+
+fn load_verified_cache() -> VerifiedCache {
+    let path = paths::cache_dir().join("verified.json");
+    if path.exists() {
+        if let Ok(data) = std::fs::read_to_string(&path) {
+            if let Ok(cache) = serde_json::from_str(&data) {
+                return cache;
+            }
+        }
+    }
+    HashMap::new()
+}
+
+fn save_verified_cache(cache: &VerifiedCache) {
+    let cache_dir = paths::cache_dir();
+    let _ = std::fs::create_dir_all(&cache_dir);
+    let path = cache_dir.join("verified.json");
+    if let Ok(json) = serde_json::to_string(cache) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+fn calculate_file_sha1(path: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut hasher = Sha1::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        match file.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => hasher.update(&buf[..n]),
+            Err(_) => return None,
+        }
+    }
+    Some(hex::encode(hasher.finalize()))
+}
+
+async fn verify_specs_cached(specs: Vec<DownloadSpec>) -> Vec<DownloadSpec> {
+    let mut cache = load_verified_cache();
+    let mut unverified = Vec::new();
+    let mut candidates_to_hash = Vec::new();
+
+    for spec in specs {
+        if !spec.dest.exists() {
+            unverified.push(spec);
+            continue;
+        }
+
+        let metadata = match std::fs::metadata(&spec.dest) {
+            Ok(m) => m,
+            Err(_) => {
+                unverified.push(spec);
+                continue;
+            }
+        };
+        let file_size = metadata.len();
+        let mtime_ms = metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
+        if let Some(expected_size) = spec.size {
+            if file_size != expected_size {
+                unverified.push(spec);
+                continue;
+            }
+        }
+
+        if let Some(expected_sha1) = spec.sha1.clone() {
+            let dest_key = spec.dest.to_string_lossy().to_string();
+            if let Some(entry) = cache.get(&dest_key) {
+                if entry.size == file_size && entry.mtime_ms == mtime_ms {
+                    continue;
+                }
+            }
+            candidates_to_hash.push((spec, dest_key, file_size, mtime_ms, expected_sha1));
+        }
+    }
+
+    if !candidates_to_hash.is_empty() {
+        for batch in candidates_to_hash.chunks(64) {
+            let tasks: Vec<_> = batch
+                .iter()
+                .map(|(spec, dest_key, file_size, mtime_ms, expected_sha1)| {
+                    let path = spec.dest.clone();
+                    let exp_sha1 = expected_sha1.clone();
+                    let dest_key = dest_key.clone();
+                    let file_size = *file_size;
+                    let mtime_ms = *mtime_ms;
+                    let spec = spec.clone();
+                    tokio::task::spawn_blocking(move || {
+                        let passed = calculate_file_sha1(&path)
+                            .map(|actual| actual.eq_ignore_ascii_case(&exp_sha1))
+                            .unwrap_or(false);
+                        (spec, dest_key, file_size, mtime_ms, passed)
+                    })
+                })
+                .collect();
+
+            for task in tasks {
+                if let Ok((spec, dest_key, file_size, mtime_ms, passed)) = task.await {
+                    if passed {
+                        cache.insert(
+                            dest_key,
+                            VerifiedCacheEntry {
+                                size: file_size,
+                                mtime_ms,
+                            },
+                        );
+                    } else {
+                        unverified.push(spec);
+                    }
+                }
+            }
+        }
+        save_verified_cache(&cache);
+    }
+
+    unverified
 }
 
 /// Repairs an existing Minecraft instance by checking and downloading missing/corrupted files.
@@ -680,10 +812,7 @@ pub async fn repair_instance(
     )
     .await?;
 
-    let unverified_specs: Vec<DownloadSpec> = specs
-        .into_iter()
-        .filter(|spec| !file_is_verified(&spec.dest, spec.size, spec.sha1.as_deref()))
-        .collect();
+    let unverified_specs = verify_specs_cached(specs).await;
 
     let count = unverified_specs.len();
     info!("Repairing instance {instance_id}: {count} files missing or corrupted");
@@ -696,6 +825,26 @@ pub async fn repair_instance(
     Ok(count)
 }
 
+/// Remove incomplete instance folders (containing `.mclr-installing`) and `.mclr-staging` dirs left behind by interrupted installs.
+pub fn cleanup_stale(mc_folder: &std::path::Path) {
+    let versions_dir = mc_folder.join("versions");
+    if versions_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&versions_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() && path.join(".mclr-installing").exists() {
+                    tracing::info!("Cleaning up incomplete instance: {}", path.display());
+                    let _ = std::fs::remove_dir_all(&path);
+                }
+            }
+        }
+    }
+    let staging_dir = mc_folder.join(".mclr-staging");
+    if staging_dir.exists() {
+        tracing::info!("Cleaning up stale staging dir: {}", staging_dir.display());
+        let _ = std::fs::remove_dir_all(&staging_dir);
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -881,5 +1030,28 @@ mod tests {
         unsafe {
             std::env::remove_var("MCLR_DATA_DIR");
         }
+    }
+
+    #[test]
+    fn test_cleanup_stale() {
+        let temp = tempfile::tempdir().unwrap();
+        let mc_folder = temp.path();
+        let versions = mc_folder.join("versions");
+        let incomplete = versions.join("incomplete_inst");
+        let complete = versions.join("complete_inst");
+        let staging = mc_folder.join(".mclr-staging");
+
+        std::fs::create_dir_all(&incomplete).unwrap();
+        std::fs::write(incomplete.join(".mclr-installing"), b"").unwrap();
+        std::fs::create_dir_all(&complete).unwrap();
+        std::fs::write(complete.join("complete_inst.json"), b"{}").unwrap();
+        std::fs::create_dir_all(&staging).unwrap();
+        std::fs::write(staging.join("temp.txt"), b"temp").unwrap();
+
+        cleanup_stale(mc_folder);
+
+        assert!(!incomplete.exists());
+        assert!(complete.exists());
+        assert!(!staging.exists());
     }
 }

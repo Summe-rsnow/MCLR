@@ -7,25 +7,17 @@ pub use mclr_game::launch::{
     LaunchExitPayload, LaunchProcessInfo, LaunchStartResult, LaunchWatcher, LogLevel, LogLine,
 };
 use mclr_game::launch::{WatcherEvent, launch as game_launch};
-use mclr_net::build_http_client;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
-async fn current_mc_folder(state: &State<'_, SettingsStore>) -> PathBuf {
-    let settings = state.get().await;
-    if settings.game.current_folder.is_empty() {
-        mclr_core::paths::default_minecraft_dir()
-    } else {
-        PathBuf::from(settings.game.current_folder)
-    }
-}
+use super::current_mc_folder;
 
 #[tauri::command]
 #[specta::specta]
 #[allow(clippy::too_many_arguments)]
 pub async fn launch_instance(
+    http: State<'_, crate::http::HttpState>,
     app: AppHandle,
     settings_state: State<'_, SettingsStore>,
     tasks_state: State<'_, Arc<TaskCenter>>,
@@ -35,7 +27,7 @@ pub async fn launch_instance(
     account_id: String,
 ) -> Result<LaunchStartResult, AppError> {
     let settings = settings_state.get().await;
-    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+    let client = http.client();
     let mc_folder = current_mc_folder(&settings_state).await;
 
     // 1. Resolve account session
@@ -71,6 +63,21 @@ pub async fn launch_instance(
                 let mut rx = watcher.subscribe();
                 let app_handle = app.clone();
                 let target_pid = pid;
+                let target_instance_id = instance_id.clone();
+
+                let log_batcher = crate::events::spawn_default({
+                    let app_handle = app_handle.clone();
+                    let inst_id = target_instance_id.clone();
+                    move |batch: Vec<LogLine>| {
+                        let _ = app_handle.emit(
+                            "launch://logBatch",
+                            &serde_json::json!({
+                                "instanceId": inst_id,
+                                "lines": batch,
+                            }),
+                        );
+                    }
+                });
 
                 tokio::spawn(async move {
                     while let Ok(evt) = rx.recv().await {
@@ -80,6 +87,7 @@ pub async fn launch_instance(
                             }
                             WatcherEvent::Log(log) if log.process_id == target_pid => {
                                 let _ = app_handle.emit("launch://log", &log);
+                                log_batcher.push(log);
                             }
                             WatcherEvent::Crashed(payload) if payload.process_id == target_pid => {
                                 let _ = app_handle.emit("launch://crashed", &payload);

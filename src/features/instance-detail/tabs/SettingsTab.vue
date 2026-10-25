@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { InstanceInfo, InstanceConfig } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
@@ -10,6 +10,7 @@ import {
   MButton,
   MInput,
   MSelect,
+  MSegmented,
   useToast,
 } from '../../../ui'
 
@@ -25,8 +26,10 @@ const saving = ref(false)
 const form = ref<InstanceConfig>({
   icon: props.instance.config?.icon || 'grass_block',
   category: props.instance.config?.category || 'Default',
-  pinned: Boolean(props.instance.config?.pinned),
-  isolation: props.instance.config?.isolation || 'global',
+  pinned: Boolean(props.instance.config?.pinned || props.instance.config?.starred),
+  starred: Boolean(props.instance.config?.starred || props.instance.config?.pinned),
+  cardType: props.instance.config?.cardType ?? null,
+  isolation: props.instance.config?.isolation === 'instance' ? 'on' : (props.instance.config?.isolation || 'global'),
   java: props.instance.config?.java ?? null,
   memory: props.instance.config?.memory ?? null,
   jvmArgs: props.instance.config?.jvmArgs ?? null,
@@ -37,6 +40,10 @@ const form = ref<InstanceConfig>({
   serverQuickPlay: props.instance.config?.serverQuickPlay ?? null,
 })
 
+const javaList = ref<{ label: string; value: string | null }[]>([
+  { label: t('instanceDetail.settings.useGlobal'), value: null },
+])
+
 watch(
   () => props.instance.config,
   (cfg) => {
@@ -44,8 +51,10 @@ watch(
       form.value = {
         icon: cfg.icon || 'grass_block',
         category: cfg.category || 'Default',
-        pinned: Boolean(cfg.pinned),
-        isolation: cfg.isolation || 'global',
+        pinned: Boolean(cfg.pinned || cfg.starred),
+        starred: Boolean(cfg.starred || cfg.pinned),
+        cardType: cfg.cardType ?? null,
+        isolation: cfg.isolation === 'instance' ? 'on' : (cfg.isolation || 'global'),
         java: cfg.java ?? null,
         memory: cfg.memory ?? null,
         jvmArgs: cfg.jvmArgs ?? null,
@@ -60,16 +69,33 @@ watch(
   { deep: true },
 )
 
+onMounted(async () => {
+  try {
+    const list = await ipcClient.javaScan()
+    javaList.value = [
+      { label: t('instanceDetail.settings.useGlobal'), value: null },
+      ...list.map((j) => ({
+        label: `${j.implementor || 'Java'} ${j.major} (${j.version})`,
+        value: j.path,
+      })),
+    ]
+  } catch {
+    // fallback
+  }
+})
+
 const isolationOptions = [
   { label: t('instanceDetail.settings.isolation.global'), value: 'global' },
-  { label: t('instanceDetail.settings.isolation.instance'), value: 'instance' },
+  { label: t('instanceDetail.settings.isolation.on'), value: 'on' },
+  { label: t('instanceDetail.settings.isolation.off'), value: 'off' },
 ]
 
 const loginRequirementOptions = [
   { label: t('instanceDetail.settings.loginRequirement.any'), value: 'any' },
   { label: t('instanceDetail.settings.loginRequirement.microsoft'), value: 'microsoft' },
+  { label: t('instanceDetail.settings.loginRequirement.thirdParty'), value: 'thirdParty' },
+  { label: t('instanceDetail.settings.loginRequirement.microsoftOrThirdParty'), value: 'microsoftOrThirdParty' },
 ]
-
 async function saveSettings() {
   saving.value = true
   try {
@@ -113,11 +139,23 @@ async function saveSettings() {
           :label="t('instanceDetail.settings.isolation.title')"
           :hint="t('instanceDetail.settings.isolation.hint')"
         >
-          <MSelect
+          <MSegmented
             v-model="form.isolation"
             :options="isolationOptions"
             size="sm"
-            class="w-56"
+          />
+        </MSettingRow>
+
+        <MSettingRow
+          :label="t('instanceDetail.settings.javaLabel')"
+          :hint="t('instanceDetail.settings.javaHint')"
+        >
+          <MSelect
+            :model-value="form.java || ''"
+            :options="javaList.map(j => ({ label: j.label, value: j.value || '' }))"
+            size="sm"
+            class="w-72"
+            @update:model-value="form.java = $event ? String($event) : null"
           />
         </MSettingRow>
 

@@ -10,6 +10,7 @@ export interface TaskTreeItem extends TaskNode {
 export const useTasksStore = defineStore('tasks', () => {
   const tasks = ref<TaskNode[]>([])
   const loading = ref(false)
+  const initialized = ref(false)
   let unlisten: UnlistenFn | null = null
 
   const activeTasks = computed(() =>
@@ -57,6 +58,7 @@ export const useTasksStore = defineStore('tasks', () => {
     loading.value = true
     try {
       tasks.value = await ipcClient.tasksList()
+      initialized.value = true
     } catch {
       // In tests or if not ready
     } finally {
@@ -129,7 +131,7 @@ export const useTasksStore = defineStore('tasks', () => {
   return {
     tasks,
     loading,
-    activeTasks,
+    initialized,
     activeTasksCount,
     aggregateSpeedBps,
     aggregateProgress,

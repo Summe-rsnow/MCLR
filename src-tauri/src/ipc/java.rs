@@ -2,32 +2,62 @@
 
 use mclr_core::{AppError, SettingsStore, TaskCenter, paths};
 use mclr_game::{JavaInstallation, resolve_mojang_runtime_downloads, scan_java};
-use mclr_net::{DownloadSpec, Downloader, SourceKind, build_http_client, rewrite_url};
+use mclr_net::{DownloadSpec, Downloader, SourceKind, rewrite_url};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use url::Url;
 
 #[tauri::command]
 #[specta::specta]
-pub async fn java_scan(state: State<'_, SettingsStore>) -> Result<Vec<JavaInstallation>, AppError> {
+pub async fn java_scan(
+    app: AppHandle,
+    state: State<'_, SettingsStore>,
+    force_refresh: Option<bool>,
+) -> Result<Vec<JavaInstallation>, AppError> {
     let settings = state.get().await;
     let custom = settings.java.custom.clone();
-    let list = tokio::task::spawn_blocking(move || scan_java(&custom))
-        .await
-        .map_err(|e| AppError::new("game.io").with_detail(e.to_string()))?;
+    let force = force_refresh.unwrap_or(false);
+
+    if !force {
+        let cached = mclr_game::java::cached_java();
+        if !cached.is_empty() {
+            let app_clone = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let updated =
+                    super::run_blocking(move || Ok::<_, AppError>(scan_java(&custom))).await;
+                if let Ok(list) = updated {
+                    let _ = app_clone.emit("java://updated", &list);
+                }
+            });
+            return Ok(cached);
+        }
+    }
+
+    let list = super::run_blocking(move || Ok::<_, AppError>(scan_java(&custom))).await?;
+    let _ = app.emit("java://updated", &list);
     Ok(list)
 }
 
 #[tauri::command]
 #[specta::specta]
+pub async fn java_list(
+    app: AppHandle,
+    state: State<'_, SettingsStore>,
+) -> Result<Vec<JavaInstallation>, AppError> {
+    java_scan(app, state, Some(false)).await
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn java_download(
+    http: State<'_, crate::http::HttpState>,
     settings_state: State<'_, SettingsStore>,
     tasks_state: State<'_, Arc<TaskCenter>>,
     component: String,
 ) -> Result<String, AppError> {
     let settings = settings_state.get().await;
-    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+    let client = http.client();
     let mut params = HashMap::new();
     params.insert("component".to_string(), component.clone());
 

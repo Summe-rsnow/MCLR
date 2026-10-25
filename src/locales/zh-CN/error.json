@@ -11,7 +11,8 @@
     "instanceExists": "已存在同名实例",
     "invalidInstanceName": "实例名称包含非法字符",
     "javaNotFound": "未找到适合该版本的 Java 运行环境",
-    "runtimeManifest": "下载 Java 运行时清单失败"
+    "runtimeManifest": "下载 Java 运行时清单失败",
+    "invalidPath": "无效的资源目录：{sub}"
   },
   "tasks": {
     "notFound": "找不到指定的任务",
@@ -97,8 +98,7 @@
     "notFound": "找不到指定的世界存档",
     "pingFailed": "无法连接服务器或 Ping 超时",
     "invalidPath": "无效的文件路径或格式"
-  }
-  ,
+  },
   "export": {
     "scanFailed": "扫描实例文件失败",
     "packFailed": "打包导出整合包失败",
@@ -133,5 +133,23 @@
     "http": "更新服务器网络请求异常: {detail}",
     "signatureInvalid": "更新包签名校验失败",
     "json": "更新元数据解析失败"
+  },
+  "app": {
+    "blockingJoin": "后台任务执行失败",
+    "assetScope": "本地资源授权失败"
+  },
+  "instance": {
+    "name": {
+      "empty": "实例名称不能为空",
+      "invalidChar": "实例名称不能包含首尾空格或非法字符（\\ / : * ? \" < > | ! ;）",
+      "reserved": "实例名称不能使用系统保留名",
+      "trailingDot": "实例名称不能以英文句点结尾",
+      "duplicate": "已存在同名实例（不区分大小写）",
+      "tooLong": "实例名称不能超过 70 个字符"
+    }
+  },
+  "resource": {
+    "toggleConflict": "同时存在启用与禁用文件且内容不同，无法直接切换",
+    "notModable": "当前实例未安装模组加载器，无法导入模组"
   }
 }

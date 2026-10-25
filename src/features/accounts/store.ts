@@ -11,6 +11,7 @@ import {
 export const useAccountsStore = defineStore('accounts', () => {
   const accounts = ref<AccountView[]>([])
   const loading = ref(false)
+  const initialized = ref(false)
   const deviceCodeDialog = ref(false)
   const deviceCodeData = ref<DeviceCodeEvent | null>(null)
 
@@ -46,6 +47,7 @@ export const useAccountsStore = defineStore('accounts', () => {
     loading.value = true
     try {
       accounts.value = await ipcClient.accountsList()
+      initialized.value = true
     } finally {
       loading.value = false
     }
@@ -122,6 +124,7 @@ export const useAccountsStore = defineStore('accounts', () => {
   return {
     accounts,
     loading,
+    initialized,
     selectedAccount,
     deviceCodeDialog,
     deviceCodeData,

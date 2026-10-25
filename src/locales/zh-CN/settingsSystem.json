@@ -18,6 +18,7 @@
     "currentBadge": "当前生效",
     "addFolder": "添加游戏目录",
     "folderNamePlaceholder": "目录备注名称 (例如：Default)",
+    "browseFolder": "浏览...",
     "folderPathPlaceholder": "完整目录路径 (例如：C:\\Games\\.minecraft)",
     "folderNameRequired": "请输入目录备注名称",
     "folderPathRequired": "请输入有效的目录绝对路径",
@@ -27,8 +28,13 @@
     "isolationTitle": "版本隔离策略",
     "isolationDesc": "新安装实例时的默认隔离选项，可避免不同游戏版本间配置文件冲突",
     "defaultIsolation": "新建实例默认隔离",
-    "isolationOn": "独立隔离 (每个实例独立拥有 mods、saves 和配置文件夹)",
-    "isolationOff": "共享全局 (共享主目录下的公共配置与存档)",
+    "isolation": {
+      "off": "不隔离",
+      "modded": "仅可安装 Mod 的实例",
+      "nonRelease": "仅非正式版实例",
+      "moddedOrNonRelease": "可安装 Mod 或非正式版实例",
+      "all": "全部实例（默认）"
+    },
     "sortTitle": "实例列表排列偏好",
     "sortDesc": "控制实例展示界面上的默认卡片排序准则",
     "sortBy": "实例排序准则",

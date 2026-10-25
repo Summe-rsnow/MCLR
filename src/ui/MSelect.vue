@@ -202,6 +202,7 @@ onUnmounted(() => {
     </select>
 
     <Teleport to="body">
+      <Transition name="m-pop">
       <div
         v-if="isOpen"
         ref="listRef"
@@ -238,6 +239,7 @@ onUnmounted(() => {
           />
         </button>
       </div>
+      </Transition>
     </Teleport>
   </div>
 </template>

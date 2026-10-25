@@ -1,12 +1,12 @@
-import ResourcePacksTab from './ResourcePacksTab.vue'
+import { defineAsyncComponent } from 'vue'
 import type { InstanceDetailTab } from '../tabs'
 
 const tab: InstanceDetailTab = {
   key: 'resourcepacks',
   titleKey: 'instanceDetail.tabs.resourcepacks',
   icon: 'i-lucide-palette',
-  order: 40,
-  component: ResourcePacksTab,
+  order: 80,
+  component: defineAsyncComponent(() => import('./ResourcePacksTab.vue')),
 }
 
 export default tab

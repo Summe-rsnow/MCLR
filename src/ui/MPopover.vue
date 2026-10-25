@@ -94,15 +94,17 @@ onUnmounted(() => {
   <span ref="anchorRef" class="inline-flex">
     <slot name="trigger" />
     <Teleport to="body">
-      <div
-        v-if="open"
-        ref="panelRef"
-        data-testid="m-popover"
-        class="fixed z-50 m-overlay m-refract rounded-xl p-3 text-fg select-none"
-        :style="posStyle"
-      >
-        <slot />
-      </div>
+      <Transition name="m-pop">
+        <div
+          v-if="open"
+          ref="panelRef"
+          data-testid="m-popover"
+          class="fixed z-50 m-overlay m-refract rounded-xl p-3 text-fg select-none"
+          :style="{ ...posStyle, '--origin': placement.startsWith('top') ? 'bottom' : 'top' }"
+        >
+          <slot />
+        </div>
+      </Transition>
     </Teleport>
   </span>
 </template>

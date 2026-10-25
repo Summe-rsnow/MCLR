@@ -33,7 +33,7 @@ function navigateToAccounts() {
         :src="accountsStore.selectedAccount.skinHeadDataUrl"
         alt="Avatar"
         class="w-full h-full object-cover [image-rendering:pixelated]"
-      />
+       loading="lazy" decoding="async"/>
       <span
         v-else-if="accountsStore.selectedAccount"
         class="i-lucide-user text-fg-muted w-4 h-4"

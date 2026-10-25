@@ -1,8 +1,10 @@
+#![allow(clippy::collapsible_if)]
 //! Mod loader installers (Fabric, LegacyFabric, LiteLoader, LabyMod, OptiFine, Forge, NeoForge, Cleanroom).
 
 pub mod error;
 pub mod fabric;
 pub mod forge;
+pub mod pipeline;
 
 pub use error::LoaderError;
 pub use fabric::{
@@ -10,8 +12,13 @@ pub use fabric::{
     OptiFineInstaller,
 };
 pub use forge::{CleanroomInstaller, ForgeInstaller, NeoForgeInstaller};
+pub use pipeline::{
+    ExtraMod, InstallEnv, InstallMode, InstallRequest, LabyModSel, StageCtx, Staged,
+    install_instance,
+};
 
 use async_trait::async_trait;
+use mclr_core::settings::GameSettings;
 use mclr_core::{JavaSettings, NetSettings, TaskCenter};
 use mclr_game::InstanceInfo;
 use serde::{Deserialize, Serialize};
@@ -85,14 +92,43 @@ pub async fn install_with_loader(
     loader: LoaderKind,
     ctx: LoaderInstallContext<'_>,
 ) -> Result<InstanceInfo, LoaderError> {
+    let mut req = InstallRequest {
+        mc_version: ctx.mc_version.clone(),
+        instance_name: ctx.instance_name.clone(),
+        forge: None,
+        neoforge: None,
+        cleanroom: None,
+        fabric: None,
+        legacy_fabric: None,
+        labymod: None,
+        liteloader: None,
+        optifine: ctx.optifine_version.clone(),
+        extra_mods: Vec::new(),
+        mode: InstallMode::Create,
+    };
     match loader {
-        LoaderKind::Fabric => FabricInstaller.install(ctx).await,
-        LoaderKind::LegacyFabric => LegacyFabricInstaller.install(ctx).await,
-        LoaderKind::LiteLoader => LiteLoaderInstaller.install(ctx).await,
-        LoaderKind::LabyMod => LabyModInstaller.install(ctx).await,
-        LoaderKind::OptiFine => OptiFineInstaller.install(ctx).await,
-        LoaderKind::Forge => ForgeInstaller.install(ctx).await,
-        LoaderKind::NeoForge => NeoForgeInstaller.install(ctx).await,
-        LoaderKind::Cleanroom => CleanroomInstaller.install(ctx).await,
+        LoaderKind::Fabric => req.fabric = Some(ctx.loader_version.clone()),
+        LoaderKind::LegacyFabric => req.legacy_fabric = Some(ctx.loader_version.clone()),
+        LoaderKind::LiteLoader => req.liteloader = Some(ctx.loader_version.clone()),
+        LoaderKind::LabyMod => {
+            req.labymod = Some(LabyModSel {
+                channel: "production".to_string(),
+                commit_ref: ctx.loader_version.clone(),
+                base_version: ctx.loader_version.clone(),
+            })
+        }
+        LoaderKind::OptiFine => req.optifine = Some(ctx.loader_version.clone()),
+        LoaderKind::Forge => req.forge = Some(ctx.loader_version.clone()),
+        LoaderKind::NeoForge => req.neoforge = Some(ctx.loader_version.clone()),
+        LoaderKind::Cleanroom => req.cleanroom = Some(ctx.loader_version.clone()),
     }
+    let env = InstallEnv {
+        client: ctx.client.clone(),
+        net_settings: ctx.net_settings.clone(),
+        java_settings: ctx.java_settings.clone(),
+        game_settings: GameSettings::default(),
+        mc_folder: ctx.mc_folder,
+        task_ctx: ctx.task_ctx,
+    };
+    install_instance(req, env).await
 }

@@ -10,6 +10,7 @@ import {
   MBadge,
   MCard,
   MEmpty,
+  MSkeletonList,
 } from '../../ui'
 
 const { t, te } = useI18n()
@@ -96,8 +97,13 @@ function getBadgeVariant(state: string): 'primary' | 'success' | 'danger' | 'neu
       </template>
     </MPageHeader>
 
+    <!-- Loading Skeleton State -->
+    <div v-if="!tasksStore.initialized && tasksStore.loading" class="py-4">
+      <MSkeletonList :rows="3" variant="card" />
+    </div>
+
     <!-- Empty State -->
-    <div v-if="tasksStore.tasks.length === 0" class="py-16">
+    <div v-else-if="tasksStore.tasks.length === 0" class="py-16">
       <MEmpty
         :title="t('tasks.empty')"
         :description="t('tasks.emptySubtitle')"
@@ -106,9 +112,9 @@ function getBadgeVariant(state: string): 'primary' | 'success' | 'danger' | 'neu
     </div>
 
     <!-- Task List -->
-    <div v-else class="space-y-3">
-      <template v-for="task in tasksStore.taskTree" :key="task.id">
-        <MCard padding="md" class="space-y-3">
+    <TransitionGroup v-else name="m-list" tag="div" class="space-y-3">
+      <template v-for="(task, index) in tasksStore.taskTree" :key="task.id">
+        <MCard padding="md" class="space-y-3 m-stagger" :style="{ '--i': index }">
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-2.5 min-w-0">
               <span
@@ -203,6 +209,6 @@ function getBadgeVariant(state: string): 'primary' | 'success' | 'danger' | 'neu
           </div>
         </MCard>
       </template>
-    </div>
+    </TransitionGroup>
   </div>
 </template>

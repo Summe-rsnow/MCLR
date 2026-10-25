@@ -11,6 +11,9 @@
   "repairing": "正在修复游戏文件...",
   "repairSuccess": "实例文件检查完成",
   "launchButton": "启动游戏",
+  "button": {
+    "download": "下载游戏"
+  },
   "launching": "正在启动...",
   "running": "游戏运行中",
   "processCount": "{count} 个游戏进程运行中",

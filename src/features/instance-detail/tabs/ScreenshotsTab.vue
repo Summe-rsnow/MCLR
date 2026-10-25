@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ScreenshotInfo } from '../../../ipc/client'
+import { convertFileSrc } from '@tauri-apps/api/core'
+import type { ScreenshotMeta } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
 import {
   MCard,
   MButton,
   MIconButton,
-  MDialog,
   MEmpty,
+  MSkeletonList,
   useToast,
   useDialog,
 } from '../../../ui'
@@ -21,14 +22,40 @@ const { t } = useI18n()
 const toast = useToast()
 const { confirm } = useDialog()
 
-const screenshots = ref<ScreenshotInfo[]>([])
+const screenshots = ref<ScreenshotMeta[]>([])
+const total = ref(0)
 const loading = ref(false)
-const previewTarget = ref<ScreenshotInfo | null>(null)
+const loadingMore = ref(false)
+const thumbs = ref<Record<string, string>>({})
+const loaded = ref<Record<string, boolean>>({})
 
-async function fetchScreenshots() {
+const sentinelRef = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
+const PAGE_SIZE = 20
+
+async function fetchThumbs(items: ScreenshotMeta[]) {
+  for (const item of items) {
+    if (!thumbs.value[item.path]) {
+      ipcClient
+        .screenshotThumb(item.path)
+        .then((thumbPath) => {
+          thumbs.value[item.path] = convertFileSrc(thumbPath)
+        })
+        .catch(() => {
+          // fallback to direct file if thumbnail generation fails
+          thumbs.value[item.path] = convertFileSrc(item.path)
+        })
+    }
+  }
+}
+
+async function fetchInitial() {
   loading.value = true
   try {
-    screenshots.value = await ipcClient.screenshotsList(props.instanceId)
+    const res = await ipcClient.screenshotsListPaged(props.instanceId, 0, PAGE_SIZE)
+    screenshots.value = res.items
+    total.value = res.total
+    fetchThumbs(res.items)
   } catch (e: unknown) {
     toast.danger(String(e))
   } finally {
@@ -36,15 +63,77 @@ async function fetchScreenshots() {
   }
 }
 
+async function fetchMore() {
+  if (loadingMore.value || loading.value || screenshots.value.length >= total.value) return
+  loadingMore.value = true
+  try {
+    const res = await ipcClient.screenshotsListPaged(
+      props.instanceId,
+      screenshots.value.length,
+      PAGE_SIZE,
+    )
+    screenshots.value.push(...res.items)
+    total.value = res.total
+    fetchThumbs(res.items)
+  } catch (e: unknown) {
+    toast.danger(String(e))
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+function setupObserver() {
+  if (typeof IntersectionObserver === 'undefined') return
+  if (observer) observer.disconnect()
+
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting) {
+        fetchMore()
+      }
+    },
+    { rootMargin: '200px' },
+  )
+
+  if (sentinelRef.value) {
+    observer.observe(sentinelRef.value)
+  }
+}
+
 async function handleOpenFolder() {
   try {
-    await ipcClient.instanceOpenFolder(props.instanceId)
+    await ipcClient.instanceOpenPath(props.instanceId, 'screenshots')
   } catch (e: unknown) {
     toast.danger(String(e))
   }
 }
 
-async function handleDelete(item: ScreenshotInfo) {
+async function handleOpen(item: ScreenshotMeta) {
+  try {
+    await ipcClient.screenshotOpen(item.path)
+  } catch (e: unknown) {
+    toast.danger(String(e))
+  }
+}
+
+async function handleReveal(item: ScreenshotMeta) {
+  try {
+    await ipcClient.screenshotReveal(item.path)
+  } catch (e: unknown) {
+    toast.danger(String(e))
+  }
+}
+
+async function handleCopy(item: ScreenshotMeta) {
+  try {
+    await ipcClient.screenshotCopy(item.path)
+    toast.success(t('instanceDetail.screenshots.copySuccess', t('common.copied')))
+  } catch (e: unknown) {
+    toast.danger(String(e))
+  }
+}
+
+async function handleDelete(item: ScreenshotMeta) {
   const ok = await confirm({
     title: t('instanceDetail.screenshots.deleteConfirmTitle'),
     content: t('instanceDetail.screenshots.deleteConfirm', { name: item.fileName }),
@@ -52,12 +141,10 @@ async function handleDelete(item: ScreenshotInfo) {
   if (!ok) return
 
   try {
-    await ipcClient.screenshotDelete(props.instanceId, item.fileName)
-    screenshots.value = screenshots.value.filter((s) => s.fileName !== item.fileName)
+    await ipcClient.screenshotDelete(item.path)
+    screenshots.value = screenshots.value.filter((s) => s.path !== item.path)
+    total.value = Math.max(0, total.value - 1)
     toast.success(t('instanceDetail.screenshots.deleteSuccess'))
-    if (previewTarget.value?.fileName === item.fileName) {
-      previewTarget.value = null
-    }
   } catch (e: unknown) {
     toast.danger(String(e))
   }
@@ -70,9 +157,28 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
 }
 
-onMounted(() => {
-  fetchScreenshots()
+onMounted(async () => {
+  await fetchInitial()
+  await nextTick()
+  setupObserver()
 })
+
+onUnmounted(() => {
+  if (observer) {
+    observer.disconnect()
+    observer = null
+  }
+})
+
+watch(
+  () => props.instanceId,
+  () => {
+    screenshots.value = []
+    thumbs.value = {}
+    loaded.value = {}
+    fetchInitial()
+  },
+)
 </script>
 
 <template>
@@ -84,7 +190,7 @@ onMounted(() => {
           {{ t('instanceDetail.tabs.screenshots') }}
         </h2>
         <span class="text-xs text-fg-muted font-mono">
-          ({{ screenshots.length }})
+          ({{ total }})
         </span>
       </div>
       <div class="flex items-center gap-2">
@@ -92,15 +198,20 @@ onMounted(() => {
           <span class="w-4 h-4 i-lucide-folder-open mr-1" />
           {{ t('instanceDetail.screenshots.openFolder') }}
         </MButton>
-        <MButton variant="tonal" size="sm" :loading="loading" @click="fetchScreenshots">
+        <MButton variant="tonal" size="sm" :loading="loading" @click="fetchInitial">
           <span class="w-4 h-4 i-lucide-refresh-cw mr-1" />
           {{ t('instanceDetail.screenshots.refresh') }}
         </MButton>
       </div>
     </div>
 
+    <!-- Skeleton Loading Initial -->
+    <div v-if="loading && screenshots.length === 0" class="py-4">
+      <MSkeletonList :rows="6" variant="tile" />
+    </div>
+
     <!-- Empty State -->
-    <div v-if="screenshots.length === 0" class="py-16">
+    <div v-else-if="screenshots.length === 0" class="py-16">
       <MEmpty
         :title="t('instanceDetail.screenshots.empty')"
         icon="i-lucide-image"
@@ -111,7 +222,7 @@ onMounted(() => {
     <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
       <MCard
         v-for="item in screenshots"
-        :key="item.fileName"
+        :key="item.path"
         variant="well"
         hoverable
         padding="none"
@@ -120,24 +231,35 @@ onMounted(() => {
         <!-- Thumbnail / Image -->
         <div
           class="aspect-video bg-sunken/50 relative overflow-hidden cursor-pointer flex items-center justify-center"
-          @click="previewTarget = item"
+          :title="t('instanceDetail.screenshots.preview', t('common.open'))"
+          @click="handleOpen(item)"
         >
           <img
-            v-if="item.dataUrl"
-            :src="item.dataUrl"
+            v-if="thumbs[item.path]"
+            :src="thumbs[item.path]"
             :alt="item.fileName"
-            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            class="w-full h-full object-cover transition-all duration-200"
+            :class="loaded[item.path] ? 'opacity-100 scale-100' : 'opacity-0 scale-95'"
+            loading="lazy"
+            decoding="async"
+            @load="loaded[item.path] = true"
           />
-          <span v-else class="w-10 h-10 i-lucide-image text-fg-muted/40" />
+          <div
+            v-else
+            class="w-full h-full flex items-center justify-center bg-sunken/40"
+          >
+            <span class="w-8 h-8 i-lucide-image text-fg-muted/40" />
+          </div>
+
           <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-            <span class="w-6 h-6 i-lucide-maximize-2" />
+            <span class="w-6 h-6 i-lucide-external-link" />
           </div>
         </div>
 
-        <!-- Info Bar -->
+        <!-- Info & Actions Bar -->
         <div class="p-3 flex items-center justify-between gap-2 border-t border-line">
           <div class="min-w-0">
-            <div class="text-xs font-semibold text-fg truncate">
+            <div class="text-xs font-semibold text-fg truncate" :title="item.fileName">
               {{ item.fileName }}
             </div>
             <div class="text-[11px] text-fg-muted mt-0.5">
@@ -145,54 +267,38 @@ onMounted(() => {
             </div>
           </div>
 
-          <MIconButton
-            icon="i-lucide-trash-2"
-            size="sm"
-            class="text-danger hover:bg-danger/10 shrink-0"
-            :title="t('instanceDetail.screenshots.delete')"
-            @click="handleDelete(item)"
-          />
+          <div class="flex items-center gap-1 shrink-0">
+            <MIconButton
+              icon="i-lucide-copy"
+              size="sm"
+              class="text-fg-muted hover:text-fg"
+              :title="t('instanceDetail.screenshots.copy', t('common.copy'))"
+              @click.stop="handleCopy(item)"
+            />
+            <MIconButton
+              icon="i-lucide-folder-symlink"
+              size="sm"
+              class="text-fg-muted hover:text-fg"
+              :title="t('instanceDetail.screenshots.reveal', t('common.openFolder'))"
+              @click.stop="handleReveal(item)"
+            />
+            <MIconButton
+              icon="i-lucide-trash-2"
+              size="sm"
+              class="text-danger hover:bg-danger/10"
+              :title="t('instanceDetail.screenshots.delete')"
+              @click.stop="handleDelete(item)"
+            />
+          </div>
         </div>
       </MCard>
     </div>
 
-    <!-- Preview Modal -->
-    <MDialog
-      :open="!!previewTarget"
-      :title="previewTarget?.fileName || t('instanceDetail.screenshots.preview')"
-      @update:open="!$event && (previewTarget = null)"
-    >
-      <div class="py-2 flex items-center justify-center max-h-[70vh] overflow-hidden bg-sunken/30 rounded-xl">
-        <img
-          v-if="previewTarget?.dataUrl"
-          :src="previewTarget.dataUrl"
-          :alt="previewTarget.fileName"
-          class="max-w-full max-h-[65vh] object-contain rounded-lg"
-        />
-        <div v-else class="py-20 text-fg-muted">
-          {{ previewTarget?.path }}
-        </div>
-      </div>
-      <template #footer>
-        <div class="flex items-center justify-between w-full">
-          <div class="text-xs text-fg-muted">
-            {{ previewTarget ? formatBytes(previewTarget.size) : '' }}
-          </div>
-          <div class="flex gap-2">
-            <MButton
-              variant="danger"
-              size="sm"
-              @click="previewTarget && handleDelete(previewTarget)"
-            >
-              <span class="w-4 h-4 i-lucide-trash-2 mr-1" />
-              {{ t('instanceDetail.screenshots.delete') }}
-            </MButton>
-            <MButton variant="tonal" size="sm" @click="previewTarget = null">
-              {{ t('common.close') }}
-            </MButton>
-          </div>
-        </div>
-      </template>
-    </MDialog>
+    <!-- Infinite scroll sentinel -->
+    <div ref="sentinelRef" class="h-8 flex items-center justify-center">
+      <span v-if="loadingMore" class="text-xs text-fg-muted animate-pulse">
+        ...
+      </span>
+    </div>
   </div>
 </template>

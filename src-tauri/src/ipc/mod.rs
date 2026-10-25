@@ -2,6 +2,7 @@
 
 pub mod accounts;
 pub mod app;
+pub mod assets;
 pub mod comp;
 pub mod crash;
 pub mod export;
@@ -19,3 +20,46 @@ pub mod settings;
 pub mod tasks;
 pub mod tools;
 pub mod update;
+
+use mclr_core::AppError;
+
+/// Run synchronous fs/zip/hash/NBT/image work on Tokio's blocking pool so IPC commands
+/// never stall the async runtime. A panic or cancellation becomes `app.blockingJoin`.
+pub async fn run_blocking<T, E>(
+    f: impl FnOnce() -> Result<T, E> + Send + 'static,
+) -> Result<T, AppError>
+where
+    T: Send + 'static,
+    E: Into<AppError> + Send + 'static,
+{
+    match tokio::task::spawn_blocking(f).await {
+        Ok(res) => res.map_err(Into::into),
+        Err(join) => Err(AppError::new("app.blockingJoin").with_detail(join.to_string())),
+    }
+}
+
+use mclr_core::SettingsStore;
+use std::path::PathBuf;
+use tauri::State;
+
+/// Currently selected Minecraft folder (settings, falling back to the default folder).
+pub async fn current_mc_folder(state: &State<'_, SettingsStore>) -> PathBuf {
+    let settings = state.get().await;
+    if settings.game.current_folder.is_empty() {
+        mclr_core::paths::default_minecraft_dir()
+    } else {
+        PathBuf::from(settings.game.current_folder)
+    }
+}
+
+/// Game directory of an instance via the single isolation resolver (`mclr_game::gamedir`).
+pub async fn game_dir_for(state: &State<'_, SettingsStore>, instance_id: &str) -> PathBuf {
+    let settings = state.get().await;
+    let mc_folder = current_mc_folder(state).await;
+    let id = instance_id.to_string();
+    tokio::task::spawn_blocking(move || {
+        mclr_game::gamedir::resolve_game_dir(&mc_folder, &id, &settings.game)
+    })
+    .await
+    .unwrap_or_default()
+}

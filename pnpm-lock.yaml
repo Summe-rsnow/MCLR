@@ -14,6 +14,9 @@ importers:
       '@lobehub/webfont-harmony-sans-sc':
         specifier: 1.0.0
         version: 1.0.0
+      '@tanstack/vue-virtual':
+        specifier: ^3.13.48
+        version: 3.13.48(vue@3.5.44(typescript@5.9.3))
       '@tauri-apps/api':
         specifier: ^2.0.0
         version: 2.12.4
@@ -696,6 +699,14 @@ packages:
     resolution: {integrity: sha512-wPWi++K4Bs1VR4XihOhfGi4IGX6Cub7FlerTf8X2v+2BtDHddgSqWCXwGD+h2yAe4/niIhNDwAltioOC+wEogQ==}
     cpu: [x64]
     os: [win32]
+
+  '@tanstack/virtual-core@3.19.7':
+    resolution: {integrity: sha512-gxy5SvH0mFRJ0YujtrflB/1HAu9Wn1KGvL0bjZfQkYVVMsIpQiwcf1mR06/ViN4NjllUb4HNCjqE9FGwgTvMCQ==}
+
+  '@tanstack/vue-virtual@3.13.48':
+    resolution: {integrity: sha512-exH0/lELoCW9D6x8V1Uq61XY4zrN1AeDH4rDKUMTOJ93ndkeEVIY8zo366IBM13HSjhULpuWPdPhJ+ccidg58A==}
+    peerDependencies:
+      vue: ^2.7.0 || ^3.0.0
 
   '@tauri-apps/api@2.12.4':
     resolution: {integrity: sha512-pVmfis+4zT8H0Qhp3xPZx9Ju7kpzvA6rr/PSJPyuwfvucTQ8sVt61NYU9KMkK703UFlYadFmjKA4HhybOtN0gg==}
@@ -2093,6 +2104,13 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.65.0':
     optional: true
+
+  '@tanstack/virtual-core@3.19.7': {}
+
+  '@tanstack/vue-virtual@3.13.48(vue@3.5.44(typescript@5.9.3))':
+    dependencies:
+      '@tanstack/virtual-core': 3.19.7
+      vue: 3.5.44(typescript@5.9.3)
 
   '@tauri-apps/api@2.12.4': {}
 

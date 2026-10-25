@@ -8,30 +8,25 @@ use mclr_comp::{
     CompError, CompFile, CurseForgeClient, ModpackInspectResult, import_modpack, inspect_modpack,
 };
 use mclr_core::{AppError, SettingsStore, TaskCenter};
-use mclr_net::{DownloadSpec, Downloader, build_http_client};
+use mclr_net::{DownloadSpec, Downloader};
 use tauri::State;
 use url::Url;
 
-async fn current_mc_folder(state: &State<'_, SettingsStore>) -> PathBuf {
-    let settings = state.get().await;
-    if settings.game.current_folder.is_empty() {
-        mclr_core::paths::default_minecraft_dir()
-    } else {
-        PathBuf::from(settings.game.current_folder)
-    }
-}
+use super::current_mc_folder;
 
 #[tauri::command]
 #[specta::specta]
 pub async fn modpack_inspect(archive_path: String) -> Result<ModpackInspectResult, AppError> {
-    let path = PathBuf::from(&archive_path);
-    let plan = inspect_modpack(&path).map_err(AppError::from)?;
-    Ok(plan.inspect)
+    super::run_blocking(move || {
+        inspect_modpack(std::path::Path::new(&archive_path)).map(|p| p.inspect)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn modpack_import_file(
+    http: State<'_, crate::http::HttpState>,
     state: State<'_, SettingsStore>,
     tasks_state: State<'_, Arc<TaskCenter>>,
     archive_path: String,
@@ -44,7 +39,7 @@ pub async fn modpack_import_file(
     }
 
     let settings = state.get().await;
-    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+    let client = http.client();
     let mc_folder = current_mc_folder(&state).await;
     let cf_client = CurseForgeClient::new(settings.net.source_priority);
 
@@ -91,6 +86,7 @@ pub async fn modpack_import_file(
 #[tauri::command]
 #[specta::specta]
 pub async fn modpack_install_remote(
+    http: State<'_, crate::http::HttpState>,
     state: State<'_, SettingsStore>,
     tasks_state: State<'_, Arc<TaskCenter>>,
     file: CompFile,
@@ -118,12 +114,14 @@ pub async fn modpack_install_remote(
     }
 
     let settings = state.get().await;
-    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+    let client = http.client();
     let mc_folder = current_mc_folder(&state).await;
     let cf_client = CurseForgeClient::new(settings.net.source_priority);
 
     let cache_dir = mclr_core::paths::cache_dir().join("modpacks");
-    std::fs::create_dir_all(&cache_dir).map_err(CompError::Io)?;
+    tokio::fs::create_dir_all(&cache_dir)
+        .await
+        .map_err(CompError::Io)?;
     let archive_path = cache_dir.join(&file.file_name);
 
     let mut params = HashMap::new();

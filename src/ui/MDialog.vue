@@ -38,6 +38,7 @@ function onConfirm() {
 
 <template>
   <Teleport to="body">
+    <Transition name="m-modal">
     <div
       v-if="open"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs"
@@ -76,5 +77,6 @@ function onConfirm() {
         </div>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>

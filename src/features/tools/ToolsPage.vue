@@ -18,10 +18,13 @@ import {
   MCheckbox,
   MProgress,
   MPageHeader,
+  MSkeletonList,
 } from '../../ui'
 const { t } = useI18n()
 const toast = useToast()
 const instancesStore = useInstancesStore()
+
+const initialized = ref(false)
 
 // --- Tool 1: Skin Fetcher ---
 const skinUsername = ref('')
@@ -215,14 +218,18 @@ async function queryDailyLuck() {
 }
 
 onMounted(async () => {
-  await Promise.all([
-    loadCacheInfo(),
-    instancesStore.fetchInstances(),
-  ])
-  if (instancesStore.instances.length > 0 && !shortcutInstanceId.value) {
-    shortcutInstanceId.value = instancesStore.instances[0].id
+  try {
+    await Promise.all([
+      loadCacheInfo(),
+      instancesStore.fetchInstances(),
+    ])
+    if (instancesStore.instances.length > 0 && !shortcutInstanceId.value) {
+      shortcutInstanceId.value = instancesStore.instances[0].id
+    }
+    await queryDailyLuck()
+  } finally {
+    initialized.value = true
   }
-  await queryDailyLuck()
 })
 </script>
 
@@ -235,9 +242,14 @@ onMounted(async () => {
       icon="i-lucide-wrench"
     />
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- Card 1: Avatar / Skin Fetcher -->
-      <MCard hoverable class="p-5 flex flex-col justify-between space-y-4">
+    <div v-if="!initialized" class="space-y-6">
+      <MSkeletonList :rows="4" variant="card" />
+    </div>
+
+    <template v-else>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Card 1: Avatar / Skin Fetcher -->
+        <MCard hoverable class="p-5 flex flex-col justify-between space-y-4 m-stagger" :style="{ '--i': 0 }">
         <div>
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0">
@@ -275,6 +287,8 @@ onMounted(async () => {
                   :src="skinResult.headDataUrl"
                   :alt="skinResult.username"
                   class="w-16 h-16 rounded-lg border border-line bg-raised [image-rendering:pixelated]"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
 
@@ -299,6 +313,8 @@ onMounted(async () => {
                   :src="skinResult.skinDataUrl"
                   alt="Skin Texture"
                   class="max-h-24 w-auto [image-rendering:pixelated]"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
             </div>
@@ -319,7 +335,8 @@ onMounted(async () => {
       </MCard>
 
       <!-- Card 2: Cache Cleaner -->
-      <MCard hoverable class="p-5 flex flex-col justify-between space-y-4">
+        <!-- Card 2: Cache Cleaner -->
+        <MCard hoverable class="p-5 flex flex-col justify-between space-y-4 m-stagger" :style="{ '--i': 1 }">
         <div>
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0">
@@ -377,7 +394,8 @@ onMounted(async () => {
       </MCard>
 
       <!-- Card 3: Custom Downloader -->
-      <MCard hoverable class="p-5 flex flex-col justify-between space-y-4">
+        <!-- Card 3: Custom Downloader -->
+        <MCard hoverable class="p-5 flex flex-col justify-between space-y-4 m-stagger" :style="{ '--i': 2 }">
         <div>
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0">
@@ -430,7 +448,8 @@ onMounted(async () => {
       </MCard>
 
       <!-- Card 4: Desktop Shortcut -->
-      <MCard hoverable class="p-5 flex flex-col justify-between space-y-4">
+        <!-- Card 4: Desktop Shortcut -->
+        <MCard hoverable class="p-5 flex flex-col justify-between space-y-4 m-stagger" :style="{ '--i': 3 }">
         <div>
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0">
@@ -476,7 +495,8 @@ onMounted(async () => {
     </div>
 
     <!-- Card 5: Daily Luck -->
-    <MCard hoverable class="p-6">
+      <!-- Card 5: Daily Luck -->
+      <MCard hoverable class="p-6 m-stagger" :style="{ '--i': 4 }">
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-warning-soft text-warning-fg flex items-center justify-center shrink-0">
@@ -534,5 +554,6 @@ onMounted(async () => {
         </div>
       </div>
     </MCard>
+    </template>
   </div>
 </template>

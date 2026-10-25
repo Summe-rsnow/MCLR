@@ -48,6 +48,13 @@ Additional CSS variables set by `applyTheme`:
 - **Typography**: bundled `'HarmonyOS Sans SC'` (Regular `400`, Medium `500 600`, Bold `700`) with `'Segoe UI Variable Text', 'Microsoft YaHei UI', system-ui, sans-serif` fallbacks and `--font-user` override. Monospace uses `'Cascadia Mono', Consolas, monospace`.
 - **Motion**: `--dur-fast: 0.12s`, `--dur-base: 0.2s`, `--dur-slow: 0.32s`, `--ease: cubic-bezier(0.2, 0.8, 0.2, 1)`. Honors `prefers-reduced-motion: reduce`.
 
+
+## 3b. Motion & Loading (`src/ui/theme/transitions.css`, `src/composables/useResource.ts`)
+
+- **Transition presets**: `m-fade` (opacity 160 ms), `m-pop` (opacity + `scale(0.96 → 1)` 160 ms, `--origin`), `m-modal` (backdrop fade + `[role="dialog"]` pop), `m-slide-up` (`translateY(12px)` + fade 220 ms), `m-collapse` (`grid-template-rows: 0fr → 1fr` 240 ms via `<MCollapse>`), `m-list` (`TransitionGroup` enter/leave 200 ms, move 240 ms), `m-tab-forward` / `m-tab-back` (`translateX(±16px)` + fade 180 ms), `m-stagger` (`--i` index stagger up to 12 items × 24 ms).
+- **Motion preference**: `html[data-motion='full' | 'reduced' | 'off']` persisted in `localStorage['mclr.motion']` (`reduced` strips translate/scale/stagger/ambient drift while keeping opacity fades; `off` zeroes all transitions and animations).
+- **Skeleton rule (`createResource`)**: `loading` is `true` **only** when no cached data exists yet (`!initialized`), so pages render `<MSkeletonList>` on initial fetch and never flash `<MEmpty>` before the first response settles; subsequent refreshes set `refreshing = true` over existing data without blanking the list.
+- **Non-blocking & virtualization rule**: every IPC list command taking $> 20\text{ ms}$ must stream (two-phase scan + `resources://patch`) or serve a warm cache (`useResource` / disk cache); lists $> 60$ items use `<MVirtualList>` / `<MVirtualGrid>`.
 ## 4. Icons
 
 - UI icons use `@iconify-json/lucide` (`i-lucide-*`).
@@ -62,3 +69,5 @@ Run automatically as part of `pnpm check`:
 2. Legacy tokens (`text-text`, `text-text-muted`, `text-textMuted`, `text-muted`, `bg-surface`, `bg-surfaceVariant`, `bg-surface-variant`, `bg-primaryContainer`, `border-outline`, etc.) are forbidden.
 3. Dynamic template-interpolated icon names (`i-lucide-${...}`) are forbidden.
 4. Every color/shadow/border utility class extracted by UnoCSS must generate valid CSS.
+5. Every `<img>` in `.vue` files must declare `loading` and `decoding` attributes.
+6. Every `#[tauri::command]` in `src-tauri/src/ipc/*.rs` performing synchronous filesystem, archive, hashing, NBT, or image work must run inside `run_blocking(...)`.

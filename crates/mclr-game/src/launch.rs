@@ -749,13 +749,7 @@ pub fn build_launch_command(
     let instance_dir = mc_folder.join("versions").join(instance_id);
 
     // 1. Determine isolated game directory
-    let game_dir = if instance_config.isolation == "on"
-        || (instance_config.isolation == "global" && game_settings.default_isolation == "on")
-    {
-        instance_dir.clone()
-    } else {
-        mc_folder.to_path_buf()
-    };
+    let game_dir = crate::gamedir::resolve_game_dir(mc_folder, instance_id, game_settings);
     fs::create_dir_all(&game_dir)?;
 
     // 2. Ensure launcher_profiles.json exists
@@ -1109,6 +1103,43 @@ pub fn execute_pre_launch_command(
     Ok(())
 }
 
+/// Executes pre-launch command asynchronously if configured.
+pub async fn execute_pre_launch_command_async(
+    pre_launch_cmd: &str,
+    java_exe: &Path,
+    mc_folder: &Path,
+    instance_dir: &Path,
+    username: &str,
+) -> Result<(), GameError> {
+    if pre_launch_cmd.trim().is_empty() {
+        return Ok(());
+    }
+
+    let now = chrono::Local::now();
+    let date_str = now.format("%Y-%m-%d").to_string();
+    let time_str = now.format("%H:%M:%S").to_string();
+
+    let expanded = pre_launch_cmd
+        .replace("{java}", &format!("\"{}\"", java_exe.display()))
+        .replace("{minecraft}", &format!("\"{}\"", mc_folder.display()))
+        .replace("{version_path}", &format!("\"{}\"", instance_dir.display()))
+        .replace("{user}", username)
+        .replace("{date}", &date_str)
+        .replace("{time}", &time_str);
+
+    let status = tokio::process::Command::new("cmd")
+        .args(["/c", &expanded])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()
+        .await?;
+
+    if !status.success() {
+        warn!("Pre-launch command exited with status: {:?}", status.code());
+    }
+
+    Ok(())
+}
+
 /// Sanitizes access token and Windows username in log lines.
 pub fn sanitize_log_line(line: &str, access_token: &str, windows_username: &str) -> String {
     let mut result = line.to_string();
@@ -1264,14 +1295,31 @@ pub async fn launch(
     }
 
     // 2. Load resolved version JSON & Java resolution
-    let version_json = load_resolved_version_json(mc_folder, instance_id)?;
-    let mc_version = extract_mc_version(&version_json, instance_id);
-    let constraint = version_java_constraint(&version_json, &mc_version);
-
-    let installed_javas = scan_java(&settings.java.custom);
-    let selected_java =
-        resolve_java_installation(&installed_javas, &constraint, settings, &instance_config)?;
-
+    let (selected_java, version_json) = {
+        let mc_folder_buf = mc_folder.to_path_buf();
+        let inst_id = instance_id.to_string();
+        let custom_javas = settings.java.custom.clone();
+        let settings_clone = settings.clone();
+        let cfg_clone = instance_config.clone();
+        tokio::task::spawn_blocking(move || {
+            let version_json = load_resolved_version_json(&mc_folder_buf, &inst_id)?;
+            let mc_version = extract_mc_version(&version_json, &inst_id);
+            let constraint = version_java_constraint(&version_json, &mc_version);
+            let mut installed_javas = crate::java::cached_java();
+            if installed_javas.is_empty() {
+                installed_javas = scan_java(&custom_javas);
+            }
+            let selected_java = resolve_java_installation(
+                &installed_javas,
+                &constraint,
+                &settings_clone,
+                &cfg_clone,
+            )?;
+            Ok::<_, GameError>((selected_java, version_json))
+        })
+        .await
+        .map_err(|e| GameError::LaunchProcessFailed(e.to_string()))??
+    };
     if let Some((tc, tid)) = task_center {
         let _ = tc.update_progress(tid, 0.3, 0).await;
     }
@@ -1291,7 +1339,14 @@ pub async fn launch(
     }
 
     // 4. Extract natives
-    let natives_dir = extract_natives(mc_folder, instance_id, &version_json)?;
+    let natives_dir = {
+        let mc_folder_buf = mc_folder.to_path_buf();
+        let inst_id = instance_id.to_string();
+        let v_json = version_json.clone();
+        tokio::task::spawn_blocking(move || extract_natives(&mc_folder_buf, &inst_id, &v_json))
+            .await
+            .map_err(|e| GameError::LaunchProcessFailed(e.to_string()))??
+    };
 
     // 5. Authlib injector if required
     let authlib_jar = if session.api_location.is_some() {
@@ -1323,13 +1378,16 @@ pub async fn launch(
         .pre_launch_command
         .as_deref()
         .unwrap_or_default();
-    execute_pre_launch_command(
-        pre_cmd,
-        &spec.java_executable,
-        mc_folder,
-        &instance_dir,
-        &session.username,
-    )?;
+    if !pre_cmd.trim().is_empty() {
+        execute_pre_launch_command_async(
+            pre_cmd,
+            &spec.java_executable,
+            mc_folder,
+            &instance_dir,
+            &session.username,
+        )
+        .await?;
+    }
 
     // 8. Spawn process
     let current_path = std::env::var("PATH").unwrap_or_default();

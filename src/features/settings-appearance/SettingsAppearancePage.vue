@@ -5,6 +5,7 @@ import {
   useThemeStore,
   type BackgroundMode,
   type MusicPlayMode,
+  type MotionMode,
 } from '../../stores/theme'
 import { type ThemeMode, type MaterialMode } from '../../ui/theme'
 import {
@@ -19,9 +20,9 @@ import {
   MSection,
   MSettingRow,
 } from '../../ui'
+import { ipcClient } from '../../ipc/client'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
-
 const { t } = useI18n()
 const themeStore = useThemeStore()
 
@@ -39,6 +40,12 @@ const materialOptions = computed(() => [
   { label: t('settingsAppearance.theme.materialFlat'), value: 'flat', icon: 'i-lucide-square' },
   { label: t('settingsAppearance.theme.materialGlass'), value: 'glass', icon: 'i-lucide-sparkles' },
 ])
+const motionOptions = computed(() => [
+  { label: t('settingsAppearance.motion.full'), value: 'full' },
+  { label: t('settingsAppearance.motion.reduced'), value: 'reduced' },
+  { label: t('settingsAppearance.motion.off'), value: 'off' },
+])
+
 
 const bgModeOptions = computed(() => [
   { label: t('settingsAppearance.background.modeNone'), value: 'none' },
@@ -93,29 +100,32 @@ async function querySystemFonts() {
 
 async function browseBackground() {
   try {
+    let selected: string | null = null
     if (themeStore.backgroundMode === 'slideshow') {
-      const selected = await openFileDialog({
+      const res = await openFileDialog({
         directory: true,
         multiple: false,
       })
-      if (typeof selected === 'string' && selected) {
-        themeStore.setBackgroundPath(selected)
-      }
+      if (typeof res === 'string') selected = res
     } else if (themeStore.backgroundMode === 'video') {
-      const selected = await openFileDialog({
+      const res = await openFileDialog({
         multiple: false,
         filters: [{ name: 'Video', extensions: ['mp4', 'webm', 'mkv', 'avi'] }],
       })
-      if (typeof selected === 'string' && selected) {
-        themeStore.setBackgroundPath(selected)
-      }
+      if (typeof res === 'string') selected = res
     } else {
-      const selected = await openFileDialog({
+      const res = await openFileDialog({
         multiple: false,
         filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }],
       })
-      if (typeof selected === 'string' && selected) {
-        themeStore.setBackgroundPath(selected)
+      if (typeof res === 'string') selected = res
+    }
+    if (selected) {
+      themeStore.setBackgroundPath(selected)
+      try {
+        await ipcClient.assetsAllow(selected)
+      } catch {
+        // ignore in mock/test
       }
     }
   } catch {
@@ -131,6 +141,11 @@ async function browseMusicFolder() {
     })
     if (typeof selected === 'string' && selected) {
       themeStore.setMusicFolder(selected)
+      try {
+        await ipcClient.assetsAllow(selected)
+      } catch {
+        // ignore in mock/test
+      }
     }
   } catch {
     // Handled in browser / mock mode
@@ -201,6 +216,18 @@ onMounted(() => {
             :model-value="themeStore.material"
             :options="materialOptions"
             @update:model-value="themeStore.setMaterial($event as MaterialMode)"
+          />
+        </MSettingRow>
+
+        <!-- Motion -->
+        <MSettingRow
+          :label="t('settingsAppearance.motion.label')"
+          :hint="t('settingsAppearance.motion.desc')"
+        >
+          <MSegmented
+            :model-value="themeStore.motion"
+            :options="motionOptions"
+            @update:model-value="themeStore.setMotion($event as MotionMode)"
           />
         </MSettingRow>
 
@@ -397,7 +424,7 @@ onMounted(() => {
                   opacity: themeStore.backgroundOpacity,
                 }"
                 alt="Background preview"
-              />
+               loading="lazy" decoding="async"/>
             </template>
             <div
               v-else

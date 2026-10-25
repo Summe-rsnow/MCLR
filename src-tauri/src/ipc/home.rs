@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
 use mclr_core::{AppError, SettingsStore, paths};
-use mclr_net::build_http_client;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
@@ -224,26 +223,31 @@ fn get_cache_path(page: u32) -> PathBuf {
 #[tauri::command]
 #[specta::specta]
 pub async fn news_fetch(
-    settings_state: State<'_, SettingsStore>,
+    http: State<'_, crate::http::HttpState>,
     page: u32,
     force_refresh: bool,
 ) -> Result<Vec<NewsItem>, AppError> {
     let cache_file = get_cache_path(page);
 
+    let cache_for_read = cache_file.clone();
     if !force_refresh
-        && cache_file.exists()
-        && let Ok(metadata) = fs::metadata(&cache_file)
-        && let Ok(modified) = metadata.modified()
-        && let Ok(elapsed) = SystemTime::now().duration_since(modified)
-        && elapsed < Duration::from_secs(30 * 60)
-        && let Ok(cached_content) = fs::read_to_string(&cache_file)
-        && let Ok(items) = serde_json::from_str::<Vec<NewsItem>>(&cached_content)
+        && let Ok(Some(items)) = super::run_blocking(move || {
+            Ok::<_, AppError>((|| {
+                let modified = fs::metadata(&cache_for_read).ok()?.modified().ok()?;
+                if SystemTime::now().duration_since(modified).ok()? >= Duration::from_secs(30 * 60)
+                {
+                    return None;
+                }
+                let content = fs::read_to_string(&cache_for_read).ok()?;
+                serde_json::from_str::<Vec<NewsItem>>(&content).ok()
+            })())
+        })
+        .await
     {
         return Ok(items);
     }
 
-    let settings = settings_state.get().await;
-    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+    let client = http.client();
 
     let url = format!(
         "https://net-secondary.web.minecraft-services.net/api/v1.0/zh-cn/search?pageSize=24&sortType=Recent&category=News&newsOnly=true&page={page}"
@@ -268,9 +272,13 @@ pub async fn news_fetch(
 
     let items = parse_news_entries(&raw_text);
 
-    let _ = fs::create_dir_all(paths::cache_dir());
     if let Ok(serialized) = serde_json::to_string(&items) {
-        let _ = fs::write(&cache_file, serialized);
+        let _ = super::run_blocking(move || {
+            let _ = fs::create_dir_all(paths::cache_dir());
+            let _ = fs::write(&cache_file, serialized);
+            Ok::<_, AppError>(())
+        })
+        .await;
     }
 
     Ok(items)
@@ -279,6 +287,7 @@ pub async fn news_fetch(
 #[tauri::command]
 #[specta::specta]
 pub async fn announcements_fetch(
+    http: State<'_, crate::http::HttpState>,
     settings_state: State<'_, SettingsStore>,
 ) -> Result<Vec<AnnouncementItem>, AppError> {
     let settings = settings_state.get().await;
@@ -288,7 +297,7 @@ pub async fn announcements_fetch(
         return Ok(Vec::new());
     }
 
-    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+    let client = http.client();
     let resp =
         client.get(announcement_url).send().await.map_err(|e| {
             AppError::new("home.announcementFetchFailed").with_detail(e.to_string())

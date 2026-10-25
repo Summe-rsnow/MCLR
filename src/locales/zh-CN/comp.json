@@ -63,7 +63,9 @@
     "download": "下载",
     "downloading": "下载中...",
     "distributionDisabled": "该文件不支持第三方下载",
-    "openWebsite": "网页下载"
+    "openWebsite": "网页下载",
+    "selectedVersionGroup": "所选版本：{loader} {mc}",
+    "otherVersions": "其他版本"
   },
   "downloadDialog": {
     "title": "下载并安装文件",
@@ -108,5 +110,18 @@
   "favorites": {
     "empty": "暂无收藏的项目",
     "emptyDesc": "在浏览资源时点击爱心图标即可加入收藏"
+  },
+  "downloadForInstance": "为 {instance} 下载",
+  "detail": {
+    "noApplicableInstance": "当前 MC 文件夹中没有找到适合此资源文件的实例！",
+    "pickFolder": "选择目标文件夹"
+  },
+  "dependency": {
+    "confirmTitle": "安装模组前置确认",
+    "installWithDeps": "安装模组与必需前置",
+    "installModOnly": "仅下载模组本体（不建议）",
+    "cannotInstallTitle": "无法安装必需前置",
+    "resolveFailedTitle": "前置解析失败",
+    "continueDownload": "继续下载"
   }
 }

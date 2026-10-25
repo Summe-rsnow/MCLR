@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.14] - 2026-10-25
+
+### Added
+- **Instance-First Empty Flow & PCL Card Classification**: Dev-only mock IPC isolation (zero demo instances in production bundles), automatic `ensure_game_folder` (`versions/` + `launcher_profiles.json`), empty-first Launch CTA ("下载游戏" → `/download`) and Instances empty state, 7-group PCL card classifier (`收藏`, `可安装 Mod`, `常规`, `不常用`, `愚人节版本`, `错误的实例`, `隐藏的实例`) with mtime-keyed scan cache, case-only rename support, and Recycle Bin / Shift-permanent deletion.
+- **Staged Multi-Loader Create & Modify Pipeline**: `mclr-loaders::pipeline::install_instance` staging in `.mclr-staging` with `.mclr-installing` marker and `cleanup_stale` recovery, PCL merge order (`Vanilla → OptiFine → Forge → NeoForge → Cleanroom → LiteLoader → Fabric → LegacyFabric → LabyMod`), OptiFine-as-mod vs merged handling (incl. `mods/<mc>/` with LiteLoader), `cache/verified.json` parallel SHA1 repair cache, PCL `compat.ts` / `FolderNameValidator` rules, two-step `InstallPage.vue` + `InstallConfigurator.vue`, per-instance `InstallTab.vue` modify/reset flow, and `mclr-cli install` multi-loader flags.
+- **Unified Per-Instance Resources & Community Target Resolution**: `mclr-comp::resources` for Mods, Resource Packs (`pack.mcmeta` flattening + `cache/packicons` thumbnail extraction), Shaders, and Schematics (gzip NBT inspection across `.litematic/.nbt/.schematic/.schem`), two-phase local mod scanning with 50 ms batched `resources://patch` streaming, `ResourceList.vue` (weighted search, filter chips, multi-select action bar, cascade dependency prompts, TXT/CSV export, drag-drop import), `ModsDisabledTab.vue`, and `comp_pick_target` download-into-instance priority.
+- **Single Isolation Resolver & Progressive Media**: `mclr_game::gamedir::resolve_game_dir` unifying all 7 backend resolvers with 5-mode `DefaultIsolation` (`off | modded | nonRelease | moddedOrNonRelease | all`) and one-time `"global"` persistence, `instance_open_path`, Tauri `protocol-asset` scope + `assets_allow`, paged screenshots with 400 px disk-cached JPEG thumbnails (`screenshot_thumb`) and `arboard` clipboard copy (`screenshot_copy`), and world `iconPath` rendering.
+- **Fluidity, Virtualization & Non-Blocking Runtime**: `ipc::run_blocking` across all sync IPC commands, shared `HttpState` `reqwest::Client`, `events::Batcher` (50 ms / 64 items for `tasks://update`, `launch://logBatch`, `resources://patch`), `createResource` stale-while-revalidate composable, `MVirtualList` / `MVirtualGrid` (`@tanstack/vue-virtual`), shimmer `MSkeleton` / `MSkeletonList`, `MCollapse`, `transitions.css` presets with `html[data-motion='full|reduced|off']` preference, sliding `SidebarNav` active pill, rAF-batched virtualized `LogsPage`, and lint rules (e)/(f) in `scripts/lint-ui-contracts.mjs`.
+
+### Removed
+- Removed global `/mods` route and `LoaderPage.vue` single-loader routes in favor of per-instance resource management and the unified two-step configurator.
+
 ## [0.0.13] - 2026-10-25
 
 ### Added

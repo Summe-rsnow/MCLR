@@ -1,378 +1,426 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createResource } from '../../composables/useResource'
 import {
-  useInstallStore,
-  type SelectedLoader,
-} from './store'
-import type { VersionManifestEntry } from '../../ipc/client'
+  ipcClient,
+  type VersionManifestEntry,
+  type VersionManifestList,
+} from '../../ipc/client'
 import {
-  MButton,
-  MIconButton,
-  MCard,
-  MInput,
-  MSelect,
-  MSegmented,
   MBadge,
-  MDialog,
+  MButton,
+  MCard,
+  MCollapse,
   MEmpty,
+  MInput,
   MPageHeader,
-  MLoaderIcon,
-  useToast,
+  MSkeletonList,
+  MVirtualList,
 } from '../../ui'
-import { useRouter } from 'vue-router'
+import InstallConfigurator from './InstallConfigurator.vue'
+import { isAprilFools } from './compat'
 
 const { t } = useI18n()
-const installStore = useInstallStore()
-const toast = useToast()
-const router = useRouter()
 
-const installing = ref(false)
-const installError = ref('')
-
-onMounted(async () => {
-  if (installStore.manifest.versions.length === 0) {
-    await installStore.fetchManifest()
-  }
+// Manifest resource with stale-while-revalidate & skeleton
+const manifestResource = createResource<VersionManifestList>({
+  key: 'version_manifest',
+  fetcher: () => ipcClient.installManifest(false),
 })
 
-const filterOptions = computed(() => [
-  { label: t('download.filter.release'), value: 'release' },
-  { label: t('download.filter.snapshot'), value: 'snapshot' },
-  { label: t('download.filter.old'), value: 'old' },
-])
-
-
-const loaderPickerOptions = computed(() => {
-  return installStore.compatibleLoaders.map((k) => ({
-    label: t(`download.loaders.${k}`),
-    value: k,
-  }))
+onMounted(() => {
+  manifestResource.refresh()
 })
 
-const loaderVersionSelectOptions = computed(() => {
-  return installStore.loaderVersions.map((v) => ({
-    label: `${v.version} ${v.stable ? `(${t('download.loaders.stable')})` : `(${t('download.loaders.preview')})`}`,
-    value: v.version,
-  }))
+const currentStep = ref<1 | 2>(1)
+const stepDirection = ref<'forward' | 'back'>('forward')
+const selectedVersion = ref('')
+const searchQuery = ref('')
+
+// Group collapse states
+const openLatest = ref(true)
+const openRelease = ref(true)
+const openSnapshot = ref(false)
+const openOld = ref(false)
+const openAprilFools = ref(false)
+
+const allVersions = computed<VersionManifestEntry[]>(() => {
+  return manifestResource.data.value?.versions ?? []
 })
 
-const optifineComboOptions = computed(() => {
-  const base = [{ label: t('download.loaders.optifineNone'), value: '' }]
-  const opts = installStore.optifineComboVersions.map((v) => ({
-    label: `OptiFine ${v.version}`,
-    value: v.version,
-  }))
-  return [...base, ...opts]
+// Filtered by search query
+const filteredVersions = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase()
+  if (!query) return allVersions.value
+  return allVersions.value.filter(
+    (v) =>
+      v.id.toLowerCase().includes(query) ||
+      v.releaseTime.toLowerCase().includes(query),
+  )
 })
 
-async function onLoaderPick(loader: SelectedLoader) {
-  await installStore.selectLoader(loader)
+// Group 1: Latest
+const latestVersions = computed(() => {
+  const manifest = manifestResource.data.value
+  if (!manifest) return []
+  const list: VersionManifestEntry[] = []
+  const rel = allVersions.value.find((v) => v.id === manifest.latestRelease)
+  if (rel) list.push(rel)
+  const snap = allVersions.value.find((v) => v.id === manifest.latestSnapshot)
+  if (snap && snap.id !== rel?.id) list.push(snap)
+  return list
+})
+
+// Group 2: Release
+const releaseVersions = computed(() => {
+  return filteredVersions.value.filter(
+    (v) => v.versionType === 'release' && !isAprilFools(v.id, v.releaseTime),
+  )
+})
+
+// Group 3: Snapshot
+const snapshotVersions = computed(() => {
+  return filteredVersions.value.filter(
+    (v) => v.versionType === 'snapshot' && !isAprilFools(v.id, v.releaseTime),
+  )
+})
+
+// Group 4: Old
+const oldVersions = computed(() => {
+  return filteredVersions.value.filter(
+    (v) =>
+      (v.versionType === 'old_beta' || v.versionType === 'old_alpha') &&
+      !isAprilFools(v.id, v.releaseTime),
+  )
+})
+
+// Group 5: April Fools
+const aprilFoolsVersions = computed(() => {
+  return filteredVersions.value.filter((v) =>
+    isAprilFools(v.id, v.releaseTime),
+  )
+})
+
+function selectVersion(id: string) {
+  selectedVersion.value = id
+  stepDirection.value = 'forward'
+  currentStep.value = 2
 }
 
-function handleVersionTypeBadge(type: string): { label: string; variant: 'success' | 'neutral' | 'warning' } {
-  if (type === 'release') {
-    return { label: t('download.versionItem.release'), variant: 'success' }
-  }
-  if (type === 'snapshot') {
-    return { label: t('download.versionItem.snapshot'), variant: 'warning' }
-  }
-  return { label: t('download.versionItem.oldBeta'), variant: 'neutral' }
+function handleBack() {
+  stepDirection.value = 'back'
+  currentStep.value = 1
 }
 
 function formatDate(iso: string): string {
   try {
-    const d = new Date(iso)
-    return d.toLocaleDateString()
+    return new Date(iso).toLocaleDateString()
   } catch {
     return iso
-  }
-}
-
-async function handleRefresh() {
-  try {
-    await installStore.fetchManifest(true)
-    toast.success(t('common.refresh'))
-  } catch {
-    toast.danger(t('error.unknown'))
-  }
-}
-
-function openInstallDialog(v: VersionManifestEntry) {
-  installError.value = ''
-  installStore.openInstallDialog(v)
-}
-
-async function handleConfirmInstall() {
-  if (!installStore.isNameValid) {
-    installError.value = t('download.dialog.nameError')
-    return
-  }
-
-  installing.value = true
-  installError.value = ''
-  try {
-    await installStore.install()
-    toast.success(t('download.dialog.installStarted'))
-  } catch (err: unknown) {
-    const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : 'unknown'
-    installError.value = t(`error.${code}`) || code
-  } finally {
-    installing.value = false
   }
 }
 </script>
 
 <template>
-  <div class="m-page">
-    <!-- Header -->
+  <div class="p-6 max-w-5xl mx-auto flex flex-col gap-6">
     <MPageHeader
       :title="t('download.title')"
-      icon="i-lucide-cloud-download"
+      :description="
+        currentStep === 1 ? t('download.step1') : t('download.step2')
+      "
+    />
+
+    <Transition
+      :name="stepDirection === 'forward' ? 'm-tab-forward' : 'm-tab-back'"
+      mode="out-in"
     >
-      <template #actions>
-        <MIconButton
-          icon="i-lucide-refresh-cw"
-          :loading="installStore.loading"
-          :title="t('download.refresh')"
-          @click="handleRefresh"
-        />
-      </template>
-    </MPageHeader>
+      <!-- STEP 1: Version List -->
+      <div v-if="currentStep === 1" key="step1" class="flex flex-col gap-6">
+        <!-- Search bar -->
+        <div class="flex items-center gap-4">
+          <MInput
+            v-model="searchQuery"
+            :placeholder="t('download.search')"
+            class="flex-1"
+          >
+            <template #prefix>
+              <span class="i-lucide-search text-fg-muted" />
+            </template>
+          </MInput>
+          <MButton
+            variant="text"
+            size="md"
+            :loading="manifestResource.refreshing.value"
+            @click="manifestResource.refresh(true)"
+          >
+            <span class="i-lucide-refresh-cw mr-2" />
+            {{ t('download.refresh') }}
+          </MButton>
+        </div>
 
-    <div v-if="installStore.manifest.latestRelease || installStore.manifest.latestSnapshot" class="text-xs text-fg-muted -mt-4 flex items-center gap-3">
-      <span v-if="installStore.manifest.latestRelease">
-        {{ t('download.latestRelease') }}:
-        <span class="font-mono font-medium text-primary">
-          {{ installStore.manifest.latestRelease }}
-        </span>
-      </span>
-      <span v-if="installStore.manifest.latestSnapshot">
-        · {{ t('download.latestSnapshot') }}:
-        <span class="font-mono font-medium text-fg">
-          {{ installStore.manifest.latestSnapshot }}
-        </span>
-      </span>
-    </div>
-    <!-- Filter Bar -->
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <MSegmented
-        v-model="installStore.filterType"
-        :options="filterOptions"
-      />
+        <!-- Skeleton loading state -->
+        <div v-if="manifestResource.loading.value" class="flex flex-col gap-4">
+          <MSkeletonList variant="card" :rows="6" />
+        </div>
 
-      <div class="w-72">
-        <MInput
-          v-model="installStore.searchQuery"
-          icon="i-lucide-search"
-          :placeholder="t('download.search')"
-        />
-      </div>
-    </div>
-
-    <!-- Dedicated Loader Pages Quick Navigation -->
-    <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs text-fg-muted">
-      <span class="shrink-0 font-medium text-fg">
-        {{ t('download.loaders.title') }}:
-      </span>
-      <button
-        type="button"
-        class="px-2.5 py-1 rounded-lg bg-sunken text-fg hover:bg-primary-soft hover:text-primary transition shrink-0"
-        @click="router.push('/download/fabric')"
-      >
-        {{ t('download.tabs.fabric') }}
-      </button>
-      <button
-        type="button"
-        class="px-2.5 py-1 rounded-lg bg-sunken text-fg hover:bg-primary-soft hover:text-primary transition shrink-0"
-        @click="router.push('/download/forge')"
-      >
-        {{ t('download.tabs.forge') }}
-      </button>
-      <button
-        type="button"
-        class="px-2.5 py-1 rounded-lg bg-sunken text-fg hover:bg-primary-soft hover:text-primary transition shrink-0"
-        @click="router.push('/download/neoforge')"
-      >
-        {{ t('download.tabs.neoforge') }}
-      </button>
-      <button
-        type="button"
-        class="px-2.5 py-1 rounded-lg bg-sunken text-fg hover:bg-primary-soft hover:text-primary transition shrink-0"
-        @click="router.push('/download/optifine')"
-      >
-        {{ t('download.tabs.optifine') }}
-      </button>
-      <button
-        type="button"
-        class="px-2.5 py-1 rounded-lg bg-sunken text-fg hover:bg-primary-soft hover:text-primary transition shrink-0"
-        @click="router.push('/download/legacyfabric')"
-      >
-        {{ t('download.tabs.legacyfabric') }}
-      </button>
-      <button
-        type="button"
-        class="px-2.5 py-1 rounded-lg bg-sunken text-fg hover:bg-primary-soft hover:text-primary transition shrink-0"
-        @click="router.push('/download/liteloader')"
-      >
-        {{ t('download.tabs.liteloader') }}
-      </button>
-      <button
-        type="button"
-        class="px-2.5 py-1 rounded-lg bg-sunken text-fg hover:bg-primary-soft hover:text-primary transition shrink-0"
-        @click="router.push('/download/labymod')"
-      >
-        {{ t('download.tabs.labymod') }}
-      </button>
-      <button
-        type="button"
-        class="px-2.5 py-1 rounded-lg bg-sunken text-fg hover:bg-primary-soft hover:text-primary transition shrink-0"
-        @click="router.push('/download/cleanroom')"
-      >
-        {{ t('download.tabs.cleanroom') }}
-      </button>
-    </div>
-
-    <!-- Versions List -->
-    <div class="flex-1 overflow-y-auto pr-1">
-      <MCard v-if="installStore.filteredVersions.length === 0" class="p-8">
+        <!-- Empty search result -->
         <MEmpty
+          v-else-if="filteredVersions.length === 0"
           :title="t('download.empty')"
           icon="i-lucide-box"
         />
-      </MCard>
 
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        <MCard
-          v-for="v in installStore.filteredVersions"
-          :key="v.id"
-          hoverable
-          class="p-4 flex items-center justify-between gap-3"
-        >
-          <div class="min-w-0">
-            <div class="flex items-center gap-2">
-              <span class="font-semibold text-base font-mono text-fg truncate">
-                {{ v.id }}
-              </span>
-              <MBadge
-                :variant="handleVersionTypeBadge(v.versionType).variant"
-                size="sm"
-              >
-                {{ handleVersionTypeBadge(v.versionType).label }}
-              </MBadge>
-            </div>
-            <div class="text-xs text-fg-muted mt-1 truncate">
-              {{ t('download.versionItem.releasedAt', { date: formatDate(v.releaseTime) }) }}
-            </div>
-          </div>
-
-          <MButton
-            variant="tonal"
-            size="sm"
-            icon="i-lucide-download"
-            @click="openInstallDialog(v)"
-          >
-            {{ t('download.dialog.installAction') }}
-          </MButton>
-        </MCard>
-      </div>
-    </div>
-    <!-- Install Dialog -->
-    <MDialog
-      v-model:open="installStore.installDialogOpen"
-      :title="t('download.dialog.installTitle')"
-    >
-      <div v-if="installStore.selectedVersion" class="flex flex-col gap-4 py-2">
-        <div class="flex items-center gap-3 p-3 rounded-xl m-well">
-          <MLoaderIcon :kind="installStore.selectedLoader === 'none' ? 'vanilla' : installStore.selectedLoader" :size="40" />
-          <div class="min-w-0">
-            <div class="text-xs font-medium text-fg-muted">
-              {{ t('download.dialog.version') }}
-            </div>
-            <div class="font-mono text-sm font-semibold text-fg truncate">
-              {{ installStore.selectedVersion.id }} ({{ installStore.selectedVersion.versionType }})
-            </div>
-          </div>
-        </div>
-
-        <!-- Loader Selection Chips -->
-        <div>
-          <label class="text-xs font-medium text-fg-muted mb-1.5 block">
-            {{ t('download.loaders.title') }}
-          </label>
-          <div class="flex flex-wrap gap-1.5">
+        <!-- Groups list -->
+        <div v-else class="flex flex-col gap-4">
+          <!-- Latest Group -->
+          <MCard v-if="!searchQuery && latestVersions.length > 0" class="overflow-hidden">
             <button
-              v-for="opt in loaderPickerOptions"
-              :key="opt.value"
               type="button"
-              class="px-2.5 py-1 text-xs rounded-lg transition cursor-pointer border"
-              :class="
-                installStore.selectedLoader === opt.value
-                  ? 'bg-primary text-primary-on border-primary font-medium'
-                  : 'bg-sunken text-fg border-line hover:border-line-strong'
-              "
-              @click="onLoaderPick(opt.value)"
+              class="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+              @click="openLatest = !openLatest"
             >
-              {{ opt.label }}
+              <div class="flex items-center gap-3">
+                <span class="i-lucide-sparkles text-xl text-primary" />
+                <span class="font-bold text-base">{{ t('download.groups.latest') }}</span>
+                <MBadge size="sm" variant="primary">{{ latestVersions.length }}</MBadge>
+              </div>
+              <span
+                :class="[
+                  'i-lucide-chevron-down text-lg text-fg-muted transition-transform duration-200',
+                  openLatest ? 'rotate-180' : '',
+                ]"
+              />
             </button>
-          </div>
-        </div>
-        <!-- Loader Version Dropdown -->
-        <div v-if="installStore.selectedLoader !== 'none'">
-          <label class="text-xs font-medium text-fg-muted mb-1 block">
-            {{ t('download.loaders.version') }}
-          </label>
-          <div v-if="installStore.loadingLoaderVersions" class="text-xs text-fg-muted py-1">
-            {{ t('download.loaders.loadingVersions') }}
-          </div>
-          <div v-else-if="loaderVersionSelectOptions.length === 0" class="text-xs text-warning py-1">
-            {{ t('download.loaders.noVersions') }}
-          </div>
-          <MSelect
-            v-else
-            v-model="installStore.selectedLoaderVersion"
-            :options="loaderVersionSelectOptions"
-          />
-        </div>
+            <MCollapse :open="openLatest">
+              <div class="divide-y divide-white/5 border-t border-white/5">
+                <div
+                  v-for="v in latestVersions"
+                  :key="v.id"
+                  class="p-4 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group"
+                  @click="selectVersion(v.id)"
+                >
+                  <div class="flex items-center gap-3">
+                    <span class="font-semibold text-base group-hover:text-primary transition-colors">
+                      {{ v.id }}
+                    </span>
+                    <MBadge
+                      size="sm"
+                      :variant="v.versionType === 'release' ? 'primary' : 'neutral'"
+                    >
+                      {{ v.versionType === 'release' ? t('download.configurator.releaseBadge') : t('download.configurator.snapshotBadge') }}
+                    </MBadge>
+                    <span class="text-xs text-fg-muted">
+                      {{ formatDate(v.releaseTime) }}
+                    </span>
+                  </div>
+                  <MButton variant="text" size="sm">
+                    <span class="i-lucide-arrow-right" />
+                  </MButton>
+                </div>
+              </div>
+            </MCollapse>
+          </MCard>
 
-        <!-- OptiFine Combo Selector (for Fabric or Forge) -->
-        <div v-if="installStore.selectedLoader === 'fabric' || installStore.selectedLoader === 'forge'">
-          <label class="text-xs font-medium text-fg-muted mb-1 block">
-            {{ t('download.loaders.optifineCombo') }}
-          </label>
-          <MSelect
-            v-model="installStore.selectedOptifineVersion"
-            :options="optifineComboOptions"
-          />
-        </div>
+          <!-- Release Group -->
+          <MCard v-if="releaseVersions.length > 0" class="overflow-hidden">
+            <button
+              type="button"
+              class="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+              @click="openRelease = !openRelease"
+            >
+              <div class="flex items-center gap-3">
+                <span class="i-lucide-check-circle text-xl text-emerald-400" />
+                <span class="font-bold text-base">{{ t('download.groups.release') }}</span>
+                <MBadge size="sm" variant="neutral">{{ releaseVersions.length }}</MBadge>
+              </div>
+              <span
+                :class="[
+                  'i-lucide-chevron-down text-lg text-fg-muted transition-transform duration-200',
+                  openRelease ? 'rotate-180' : '',
+                ]"
+              />
+            </button>
+            <MCollapse :open="openRelease">
+              <div class="border-t border-white/5">
+                <MVirtualList
+                  :items="releaseVersions"
+                  :item-key="(v) => v.id"
+                  :estimate-size="56"
+                  max-height="65vh"
+                >
+                  <template #item="{ item: v }">
+                    <div
+                      class="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group border-b border-white/5"
+                      @click="selectVersion(v.id)"
+                    >
+                      <div class="flex items-center gap-3">
+                        <span class="font-semibold text-sm group-hover:text-primary transition-colors">
+                          {{ v.id }}
+                        </span>
+                        <span class="text-xs text-fg-muted">
+                          {{ formatDate(v.releaseTime) }}
+                        </span>
+                      </div>
+                      <span class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors" />
+                    </div>
+                  </template>
+                </MVirtualList>
+              </div>
+            </MCollapse>
+          </MCard>
 
-        <div>
-          <label class="text-xs font-medium text-fg-muted mb-1 block">
-            {{ t('download.dialog.instanceName') }}
-          </label>
-          <MInput
-            v-model="installStore.instanceName"
-            :placeholder="t('download.dialog.namePlaceholder')"
-          />
-        </div>
+          <!-- Snapshot Group -->
+          <MCard v-if="snapshotVersions.length > 0" class="overflow-hidden">
+            <button
+              type="button"
+              class="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+              @click="openSnapshot = !openSnapshot"
+            >
+              <div class="flex items-center gap-3">
+                <span class="i-lucide-flask-conical text-xl text-amber-400" />
+                <span class="font-bold text-base">{{ t('download.groups.snapshot') }}</span>
+                <MBadge size="sm" variant="neutral">{{ snapshotVersions.length }}</MBadge>
+              </div>
+              <span
+                :class="[
+                  'i-lucide-chevron-down text-lg text-fg-muted transition-transform duration-200',
+                  openSnapshot ? 'rotate-180' : '',
+                ]"
+              />
+            </button>
+            <MCollapse :open="openSnapshot">
+              <div class="border-t border-white/5">
+                <MVirtualList
+                  :items="snapshotVersions"
+                  :item-key="(v) => v.id"
+                  :estimate-size="56"
+                  max-height="65vh"
+                >
+                  <template #item="{ item: v }">
+                    <div
+                      class="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group border-b border-white/5"
+                      @click="selectVersion(v.id)"
+                    >
+                      <div class="flex items-center gap-3">
+                        <span class="font-semibold text-sm group-hover:text-primary transition-colors">
+                          {{ v.id }}
+                        </span>
+                        <span class="text-xs text-fg-muted">
+                          {{ formatDate(v.releaseTime) }}
+                        </span>
+                      </div>
+                      <span class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors" />
+                    </div>
+                  </template>
+                </MVirtualList>
+              </div>
+            </MCollapse>
+          </MCard>
 
-        <div v-if="installError" class="text-xs text-danger">
-          {{ installError }}
+          <!-- April Fools Group -->
+          <MCard v-if="aprilFoolsVersions.length > 0" class="overflow-hidden">
+            <button
+              type="button"
+              class="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+              @click="openAprilFools = !openAprilFools"
+            >
+              <div class="flex items-center gap-3">
+                <span class="i-lucide-party-popper text-xl text-purple-400" />
+                <span class="font-bold text-base">{{ t('download.groups.aprilFools') }}</span>
+                <MBadge size="sm" variant="neutral">{{ aprilFoolsVersions.length }}</MBadge>
+              </div>
+              <span
+                :class="[
+                  'i-lucide-chevron-down text-lg text-fg-muted transition-transform duration-200',
+                  openAprilFools ? 'rotate-180' : '',
+                ]"
+              />
+            </button>
+            <MCollapse :open="openAprilFools">
+              <div class="border-t border-white/5 divide-y divide-white/5">
+                <div
+                  v-for="v in aprilFoolsVersions"
+                  :key="v.id"
+                  class="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group"
+                  @click="selectVersion(v.id)"
+                >
+                  <div class="flex items-center gap-3">
+                    <span class="font-semibold text-sm group-hover:text-primary transition-colors">
+                      {{ v.id }}
+                    </span>
+                    <span class="text-xs text-fg-muted">
+                      {{ formatDate(v.releaseTime) }}
+                    </span>
+                  </div>
+                  <span class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors" />
+                </div>
+              </div>
+            </MCollapse>
+          </MCard>
+
+          <!-- Old Group -->
+          <MCard v-if="oldVersions.length > 0" class="overflow-hidden">
+            <button
+              type="button"
+              class="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+              @click="openOld = !openOld"
+            >
+              <div class="flex items-center gap-3">
+                <span class="i-lucide-archive text-xl text-stone-400" />
+                <span class="font-bold text-base">{{ t('download.groups.old') }}</span>
+                <MBadge size="sm" variant="neutral">{{ oldVersions.length }}</MBadge>
+              </div>
+              <span
+                :class="[
+                  'i-lucide-chevron-down text-lg text-fg-muted transition-transform duration-200',
+                  openOld ? 'rotate-180' : '',
+                ]"
+              />
+            </button>
+            <MCollapse :open="openOld">
+              <div class="border-t border-white/5">
+                <MVirtualList
+                  :items="oldVersions"
+                  :item-key="(v) => v.id"
+                  :estimate-size="56"
+                  max-height="65vh"
+                >
+                  <template #item="{ item: v }">
+                    <div
+                      class="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group border-b border-white/5"
+                      @click="selectVersion(v.id)"
+                    >
+                      <div class="flex items-center gap-3">
+                        <span class="font-semibold text-sm group-hover:text-primary transition-colors">
+                          {{ v.id }}
+                        </span>
+                        <MBadge size="sm" variant="neutral">
+                          {{ v.versionType }}
+                        </MBadge>
+                        <span class="text-xs text-fg-muted">
+                          {{ formatDate(v.releaseTime) }}
+                        </span>
+                      </div>
+                      <span class="i-lucide-chevron-right text-fg-muted group-hover:text-primary transition-colors" />
+                    </div>
+                  </template>
+                </MVirtualList>
+              </div>
+            </MCollapse>
+          </MCard>
         </div>
       </div>
-      <template #footer>
-        <MButton variant="text" @click="installStore.installDialogOpen = false">
-          {{ t('common.cancel') }}
-        </MButton>
-        <MButton
-          variant="primary"
-          :loading="installing"
-          :disabled="!installStore.isNameValid"
-          @click="handleConfirmInstall"
-        >
-          {{ t('download.dialog.installAction') }}
-        </MButton>
-      </template>
-    </MDialog>
+
+      <!-- STEP 2: Configurator -->
+      <div v-else-if="currentStep === 2" key="step2">
+        <InstallConfigurator
+          mode="create"
+          :mc-version="selectedVersion"
+          @back="handleBack"
+          @success="handleBack"
+        />
+      </div>
+    </Transition>
   </div>
 </template>

@@ -368,6 +368,10 @@ fn search_java_exe(dir: &Path, max_depth: u32, results: &mut HashMap<String, Jav
 }
 
 /// Reads cached Java installations from `<data_dir>/cache/java.json`.
+pub fn cached_java() -> Vec<JavaInstallation> {
+    read_cache()
+}
+
 fn read_cache() -> Vec<JavaInstallation> {
     let cache_file = paths::cache_dir().join("java.json");
     if cache_file.exists() {

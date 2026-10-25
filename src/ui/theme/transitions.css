@@ -1,0 +1,167 @@
+/* Motion presets — see docs/design-language.md "Motion & loading". All use var(--ease). */
+
+/* m-fade: opacity 160 ms */
+.m-fade-enter-active,
+.m-fade-leave-active {
+  transition: opacity 160ms var(--ease);
+}
+.m-fade-enter-from,
+.m-fade-leave-to {
+  opacity: 0;
+}
+
+/* m-pop: opacity + scale(.96 → 1); origin via --origin (default top) */
+.m-pop-enter-active,
+.m-pop-leave-active {
+  transition:
+    opacity 160ms var(--ease),
+    transform 160ms var(--ease);
+  transform-origin: var(--origin, top);
+}
+.m-pop-enter-from,
+.m-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+/* m-modal: backdrop fades (m-fade) while its [role=dialog] panel pops (m-pop) */
+.m-modal-enter-active,
+.m-modal-leave-active {
+  transition: opacity 160ms var(--ease);
+}
+.m-modal-enter-active > [role='dialog'],
+.m-modal-leave-active > [role='dialog'] {
+  transition:
+    opacity 160ms var(--ease),
+    transform 160ms var(--ease);
+  transform-origin: center;
+}
+.m-modal-enter-from,
+.m-modal-leave-to {
+  opacity: 0;
+}
+.m-modal-enter-from > [role='dialog'],
+.m-modal-leave-to > [role='dialog'] {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+/* m-slide-up: translateY(12px) + fade, 220 ms */
+.m-slide-up-enter-active,
+.m-slide-up-leave-active {
+  transition:
+    opacity 220ms var(--ease),
+    transform 220ms var(--ease);
+}
+.m-slide-up-enter-from,
+.m-slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+/* m-collapse: grid-template-rows 0fr → 1fr, 240 ms (MCollapse) */
+.m-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 240ms var(--ease),
+    visibility 0s;
+}
+.m-collapse[data-open='false'] {
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition:
+    grid-template-rows 240ms var(--ease),
+    visibility 0s 240ms;
+}
+.m-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* m-list: TransitionGroup enter/leave 200 ms, move 240 ms */
+.m-list-enter-active,
+.m-list-leave-active {
+  transition:
+    opacity 200ms var(--ease),
+    transform 200ms var(--ease);
+}
+.m-list-move {
+  transition: transform 240ms var(--ease);
+}
+.m-list-enter-from,
+.m-list-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.m-list-leave-active {
+  position: absolute;
+}
+
+/* m-tab-forward / m-tab-back: translateX ±16 px + fade, 180 ms */
+.m-tab-forward-enter-active,
+.m-tab-forward-leave-active,
+.m-tab-back-enter-active,
+.m-tab-back-leave-active {
+  transition:
+    opacity 180ms var(--ease),
+    transform 180ms var(--ease);
+}
+.m-tab-forward-enter-from,
+.m-tab-back-leave-to {
+  opacity: 0;
+  transform: translateX(16px);
+}
+.m-tab-forward-leave-to,
+.m-tab-back-enter-from {
+  opacity: 0;
+  transform: translateX(-16px);
+}
+
+/* m-stagger: children set --i; entrance delayed by min(i,12) * 24 ms */
+.m-stagger > * {
+  animation: m-stagger-in 320ms var(--ease) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 24ms);
+}
+@keyframes m-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Motion preference: html[data-motion='full'|'reduced'|'off'] */
+html[data-motion='off'] *,
+html[data-motion='off'] *::before,
+html[data-motion='off'] *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+html[data-motion='reduced'] .m-stagger > * {
+  animation: none;
+}
+html[data-motion='reduced'] .m-pop-enter-from,
+html[data-motion='reduced'] .m-pop-leave-to,
+html[data-motion='reduced'] .m-modal-enter-from > [role='dialog'],
+html[data-motion='reduced'] .m-modal-leave-to > [role='dialog'],
+html[data-motion='reduced'] .m-slide-up-enter-from,
+html[data-motion='reduced'] .m-slide-up-leave-to,
+html[data-motion='reduced'] .m-list-enter-from,
+html[data-motion='reduced'] .m-list-leave-to,
+html[data-motion='reduced'] .m-tab-forward-enter-from,
+html[data-motion='reduced'] .m-tab-forward-leave-to,
+html[data-motion='reduced'] .m-tab-back-enter-from,
+html[data-motion='reduced'] .m-tab-back-leave-to {
+  transform: none;
+}
+html[data-motion='reduced'] .m-list-move {
+  transition: none;
+}
+html[data-motion='reduced'] .ambient-blob {
+  animation: none !important;
+}

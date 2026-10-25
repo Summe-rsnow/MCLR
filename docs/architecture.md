@@ -18,3 +18,10 @@
 - `mclr-update`: self-update wrapper around `tauri-plugin-updater`.
 - `mclr-cli`: headless smoke CLI (`clap`).
 - `mclr-app` (`src-tauri`): Tauri shell, window vibrancy, command registry.
+
+## Async & Non-Blocking Runtime (`src-tauri/src/`)
+- **`ipc::run_blocking`**: wraps `tokio::task::spawn_blocking` and maps `JoinError` to `AppError("app.blockingJoin")`; mandatory for synchronous filesystem/archive/hash/NBT/image work in `#[tauri::command]` handlers.
+- **`http::HttpState`**: managed `RwLock<(NetSettings, reqwest::Client)>` state shared across all IPC commands and rebuilt only when `settings.net` changes on `settings_patch`.
+- **`events::Batcher<T>`**: coalesces high-frequency backend events into 50 ms / 64-item windows (`tasks://update` deduplicated by task ID, `launch://logBatch`, `resources://patch`).
+- **`mclr_game::gamedir::resolve_game_dir`**: single source of truth for per-instance game directory isolation (`"on" | "off" | "global"` + `DefaultIsolation`), persisting the first computed `"global"` decision into `mclr.instance.json`.
+- **Asset protocol**: enabled with `data_dir` and all configured `game.folders` allowed at startup plus `assets_allow` on user-selected media/folder paths so thumbnails, world icons, and pack icons load via `convertFileSrc` without base64 IPC payloads.

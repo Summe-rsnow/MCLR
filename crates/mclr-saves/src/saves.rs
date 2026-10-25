@@ -11,6 +11,7 @@ use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use serde::{Deserialize, Serialize};
+use sha1::Digest;
 use specta::Type;
 use zip::ZipArchive;
 use zip::write::{SimpleFileOptions, ZipWriter};
@@ -38,6 +39,7 @@ pub struct SaveInfo {
     pub play_time: i64,
     pub last_played: i64,
     pub data_version: Option<i32>,
+    pub icon_path: Option<String>,
     pub icon_data_url: Option<String>,
 }
 
@@ -60,6 +62,23 @@ pub struct ScreenshotInfo {
     pub size: u64,
     pub modified_at: String,
     pub data_url: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenshotMeta {
+    pub file_name: String,
+    pub path: String,
+    pub size: u64,
+    pub created_ms: u64,
+    pub modified_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenshotsPagedResult {
+    pub items: Vec<ScreenshotMeta>,
+    pub total: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -381,9 +400,14 @@ pub fn parse_save_info_from_nbt(
     let last_played = data.get("LastPlayed").and_then(as_i64).unwrap_or(0);
 
     // 9. Icon data URL
-    let icon_path = save_dir.join("icon.png");
-    let icon_data_url = if icon_path.exists() {
-        match fs::read(&icon_path) {
+    let icon_file = save_dir.join("icon.png");
+    let icon_path_str = if icon_file.exists() {
+        Some(icon_file.to_string_lossy().to_string())
+    } else {
+        None
+    };
+    let icon_data_url = if icon_file.exists() {
+        match fs::read(&icon_file) {
             Ok(bytes) => {
                 let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
                 Some(format!("data:image/png;base64,{}", b64))
@@ -405,6 +429,7 @@ pub fn parse_save_info_from_nbt(
         play_time,
         last_played,
         data_version,
+        icon_path: icon_path_str,
         icon_data_url,
     })
 }
@@ -909,41 +934,108 @@ pub fn toggle_datapack(
     list_datapacks(save_dir)
 }
 
-/// Lists screenshots in `screenshots_dir`, sorted newest first.
-pub fn list_screenshots(screenshots_dir: &Path) -> Result<Vec<ScreenshotInfo>, SavesError> {
+const SUPPORTED_SCREENSHOT_EXTS: &[&str] = &["png", "jpg", "jpeg", "bmp", "webp", "tiff"];
+
+/// Lists screenshots with pagination, supporting common image formats and sorting newest first.
+pub fn list_screenshots_paged(
+    screenshots_dir: &Path,
+    offset: usize,
+    limit: usize,
+) -> Result<ScreenshotsPagedResult, SavesError> {
     if !screenshots_dir.exists() {
-        return Ok(Vec::new());
+        let _ = fs::create_dir_all(screenshots_dir);
+        return Ok(ScreenshotsPagedResult {
+            items: Vec::new(),
+            total: 0,
+        });
     }
+
     let mut screenshots = Vec::new();
     for entry in fs::read_dir(screenshots_dir)? {
         let entry = entry?;
         let path = entry.path();
-        let file_name = entry.file_name().to_string_lossy().to_string();
-        if path.is_file() && file_name.to_ascii_lowercase().ends_with(".png") {
-            let meta = fs::metadata(&path)?;
-            let size = meta.len();
-            let modified_at =
-                format_system_time(meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH));
-
-            let data_url = match fs::read(&path) {
-                Ok(bytes) => {
-                    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                    Some(format!("data:image/png;base64,{}", b64))
-                }
-                Err(_) => None,
-            };
-
-            screenshots.push(ScreenshotInfo {
-                file_name,
-                path: path.to_string_lossy().to_string(),
-                size,
-                modified_at,
-                data_url,
-            });
+        if !path.is_file() {
+            continue;
         }
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        if file_name.starts_with('.') {
+            continue;
+        }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if !SUPPORTED_SCREENSHOT_EXTS.contains(&ext.as_str()) {
+            continue;
+        }
+
+        let meta = match fs::metadata(&path) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let size = meta.len();
+        if size == 0 {
+            continue;
+        }
+
+        let created_time = meta
+            .created()
+            .unwrap_or_else(|_| meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH));
+        let created_ms = created_time
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        let modified_at =
+            format_system_time(meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH));
+
+        screenshots.push(ScreenshotMeta {
+            file_name,
+            path: path.to_string_lossy().to_string(),
+            size,
+            created_ms,
+            modified_at,
+        });
     }
-    screenshots.sort_by_key(|a| std::cmp::Reverse(a.modified_at.clone()));
-    Ok(screenshots)
+
+    screenshots.sort_by_key(|a| std::cmp::Reverse(a.created_ms));
+    let total = screenshots.len();
+    let items = screenshots.into_iter().skip(offset).take(limit).collect();
+
+    Ok(ScreenshotsPagedResult { items, total })
+}
+
+/// Lists screenshots in `screenshots_dir`, sorted newest first (metadata only, no base64).
+pub fn list_screenshots(screenshots_dir: &Path) -> Result<Vec<ScreenshotInfo>, SavesError> {
+    let paged = list_screenshots_paged(screenshots_dir, 0, usize::MAX)?;
+    let result = paged
+        .items
+        .into_iter()
+        .map(|meta| ScreenshotInfo {
+            file_name: meta.file_name,
+            path: meta.path,
+            size: meta.size,
+            modified_at: meta.modified_at,
+            data_url: None,
+        })
+        .collect();
+    Ok(result)
+}
+
+/// Deletes a screenshot file by direct path.
+pub fn delete_screenshot_path(path: &Path) -> Result<(), SavesError> {
+    if !path.exists() {
+        return Err(SavesError::InvalidPath(format!(
+            "Screenshot not found: {}",
+            path.display()
+        )));
+    }
+    if let Err(trash_err) = trash::delete(path) {
+        tracing::warn!("trash::delete failed ({trash_err}), falling back to remove_file");
+        fs::remove_file(path)?;
+    }
+    Ok(())
 }
 
 /// Deletes a screenshot from `screenshots_dir`.
@@ -952,17 +1044,96 @@ pub fn delete_screenshot(screenshots_dir: &Path, file_name: &str) -> Result<(), 
         return Err(SavesError::InvalidPath("Invalid file name".into()));
     }
     let target = screenshots_dir.join(file_name);
-    if !target.exists() {
+    delete_screenshot_path(&target)
+}
+
+/// Generates and caches a 400px-wide JPEG thumbnail of the screenshot.
+pub fn generate_screenshot_thumb(image_path: &str) -> Result<String, SavesError> {
+    let path = Path::new(image_path);
+    if !path.exists() {
         return Err(SavesError::InvalidPath(format!(
-            "Screenshot not found: {}",
-            file_name
+            "File not found: {}",
+            image_path
         )));
     }
-    if let Err(trash_err) = trash::delete(&target) {
-        tracing::warn!("trash::delete failed ({trash_err}), falling back to remove_file");
-        fs::remove_file(&target)?;
+    let meta = fs::metadata(path)?;
+    let mtime_ms = meta
+        .modified()
+        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let hash_input = format!("{}:{}", image_path, mtime_ms);
+    let mut hasher = sha1::Sha1::new();
+    sha1::Digest::update(&mut hasher, hash_input.as_bytes());
+    let hash_hex = hex::encode(sha1::Digest::finalize(hasher));
+
+    let thumbs_dir = mclr_core::paths::cache_dir().join("thumbs");
+    if !thumbs_dir.exists() {
+        let _ = fs::create_dir_all(&thumbs_dir);
     }
-    Ok(())
+    let thumb_file = thumbs_dir.join(format!("{}.jpg", hash_hex));
+    if thumb_file.exists() {
+        return Ok(thumb_file.to_string_lossy().to_string());
+    }
+
+    let img =
+        image::open(path).map_err(|e| SavesError::Io(std::io::Error::other(e.to_string())))?;
+    let orig_w = img.width();
+    let orig_h = img.height();
+    let target_w = 400;
+    let target_h = if orig_w > 0 {
+        ((orig_h as f64) * (target_w as f64 / orig_w as f64))
+            .round()
+            .max(1.0) as u32
+    } else {
+        400
+    };
+    let resized = img.resize(target_w, target_h, image::imageops::FilterType::Triangle);
+    resized
+        .save(&thumb_file)
+        .map_err(|e| SavesError::Io(std::io::Error::other(e.to_string())))?;
+
+    Ok(thumb_file.to_string_lossy().to_string())
+}
+
+/// Decodes image to RGBA and copies to the system clipboard via `arboard::Clipboard` (with up to 5 retries 100ms apart).
+pub fn copy_image_to_clipboard(image_path: &str) -> Result<(), SavesError> {
+    let path = Path::new(image_path);
+    if !path.exists() {
+        return Err(SavesError::InvalidPath(format!(
+            "File not found: {}",
+            image_path
+        )));
+    }
+    let img = image::open(path)
+        .map_err(|e| SavesError::Io(std::io::Error::other(e.to_string())))?
+        .to_rgba8();
+    let width = img.width() as usize;
+    let height = img.height() as usize;
+    let bytes = img.into_raw();
+    let img_data = arboard::ImageData {
+        width,
+        height,
+        bytes: std::borrow::Cow::Owned(bytes),
+    };
+
+    let mut last_err = None;
+    for attempt in 0..5 {
+        match arboard::Clipboard::new().and_then(|mut cb| cb.set_image(img_data.clone())) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last_err = Some(e);
+                if attempt < 4 {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
+        }
+    }
+    Err(SavesError::Io(std::io::Error::other(format!(
+        "Failed to copy image to clipboard after 5 attempts: {:?}",
+        last_err
+    ))))
 }
 
 /// Lists files in an instance folder (`resourcepacks`, `shaderpacks`, `schematics`).
@@ -1353,11 +1524,14 @@ mod tests {
         let img_file = ss_dir.join("2024-05-01_12.00.00.png");
         fs::write(&img_file, b"sample_png").unwrap();
 
+        let paged = list_screenshots_paged(&ss_dir, 0, 10).unwrap();
+        assert_eq!(paged.total, 1);
+        assert_eq!(paged.items[0].file_name, "2024-05-01_12.00.00.png");
+
         let list = list_screenshots(&ss_dir).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].file_name, "2024-05-01_12.00.00.png");
-        assert!(list[0].data_url.is_some());
-
+        assert!(list[0].data_url.is_none());
         delete_screenshot(&ss_dir, "2024-05-01_12.00.00.png").unwrap();
         assert_eq!(list_screenshots(&ss_dir).unwrap().len(), 0);
 

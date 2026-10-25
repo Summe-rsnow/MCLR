@@ -113,6 +113,8 @@ async function main() {
   const legacyTokenErrors = []
   const dynamicIconErrors = []
   const unknownColorErrors = []
+  const imgErrors = []
+  const blockingErrors = []
 
   const vueFiles = walkFiles(srcDir, /\.vue$/)
   const allCodeFiles = walkFiles(srcDir, /\.(vue|ts|css)$/)
@@ -176,6 +178,17 @@ async function main() {
               }
             }
           }
+        }
+      }
+      if (node.type === 1 && node.tag === 'img') {
+        const line = node.loc?.start?.line ?? 1
+        const names = new Set(
+          (node.props || []).map((p) =>
+            p.type === 6 ? p.name : p.type === 7 && p.arg?.type === 4 ? p.arg.content : '',
+          ),
+        )
+        if (!names.has('loading') || !names.has('decoding')) {
+          imgErrors.push(`${rel}:${line} <img> must have loading and decoding attributes`)
         }
       }
       for (const child of node.children || []) {
@@ -254,11 +267,71 @@ async function main() {
     }
   }
 
+  // (f) src-tauri/src/ipc/*.rs #[tauri::command] bodies must wrap sync fs/heavy work in run_blocking
+  const bannedCalls = [
+    'std::fs::',
+    'scan_local_mods(',
+    'scan_instances(',
+    'list_saves(',
+    'list_screenshots(',
+    'rename_instance(',
+    'duplicate_instance(',
+    'delete_instance(',
+    'save_instance_config(',
+    'backup_save(',
+    'export_save_zip(',
+    'import_save_zip(',
+    'delete_save(',
+    'scan_java(',
+    'scan_jar_in_jar(',
+    'inspect_modpack(',
+    'scan_export_candidates(',
+    'crop_skin_head(',
+    'analyze_crash(',
+    'export_crash_report',
+    'extract_natives(',
+    'read_servers_dat(',
+    'add_server(',
+    'update_server(',
+    'remove_server(',
+  ]
+  const ipcDir = path.join(rootDir, 'src-tauri', 'src', 'ipc')
+  for (const file of walkFiles(ipcDir, /\.rs$/)) {
+    const rel = path.relative(rootDir, file).replace(/\\/g, '/')
+    const text = fs.readFileSync(file, 'utf8')
+    const cmdRe = /#\[tauri::command\][\s\S]*?pub\s+(?:async\s+)?fn\s+(\w+)[\s\S]*?\{/g
+    for (const m of text.matchAll(cmdRe)) {
+      const fnName = m[1]
+      const start = m.index + m[0].length - 1
+      let depth = 0
+      let end = start
+      for (let i = start; i < text.length; i++) {
+        if (text[i] === '{') depth++
+        else if (text[i] === '}') {
+          depth--
+          if (depth === 0) {
+            end = i
+            break
+          }
+        }
+      }
+      const body = text.slice(start, end + 1)
+      if (body.includes('run_blocking(') || body.includes('spawn_blocking(') || body.includes('tokio::spawn(')) continue
+      for (const banned of bannedCalls) {
+        if (body.includes(banned)) {
+          blockingErrors.push(`${rel} #[tauri::command] ${fnName} calls "${banned}" without run_blocking`)
+        }
+      }
+    }
+  }
+
   const totalErrors =
     propSlotErrors.length +
     legacyTokenErrors.length +
     dynamicIconErrors.length +
-    unknownColorErrors.length
+    unknownColorErrors.length +
+    imgErrors.length +
+    blockingErrors.length
 
   if (totalErrors > 0) {
     console.error(`\n[lint-ui-contracts] Failed with ${totalErrors} violation(s):`)
@@ -280,6 +353,14 @@ async function main() {
       console.error(`\n  (d) Unmatched UnoCSS utility tokens (${unknownColorErrors.length}):`)
       for (const e of unknownColorErrors.slice(0, 30)) console.error(`    - ${e}`)
       if (unknownColorErrors.length > 30) console.error(`    ... and ${unknownColorErrors.length - 30} more`)
+    }
+    if (imgErrors.length > 0) {
+      console.error(`\n  (e) <img> missing loading/decoding (${imgErrors.length}):`)
+      for (const e of imgErrors) console.error(`    - ${e}`)
+    }
+    if (blockingErrors.length > 0) {
+      console.error(`\n  (f) Sync fs/work in #[tauri::command] without run_blocking (${blockingErrors.length}):`)
+      for (const e of blockingErrors) console.error(`    - ${e}`)
     }
     process.exit(1)
   }

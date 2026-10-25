@@ -1,22 +1,15 @@
 //! Instance management IPC commands.
 
 use mclr_core::{AppError, SettingsStore};
+use mclr_game::instance::{delete_instance_ext, ensure_game_folder};
 use mclr_game::{
-    InstanceConfig, InstanceInfo, delete_instance, duplicate_instance, rename_instance,
-    save_instance_config, scan_instances,
+    InstanceConfig, InstanceInfo, duplicate_instance, rename_instance, save_instance_config,
+    scan_instances,
 };
-use std::path::PathBuf;
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
-async fn current_mc_folder(state: &State<'_, SettingsStore>) -> PathBuf {
-    let settings = state.get().await;
-    if settings.game.current_folder.is_empty() {
-        mclr_core::paths::default_minecraft_dir()
-    } else {
-        PathBuf::from(settings.game.current_folder)
-    }
-}
+use super::current_mc_folder;
 
 #[tauri::command]
 #[specta::specta]
@@ -24,7 +17,11 @@ pub async fn instances_list(
     state: State<'_, SettingsStore>,
 ) -> Result<Vec<InstanceInfo>, AppError> {
     let folder = current_mc_folder(&state).await;
-    scan_instances(&folder).map_err(AppError::from)
+    super::run_blocking(move || {
+        let _ = ensure_game_folder(&folder);
+        scan_instances(&folder)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -35,7 +32,7 @@ pub async fn instance_rename(
     new_name: String,
 ) -> Result<InstanceInfo, AppError> {
     let folder = current_mc_folder(&state).await;
-    rename_instance(&folder, &id, &new_name).map_err(AppError::from)
+    super::run_blocking(move || rename_instance(&folder, &id, &new_name)).await
 }
 
 #[tauri::command]
@@ -46,14 +43,19 @@ pub async fn instance_duplicate(
     new_name: String,
 ) -> Result<InstanceInfo, AppError> {
     let folder = current_mc_folder(&state).await;
-    duplicate_instance(&folder, &id, &new_name).map_err(AppError::from)
+    super::run_blocking(move || duplicate_instance(&folder, &id, &new_name)).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn instance_delete(state: State<'_, SettingsStore>, id: String) -> Result<(), AppError> {
+pub async fn instance_delete(
+    state: State<'_, SettingsStore>,
+    id: String,
+    permanent: Option<bool>,
+) -> Result<(), AppError> {
     let folder = current_mc_folder(&state).await;
-    delete_instance(&folder, &id).map_err(AppError::from)
+    let perm = permanent.unwrap_or(false);
+    super::run_blocking(move || delete_instance_ext(&folder, &id, perm)).await
 }
 
 #[tauri::command]
@@ -64,23 +66,33 @@ pub async fn instance_update_config(
     config: InstanceConfig,
 ) -> Result<InstanceInfo, AppError> {
     let folder = current_mc_folder(&state).await;
-    save_instance_config(&folder, &id, &config).map_err(AppError::from)
+    super::run_blocking(move || save_instance_config(&folder, &id, &config)).await
 }
 
+/// Open the game directory (or one of its well-known sub-folders) in the OS file manager.
+/// `sub` ∈ `mods|resourcepacks|shaderpacks|schematics|saves|screenshots|""`; missing folders are created.
 #[tauri::command]
 #[specta::specta]
-pub async fn instance_open_folder(
+pub async fn instance_open_path(
     app: AppHandle,
     state: State<'_, SettingsStore>,
     id: String,
+    sub: Option<String>,
 ) -> Result<(), AppError> {
     let folder = current_mc_folder(&state).await;
-    let instance_dir = folder.join("versions").join(&id);
-    if !instance_dir.exists() {
+    if !folder.join("versions").join(&id).is_dir() {
         return Err(AppError::new("game.instanceNotFound").with_param("id", id));
     }
+    let game_dir = super::game_dir_for(&state, &id).await;
+    let sub = sub.unwrap_or_default();
+    let target = mclr_game::gamedir::game_subdir(&game_dir, &sub)
+        .filter(|_| sub != "servers.dat")
+        .ok_or_else(|| AppError::new("game.invalidPath").with_param("sub", sub.clone()))?;
+    tokio::fs::create_dir_all(&target)
+        .await
+        .map_err(|e| AppError::new("game.io").with_detail(e.to_string()))?;
     app.opener()
-        .open_path(instance_dir.to_string_lossy().to_string(), None::<&str>)
+        .open_path(target.to_string_lossy().to_string(), None::<&str>)
         .map_err(|e| AppError::new("game.io").with_detail(e.to_string()))?;
     Ok(())
 }

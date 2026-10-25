@@ -24,7 +24,7 @@ import {
   MSettingRow,
   useToast,
 } from '../../ui'
-
+import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
 const { t } = useI18n()
 const { formatError } = useErrorText()
 const toast = useToast()
@@ -53,7 +53,7 @@ const activeTab = computed<SystemTab>({
 // Game Manage state
 const folders = ref<GameFolderEntry[]>([])
 const currentFolder = ref('')
-const defaultIsolation = ref('on')
+const defaultIsolation = ref('all')
 const sortBy = ref('name')
 const newFolderName = ref('')
 const newFolderPath = ref('')
@@ -79,6 +79,14 @@ const localeOptions = computed(() => {
   const merged = Array.from(new Set([...availableLocales, ...dynamicKeys])).sort()
   return merged.map((loc) => ({ label: loc, value: loc }))
 })
+
+const isolationOptions = computed(() => [
+  { label: t('settingsSystem.gameManage.isolation.off'), value: 'off' },
+  { label: t('settingsSystem.gameManage.isolation.modded'), value: 'modded' },
+  { label: t('settingsSystem.gameManage.isolation.nonRelease'), value: 'nonRelease' },
+  { label: t('settingsSystem.gameManage.isolation.moddedOrNonRelease'), value: 'moddedOrNonRelease' },
+  { label: t('settingsSystem.gameManage.isolation.all'), value: 'all' },
+])
 
 // Update state
 const updateChannel = ref('stable')
@@ -170,17 +178,44 @@ async function saveGameSettings() {
   })
 }
 
+async function browseGameFolder() {
+  try {
+    const selected = await openFileDialog({
+      directory: true,
+      multiple: false,
+    })
+    if (typeof selected === 'string' && selected) {
+      newFolderPath.value = selected
+      if (!newFolderName.value.trim()) {
+        const parts = selected.replace(/\\/g, '/').split('/').filter(Boolean)
+        newFolderName.value = parts[parts.length - 1] || 'Minecraft'
+      }
+      try {
+        await ipcClient.assetsAllow(selected)
+      } catch {
+        // ignore in mock/test
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
 async function addGameFolder() {
   const name = newFolderName.value.trim()
   const path = newFolderPath.value.trim()
   if (!name || !path) return
+  try {
+    await ipcClient.assetsAllow(path)
+  } catch {
+    // ignore in mock/test
+  }
   folders.value.push({ name, path })
   currentFolder.value = path
   newFolderName.value = ''
   newFolderPath.value = ''
   await saveGameSettings()
 }
-
 async function switchGameFolder(path: string) {
   currentFolder.value = path
   await saveGameSettings()
@@ -375,17 +410,23 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-line">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t border-line">
             <MInput
               v-model="newFolderName"
               size="sm"
               :placeholder="t('settingsSystem.gameManage.folderNamePlaceholder')"
             />
-            <MInput
-              v-model="newFolderPath"
-              size="sm"
-              :placeholder="t('settingsSystem.gameManage.folderPathPlaceholder')"
-            />
+            <div class="flex items-center gap-1.5 md:col-span-2">
+              <MInput
+                v-model="newFolderPath"
+                size="sm"
+                :placeholder="t('settingsSystem.gameManage.folderPathPlaceholder')"
+                class="flex-1"
+              />
+              <MButton variant="tonal" size="sm" icon="i-lucide-folder-open" @click="browseGameFolder">
+                {{ t('settingsSystem.gameManage.browseFolder') }}
+              </MButton>
+            </div>
             <MButton variant="primary" size="sm" data-testid="add-folder-btn" @click="addGameFolder">
               {{ t('settingsSystem.gameManage.addFolder') }}
             </MButton>
@@ -404,12 +445,9 @@ onMounted(async () => {
           >
             <MSelect
               :model-value="defaultIsolation"
-              :options="[
-                { label: t('settingsSystem.gameManage.isolationOn'), value: 'on' },
-                { label: t('settingsSystem.gameManage.isolationOff'), value: 'off' },
-              ]"
+              :options="isolationOptions"
               size="sm"
-              class="w-48"
+              class="w-64"
               @update:model-value="
                 (v) => {
                   defaultIsolation = String(v)

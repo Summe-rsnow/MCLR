@@ -1,4 +1,5 @@
 import { mockIPC } from '@tauri-apps/api/mocks'
+import { isEmptyScenarioActive, mockLatencyMs } from './scenario'
 
 type MockHandlers = Record<string, (args: Record<string, unknown>) => unknown>
 
@@ -73,6 +74,9 @@ export function setupMockIpc(): void {
       autoCheck: true,
       announcementUrl: '',
     },
+    download: {
+      autoSelectInstance: true,
+    },
     states: {
       dismissedAnnouncements: [],
     },
@@ -115,11 +119,18 @@ export function setupMockIpc(): void {
     }
   }
 
-  mockIPC((cmd, args) => {
+  mockIPC(async (cmd, args) => {
     const handler = handlers[cmd]
-    if (handler) {
-      return handler((args ?? {}) as Record<string, unknown>)
+    if (!handler) {
+      throw { code: 'unknown', params: { cmd }, detail: `Unhandled mock command: ${cmd}` }
     }
-    throw { code: 'unknown', params: { cmd }, detail: `Unhandled mock command: ${cmd}` }
+    const latency = mockLatencyMs()
+    if (latency > 0) {
+      const { promise, resolve } = Promise.withResolvers<void>()
+      setTimeout(resolve, latency)
+      await promise
+    }
+    const result = handler((args ?? {}) as Record<string, unknown>)
+    return isEmptyScenarioActive() && /_(list|scan)$/.test(cmd) && Array.isArray(result) ? [] : result
   })
 }

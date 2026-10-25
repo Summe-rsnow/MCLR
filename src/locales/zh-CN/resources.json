@@ -1,0 +1,118 @@
+{
+  "title": "资源管理",
+  "downloadMore": "下载更多",
+  "searchPlaceholder": "搜索资源名称、文件名、标签...",
+  "filter": {
+    "all": "全部",
+    "searchResult": "搜索结果",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "updatable": "可更新",
+    "error": "错误",
+    "duplicate": "重复"
+  },
+  "sort": {
+    "label": "排序方式",
+    "name": "名称",
+    "fileName": "文件名",
+    "tagCount": "标签数",
+    "createdTime": "创建时间",
+    "fileSize": "文件大小"
+  },
+  "actions": {
+    "addFiles": "添加文件",
+    "import": "导入",
+    "export": "导出列表",
+    "exportTxt": "导出为 TXT",
+    "exportCsv": "导出为 CSV",
+    "exportSuccess": "资源列表已成功导出",
+    "openFolder": "打开所在文件夹",
+    "jarInJar": "嵌套依赖 (Jar-in-Jar)",
+    "checkUpdates": "检查更新",
+    "update": "更新",
+    "updateAll": "更新全部",
+    "enable": "启用",
+    "disable": "禁用",
+    "delete": "删除",
+    "deletePermanent": "永久删除",
+    "info": "详细信息",
+    "reveal": "打开所在位置",
+    "favorite": "收藏",
+    "share": "分享",
+    "cancel": "取消",
+    "confirm": "确定"
+  },
+  "selection": {
+    "selected": "已选择 {count} 项",
+    "selectAll": "全选",
+    "clear": "取消选择"
+  },
+  "status": {
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "unavailable": "不可用",
+    "updateAvailable": "发现新版本：{version}",
+    "noUpdates": "已是最新版本",
+    "scanning": "正在深度解析资源信息...",
+    "scanProgress": "正在解析模组依赖 ({current}/{total})..."
+  },
+  "empty": {
+    "mod": "当前实例没有安装模组",
+    "resourcePack": "当前实例没有安装资源包",
+    "shader": "当前实例没有安装光影包",
+    "schematic": "当前实例没有投影原理图",
+    "search": "未找到匹配的资源"
+  },
+  "cascade": {
+    "title": "依赖关联提示",
+    "disableMessage": "禁用此模组会影响 {count} 个依赖它的模组：\n{names}",
+    "deleteMessage": "删除此模组会影响 {count} 个依赖它的模组：\n{names}",
+    "onlyThis": "仅此模组",
+    "cascadeDisable": "连带禁用",
+    "cascadeDelete": "连带删除"
+  },
+  "update": {
+    "warningTitle": "批量更新风险提示",
+    "warningMessage": "您正在批量更新 {count} 个模组。更新可能导致模组冲突或存档不兼容，已删除旧文件将移至回收站。建议在更新前备份重要存档。",
+    "understoodRisk": "我已了解风险，继续更新",
+    "confirmTitle": "模组更新确认",
+    "confirmMessage": "确定将「{name}」从 {current} 更新到 {latest} 吗？",
+    "viewChangelog": "查看更新日志",
+    "updating": "正在提交更新任务...",
+    "success": "已成功提交模组更新任务"
+  },
+  "delete": {
+    "confirmTitle": "删除资源",
+    "confirmMessage": "确定要将「{name}」移至回收站吗？",
+    "confirmPermanentMessage": "确定要永久删除「{name}」吗？此操作无法撤销！",
+    "batchConfirmMessage": "确定要删除选中的 {count} 个资源吗？"
+  },
+  "import": {
+    "success": "成功导入 {count} 个文件",
+    "conflictTitle": "文件冲突确认",
+    "conflictMessage": "以下文件在目标文件夹中已存在，是否覆盖？\n{files}",
+    "overwrite": "覆盖",
+    "skip": "跳过",
+    "dragDropHint": "拖拽资源文件到此处快速导入"
+  },
+  "schematic": {
+    "disabledTitle": "该实例不可用投影原理图",
+    "disabledDesc": "当前游戏版本或加载器未安装 Litematica 等投影原理图模组，无法在游戏内加载原理图。",
+    "downloadLitematica": "下载投影模组",
+    "selectInstance": "选择其他实例",
+    "folderBack": "返回上级目录",
+    "currentFolder": "当前路径：{path}",
+    "dimensions": "尺寸 (X × Y × Z)",
+    "volume": "总体积",
+    "blocks": "方块总数",
+    "regions": "区域数量",
+    "author": "创作者",
+    "timeCreated": "创建时间",
+    "timeModified": "修改时间"
+  },
+  "jarInJarDrawer": {
+    "title": "嵌套依赖 (Jar-in-Jar)",
+    "subtitle": "模组「{name}」内置包含的 Jar 依赖库",
+    "empty": "该模组没有包含嵌套依赖 (Jar-in-Jar)"
+  }
+}

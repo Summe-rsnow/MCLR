@@ -1,4 +1,4 @@
-import SettingsTab from './SettingsTab.vue'
+import { defineAsyncComponent } from 'vue'
 import type { InstanceDetailTab } from '../tabs'
 
 const tab: InstanceDetailTab = {
@@ -6,7 +6,7 @@ const tab: InstanceDetailTab = {
   titleKey: 'instanceDetail.tabs.settings',
   icon: 'i-lucide-sliders-horizontal',
   order: 20,
-  component: SettingsTab,
+  component: defineAsyncComponent(() => import('./SettingsTab.vue')),
 }
 
 export default tab

@@ -1,21 +1,59 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   ipcClient,
   type InstanceInfo,
   type GameFolderEntry,
+  type CardKind,
 } from '../../ipc/client'
+import { createResource } from '../../composables/useResource'
+
+export interface InstanceCardGroup {
+  key: CardKind
+  titleKey: string
+  items: InstanceInfo[]
+}
+
+const CARD_GROUP_CONFIG: Array<{ key: CardKind; titleKey: string }> = [
+  { key: 'star', titleKey: 'instances.groups.star' },
+  { key: 'api', titleKey: 'instances.groups.api' },
+  { key: 'regular', titleKey: 'instances.groups.regular' },
+  { key: 'rubbish', titleKey: 'instances.groups.rubbish' },
+  { key: 'fool', titleKey: 'instances.groups.fool' },
+  { key: 'error', titleKey: 'instances.groups.error' },
+  { key: 'hidden', titleKey: 'instances.groups.hidden' },
+]
 
 export const useInstancesStore = defineStore('instances', () => {
+  const resource = createResource<InstanceInfo[]>({
+    key: 'instances',
+    fetcher: () => ipcClient.instancesList(),
+    ttlMs: 10_000,
+  })
+
   const instances = ref<InstanceInfo[]>([])
-  const folders = ref<GameFolderEntry[]>([
-    { name: 'Default', path: 'C:\\Users\\User\\AppData\\Roaming\\MCLR\\.minecraft' },
-  ])
-  const currentFolder = ref<string>('C:\\Users\\User\\AppData\\Roaming\\MCLR\\.minecraft')
-  const loading = ref(false)
+  const folders = ref<GameFolderEntry[]>([])
+  const currentFolder = ref<string>('')
   const searchQuery = ref('')
   const filterType = ref<'all' | 'pinned' | 'vanilla' | 'modded'>('all')
   const sortBy = ref<'name' | 'version' | 'category'>('name')
+  const showHidden = ref(false)
+
+  // Sync resource data to local reactive array
+  watch(
+    resource.data,
+    (val) => {
+      if (val) {
+        instances.value = [...val]
+      }
+    },
+    { immediate: true },
+  )
+
+  const initialized = resource.initialized
+  const loading = resource.loading
+  const refreshing = resource.refreshing
+
   const filteredInstances = computed(() => {
     let result = instances.value
 
@@ -34,38 +72,60 @@ export const useInstancesStore = defineStore('instances', () => {
 
     // Type / tab filter
     if (filterType.value === 'pinned') {
-      result = result.filter((i) => i.config?.pinned)
+      result = result.filter((i) => i.config?.starred || i.config?.pinned)
     } else if (filterType.value === 'vanilla') {
-      result = result.filter((i) => i.kind === 'vanilla' || i.kind === 'snapshot' || i.kind === 'oldBeta' || i.kind === 'oldAlpha')
+      result = result.filter(
+        (i) =>
+          i.kind === 'vanilla' ||
+          i.kind === 'snapshot' ||
+          i.kind === 'oldBeta' ||
+          i.kind === 'oldAlpha',
+      )
     } else if (filterType.value === 'modded') {
-      result = result.filter((i) => i.kind !== 'vanilla' && i.kind !== 'snapshot' && i.kind !== 'oldBeta' && i.kind !== 'oldAlpha')
+      result = result.filter(
+        (i) =>
+          i.kind !== 'vanilla' &&
+          i.kind !== 'snapshot' &&
+          i.kind !== 'oldBeta' &&
+          i.kind !== 'oldAlpha',
+      )
     }
 
-    // Sort: pinned first, then according to sortBy
-    return [...result].sort((a, b) => {
-      const pinA = a.config?.pinned ? 1 : 0
-      const pinB = b.config?.pinned ? 1 : 0
-      if (pinA !== pinB) return pinB - pinA
-      if (sortBy.value === 'version') {
-        return b.mcVersion.localeCompare(a.mcVersion, undefined, { numeric: true })
-      }
-      if (sortBy.value === 'category') {
-        const catA = a.config?.category || 'Default'
-        const catB = b.config?.category || 'Default'
-        const catCmp = catA.localeCompare(catB)
-        if (catCmp !== 0) return catCmp
-      }
-      return a.name.localeCompare(b.name)
-    })
+    return result
   })
 
-  // Grouped by pinned and then categories
+  // PCL card groups
+  const cardGroups = computed<InstanceCardGroup[]>(() => {
+    const list = filteredInstances.value
+    const groups: InstanceCardGroup[] = []
+
+    for (const conf of CARD_GROUP_CONFIG) {
+      if (conf.key === 'hidden' && !showHidden.value) {
+        continue
+      }
+      const items = list.filter((i) => {
+        if (!showHidden.value && i.card === 'hidden') return false
+        return i.card === conf.key
+      })
+      if (items.length > 0) {
+        groups.push({
+          key: conf.key,
+          titleKey: conf.titleKey,
+          items,
+        })
+      }
+    }
+
+    return groups
+  })
+
+  // Legacy groupedInstances for compatibility
   const groupedInstances = computed(() => {
     const pinned: InstanceInfo[] = []
     const categories = new Map<string, InstanceInfo[]>()
 
     for (const inst of filteredInstances.value) {
-      if (filterType.value !== 'pinned' && inst.config?.pinned) {
+      if (filterType.value !== 'pinned' && (inst.config?.starred || inst.config?.pinned)) {
         pinned.push(inst)
       } else {
         const cat = inst.config?.category || 'Default'
@@ -82,6 +142,7 @@ export const useInstancesStore = defineStore('instances', () => {
         name,
         items,
       })),
+      groups: cardGroups.value,
     }
   })
 
@@ -102,14 +163,10 @@ export const useInstancesStore = defineStore('instances', () => {
     }
   }
 
-  async function fetchInstances() {
-    loading.value = true
-    try {
-      instances.value = await ipcClient.instancesList()
-    } catch {
-      // Fallback
-    } finally {
-      loading.value = false
+  async function fetchInstances(force = true) {
+    await resource.refresh(force)
+    if (resource.data.value) {
+      instances.value = [...resource.data.value]
     }
   }
 
@@ -119,34 +176,62 @@ export const useInstancesStore = defineStore('instances', () => {
     if (idx >= 0) {
       instances.value[idx] = updated
     }
+    resource.set([...instances.value])
+    return updated
   }
 
   async function duplicate(id: string, newName: string) {
     const copy = await ipcClient.instanceDuplicate(id, newName)
     instances.value.push(copy)
+    resource.set([...instances.value])
+    return copy
   }
 
-  async function remove(id: string) {
-    await ipcClient.instanceDelete(id)
+  async function remove(id: string, permanent = false) {
+    await ipcClient.instanceDelete(id, permanent)
     instances.value = instances.value.filter((i) => i.id !== id)
+    resource.set([...instances.value])
   }
 
-  async function togglePin(id: string) {
+  async function toggleStar(id: string) {
     const inst = instances.value.find((i) => i.id === id)
     if (!inst) return
-    const newPinned = !inst.config?.pinned
+    const newStar = !(inst.config?.starred || inst.config?.pinned)
     const updated = await ipcClient.instanceUpdateConfig(id, {
       ...inst.config,
-      pinned: newPinned,
+      starred: newStar,
+      pinned: newStar,
     })
     const idx = instances.value.findIndex((i) => i.id === id)
     if (idx >= 0) {
       instances.value[idx] = updated
     }
+    resource.set([...instances.value])
+    return updated
   }
 
-  async function openFolder(id: string) {
-    await ipcClient.instanceOpenFolder(id)
+  async function togglePin(id: string) {
+    return toggleStar(id)
+  }
+
+  async function toggleHide(id: string) {
+    const inst = instances.value.find((i) => i.id === id)
+    if (!inst) return
+    const isHidden = inst.config?.cardType === 'hidden' || inst.card === 'hidden'
+    const updated = await ipcClient.instanceUpdateConfig(id, {
+      ...inst.config,
+      cardType: isHidden ? null : 'hidden',
+    })
+    const idx = instances.value.findIndex((i) => i.id === id)
+    if (idx >= 0) {
+      instances.value[idx] = updated
+    }
+    resource.set([...instances.value])
+    return updated
+  }
+
+  async function openFolder(id: string, sub = '') {
+    await ipcClient.instanceOpenPath(id, sub)
   }
 
   async function switchFolder(path: string) {
@@ -160,7 +245,7 @@ export const useInstancesStore = defineStore('instances', () => {
     } catch {
       // Fallback
     }
-    await fetchInstances()
+    await fetchInstances(true)
   }
 
   async function addFolder(name: string, path: string) {
@@ -177,7 +262,7 @@ export const useInstancesStore = defineStore('instances', () => {
     } catch {
       // Fallback
     }
-    await fetchInstances()
+    await fetchInstances(true)
   }
 
   return {
@@ -185,17 +270,23 @@ export const useInstancesStore = defineStore('instances', () => {
     folders,
     currentFolder,
     loading,
+    refreshing,
+    initialized,
     searchQuery,
     filterType,
     sortBy,
+    showHidden,
     filteredInstances,
+    cardGroups,
     groupedInstances,
     loadSettings,
     fetchInstances,
     rename,
     duplicate,
     remove,
+    toggleStar,
     togglePin,
+    toggleHide,
     openFolder,
     switchFolder,
     addFolder,

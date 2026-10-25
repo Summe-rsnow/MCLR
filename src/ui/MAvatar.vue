@@ -40,7 +40,7 @@ const initials = computed(() => {
       class="w-full h-full object-cover"
       style="image-rendering: pixelated"
       @error="imgError = true"
-    />
+     loading="lazy" decoding="async"/>
     <span v-else>{{ initials }}</span>
   </div>
 </template>

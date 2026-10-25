@@ -4,30 +4,20 @@ use mclr_core::{AppError, SettingsStore, TaskCenter};
 use mclr_loaders::{
     LoaderInstallContext, LoaderKind, LoaderVersionEntry, install_with_loader, list_loader_versions,
 };
-use mclr_net::build_http_client;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 
-async fn current_mc_folder(state: &State<'_, SettingsStore>) -> PathBuf {
-    let settings = state.get().await;
-    if settings.game.current_folder.is_empty() {
-        mclr_core::paths::default_minecraft_dir()
-    } else {
-        PathBuf::from(settings.game.current_folder)
-    }
-}
+use super::current_mc_folder;
 
 #[tauri::command]
 #[specta::specta]
 pub async fn loaders_versions(
-    state: State<'_, SettingsStore>,
+    http: State<'_, crate::http::HttpState>,
     loader: LoaderKind,
     mc_version: String,
 ) -> Result<Vec<LoaderVersionEntry>, AppError> {
-    let settings = state.get().await;
-    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+    let client = http.client();
     list_loader_versions(&client, loader, &mc_version)
         .await
         .map_err(AppError::from)
@@ -35,7 +25,9 @@ pub async fn loaders_versions(
 
 #[tauri::command]
 #[specta::specta]
+#[allow(clippy::too_many_arguments)]
 pub async fn loaders_install(
+    http: State<'_, crate::http::HttpState>,
     state: State<'_, SettingsStore>,
     tasks_state: State<'_, Arc<TaskCenter>>,
     mc_version: String,
@@ -45,7 +37,7 @@ pub async fn loaders_install(
     optifine_version: Option<String>,
 ) -> Result<String, AppError> {
     let settings = state.get().await;
-    let client = build_http_client(&settings.net).map_err(AppError::from)?;
+    let client = http.client();
     let mc_folder = current_mc_folder(&state).await;
     let net_settings = settings.net.clone();
     let java_settings = settings.java.clone();

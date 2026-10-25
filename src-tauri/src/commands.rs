@@ -9,6 +9,8 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::app::app_info,
         crate::ipc::app::secrets_status,
         crate::ipc::app::window_set_material,
+        // [assets]
+        crate::ipc::assets::assets_allow,
         // [settings]
         crate::ipc::settings::settings_get,
         crate::ipc::settings::settings_patch,
@@ -23,9 +25,10 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::instances::instance_duplicate,
         crate::ipc::instances::instance_delete,
         crate::ipc::instances::instance_update_config,
-        crate::ipc::instances::instance_open_folder,
+        crate::ipc::instances::instance_open_path,
         // [java]
         crate::ipc::java::java_scan,
+        crate::ipc::java::java_list,
         crate::ipc::java::java_download,
         // [accounts]
         crate::ipc::accounts::accounts_list,
@@ -40,6 +43,10 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::accounts::accounts_cape_set,
         // [install]
         crate::ipc::install::install_manifest,
+        crate::ipc::install::install_create,
+        crate::ipc::install::install_extras,
+        crate::ipc::install::install_current_info,
+        crate::ipc::install::install_validate_name,
         crate::ipc::install::install_vanilla,
         crate::ipc::install::install_repair,
         // [launch]
@@ -55,6 +62,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::comp::comp_project,
         crate::ipc::comp::comp_files,
         crate::ipc::comp::comp_download,
+        crate::ipc::comp::comp_pick_target,
         // [modpack]
         crate::ipc::modpack::modpack_inspect,
         crate::ipc::modpack::modpack_import_file,
@@ -67,6 +75,15 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::localmods::local_mod_update,
         crate::ipc::localmods::local_mod_jar_in_jar,
         crate::ipc::localmods::comp_resolve_dependencies,
+        crate::ipc::localmods::resources_list,
+        crate::ipc::localmods::local_mods_scan_start,
+        crate::ipc::localmods::resource_toggle,
+        crate::ipc::localmods::resources_delete,
+        crate::ipc::localmods::resources_import,
+        crate::ipc::localmods::resources_export,
+        crate::ipc::localmods::schematic_inspect,
+        crate::ipc::localmods::local_mods_dependents,
+        crate::ipc::localmods::local_mods_update_many,
         // [saves]
         crate::ipc::saves::saves_list,
         crate::ipc::saves::save_delete,
@@ -76,10 +93,12 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::ipc::saves::save_datapacks_list,
         crate::ipc::saves::save_datapack_toggle,
         crate::ipc::saves::screenshots_list,
+        crate::ipc::saves::screenshots_list_paged,
+        crate::ipc::saves::screenshot_thumb,
         crate::ipc::saves::screenshot_delete,
-        crate::ipc::saves::instance_files_list,
-        crate::ipc::saves::instance_file_toggle,
-        crate::ipc::saves::instance_file_delete,
+        crate::ipc::saves::screenshot_reveal,
+        crate::ipc::saves::screenshot_open,
+        crate::ipc::saves::screenshot_copy,
         // [servers]
         crate::ipc::servers::servers_list,
         crate::ipc::servers::server_add,

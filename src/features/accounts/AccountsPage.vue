@@ -15,6 +15,7 @@ import {
   MEmpty,
   MPageHeader,
   MBrandIcon,
+  MSkeletonList,
   getAccountKindMeta,
   useDialog,
   useToast,
@@ -271,9 +272,18 @@ async function openCloset(serverUrl?: string | null) {
         </MButton>
       </template>
     </MPageHeader>
+    <!-- Loading Skeleton State -->
+    <div v-if="!accountsStore.initialized && accountsStore.loading" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-7">
+        <MSkeletonList :rows="3" variant="card" />
+      </div>
+      <div class="lg:col-span-5">
+        <MSkeletonList :rows="1" variant="card" />
+      </div>
+    </div>
 
     <!-- Empty State -->
-    <MCard v-if="accountsStore.accounts.length === 0" class="p-8">
+    <MCard v-else-if="accountsStore.accounts.length === 0" class="p-8">
       <MEmpty
         :title="t('accounts.empty')"
         :description="t('accounts.emptySubtitle')"
@@ -288,13 +298,14 @@ async function openCloset(serverUrl?: string | null) {
     <!-- Main Grid: Accounts List & Skin Panel -->
     <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-6">
       <!-- Accounts List (Left 7 Cols) -->
-      <div class="lg:col-span-7 flex flex-col gap-3">
+      <TransitionGroup name="m-list" tag="div" class="lg:col-span-7 flex flex-col gap-3">
         <MCard
-          v-for="acc in accountsStore.accounts"
+          v-for="(acc, index) in accountsStore.accounts"
           :key="acc.id"
           hoverable
           :variant="acc.selected ? 'tinted' : 'raised'"
-          class="p-4 cursor-pointer"
+          class="p-4 cursor-pointer m-stagger"
+          :style="{ '--i': index }"
           @click="handleSelectAccount(acc)"
         >
           <div class="flex items-center justify-between gap-4">
@@ -347,7 +358,7 @@ async function openCloset(serverUrl?: string | null) {
             </div>
           </div>
         </MCard>
-      </div>
+      </TransitionGroup>
 
       <!-- Skin & Cape Panel (Right 5 Cols) -->
       <div class="lg:col-span-5 flex flex-col gap-4">
@@ -365,7 +376,7 @@ async function openCloset(serverUrl?: string | null) {
                   :src="accountsStore.selectedAccount.skinHeadDataUrl"
                   alt="Skin Head"
                   class="w-full h-full object-contain image-rendering-pixelated"
-                />
+                 loading="lazy" decoding="async"/>
                 <MAvatar
                   v-else
                   :name="accountsStore.selectedAccount.username"

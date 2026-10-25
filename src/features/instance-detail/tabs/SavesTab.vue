@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { convertFileSrc } from '@tauri-apps/api/core'
 import type { SaveInfo, DatapackInfo } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
 import {
@@ -12,6 +13,7 @@ import {
   MDialog,
   MInput,
   MEmpty,
+  MSkeletonList,
   useToast,
   useDialog,
 } from '../../../ui'
@@ -56,7 +58,7 @@ async function fetchSaves() {
 
 async function handleOpenFolder() {
   try {
-    await ipcClient.instanceOpenFolder(props.instanceId)
+    await ipcClient.instanceOpenPath(props.instanceId, 'saves')
   } catch (e: unknown) {
     toast.danger(String(e))
   }
@@ -230,14 +232,18 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Skeleton Loading -->
+    <div v-if="loading && saves.length === 0" class="py-4">
+      <MSkeletonList :rows="3" variant="card" />
+    </div>
+
     <!-- Empty State -->
-    <div v-if="saves.length === 0" class="py-16">
+    <div v-else-if="saves.length === 0" class="py-16">
       <MEmpty
         :title="t('instanceDetail.saves.empty')"
         icon="i-lucide-globe"
       />
     </div>
-
     <!-- Saves List -->
     <div v-else class="space-y-3">
       <MCard
@@ -252,10 +258,12 @@ onMounted(() => {
           <!-- Icon / Thumbnail -->
           <div class="w-14 h-14 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 border border-line overflow-hidden text-primary">
             <img
-              v-if="save.iconDataUrl"
-              :src="save.iconDataUrl"
+              v-if="save.iconPath || save.iconDataUrl"
+              :src="save.iconPath ? convertFileSrc(save.iconPath) : (save.iconDataUrl ?? undefined)"
               class="w-full h-full object-cover"
               alt="World Icon"
+              loading="lazy"
+              decoding="async"
             />
             <span v-else class="w-7 h-7 i-lucide-compass" />
           </div>

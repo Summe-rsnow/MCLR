@@ -206,7 +206,7 @@ function onInstanceSelectChange(id: string | number) {
           <div class="min-w-0 space-y-1.5">
             <div class="flex items-center gap-2">
               <h2 class="text-2xl font-bold text-fg truncate">
-                {{ launchStore.selectedInstance?.name || t('launch.noInstance') }}
+                {{ instancesStore.instances.length === 0 ? t('instances.empty.title') : (launchStore.selectedInstance?.name || t('launch.noInstance')) }}
               </h2>
               <MButton
                 v-if="launchStore.selectedInstance"
@@ -239,6 +239,17 @@ function onInstanceSelectChange(id: string | number) {
         <!-- Launch CTA inside hero -->
         <div class="flex flex-col items-center sm:items-end w-full md:w-auto shrink-0 gap-2">
           <MButton
+            v-if="instancesStore.instances.length === 0"
+            size="lg"
+            icon="i-lucide-download"
+            variant="primary"
+            class="h-14 px-10 rounded-2xl text-lg font-bold m-refract w-full sm:w-auto shadow-2"
+            @click="router.push('/download')"
+          >
+            {{ t('launch.button.download') }}
+          </MButton>
+          <MButton
+            v-else
             size="lg"
             icon="i-lucide-play"
             class="h-14 px-10 rounded-2xl text-lg font-bold m-refract w-full sm:w-auto shadow-2"

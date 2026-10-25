@@ -5,36 +5,16 @@ use std::sync::Arc;
 
 use mclr_core::{AppError, SettingsStore};
 pub use mclr_crash::{CrashCauseFinding, CrashConfidence, CrashResult};
-use mclr_game::{InstanceConfig, LaunchWatcher};
+use mclr_game::LaunchWatcher;
 use tauri::State;
 
 async fn resolve_instance_dirs(
     state: &State<'_, SettingsStore>,
     instance_id: &str,
 ) -> (PathBuf, PathBuf) {
-    let settings = state.get().await;
-    let mc_folder = if settings.game.current_folder.is_empty() {
-        mclr_core::paths::default_minecraft_dir()
-    } else {
-        PathBuf::from(&settings.game.current_folder)
-    };
+    let mc_folder = super::current_mc_folder(state).await;
     let instance_dir = mc_folder.join("versions").join(instance_id);
-    let config_path = instance_dir.join("mclr.instance.json");
-    let instance_config = if config_path.exists() {
-        std::fs::read_to_string(&config_path)
-            .ok()
-            .and_then(|content| serde_json::from_str::<InstanceConfig>(&content).ok())
-            .unwrap_or_default()
-    } else {
-        InstanceConfig::default()
-    };
-    let game_dir = if instance_config.isolation == "on"
-        || (instance_config.isolation == "global" && settings.game.default_isolation == "on")
-    {
-        instance_dir.clone()
-    } else {
-        mc_folder.clone()
-    };
+    let game_dir = super::game_dir_for(state, instance_id).await;
     (instance_dir, game_dir)
 }
 
@@ -50,13 +30,21 @@ pub async fn crash_analyze(
     let watcher_logs = watcher_state.get_logs(Some(&instance_id)).await;
     let watcher_lines: Vec<String> = watcher_logs.into_iter().map(|l| l.text).collect();
 
-    let custom_path = custom_log_path.as_deref().map(Path::new);
-    let logs =
-        mclr_crash::collect_crash_logs(&instance_dir, Some(&game_dir), &watcher_lines, custom_path)
-            .map_err(AppError::from)?;
-
-    let result = mclr_crash::analyze_crash(&instance_id, &instance_dir, &logs);
-    Ok(result)
+    super::run_blocking(move || {
+        let custom_path = custom_log_path.as_deref().map(Path::new);
+        let logs = mclr_crash::collect_crash_logs(
+            &instance_dir,
+            Some(&game_dir),
+            &watcher_lines,
+            custom_path,
+        )?;
+        Ok::<_, mclr_crash::CrashError>(mclr_crash::analyze_crash(
+            &instance_id,
+            &instance_dir,
+            &logs,
+        ))
+    })
+    .await
 }
 
 #[tauri::command]
@@ -71,13 +59,14 @@ pub async fn crash_export_report(
     let watcher_logs = watcher_state.get_logs(Some(&instance_id)).await;
     let watcher_lines: Vec<String> = watcher_logs.into_iter().map(|l| l.text).collect();
 
-    let out_path = mclr_crash::export_crash_report_zip(
-        &instance_dir,
-        &instance_id,
-        &watcher_lines,
-        Path::new(&dest_zip_path),
-    )
-    .map_err(AppError::from)?;
-
-    Ok(out_path.to_string_lossy().to_string())
+    super::run_blocking(move || {
+        let out_path = mclr_crash::export_crash_report_zip(
+            &instance_dir,
+            &instance_id,
+            &watcher_lines,
+            Path::new(&dest_zip_path),
+        )?;
+        Ok::<_, mclr_crash::CrashError>(out_path.to_string_lossy().to_string())
+    })
+    .await
 }

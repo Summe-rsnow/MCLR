@@ -2,24 +2,24 @@
 #![allow(clippy::collapsible_if)]
 
 use crate::error::LoaderError;
+use crate::pipeline::{LabyModSel, StageCtx, Staged};
 use crate::{LoaderInstallContext, LoaderInstaller, LoaderKind, LoaderVersionEntry};
 use async_trait::async_trait;
+use mclr_core::paths;
 use mclr_game::{
-    ArgumentEntry, InstanceConfig, InstanceInfo, InstanceState, Library, VersionJson,
-    classify_instance, install_vanilla, merge_version_json, repair_instance, scan_java,
-    select_java, version_java_constraint,
+    InstanceInfo, Library, VersionJson, scan_java, select_java, version_java_constraint,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
-use tracing::{info, warn};
+use tracing::warn;
 
 // ============================================================================
 // Internal HTTP Helpers
 // ============================================================================
 
-async fn fetch_json<T: for<'de> Deserialize<'de>>(
+pub(crate) async fn fetch_json<T: for<'de> Deserialize<'de>>(
     client: &reqwest::Client,
     primary_url: &str,
     fallback_url: Option<&str>,
@@ -60,7 +60,7 @@ async fn fetch_json<T: for<'de> Deserialize<'de>>(
     serde_json::from_slice(&bytes).map_err(LoaderError::Json)
 }
 
-async fn fetch_string(
+pub(crate) async fn fetch_string(
     client: &reqwest::Client,
     primary_url: &str,
     fallback_url: Option<&str>,
@@ -99,7 +99,7 @@ async fn fetch_string(
     resp.text().await.map_err(|e| LoaderError::Net(e.into()))
 }
 
-async fn download_file(
+pub(crate) async fn download_file(
     client: &reqwest::Client,
     url: &str,
     dest: &Path,
@@ -121,78 +121,8 @@ async fn download_file(
     }
 
     let bytes = resp.bytes().await.map_err(|e| LoaderError::Net(e.into()))?;
-
     std::fs::write(dest, bytes)?;
     Ok(())
-}
-
-async fn ensure_vanilla_installed(
-    ctx: &LoaderInstallContext<'_>,
-) -> Result<VersionJson, LoaderError> {
-    let instance_dir = ctx.mc_folder.join("versions").join(&ctx.instance_name);
-    let instance_json_file = instance_dir.join(format!("{}.json", ctx.instance_name));
-
-    if instance_json_file.exists() {
-        if let Ok(content) = std::fs::read_to_string(&instance_json_file) {
-            if let Ok(json) = VersionJson::parse(&content) {
-                return Ok(json);
-            }
-        }
-    }
-
-    info!(
-        "Base instance JSON not found at {}; installing vanilla {} first",
-        instance_json_file.display(),
-        ctx.mc_version
-    );
-
-    install_vanilla(
-        ctx.client,
-        ctx.net_settings,
-        &ctx.mc_folder,
-        &ctx.mc_version,
-        &ctx.instance_name,
-        ctx.task_ctx,
-    )
-    .await?;
-
-    let content = std::fs::read_to_string(&instance_json_file)?;
-    VersionJson::parse(&content).map_err(LoaderError::Game)
-}
-
-fn finish_instance_install(
-    ctx: &LoaderInstallContext<'_>,
-    merged: &VersionJson,
-) -> Result<InstanceInfo, LoaderError> {
-    let instance_dir = ctx.mc_folder.join("versions").join(&ctx.instance_name);
-    let instance_json_file = instance_dir.join(format!("{}.json", ctx.instance_name));
-    std::fs::create_dir_all(&instance_dir)?;
-
-    let serialized = serde_json::to_string_pretty(merged)?;
-    std::fs::write(&instance_json_file, serialized)?;
-
-    let (kind, loaders) = classify_instance(merged, &ctx.mc_version);
-    let cfg_path = instance_dir.join("mclr.instance.json");
-    let config = if cfg_path.exists() {
-        std::fs::read_to_string(&cfg_path)
-            .ok()
-            .and_then(|c| serde_json::from_str(&c).ok())
-            .unwrap_or_default()
-    } else {
-        InstanceConfig::default()
-    };
-
-    Ok(InstanceInfo {
-        id: ctx.instance_name.clone(),
-        name: ctx.instance_name.clone(),
-        folder: ctx.mc_folder.to_string_lossy().to_string(),
-        path: instance_dir.to_string_lossy().to_string(),
-        mc_version: ctx.mc_version.clone(),
-        kind,
-        loaders,
-        state: InstanceState::Ok,
-        config,
-    })
 }
 
 // ============================================================================
@@ -221,18 +151,18 @@ pub fn parse_optifine_version(version_str: &str) -> (String, String) {
             opt_type.to_string(),
             patch.trim_start_matches('_').to_string(),
         )
-    } else if let Some(last_underscore) = version_str.rfind('_') {
-        let (opt_type, patch) = version_str.split_at(last_underscore);
+    } else if let Some(idx) = version_str.rfind('_') {
+        let (opt_type, patch) = version_str.split_at(idx);
         (
             opt_type.to_string(),
             patch.trim_start_matches('_').to_string(),
         )
     } else {
-        ("HD_U".to_string(), version_str.to_string())
+        (version_str.to_string(), String::new())
     }
 }
 
-fn parse_mc_minor(mc_version: &str) -> u32 {
+pub(crate) fn parse_mc_minor(mc_version: &str) -> u32 {
     let parts: Vec<&str> = mc_version.split('.').collect();
     if parts.len() >= 2 {
         parts[1].parse().unwrap_or(0)
@@ -257,6 +187,28 @@ struct FabricMetaEntry {
 }
 
 pub struct FabricInstaller;
+
+impl FabricInstaller {
+    pub async fn stage(ctx: &StageCtx<'_>, loader_version: &str) -> Result<Staged, LoaderError> {
+        let primary_profile = format!(
+            "https://bmclapi2.bangbang93.com/fabric-meta/v2/versions/loader/{}/{}/profile/json",
+            ctx.mc_version, loader_version
+        );
+        let fallback_profile = format!(
+            "https://meta.fabricmc.net/v2/versions/loader/{}/{}/profile/json",
+            ctx.mc_version, loader_version
+        );
+
+        let fabric_profile_str =
+            fetch_string(ctx.client, &primary_profile, Some(&fallback_profile)).await?;
+        let fabric_profile = VersionJson::parse(&fabric_profile_str).map_err(LoaderError::Game)?;
+
+        Ok(Staged {
+            version_json: fabric_profile,
+            mods: Vec::new(),
+        })
+    }
+}
 
 #[async_trait]
 impl LoaderInstaller for FabricInstaller {
@@ -284,41 +236,7 @@ impl LoaderInstaller for FabricInstaller {
     }
 
     async fn install(&self, ctx: LoaderInstallContext<'_>) -> Result<InstanceInfo, LoaderError> {
-        let vanilla_json = ensure_vanilla_installed(&ctx).await?;
-
-        let primary_profile = format!(
-            "https://bmclapi2.bangbang93.com/fabric-meta/v2/versions/loader/{}/{}/profile/json",
-            ctx.mc_version, ctx.loader_version
-        );
-        let fallback_profile = format!(
-            "https://meta.fabricmc.net/v2/versions/loader/{}/{}/profile/json",
-            ctx.mc_version, ctx.loader_version
-        );
-
-        let fabric_profile_str =
-            fetch_string(ctx.client, &primary_profile, Some(&fallback_profile)).await?;
-        let fabric_profile = VersionJson::parse(&fabric_profile_str).map_err(LoaderError::Game)?;
-
-        let mut merged = merge_version_json(fabric_profile, vanilla_json);
-        merged.id = ctx.instance_name.clone();
-        merged.inherits_from = None;
-
-        if let Some(of_ver) = &ctx.optifine_version {
-            merged
-                .libraries
-                .insert(0, make_optifine_library(&ctx.mc_version, of_ver));
-        }
-
-        let info = finish_instance_install(&ctx, &merged)?;
-        repair_instance(
-            ctx.client,
-            ctx.net_settings,
-            &ctx.mc_folder,
-            &ctx.instance_name,
-            ctx.task_ctx,
-        )
-        .await?;
-        Ok(info)
+        crate::install_with_loader(LoaderKind::Fabric, ctx).await
     }
 }
 
@@ -327,6 +245,23 @@ impl LoaderInstaller for FabricInstaller {
 // ============================================================================
 
 pub struct LegacyFabricInstaller;
+
+impl LegacyFabricInstaller {
+    pub async fn stage(ctx: &StageCtx<'_>, loader_version: &str) -> Result<Staged, LoaderError> {
+        let profile_url = format!(
+            "https://meta.legacyfabric.net/v2/versions/loader/{}/{}/profile/json",
+            ctx.mc_version, loader_version
+        );
+
+        let profile_str = fetch_string(ctx.client, &profile_url, None).await?;
+        let profile = VersionJson::parse(&profile_str).map_err(LoaderError::Game)?;
+
+        Ok(Staged {
+            version_json: profile,
+            mods: Vec::new(),
+        })
+    }
+}
 
 #[async_trait]
 impl LoaderInstaller for LegacyFabricInstaller {
@@ -351,36 +286,7 @@ impl LoaderInstaller for LegacyFabricInstaller {
     }
 
     async fn install(&self, ctx: LoaderInstallContext<'_>) -> Result<InstanceInfo, LoaderError> {
-        let vanilla_json = ensure_vanilla_installed(&ctx).await?;
-
-        let profile_url = format!(
-            "https://meta.legacyfabric.net/v2/versions/loader/{}/{}/profile/json",
-            ctx.mc_version, ctx.loader_version
-        );
-
-        let profile_str = fetch_string(ctx.client, &profile_url, None).await?;
-        let profile = VersionJson::parse(&profile_str).map_err(LoaderError::Game)?;
-
-        let mut merged = merge_version_json(profile, vanilla_json);
-        merged.id = ctx.instance_name.clone();
-        merged.inherits_from = None;
-
-        if let Some(of_ver) = &ctx.optifine_version {
-            merged
-                .libraries
-                .insert(0, make_optifine_library(&ctx.mc_version, of_ver));
-        }
-
-        let info = finish_instance_install(&ctx, &merged)?;
-        repair_instance(
-            ctx.client,
-            ctx.net_settings,
-            &ctx.mc_folder,
-            &ctx.instance_name,
-            ctx.task_ctx,
-        )
-        .await?;
-        Ok(info)
+        crate::install_with_loader(LoaderKind::LegacyFabric, ctx).await
     }
 }
 
@@ -396,90 +302,23 @@ struct LiteLoaderRoot {
 
 pub struct LiteLoaderInstaller;
 
-#[async_trait]
-impl LoaderInstaller for LiteLoaderInstaller {
-    async fn versions(
-        &self,
-        client: &reqwest::Client,
-        mc_version: &str,
-    ) -> Result<Vec<LoaderVersionEntry>, LoaderError> {
-        let primary = "https://bmclapi2.bangbang93.com/maven/com/mumfrey/liteloader/versions.json";
-        let fallback = "http://dl.liteloader.com/versions/versions.json";
-
-        let root: LiteLoaderRoot = fetch_json(client, primary, Some(fallback)).await?;
-
-        let mut entries = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-
-        if let Some(mc_obj) = root.versions.get(mc_version) {
-            for section_key in &["artefacts", "snapshots"] {
-                if let Some(section) = mc_obj.get(section_key).and_then(|v| v.as_object()) {
-                    if let Some(ll) = section
-                        .get("com.mumfrey:liteloader")
-                        .and_then(|v| v.as_object())
-                    {
-                        for (_k, build_val) in ll {
-                            if let Some(b_obj) = build_val.as_object() {
-                                if let Some(ver) = b_obj.get("version").and_then(|v| v.as_str()) {
-                                    if seen.insert(ver.to_string()) {
-                                        let stream = b_obj
-                                            .get("stream")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let stable = stream.eq_ignore_ascii_case("RELEASE")
-                                            || !ver.contains("SNAPSHOT");
-                                        let release_time = b_obj.get("timestamp").and_then(|v| {
-                                            if let Some(s) = v.as_str() {
-                                                Some(s.to_string())
-                                            } else {
-                                                v.as_i64().map(|n| n.to_string())
-                                            }
-                                        });
-                                        entries.push(LoaderVersionEntry {
-                                            loader: LoaderKind::LiteLoader,
-                                            mc_version: mc_version.to_string(),
-                                            version: ver.to_string(),
-                                            stable,
-                                            release_time,
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+impl LiteLoaderInstaller {
+    pub async fn stage(ctx: &StageCtx<'_>, loader_version: &str) -> Result<Staged, LoaderError> {
+        let resolved_ver = if loader_version == ctx.mc_version || !loader_version.contains('-') {
+            if let Ok(list) = Self.versions(ctx.client, ctx.mc_version).await
+                && let Some(first) = list.first()
+            {
+                first.version.clone()
+            } else {
+                format!("{loader_version}-SNAPSHOT")
             }
-        }
-
-        Ok(entries)
-    }
-
-    async fn install(&self, ctx: LoaderInstallContext<'_>) -> Result<InstanceInfo, LoaderError> {
-        let mut vanilla_json = ensure_vanilla_installed(&ctx).await?;
-
-        vanilla_json.main_class = Some("net.minecraft.launchwrapper.Launch".to_string());
-        vanilla_json.id = ctx.instance_name.clone();
-        vanilla_json.inherits_from = None;
-
-        let tweak_arg = "com.mumfrey.liteloader.launch.LiteLoaderTweaker";
-        if let Some(args) = &mut vanilla_json.minecraft_arguments {
-            if !args.contains(tweak_arg) {
-                args.push_str(&format!(" --tweakClass {tweak_arg}"));
-            }
-        } else if let Some(arguments) = &mut vanilla_json.arguments {
-            arguments
-                .game
-                .push(ArgumentEntry::Plain("--tweakClass".to_string()));
-            arguments
-                .game
-                .push(ArgumentEntry::Plain(tweak_arg.to_string()));
         } else {
-            vanilla_json.minecraft_arguments = Some(format!("--tweakClass {tweak_arg}"));
-        }
-
+            loader_version.to_string()
+        };
+        let tweak_arg = "com.mumfrey.liteloader.launch.LiteLoaderTweaker";
         let ll_lib = Library {
-            name: format!("com.mumfrey:liteloader:{}", ctx.loader_version),
-            url: Some("https://dl.liteloader.com/versions/".to_string()),
+            name: format!("com.mumfrey:liteloader:{resolved_ver}"),
+            url: Some("https://bmclapi2.bangbang93.com/maven/".to_string()),
             downloads: None,
             rules: Vec::new(),
             natives: HashMap::new(),
@@ -494,25 +333,64 @@ impl LoaderInstaller for LiteLoaderInstaller {
             extract: None,
         };
 
-        vanilla_json.libraries.insert(0, ll_lib);
-        vanilla_json.libraries.insert(1, lw_lib);
+        let version_json = VersionJson {
+            main_class: Some("net.minecraft.launchwrapper.Launch".to_string()),
+            libraries: vec![ll_lib, lw_lib],
+            minecraft_arguments: Some(format!("--tweakClass {tweak_arg}")),
+            ..Default::default()
+        };
 
-        if let Some(of_ver) = &ctx.optifine_version {
-            vanilla_json
-                .libraries
-                .insert(0, make_optifine_library(&ctx.mc_version, of_ver));
+        Ok(Staged {
+            version_json,
+            mods: Vec::new(),
+        })
+    }
+}
+
+#[async_trait]
+impl LoaderInstaller for LiteLoaderInstaller {
+    async fn versions(
+        &self,
+        client: &reqwest::Client,
+        mc_version: &str,
+    ) -> Result<Vec<LoaderVersionEntry>, LoaderError> {
+        let url = "https://dl.liteloader.com/versions/versions.json";
+        let root: LiteLoaderRoot = fetch_json(client, url, None).await?;
+
+        let mut entries = Vec::new();
+
+        if let Some(mc_obj) = root.versions.get(mc_version) {
+            for section_key in &["artefacts", "snapshots"] {
+                if let Some(section) = mc_obj.get(section_key).and_then(|v| v.as_object()) {
+                    if let Some(ll) = section
+                        .get("com.mumfrey:liteloader")
+                        .and_then(|v| v.as_object())
+                    {
+                        if let Some(latest) = ll.get("latest").and_then(|v| v.as_object()) {
+                            let version = latest
+                                .get("version")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("latest")
+                                .to_string();
+                            let stable = *section_key == "artefacts";
+                            entries.push(LoaderVersionEntry {
+                                loader: LoaderKind::LiteLoader,
+                                mc_version: mc_version.to_string(),
+                                version,
+                                stable,
+                                release_time: None,
+                            });
+                        }
+                    }
+                }
+            }
         }
 
-        let info = finish_instance_install(&ctx, &vanilla_json)?;
-        repair_instance(
-            ctx.client,
-            ctx.net_settings,
-            &ctx.mc_folder,
-            &ctx.instance_name,
-            ctx.task_ctx,
-        )
-        .await?;
-        Ok(info)
+        Ok(entries)
+    }
+
+    async fn install(&self, ctx: LoaderInstallContext<'_>) -> Result<InstanceInfo, LoaderError> {
+        crate::install_with_loader(LoaderKind::LiteLoader, ctx).await
     }
 }
 
@@ -525,16 +403,12 @@ struct LabyModMinecraftVersion {
     version: String,
     #[serde(default)]
     tag: Option<String>,
-    #[serde(default, rename = "customManifestUrl")]
-    custom_manifest_url: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct LabyModManifest {
     #[serde(rename = "labyModVersion")]
     laby_mod_version: String,
-    #[serde(rename = "commitReference")]
-    commit_reference: String,
     #[serde(default, rename = "releaseTime")]
     release_time: Option<serde_json::Value>,
     #[serde(default, rename = "minecraftVersions")]
@@ -542,6 +416,36 @@ struct LabyModManifest {
 }
 
 pub struct LabyModInstaller;
+
+impl LabyModInstaller {
+    pub async fn stage(ctx: &StageCtx<'_>, sel: &LabyModSel) -> Result<Staged, LoaderError> {
+        let profile_url = format!(
+            "https://releases.r2.labymod.net/api/v1/download/manifest/labymod4/{}/{}/{}.json",
+            sel.channel, ctx.mc_version, sel.commit_ref
+        );
+
+        let profile_str = fetch_string(ctx.client, &profile_url, None).await?;
+        let mut profile = VersionJson::parse(&profile_str).map_err(LoaderError::Game)?;
+
+        let laby_core_lib = Library {
+            name: "net.labymod:LabyMod:4".to_string(),
+            url: Some(format!(
+                "https://releases.r2.labymod.net/api/v1/download/labymod4/{}/{}.jar",
+                sel.channel, sel.commit_ref
+            )),
+            downloads: None,
+            rules: Vec::new(),
+            natives: HashMap::new(),
+            extract: None,
+        };
+        profile.libraries.insert(0, laby_core_lib);
+
+        Ok(Staged {
+            version_json: profile,
+            mods: Vec::new(),
+        })
+    }
+}
 
 #[async_trait]
 impl LoaderInstaller for LabyModInstaller {
@@ -573,67 +477,7 @@ impl LoaderInstaller for LabyModInstaller {
     }
 
     async fn install(&self, ctx: LoaderInstallContext<'_>) -> Result<InstanceInfo, LoaderError> {
-        let vanilla_json = ensure_vanilla_installed(&ctx).await?;
-
-        let manifest_url = "https://releases.r2.labymod.net/api/v1/manifest/production/latest.json";
-        let manifest: LabyModManifest = fetch_json(ctx.client, manifest_url, None).await?;
-
-        let commit_ref = if ctx.loader_version.len() == 8
-            && ctx.loader_version.chars().all(|c| c.is_ascii_hexdigit())
-        {
-            ctx.loader_version.clone()
-        } else {
-            manifest.commit_reference.clone()
-        };
-
-        let custom_url = manifest
-            .minecraft_versions
-            .iter()
-            .find(|mv| mv.version == ctx.mc_version || mv.tag.as_deref() == Some(&ctx.mc_version))
-            .and_then(|mv| mv.custom_manifest_url.clone());
-
-        let profile_url = custom_url.unwrap_or_else(|| {
-            format!(
-                "https://releases.r2.labymod.net/api/v1/download/manifest/labymod4/production/{}/{}.json",
-                ctx.mc_version, commit_ref
-            )
-        });
-
-        let profile_str = fetch_string(ctx.client, &profile_url, None).await?;
-        let profile = VersionJson::parse(&profile_str).map_err(LoaderError::Game)?;
-
-        let mut merged = merge_version_json(profile, vanilla_json);
-        merged.id = ctx.instance_name.clone();
-        merged.inherits_from = None;
-
-        let laby_core_lib = Library {
-            name: "net.labymod:LabyMod:4".to_string(),
-            url: Some(format!(
-                "https://releases.r2.labymod.net/api/v1/download/labymod4/production/{commit_ref}.jar"
-            )),
-            downloads: None,
-            rules: Vec::new(),
-            natives: HashMap::new(),
-            extract: None,
-        };
-        merged.libraries.insert(0, laby_core_lib);
-
-        if let Some(of_ver) = &ctx.optifine_version {
-            merged
-                .libraries
-                .insert(0, make_optifine_library(&ctx.mc_version, of_ver));
-        }
-
-        let info = finish_instance_install(&ctx, &merged)?;
-        repair_instance(
-            ctx.client,
-            ctx.net_settings,
-            &ctx.mc_folder,
-            &ctx.instance_name,
-            ctx.task_ctx,
-        )
-        .await?;
-        Ok(info)
+        crate::install_with_loader(LoaderKind::LabyMod, ctx).await
     }
 }
 
@@ -649,6 +493,122 @@ struct OptiFineListItem {
 }
 
 pub struct OptiFineInstaller;
+
+impl OptiFineInstaller {
+    pub async fn stage(
+        ctx: &StageCtx<'_>,
+        optifine_version: &str,
+        as_mod: bool,
+        with_liteloader: bool,
+    ) -> Result<Staged, LoaderError> {
+        let (opt_type, patch) = parse_optifine_version(optifine_version);
+        let formatted_ver = format_optifine_version(&opt_type, &patch);
+
+        let cache_dir = paths::cache_dir().join("optifine");
+        std::fs::create_dir_all(&cache_dir)?;
+        let installer_jar = cache_dir.join(format!(
+            "OptiFine-{}_{}-installer.jar",
+            ctx.mc_version, formatted_ver
+        ));
+
+        if !installer_jar.exists() {
+            let download_url = format!(
+                "https://bmclapi2.bangbang93.com/optifine/{}/{}/{}",
+                ctx.mc_version, opt_type, patch
+            );
+            download_file(ctx.client, &download_url, &installer_jar).await?;
+        }
+
+        if as_mod {
+            let mods_target = if with_liteloader {
+                ctx.staging_dir.join("mods").join(ctx.mc_version)
+            } else {
+                ctx.staging_dir.join("mods")
+            };
+            std::fs::create_dir_all(&mods_target)?;
+            let target_jar =
+                mods_target.join(format!("OptiFine_{}_{}.jar", ctx.mc_version, formatted_ver));
+            std::fs::copy(&installer_jar, &target_jar)?;
+            return Ok(Staged {
+                version_json: VersionJson::default(),
+                mods: vec![target_jar],
+            });
+        }
+
+        let minor = parse_mc_minor(ctx.mc_version);
+        let mut version_json = VersionJson::default();
+        if minor >= 14 && installer_jar.exists() {
+            let installed_javas = scan_java(&ctx.java_settings.custom);
+            let dummy_json = VersionJson::default();
+            let constraint = version_java_constraint(&dummy_json, ctx.mc_version);
+            if let Some(java) = select_java(&installed_javas, &constraint, ctx.java_settings) {
+                let mut cmd = Command::new(&java.path);
+                cmd.arg(format!("-Duser.home={}", ctx.staging_dir.to_string_lossy()));
+                if java.major >= 9 {
+                    cmd.arg("--add-exports")
+                        .arg("cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED");
+                }
+                cmd.arg("-cp").arg(&installer_jar).arg("optifine.Installer");
+                let _ = cmd.status();
+            }
+
+            let versions_dir = ctx.staging_dir.join("versions");
+            if let Ok(entries) = std::fs::read_dir(&versions_dir) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.contains("OptiFine") {
+                        let j_path = entry.path().join(format!("{name}.json"));
+                        if j_path.exists() {
+                            if let Ok(content) = std::fs::read_to_string(&j_path) {
+                                if let Ok(vj) = VersionJson::parse(&content) {
+                                    version_json = vj;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            let lib_dir = ctx
+                .staging_dir
+                .join("libraries")
+                .join("optifine")
+                .join("OptiFine")
+                .join(format!("{}_{}", ctx.mc_version, formatted_ver));
+            std::fs::create_dir_all(&lib_dir)?;
+            let lib_jar =
+                lib_dir.join(format!("OptiFine-{}_{}.jar", ctx.mc_version, formatted_ver));
+            std::fs::copy(&installer_jar, &lib_jar)?;
+
+            let of_lib = Library {
+                name: format!("optifine:OptiFine:{}_{}", ctx.mc_version, formatted_ver),
+                url: None,
+                downloads: None,
+                rules: Vec::new(),
+                natives: HashMap::new(),
+                extract: None,
+            };
+            let lw_lib = Library {
+                name: "net.minecraft:launchwrapper:1.12".to_string(),
+                url: Some("https://libraries.minecraft.net/".to_string()),
+                downloads: None,
+                rules: Vec::new(),
+                natives: HashMap::new(),
+                extract: None,
+            };
+            version_json.main_class = Some("net.minecraft.launchwrapper.Launch".to_string());
+            version_json.libraries = vec![of_lib, lw_lib];
+            version_json.minecraft_arguments =
+                Some("--tweakClass optifine.OptiFineTweaker".to_string());
+        }
+
+        Ok(Staged {
+            version_json,
+            mods: Vec::new(),
+        })
+    }
+}
 
 #[async_trait]
 impl LoaderInstaller for OptiFineInstaller {
@@ -678,103 +638,7 @@ impl LoaderInstaller for OptiFineInstaller {
     }
 
     async fn install(&self, ctx: LoaderInstallContext<'_>) -> Result<InstanceInfo, LoaderError> {
-        let mut vanilla_json = ensure_vanilla_installed(&ctx).await?;
-
-        let (opt_type, patch) = parse_optifine_version(&ctx.loader_version);
-        let formatted_ver = format_optifine_version(&opt_type, &patch);
-
-        let lib_dir = ctx
-            .mc_folder
-            .join("libraries")
-            .join("optifine")
-            .join("OptiFine")
-            .join(format!("{}_{}", ctx.mc_version, formatted_ver));
-        std::fs::create_dir_all(&lib_dir)?;
-
-        let installer_jar = lib_dir.join(format!(
-            "OptiFine-{}_{}-installer.jar",
-            ctx.mc_version, formatted_ver
-        ));
-        let target_lib_jar =
-            lib_dir.join(format!("OptiFine-{}_{}.jar", ctx.mc_version, formatted_ver));
-
-        if !installer_jar.exists() {
-            let download_url = format!(
-                "https://bmclapi2.bangbang93.com/optifine/{}/{}/{}",
-                ctx.mc_version, opt_type, patch
-            );
-            download_file(ctx.client, &download_url, &installer_jar).await?;
-        }
-
-        let minor = parse_mc_minor(&ctx.mc_version);
-        if minor >= 14 && installer_jar.exists() {
-            let java_list = scan_java(&ctx.java_settings.custom);
-            let constraint = version_java_constraint(&vanilla_json, &ctx.mc_version);
-            if let Some(java) = select_java(&java_list, &constraint, ctx.java_settings) {
-                let mut cmd = Command::new(&java.path);
-                cmd.arg(format!("-Duser.home={}", ctx.mc_folder.to_string_lossy()));
-                if java.major >= 9 {
-                    cmd.arg("--add-exports")
-                        .arg("cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED");
-                }
-                cmd.arg("-cp").arg(&installer_jar).arg("optifine.Installer");
-                let _ = cmd.status();
-            }
-        }
-
-        if !target_lib_jar.exists() && installer_jar.exists() {
-            let _ = std::fs::copy(&installer_jar, &target_lib_jar);
-        }
-
-        vanilla_json
-            .libraries
-            .insert(0, make_optifine_library(&ctx.mc_version, &formatted_ver));
-
-        if minor < 13 {
-            let lw = Library {
-                name: "net.minecraft:launchwrapper:1.12".to_string(),
-                url: Some("https://libraries.minecraft.net/".to_string()),
-                downloads: None,
-                rules: Vec::new(),
-                natives: HashMap::new(),
-                extract: None,
-            };
-            vanilla_json.libraries.insert(1, lw);
-            vanilla_json.main_class = Some("net.minecraft.launchwrapper.Launch".to_string());
-            if let Some(args) = &mut vanilla_json.minecraft_arguments {
-                if !args.contains("optifine.OptiFineTweaker") {
-                    args.push_str(" --tweakClass optifine.OptiFineTweaker");
-                }
-            } else {
-                vanilla_json.minecraft_arguments =
-                    Some("--tweakClass optifine.OptiFineTweaker".to_string());
-            }
-        } else if let Some(arguments) = &mut vanilla_json.arguments {
-            arguments
-                .game
-                .push(ArgumentEntry::Plain("--tweakClass".to_string()));
-            arguments
-                .game
-                .push(ArgumentEntry::Plain("optifine.OptiFineTweaker".to_string()));
-        } else if let Some(args) = &mut vanilla_json.minecraft_arguments {
-            if !args.contains("optifine.OptiFineTweaker") {
-                args.push_str(" --tweakClass optifine.OptiFineTweaker");
-            }
-        }
-
-        vanilla_json.id = ctx.instance_name.clone();
-        vanilla_json.inherits_from = None;
-
-        let info = finish_instance_install(&ctx, &vanilla_json)?;
-        repair_instance(
-            ctx.client,
-            ctx.net_settings,
-            &ctx.mc_folder,
-            &ctx.instance_name,
-            ctx.task_ctx,
-        )
-        .await?;
-        Ok(info)
+        crate::install_with_loader(LoaderKind::OptiFine, ctx).await
     }
 }
 
@@ -785,7 +649,9 @@ impl LoaderInstaller for OptiFineInstaller {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mclr_game::{ArgumentEntry, Arguments, InstanceKind};
+    use mclr_game::{
+        ArgumentEntry, Arguments, InstanceKind, classify_instance, merge_version_json,
+    };
 
     #[test]
     fn test_optifine_version_formatting_and_parsing() {
@@ -850,23 +716,9 @@ mod tests {
         merged.id = "my-fabric-inst".to_string();
         merged.inherits_from = None;
 
-        // Apply OptiFine combo
-        merged
-            .libraries
-            .insert(0, make_optifine_library("1.20.1", "HD_U_I6"));
-
-        assert_eq!(merged.id, "my-fabric-inst");
-        assert!(merged.inherits_from.is_none());
-        assert_eq!(
-            merged.main_class.as_deref(),
-            Some("net.fabricmc.loader.impl.launch.knot.KnotClient")
-        );
-
-        // Classify instance should detect both Fabric and OptiFine
         let (kind, loaders) = classify_instance(&merged, "1.20.1");
         assert_eq!(kind, InstanceKind::Fabric);
         assert!(loaders.iter().any(|l| l.contains("Fabric")));
-        assert!(loaders.iter().any(|l| l.contains("OptiFine")));
     }
 
     #[test]

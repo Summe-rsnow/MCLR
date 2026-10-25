@@ -9,6 +9,7 @@ import {
   MDialog,
   MButton,
   MBadge,
+  MSkeletonList,
   useToast,
 } from '../../ui'
 
@@ -111,15 +112,21 @@ function onClose() {
         </div>
       </div>
 
+      <!-- Analyzing Skeleton State -->
+      <div v-if="crashStore.isAnalyzing" class="py-2">
+        <MSkeletonList :rows="3" variant="card" />
+      </div>
+
       <!-- Causes list -->
       <div
-        v-if="crashStore.currentResult && crashStore.currentResult.causes.length > 0"
+        v-else-if="crashStore.currentResult && crashStore.currentResult.causes.length > 0"
         class="space-y-3"
       >
         <div
           v-for="(cause, index) in crashStore.currentResult.causes"
           :key="index"
-          class="p-4 rounded-xl border border-line bg-sunken space-y-2.5"
+          class="p-4 rounded-xl border border-line bg-sunken space-y-2.5 m-stagger"
+          :style="{ '--i': index }"
         >
           <div class="flex items-center justify-between gap-2">
             <h3 class="text-sm font-semibold text-fg flex items-center gap-2">

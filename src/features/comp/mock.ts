@@ -260,4 +260,99 @@ export default {
   comp_download: (_args: Record<string, unknown>): string => {
     return 'task-comp-download-' + Math.random().toString(36).substring(2, 9)
   },
+
+  comp_resolve_dependencies: (_args: Record<string, unknown>) => [
+    {
+      dependency: { projectId: 'fabric-api', kind: 'required' },
+      project: {
+        id: 'P7dR8mSH',
+        slug: 'fabric-api',
+        title: 'Fabric API',
+        summary: 'Essential hooks for Fabric mods',
+        author: 'FabricMC',
+        downloads: 100000000,
+        follows: 200000,
+        categories: [],
+        mcVersions: ['1.20.1'],
+        loaders: ['fabric'],
+        compType: 'mod',
+        updatedAt: '2024-05-01',
+        platform: 'modrinth',
+      },
+      file: {
+        id: 'fapi-file',
+        projectId: 'fabric-api',
+        platform: 'modrinth',
+        name: 'fabric-api-0.92.0+1.20.1.jar',
+        fileName: 'fabric-api-0.92.0+1.20.1.jar',
+        mcVersions: ['1.20.1'],
+        loaders: ['fabric'],
+        channel: 'release',
+        releaseDate: '2024-05-01',
+        size: 2048000,
+        hashes: {},
+        downloadUrls: ['https://example.com/fapi.jar'],
+        distributionDisabled: false,
+        dependencies: [],
+      },
+      installed: true,
+    },
+    {
+      dependency: { projectId: 'modmenu', kind: 'required' },
+      project: {
+        id: 'm9s6DxVo',
+        slug: 'modmenu',
+        title: 'Mod Menu',
+        summary: 'Adds a mod menu to Minecraft',
+        author: 'TerraformersMC',
+        downloads: 50000000,
+        follows: 150000,
+        categories: [],
+        mcVersions: ['1.20.1'],
+        loaders: ['fabric'],
+        compType: 'mod',
+        updatedAt: '2024-05-01',
+        platform: 'modrinth',
+      },
+      file: {
+        id: 'modmenu-file',
+        projectId: 'modmenu',
+        platform: 'modrinth',
+        name: 'modmenu-7.2.2.jar',
+        fileName: 'modmenu-7.2.2.jar',
+        mcVersions: ['1.20.1'],
+        loaders: ['fabric'],
+        channel: 'release',
+        releaseDate: '2024-05-01',
+        size: 1024000,
+        hashes: {},
+        downloadUrls: ['https://example.com/modmenu.jar'],
+        distributionDisabled: false,
+        dependencies: [],
+      },
+      installed: false,
+    },
+  ],
+
+  comp_pick_target: (args: Record<string, unknown>) => ({
+    instanceId: (args.preferredInstanceId as string) || '1.20.1-fabric',
+    dir: 'C:/mock/instances/1.20.1-fabric',
+  }),
+
+  modpack_inspect: (_args: Record<string, unknown>) => ({
+    name: 'Fabulously Optimized',
+    format: 'modrinth',
+    mcVersion: '1.20.1',
+    loader: 'fabric',
+    loaderVersion: '0.15.11',
+    fileCount: 42,
+    author: 'RobotKoer',
+    summary: 'A simple modpack focusing on performance and graphics enhancements.',
+  }),
+
+  modpack_import_file: (_args: Record<string, unknown>) =>
+    'task-modpack-import-' + Math.random().toString(36).substring(2, 9),
+
+  modpack_install_remote: (_args: Record<string, unknown>) =>
+    'task-modpack-install-' + Math.random().toString(36).substring(2, 9),
 }

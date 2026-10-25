@@ -1,12 +1,12 @@
-import SavesTab from './SavesTab.vue'
+import { defineAsyncComponent } from 'vue'
 import type { InstanceDetailTab } from '../tabs'
 
 const tab: InstanceDetailTab = {
   key: 'saves',
   titleKey: 'instanceDetail.tabs.saves',
   icon: 'i-lucide-globe',
-  order: 70,
-  component: SavesTab,
+  order: 50,
+  component: defineAsyncComponent(() => import('./SavesTab.vue')),
 }
 
 export default tab

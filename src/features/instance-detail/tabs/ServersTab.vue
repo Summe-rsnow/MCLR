@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { ServerEntry, ServerPingResult, InstanceInfo } from '../../../ipc/client'
@@ -14,10 +14,10 @@ import {
   MInput,
   MSelect,
   MEmpty,
+  MSkeletonList,
   useToast,
   useDialog,
 } from '../../../ui'
-
 const props = defineProps<{
   instanceId: string
   instance?: InstanceInfo
@@ -62,38 +62,60 @@ async function fetchServers() {
   }
 }
 
+let pingCancelled = false
+
 async function pingServer(ip: string) {
-  if (pinging.value[ip]) return
+  if (pingCancelled || pinging.value[ip]) return
   pinging.value[ip] = true
   try {
     const res = await ipcClient.serverPing(ip)
-    pingResults.value[ip] = res
+    if (!pingCancelled) {
+      pingResults.value[ip] = res
+    }
   } catch {
-    // If ping fails or offline
-    pingResults.value[ip] = {
-      ip,
-      resolvedAddr: '',
-      online: false,
-      motd: '',
-      versionName: '',
-      protocol: 0,
-      playersOnline: 0,
-      playersMax: 0,
-      favicon: null,
-      latencyMs: 999,
+    if (!pingCancelled) {
+      pingResults.value[ip] = {
+        ip,
+        resolvedAddr: '',
+        online: false,
+        motd: '',
+        versionName: '',
+        protocol: 0,
+        playersOnline: 0,
+        playersMax: 0,
+        favicon: null,
+        latencyMs: 999,
+      }
     }
   } finally {
     pinging.value[ip] = false
   }
 }
 
-function pingAllServers() {
-  for (const s of servers.value) {
-    if (s.ip) {
-      pingServer(s.ip)
+async function pingAllServers() {
+  pingCancelled = false
+  const ips = servers.value.map((s) => s.ip).filter(Boolean)
+  if (ips.length === 0) return
+
+  const CONCURRENCY = 4
+  let currentIndex = 0
+
+  async function worker() {
+    while (currentIndex < ips.length && !pingCancelled) {
+      const ip = ips[currentIndex++]
+      if (ip) {
+        await pingServer(ip)
+      }
     }
   }
+
+  const workers = Array.from({ length: Math.min(CONCURRENCY, ips.length) }, () => worker())
+  await Promise.all(workers)
 }
+
+onUnmounted(() => {
+  pingCancelled = true
+})
 
 function openAddDialog() {
   editingIndex.value = null
@@ -230,14 +252,18 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Skeleton Loading -->
+    <div v-if="loading && servers.length === 0" class="py-4">
+      <MSkeletonList :rows="3" variant="card" />
+    </div>
+
     <!-- Empty State -->
-    <div v-if="servers.length === 0" class="py-16">
+    <div v-else-if="servers.length === 0" class="py-16">
       <MEmpty
         :title="t('instanceDetail.servers.empty')"
         icon="i-lucide-server"
       />
     </div>
-
     <!-- Server List -->
     <div v-else class="space-y-3">
       <MCard
@@ -256,7 +282,7 @@ onMounted(() => {
               :src="pingResults[server.ip]?.favicon || server.icon || ''"
               class="w-full h-full object-cover"
               alt="Server Favicon"
-            />
+             loading="lazy" decoding="async"/>
             <span v-else class="w-7 h-7 i-lucide-server" />
           </div>
 
@@ -266,7 +292,11 @@ onMounted(() => {
               <span class="text-base font-bold text-fg truncate">
                 {{ server.name }}
               </span>
-              <template v-if="pingResults[server.ip]">
+              <MBadge v-if="pinging[server.ip]" variant="neutral" size="sm" class="animate-pulse">
+                <span class="inline-block w-1.5 h-1.5 rounded-full bg-primary mr-1" />
+                Ping...
+              </MBadge>
+              <template v-else-if="pingResults[server.ip]">
                 <MBadge
                   v-if="pingResults[server.ip].online"
                   :variant="getLatencyBadgeVariant(pingResults[server.ip].latencyMs)"
@@ -278,11 +308,7 @@ onMounted(() => {
                   {{ t('instanceDetail.servers.offline') }}
                 </MBadge>
               </template>
-              <MBadge v-else-if="pinging[server.ip]" variant="neutral" size="sm">
-                Ping...
-              </MBadge>
             </div>
-
             <div class="text-xs text-fg-muted font-mono">
               {{ server.ip }}
             </div>

@@ -9,6 +9,7 @@ pub mod model;
 pub mod modpack;
 pub mod modrinth;
 pub mod resolver;
+pub mod resources;
 
 pub use curseforge::CurseForgeClient;
 pub use error::CompError;
@@ -31,3 +32,8 @@ pub use modpack::{
 };
 pub use modrinth::ModrinthClient;
 pub use resolver::{ResolvedDependencyItem, resolve_dependencies, select_best_file};
+pub use resources::{
+    ImportResourcesResult, OverwritePolicy, ResourceEntry, ResourceKind, ResourceState,
+    SchematicInfo, delete_resources, export_resource_list, import_resources, scan_resources,
+    schematic_info, toggle_resource,
+};

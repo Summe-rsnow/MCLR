@@ -1,7 +1,7 @@
 {
   "name": "mclr",
   "private": true,
-  "version": "0.0.13",
+  "version": "0.0.14",
   "type": "module",
   "license": "Apache-2.0",
   "bugs": {
@@ -19,6 +19,7 @@
   "dependencies": {
     "@iconify-json/lucide": "^1.2.0",
     "@lobehub/webfont-harmony-sans-sc": "1.0.0",
+    "@tanstack/vue-virtual": "^3.13.48",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-opener": "^2.0.0",

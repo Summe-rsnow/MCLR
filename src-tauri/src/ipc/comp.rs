@@ -1,7 +1,6 @@
 //! Community platform (Modrinth / CurseForge) IPC commands.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use mclr_comp::{
@@ -9,18 +8,17 @@ use mclr_comp::{
     CurseForgeClient, ModrinthClient,
 };
 use mclr_core::{AppError, SettingsStore, TaskCenter};
-use mclr_game::InstanceConfig;
-use mclr_net::{DownloadSpec, Downloader, build_http_client};
+use mclr_net::{DownloadSpec, Downloader};
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use tauri::State;
 use url::Url;
 
-async fn current_mc_folder(state: &State<'_, SettingsStore>) -> PathBuf {
-    let settings = state.get().await;
-    if settings.game.current_folder.is_empty() {
-        mclr_core::paths::default_minecraft_dir()
-    } else {
-        PathBuf::from(settings.game.current_folder)
-    }
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CompPickTargetResult {
+    pub instance_id: Option<String>,
+    pub dir: Option<String>,
 }
 
 #[tauri::command]
@@ -99,6 +97,7 @@ pub async fn comp_files(
 #[tauri::command]
 #[specta::specta]
 pub async fn comp_download(
+    http: State<'_, crate::http::HttpState>,
     state: State<'_, SettingsStore>,
     tasks_state: State<'_, Arc<TaskCenter>>,
     file: CompFile,
@@ -126,30 +125,14 @@ pub async fn comp_download(
     }
 
     let settings = state.get().await;
-    let client = build_http_client(&settings.net).map_err(AppError::from)?;
-    let mc_folder = current_mc_folder(&state).await;
+    let client = http.client();
 
-    let instance_dir = mc_folder.join("versions").join(&target_instance);
-    let config_path = instance_dir.join("mclr.instance.json");
-    let instance_config = if config_path.exists() {
-        std::fs::read_to_string(&config_path)
-            .ok()
-            .and_then(|content| serde_json::from_str::<InstanceConfig>(&content).ok())
-            .unwrap_or_default()
-    } else {
-        InstanceConfig::default()
-    };
-
-    let base_dir = if instance_config.isolation == "on"
-        || (instance_config.isolation == "global" && settings.game.default_isolation == "on")
-    {
-        instance_dir
-    } else {
-        mc_folder
-    };
+    let base_dir = super::game_dir_for(&state, &target_instance).await;
 
     let target_dir = base_dir.join(kind.target_subfolder());
-    std::fs::create_dir_all(&target_dir).map_err(CompError::Io)?;
+    tokio::fs::create_dir_all(&target_dir)
+        .await
+        .map_err(CompError::Io)?;
     let dest_path = target_dir.join(&file.file_name);
 
     let mut params = HashMap::new();
@@ -187,4 +170,99 @@ pub async fn comp_download(
     });
 
     Ok(task_id)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn comp_pick_target(
+    state: State<'_, SettingsStore>,
+    project_type: CompType,
+    preferred_instance_id: Option<String>,
+    mc_versions: Vec<String>,
+    loaders: Vec<String>,
+) -> Result<CompPickTargetResult, AppError> {
+    let settings = state.get().await;
+    let mc_folder = super::current_mc_folder(&state).await;
+
+    super::run_blocking(move || {
+        let instances = mclr_game::instance::scan_instances(&mc_folder).unwrap_or_default();
+
+        let is_compatible = |inst: &mclr_game::instance::InstanceInfo| -> bool {
+            if !mc_versions.is_empty() {
+                let match_ver = mc_versions.iter().any(|v| {
+                    v.eq_ignore_ascii_case(&inst.mc_version) || inst.mc_version.starts_with(v)
+                });
+                if !match_ver {
+                    return false;
+                }
+            }
+            if project_type == CompType::Mod && !loaders.is_empty() {
+                let any_loader = loaders.iter().any(|l| l.eq_ignore_ascii_case("any"));
+                if !any_loader {
+                    let has_loader = loaders
+                        .iter()
+                        .any(|l| inst.loaders.iter().any(|il| il.eq_ignore_ascii_case(l)));
+                    if !has_loader {
+                        return false;
+                    }
+                }
+            }
+            true
+        };
+
+        if let Some(pref_id) = &preferred_instance_id {
+            if let Some(inst) = instances
+                .iter()
+                .find(|i| i.id == *pref_id || i.name == *pref_id)
+            {
+                if is_compatible(inst) {
+                    let dir =
+                        mclr_game::gamedir::resolve_game_dir(&mc_folder, &inst.id, &settings.game);
+                    return Ok(CompPickTargetResult {
+                        instance_id: Some(inst.id.clone()),
+                        dir: Some(dir.to_string_lossy().to_string()),
+                    });
+                }
+            }
+        }
+
+        let mut compatible: Vec<&mclr_game::instance::InstanceInfo> =
+            instances.iter().filter(|i| is_compatible(i)).collect();
+
+        if compatible.is_empty() {
+            return Ok(CompPickTargetResult {
+                instance_id: None,
+                dir: None,
+            });
+        }
+
+        compatible.sort_by(|a, b| {
+            let dir_a = mclr_game::gamedir::resolve_game_dir(&mc_folder, &a.id, &settings.game);
+            let dir_b = mclr_game::gamedir::resolve_game_dir(&mc_folder, &b.id, &settings.game);
+
+            let mtime_a = std::fs::metadata(&dir_a).and_then(|m| m.modified()).ok();
+            let mtime_b = std::fs::metadata(&dir_b).and_then(|m| m.modified()).ok();
+
+            match mtime_b.cmp(&mtime_a) {
+                std::cmp::Ordering::Equal => {
+                    let count_a = std::fs::read_dir(dir_a.join("mods"))
+                        .map(|r| r.count())
+                        .unwrap_or(0);
+                    let count_b = std::fs::read_dir(dir_b.join("mods"))
+                        .map(|r| r.count())
+                        .unwrap_or(0);
+                    count_b.cmp(&count_a)
+                }
+                ord => ord,
+            }
+        });
+
+        let chosen = compatible[0];
+        let dir = mclr_game::gamedir::resolve_game_dir(&mc_folder, &chosen.id, &settings.game);
+        Ok::<_, AppError>(CompPickTargetResult {
+            instance_id: Some(chosen.id.clone()),
+            dir: Some(dir.to_string_lossy().to_string()),
+        })
+    })
+    .await
 }

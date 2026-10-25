@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useInstancesStore } from '../instances/store'
 import { useLaunchStore } from '../launch/store'
 import { instanceDetailTabs } from './tabs'
+import ModsDisabledTab from './tabs/ModsDisabledTab.vue'
 import {
   MPageHeader,
   MButton,
@@ -35,12 +36,21 @@ const instance = computed(() => {
 })
 
 const activeTab = ref(instanceDetailTabs[0]?.key || 'overview')
+const direction = ref<'forward' | 'back'>('forward')
 
 // Sync with query param if present
 watch(
   () => route.query.tab,
   (tab) => {
-    if (tab && typeof tab === 'string' && instanceDetailTabs.some((t) => t.key === tab)) {
+    if (
+      tab &&
+      typeof tab === 'string' &&
+      tab !== activeTab.value &&
+      instanceDetailTabs.some((t) => t.key === tab)
+    ) {
+      const oldOrder = instanceDetailTabs.find((t) => t.key === activeTab.value)?.order ?? 0
+      const newOrder = instanceDetailTabs.find((t) => t.key === tab)?.order ?? 0
+      direction.value = newOrder >= oldOrder ? 'forward' : 'back'
       activeTab.value = tab
     }
   },
@@ -48,6 +58,9 @@ watch(
 )
 
 function onTabChange(key: string) {
+  const oldOrder = instanceDetailTabs.find((t) => t.key === activeTab.value)?.order ?? 0
+  const newOrder = instanceDetailTabs.find((t) => t.key === key)?.order ?? 0
+  direction.value = newOrder >= oldOrder ? 'forward' : 'back'
   activeTab.value = key
   router.replace({
     query: {
@@ -180,13 +193,21 @@ function handleLaunch() {
           </MButton>
         </MEmpty>
       </div>
-      <component
-        :is="activeComponent"
-        v-else
-        :key="activeTab"
-        :instance="instance"
-        :instance-id="instance.id"
-      />
+      <div v-else class="overflow-hidden">
+        <Transition :name="direction === 'forward' ? 'm-tab-forward' : 'm-tab-back'" mode="out-in">
+          <div :key="activeTab">
+            <ModsDisabledTab
+              v-if="activeTab === 'mods' && instance && !instance.modable"
+            />
+            <component
+              :is="activeComponent"
+              v-else
+              :instance="instance"
+              :instance-id="instance.id"
+            />
+          </div>
+        </Transition>
+      </div>
     </div>
   </div>
 </template>

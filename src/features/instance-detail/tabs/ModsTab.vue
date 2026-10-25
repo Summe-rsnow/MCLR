@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import ModListPanel from '../../mods/ModListPanel.vue'
+import ResourceList from '../../resources/ResourceList.vue'
 
 defineProps<{
   instanceId: string
@@ -8,6 +8,6 @@ defineProps<{
 
 <template>
   <div class="h-full">
-    <ModListPanel :instance-id="instanceId" />
+    <ResourceList :instance-id="instanceId" kind="mod" />
   </div>
 </template>

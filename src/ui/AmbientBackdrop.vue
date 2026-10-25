@@ -1,25 +1,44 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useThemeStore } from '../stores/theme'
 
 const themeStore = useThemeStore()
 const isHidden = ref(typeof document !== 'undefined' ? document.hidden : false)
+const isFocused = ref(typeof document !== 'undefined' ? document.hasFocus?.() ?? true : true)
 
 function handleVisibilityChange() {
   if (typeof document !== 'undefined') {
     isHidden.value = document.hidden
   }
 }
+function onFocus() {
+  isFocused.value = true
+}
+function onBlur() {
+  isFocused.value = false
+}
+
+const paused = computed(
+  () => isHidden.value || !isFocused.value || themeStore.motion !== 'full',
+)
 
 onMounted(() => {
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', handleVisibilityChange)
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('blur', onBlur)
   }
 })
 
 onUnmounted(() => {
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('focus', onFocus)
+    window.removeEventListener('blur', onBlur)
   }
 })
 
@@ -35,17 +54,11 @@ const noiseDataUri =
   >
     <div
       class="ambient-blobs absolute inset-0"
-      :class="{ 'ambient-paused': isHidden }"
+      :class="{ 'ambient-paused': paused }"
     >
-      <div
-        class="ambient-blob ambient-blob-1"
-      />
-      <div
-        class="ambient-blob ambient-blob-2"
-      />
-      <div
-        class="ambient-blob ambient-blob-3"
-      />
+      <div class="ambient-blob ambient-blob-1" />
+      <div class="ambient-blob ambient-blob-2" />
+      <div class="ambient-blob ambient-blob-3" />
     </div>
     <div
       class="absolute inset-0 opacity-[0.03]"
@@ -63,6 +76,8 @@ const noiseDataUri =
 .ambient-blob {
   position: absolute;
   border-radius: 9999px;
+  will-change: transform;
+  contain: strict;
   animation: ambient-drift 40s ease-in-out infinite alternate;
 }
 

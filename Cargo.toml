@@ -3,7 +3,7 @@ members = ["src-tauri", "crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.0.13"
+version = "0.0.14"
 edition = "2024"
 rust-version = "1.99"
 license = "Apache-2.0"
@@ -58,7 +58,7 @@ tempfile = "3"
 wiremock = "0.6"
 clap = { version = "4", features = ["derive"] }
 window-vibrancy = "0.5"
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-build = { version = "2", features = [] }
 tauri-specta = { version = "2.0.0-rc.21", features = ["derive", "typescript"] }
 specta = { version = "=2.0.0-rc.22", features = ["derive", "serde_json"] }
@@ -70,6 +70,7 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
 image = { version = "0.25", default-features = false, features = ["png"] }
 trash = "5"
+arboard = "3"
 jsonwebtoken = "9"
 regex = "1"
 futures-util = "0.3"

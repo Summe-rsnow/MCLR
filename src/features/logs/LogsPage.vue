@@ -15,6 +15,7 @@ import {
   MSelect,
   MBadge,
   MCard,
+  MVirtualList,
 } from '../../ui'
 
 const { t } = useI18n()
@@ -53,52 +54,22 @@ const processOptions = computed(() => {
   return options
 })
 
-// Virtualized / windowed viewport calculation
-const ROW_HEIGHT = 24
-const scrollTop = ref(0)
-const viewportHeight = ref(600)
-const overscan = 20
-
+const isAtBottom = ref(true)
 const totalCount = computed(() => logsStore.filteredLogs.length)
-const totalHeight = computed(() => totalCount.value * ROW_HEIGHT)
-
-const startIndex = computed(() => {
-  return Math.max(0, Math.floor(scrollTop.value / ROW_HEIGHT) - overscan)
-})
-
-const endIndex = computed(() => {
-  const visibleCount = Math.ceil(viewportHeight.value / ROW_HEIGHT)
-  return Math.min(
-    totalCount.value,
-    Math.floor(scrollTop.value / ROW_HEIGHT) + visibleCount + overscan,
-  )
-})
-
-const visibleLogs = computed(() => {
-  return logsStore.filteredLogs
-    .slice(startIndex.value, endIndex.value)
-    .map((line, idx) => ({
-      ...line,
-      top: (startIndex.value + idx) * ROW_HEIGHT,
-      lineId: `${line.timestamp}-${startIndex.value + idx}`,
-    }))
-})
 
 function onScroll(e: Event) {
   const target = e.target as HTMLElement
-  scrollTop.value = target.scrollTop
-  // If user scrolled up significantly, autoScroll should ideally pause or stay as-is
+  isAtBottom.value = target.scrollHeight - target.scrollTop - target.clientHeight < 40
 }
 
 function scrollToBottom() {
-  if (!logsStore.autoScroll || !logContainer.value) return
+  if (!logsStore.autoScroll || !isAtBottom.value || !logContainer.value) return
   nextTick(() => {
-    if (logContainer.value) {
+    if (logContainer.value && isAtBottom.value) {
       logContainer.value.scrollTop = logContainer.value.scrollHeight
     }
   })
 }
-
 watch(
   () => logsStore.logs.length,
   () => {
@@ -106,12 +77,10 @@ watch(
   },
 )
 
+
 onMounted(async () => {
   await logsStore.fetchLogs()
   await logsStore.startListening()
-  if (logContainer.value) {
-    viewportHeight.value = logContainer.value.clientHeight || 600
-  }
   scrollToBottom()
 })
 
@@ -320,29 +289,31 @@ function getLineTextColor(level: LogLevel) {
         {{ t('logs.empty') }}
       </div>
 
-      <div
+      <MVirtualList
         v-else
-        :style="{ height: `${totalHeight}px` }"
-        class="relative w-full"
+        :items="logsStore.filteredLogs"
+        :item-key="(line, index) => `${line.timestamp}-${index}`"
+        :estimate-size="24"
+        :threshold="60"
+        :scroll-el="logContainer"
       >
-        <div
-          v-for="line in visibleLogs"
-          :key="line.lineId"
-          :style="{ top: `${line.top}px`, height: `${ROW_HEIGHT}px` }"
-          class="absolute left-0 right-0 flex items-center gap-2 px-1 hover:bg-sunken whitespace-nowrap overflow-hidden text-ellipsis leading-tight"
-        >
-          <MBadge
-            :variant="getLevelBadgeVariant(line.level)"
-            size="sm"
-            class="uppercase shrink-0 text-[10px] px-1 py-0 h-4"
+        <template #item="{ item: line }">
+          <div
+            class="flex items-center gap-2 px-1 py-0.5 hover:bg-sunken whitespace-nowrap overflow-hidden text-ellipsis leading-tight h-[24px]"
           >
-            {{ line.level }}
-          </MBadge>
-          <span :class="[getLineTextColor(line.level), 'select-text truncate']">
-            {{ line.text }}
-          </span>
-        </div>
-      </div>
+            <MBadge
+              :variant="getLevelBadgeVariant(line.level)"
+              size="sm"
+              class="uppercase shrink-0 text-[10px] px-1 py-0 h-4"
+            >
+              {{ line.level }}
+            </MBadge>
+            <span :class="[getLineTextColor(line.level), 'select-text truncate']">
+              {{ line.text }}
+            </span>
+          </div>
+        </template>
+      </MVirtualList>
     </div>
   </div>
 </template>

@@ -55,10 +55,11 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
+    <Transition name="m-pop">
     <div
       v-if="open"
       class="fixed z-50 m-overlay m-refract min-w-40 p-1 rounded-xl text-fg flex flex-col gap-0.5 select-none"
-      :style="{ left: `${x}px`, top: `${y}px` }"
+      :style="{ left: `${x}px`, top: `${y}px`, '--origin': 'top left' }"
       @click.stop
       @contextmenu.stop.prevent
     >
@@ -79,5 +80,6 @@ onUnmounted(() => {
         <span class="flex-1">{{ item.label }}</span>
       </button>
     </div>
+    </Transition>
   </Teleport>
 </template>

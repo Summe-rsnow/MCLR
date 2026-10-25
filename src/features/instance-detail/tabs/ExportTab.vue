@@ -20,6 +20,8 @@ import {
   MCheckbox,
   MBadge,
   MEmpty,
+  MSkeletonList,
+  MVirtualList,
   useToast,
 } from '../../../ui'
 
@@ -275,8 +277,8 @@ onMounted(() => {
         </div>
       </template>
 
-      <div v-if="loadingCandidates" class="py-8 flex justify-center text-fg-muted">
-        <span class="w-6 h-6 i-lucide-loader-2 animate-spin" />
+      <div v-if="loadingCandidates && candidates.length === 0" class="py-4">
+        <MSkeletonList :rows="5" variant="row" />
       </div>
       <div v-else-if="candidates.length === 0" class="py-8">
         <MEmpty
@@ -288,36 +290,43 @@ onMounted(() => {
         v-else
         class="border border-line rounded-xl divide-y divide-line max-h-96 overflow-y-auto bg-sunken/40"
       >
-        <div
-          v-for="entry in candidates"
-          :key="entry.relPath"
-          class="flex items-center justify-between px-4 py-2 hover:bg-sunken/80 transition-colors cursor-pointer"
-          @click="togglePath(entry.relPath, !selectedPaths.includes(entry.relPath))"
+        <MVirtualList
+          :items="candidates"
+          :item-key="(entry) => entry.relPath"
+          :estimate-size="41"
+          :threshold="60"
         >
-          <div class="flex items-center gap-3 min-w-0" @click.stop>
-            <MCheckbox
-              :model-value="selectedPaths.includes(entry.relPath)"
-              @update:model-value="(val) => togglePath(entry.relPath, Boolean(val))"
-            />
-            <div class="flex items-center gap-2 truncate">
-              <span
-                class="w-4 h-4 shrink-0 text-fg-muted"
-                :class="entry.isDir ? 'i-lucide-folder text-primary/80' : 'i-lucide-file-text'"
-              />
-              <span class="text-sm font-medium text-fg truncate">
-                {{ entry.relPath }}
-              </span>
+          <template #item="{ item: entry }">
+            <div
+              class="flex items-center justify-between px-4 py-2 hover:bg-sunken/80 transition-colors cursor-pointer border-b border-line last:border-b-0"
+              @click="togglePath(entry.relPath, !selectedPaths.includes(entry.relPath))"
+            >
+              <div class="flex items-center gap-3 min-w-0" @click.stop>
+                <MCheckbox
+                  :model-value="selectedPaths.includes(entry.relPath)"
+                  @update:model-value="(val) => togglePath(entry.relPath, Boolean(val))"
+                />
+                <div class="flex items-center gap-2 truncate">
+                  <span
+                    class="w-4 h-4 shrink-0 text-fg-muted"
+                    :class="entry.isDir ? 'i-lucide-folder text-primary/80' : 'i-lucide-file-text'"
+                  />
+                  <span class="text-sm font-medium text-fg truncate">
+                    {{ entry.relPath }}
+                  </span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0 ml-3">
+                <span class="text-xs text-fg-muted font-mono">
+                  {{ formatBytes(entry.size) }}
+                </span>
+                <MBadge variant="neutral" size="sm">
+                  {{ entry.isDir ? t('instanceDetail.export.isDir') : t('instanceDetail.export.isFile') }}
+                </MBadge>
+              </div>
             </div>
-          </div>
-          <div class="flex items-center gap-2 shrink-0 ml-3">
-            <span class="text-xs text-fg-muted font-mono">
-              {{ formatBytes(entry.size) }}
-            </span>
-            <MBadge variant="neutral" size="sm">
-              {{ entry.isDir ? t('instanceDetail.export.isDir') : t('instanceDetail.export.isFile') }}
-            </MBadge>
-          </div>
-        </div>
+          </template>
+        </MVirtualList>
       </div>
 
       <!-- Action Button -->

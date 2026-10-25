@@ -58,11 +58,12 @@ pub async fn accounts_add_offline(
 #[tauri::command]
 #[specta::specta]
 pub async fn accounts_add_microsoft(
+    http: State<'_, crate::http::HttpState>,
     app: AppHandle,
     state: State<'_, Arc<AccountStore>>,
     tasks_state: State<'_, Arc<TaskCenter>>,
 ) -> Result<String, AppError> {
-    let client = reqwest::Client::new();
+    let client = http.client();
     let service = MicrosoftAuthService::new(client, MsAuthEndpoints::default(), None)
         .map_err(AppError::from)?;
 
@@ -135,12 +136,13 @@ pub async fn accounts_add_microsoft(
 #[tauri::command]
 #[specta::specta]
 pub async fn accounts_add_authlib(
+    http: State<'_, crate::http::HttpState>,
     state: State<'_, Arc<AccountStore>>,
     server: String,
     username: String,
     password: String,
 ) -> Result<AuthlibLoginResponse, AppError> {
-    let client = reqwest::Client::new();
+    let client = http.client();
     state
         .add_authlib(&client, &server, &username, &password)
         .await
@@ -150,11 +152,12 @@ pub async fn accounts_add_authlib(
 #[tauri::command]
 #[specta::specta]
 pub async fn accounts_select_profile(
+    http: State<'_, crate::http::HttpState>,
     state: State<'_, Arc<AccountStore>>,
     pending_session_id: String,
     profile_id: String,
 ) -> Result<AccountView, AppError> {
-    let client = reqwest::Client::new();
+    let client = http.client();
     state
         .select_authlib_profile(&client, &pending_session_id, &profile_id)
         .await
@@ -164,10 +167,11 @@ pub async fn accounts_select_profile(
 #[tauri::command]
 #[specta::specta]
 pub async fn accounts_refresh(
+    http: State<'_, crate::http::HttpState>,
     state: State<'_, Arc<AccountStore>>,
     id: String,
 ) -> Result<AccountView, AppError> {
-    let client = reqwest::Client::new();
+    let client = http.client();
     state
         .refresh_account(&client, &id)
         .await
@@ -177,12 +181,13 @@ pub async fn accounts_refresh(
 #[tauri::command]
 #[specta::specta]
 pub async fn accounts_skin_upload(
+    http: State<'_, crate::http::HttpState>,
     state: State<'_, Arc<AccountStore>>,
     id: String,
     variant: String,
     png_path: String,
 ) -> Result<AccountView, AppError> {
-    let client = reqwest::Client::new();
+    let client = http.client();
     let account = state
         .get_account(&id)
         .await
@@ -195,8 +200,13 @@ pub async fn accounts_skin_upload(
             .map_err(AppError::from)?;
     }
 
-    let bytes = std::fs::read(path).map_err(|e| AppError::from(mclr_auth::AuthError::Io(e)))?;
-    let data_url = crop_skin_head(&bytes, &id).map_err(AppError::from)?;
+    let id_for_crop = id.clone();
+    let path_buf = path.to_path_buf();
+    let data_url = super::run_blocking(move || {
+        let bytes = std::fs::read(&path_buf).map_err(mclr_auth::AuthError::Io)?;
+        crop_skin_head(&bytes, &id_for_crop)
+    })
+    .await?;
     state
         .update_skin_head(&id, data_url)
         .await
@@ -206,11 +216,12 @@ pub async fn accounts_skin_upload(
 #[tauri::command]
 #[specta::specta]
 pub async fn accounts_cape_set(
+    http: State<'_, crate::http::HttpState>,
     state: State<'_, Arc<AccountStore>>,
     id: String,
     cape_id: Option<String>,
 ) -> Result<AccountView, AppError> {
-    let client = reqwest::Client::new();
+    let client = http.client();
     let account = state
         .get_account(&id)
         .await
