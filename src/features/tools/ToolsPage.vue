@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useInstancesStore } from '../instances/store'
 import { MPageHeader, MSkeleton } from '../../ui'
 import ToolSkinSection from './components/ToolSkinSection.vue'
+import ToolSkinAvatarSection from './components/ToolSkinAvatarSection.vue'
 import ToolCacheSection from './components/ToolCacheSection.vue'
 import ToolDownloadSection from './components/ToolDownloadSection.vue'
 import ToolShortcutSection from './components/ToolShortcutSection.vue'
@@ -71,6 +72,7 @@ onMounted(async () => {
         <!-- Left Column: Card 1 (Skin) & Card 3 (Downloader) -->
         <div class="flex flex-col gap-5">
           <ToolSkinSection />
+          <ToolSkinAvatarSection />
           <ToolDownloadSection />
         </div>
 

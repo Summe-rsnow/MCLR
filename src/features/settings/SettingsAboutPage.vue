@@ -99,7 +99,7 @@ function toggleFaq(id: string) {
     <MSection
       :title="t('settings.about.faqTitle')"
       :description="t('settings.about.faqSubtitle')"
-      icon="i-lucide-help-circle"
+      icon="i-lucide-circle-question-mark"
     >
       <div class="space-y-3">
         <!-- 1. Account -->
@@ -280,7 +280,7 @@ function toggleFaq(id: string) {
               <div
                 class="w-8 h-8 rounded-lg bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
               >
-                <span class="i-lucide-alert-triangle w-4 h-4" />
+                <span class="i-lucide-triangle-alert w-4 h-4" />
               </div>
               <div class="min-w-0">
                 <h4 class="text-sm font-semibold text-fg">

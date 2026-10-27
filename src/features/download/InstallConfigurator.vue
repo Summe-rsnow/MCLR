@@ -14,9 +14,11 @@ import {
   type VersionCompatInfo,
 } from '../../ipc/client'
 import { useToast } from '../../ui'
+import { useInstancesStore } from '../instances/store'
 import {
   defaultName,
   dropOf,
+  loaderDisplayName,
   loaderIncompatibilities,
   loaderVisibility,
   validateInstanceNameLocal,
@@ -27,6 +29,8 @@ import ConfiguratorLoaderStep, {
   type LoaderDef,
 } from './components/ConfiguratorLoaderStep.vue'
 import ConfiguratorInstanceStep from './components/ConfiguratorInstanceStep.vue'
+
+const instancesStore = useInstancesStore()
 
 const props = withDefaults(
   defineProps<{
@@ -124,45 +128,58 @@ const primaryLoaderDefs = computed<LoaderDef[]>(() => [
     id: 'none',
     label: t('download.configurator.vanillaPure'),
     visible: true,
-    icon: 'i-lucide-box',
+    kind: 'vanilla',
   },
   {
     id: 'fabric',
     label: 'Fabric',
     visible: visibility.value.fabric,
-    icon: 'i-lucide-layers',
+    kind: 'fabric',
   },
   {
     id: 'neoforge',
     label: 'NeoForge',
     visible: visibility.value.neoforge,
-    icon: 'i-lucide-flame',
+    kind: 'neoforge',
   },
   {
     id: 'forge',
     label: 'Forge',
     visible: visibility.value.forge,
-    icon: 'i-lucide-anvil',
+    kind: 'forge',
   },
   {
     id: 'cleanroom',
     label: 'Cleanroom',
     visible: visibility.value.cleanroom,
-    icon: 'i-lucide-cpu',
+    kind: 'cleanroom',
   },
   {
     id: 'legacyFabric',
     label: 'LegacyFabric',
     visible: visibility.value.legacyFabric,
-    icon: 'i-lucide-archive',
+    kind: 'legacyfabric',
   },
   {
     id: 'labymod',
     label: 'LabyMod',
     visible: visibility.value.labymod,
-    icon: 'i-lucide-sparkles',
+    kind: 'labymod',
   },
 ])
+
+/** LabyMod only publishes a production channel today; unstable builds would be snapshots. */
+const selectedLabyModChannel = computed<string | undefined>(() => {
+  if (selectedPrimary.value !== 'labymod') return undefined
+  const entry = primaryVersions.value.find((v) => v.version === selectedPrimaryVersion.value)
+  if (!entry) return 'production'
+  return entry.stable ? 'production' : 'snapshot'
+})
+
+/** Names already used in the target game folder, for instant duplicate feedback. */
+const existingNames = computed(() =>
+  instancesStore.instances.map((i) => i.name).filter((n): n is string => Boolean(n)),
+)
 
 function updateAutoName() {
   if (props.mode === 'modify' || isNameManuallyEdited.value) return
@@ -176,6 +193,8 @@ function updateAutoName() {
       selectedPrimary.value === 'neoforge' ? selectedPrimaryVersion.value : undefined,
     cleanroomVersion:
       selectedPrimary.value === 'cleanroom' ? selectedPrimaryVersion.value : undefined,
+    labymodVersion: selectedPrimary.value === 'labymod' ? selectedPrimaryVersion.value : undefined,
+    labymodChannel: selectedPrimary.value === 'labymod' ? selectedLabyModChannel.value : undefined,
     liteloader: liteloaderEnabled.value,
     optifineDisplay: optifineEnabled.value ? selectedOptifineVersion.value : undefined,
   })
@@ -188,7 +207,7 @@ function validateName() {
     nameValidationError.value = null
     return
   }
-  const localErr = validateInstanceNameLocal(instanceName.value)
+  const localErr = validateInstanceNameLocal(instanceName.value, existingNames.value)
   if (localErr) {
     nameValidationError.value = localErr
   } else {
@@ -260,6 +279,10 @@ async function selectPrimary(id: PrimaryLoaderId) {
 
   await loadPrimaryVersions(id)
   await fetchAddons()
+  // Switching loaders (including back to vanilla) must re-derive the name: only
+  // version-picker changes used to trigger `updateAutoName`, so the previous
+  // loader suffix stuck around after returning to the vanilla option.
+  updateAutoName()
 }
 
 async function loadOptifineVersions() {
@@ -347,7 +370,9 @@ watch(liteloaderEnabled, async (val) => {
 const currentSelectionSummary = computed(() => {
   const parts: string[] = []
   if (selectedPrimary.value !== 'none') {
-    parts.push(`${selectedPrimary.value} ${selectedPrimaryVersion.value || ''}`.trim())
+    parts.push(
+      `${loaderDisplayName(selectedPrimary.value)} ${selectedPrimaryVersion.value || ''}`.trim(),
+    )
   }
   if (optifineEnabled.value) {
     parts.push(`OptiFine ${selectedOptifineVersion.value || ''}`.trim())
@@ -372,6 +397,8 @@ const isModified = computed(() => {
 })
 
 onMounted(async () => {
+  // Instance names feed both the duplicate check and auto-name dedupe.
+  void instancesStore.fetchInstances(false)
   ipcClient
     .installVersionCompat(props.mcVersion, 'release', '')
     .then((compat) => {
@@ -539,7 +566,7 @@ async function handleInstall() {
       v-if="mode === 'modify' && isQuiltInstance"
       class="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm flex items-center gap-3"
     >
-      <span class="i-lucide-alert-triangle text-xl shrink-0" />
+      <span class="i-lucide-triangle-alert text-xl shrink-0" />
       <span>{{ t('download.modify.quiltUnsupported') }}</span>
     </div>
 

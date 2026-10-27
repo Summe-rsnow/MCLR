@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computePointerPosition } from './floating'
 
 export interface ContextMenuItem {
   key: string
@@ -22,6 +23,34 @@ const props = withDefaults(
     modelValue: undefined,
     x: 0,
     y: 0,
+  },
+)
+
+const menuRef = ref<HTMLElement | null>(null)
+const size = ref<{ width: number; height: number }>({ width: 176, height: 0 })
+
+/** Clamped viewport position: a right-click near an edge must not clip the menu. */
+const menuStyle = computed<Record<string, string>>(() => {
+  const { left, top, maxWidth, maxHeight } = computePointerPosition(
+    { x: props.x, y: props.y },
+    size.value,
+  )
+  return {
+    left: `${left}px`,
+    top: `${top}px`,
+    '--origin': 'top left',
+    ...(maxWidth !== undefined ? { maxWidth: `${maxWidth}px` } : {}),
+    ...(maxHeight !== undefined ? { maxHeight: `${maxHeight}px` } : {}),
+  }
+})
+
+watch(
+  () => [props.open, props.x, props.y] as const,
+  async ([open]) => {
+    if (!open) return
+    await nextTick()
+    const el = menuRef.value
+    if (el) size.value = { width: el.offsetWidth, height: el.offsetHeight }
   },
 )
 
@@ -58,8 +87,10 @@ onUnmounted(() => {
     <Transition name="m-pop">
       <div
         v-if="open"
-        class="fixed z-50 m-overlay m-refract min-w-40 p-1 rounded-xl text-fg flex flex-col gap-0.5 select-none"
-        :style="{ left: `${x}px`, top: `${y}px`, '--origin': 'top left' }"
+        ref="menuRef"
+        data-testid="m-context-menu"
+        class="fixed z-50 m-overlay m-refract min-w-40 p-1 rounded-xl text-fg flex flex-col gap-0.5 select-none overflow-y-auto"
+        :style="menuStyle"
         @click.stop
         @contextmenu.stop.prevent
       >

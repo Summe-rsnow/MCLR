@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.25] - 2026-10-28
+
+### Added
+- **Advanced Launch Options Panel** (`设置 → 启动`): renderer bridge (software / DX12 / Vulkan), JVM argument head with recommended defaults and one-click reset, game argument tail, global pre-launch command with `{java}`/`{minecraft}`/`{verpath}`/`{username}` placeholders, high-performance GPU preference, `java.exe` console mode, locked heap (`-Xms = -Xmx`) and crash-analysis toggle — every row carries a hint tooltip and every option is actually applied during launch.
+- **Settings schema v2 migration**: existing profiles get the recommended JVM arguments and the GPU preference default without losing custom values; clearing a field afterwards is respected.
+- **Official loader artwork everywhere**: `MLoaderIcon` now serves the bundled brand logos (Fabric, Forge, NeoForge, Quilt, LabyMod, OptiFine, Cleanroom, plus the grass block for vanilla) on light hue-tinted chips, at a legible size; `MSelect` gained a square `image` option so the community-resource loader filter shows the same artwork.
+- **Skin avatar generator** (tools): PCL-compatible face upscaling with hat overlay, exportable at 64/128/256/512.
+- **Java default selection**: a single detected runtime becomes the default automatically, with explicit set/clear actions.
+- **PCL-style mod selection**: click anywhere on a card to select, toolbar select-all / clear, left accent bar instead of checkboxes.
+- **Shared floating-position utility** (`src/ui/floating.ts`): flip + shift + size clamping for viewport-fixed layers.
+- **Microsoft login placeholder**: the add-account entry is now masked with a "敬请期待" badge instead of starting an unfinished OAuth flow.
+
+### Changed
+- Installer loader section reworked: equal-width cards that fill the row, inline compact version picker, incompatible extras hidden instead of disabled.
+- Instance diff preview no longer reserves a block; it lives behind the hint icon next to the configuration summary.
+- `MHelpTooltip` reuses one implementation for every hint (icon configurable, default question mark).
+
+### Fixed
+- **Last-used instance lost on restart**: the self-healing watcher cleared the stored id before the instance list had loaded.
+- **Loader version identification** rewritten to PCL rules: arguments first (`--fml.neoForgeVersion` / `--fml.forgeVersion`), per-loader Maven parsing (FancyModLoader version is no longer mistaken for the NeoForge version, `-beta`/`-universal` classifiers preserved correctly) and one entry per loader — validated across 1.12.2 / 1.20.1 / 1.20.2+ / 26.3.
+- **LabyMod auto naming** never applied; switching back to vanilla also kept the stale suffix.
+- **Duplicate instance name** showed the raw i18n key (`instance.name.duplicate`); errors now render through the shared error formatter and the collision is detected instantly.
+- **Clipped floating layers**: dropdowns, tooltips, popovers and context menus could overflow the window or their panel; they now flip/shift within the viewport and re-anchor on scroll.
+- **Narrow-window deformations**: launch-page selectors overflowed their half-width cards, settings text inputs pushed past the card edge, and `MSegmented` labels painted outside the panel — the control now collapses to icons only when the labels genuinely do not fit.
+- **15 invalid lucide icon names** (`help-circle`, `alert-circle`, `check-circle`, `trash-2`, `edit-2`, …) rendered nothing; all icon references are validated against the icon set again.
+- **Tab/doc focus rings clipped** by `overflow-hidden` panels (log file picker, installer cards) — space is reserved instead of clipping.
+- Resource toolbar hover menus could overflow the window; they now align to the right edge with a max width.
+
 ## [0.0.24] - 2026-10-26
 
 ### Added

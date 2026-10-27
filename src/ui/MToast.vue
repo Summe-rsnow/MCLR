@@ -10,15 +10,15 @@ const { toasts, remove } = useToast()
       <div
         v-for="item in toasts"
         :key="item.id"
-        class="m-overlay m-refract pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl text-sm max-w-sm text-fg"
+        class="m-overlay m-refract pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl text-sm max-w-[min(24rem,calc(100vw-3rem))] text-fg"
       >
         <span
           class="w-4 h-4 shrink-0"
           :class="{
             'i-lucide-info text-primary': item.type === 'info',
-            'i-lucide-check-circle text-success': item.type === 'success',
-            'i-lucide-alert-triangle text-warning': item.type === 'warning',
-            'i-lucide-alert-circle text-danger': item.type === 'danger',
+            'i-lucide-circle-check text-success': item.type === 'success',
+            'i-lucide-triangle-alert text-warning': item.type === 'warning',
+            'i-lucide-circle-alert text-danger': item.type === 'danger',
           }"
         />
         <span class="flex-1 text-fg select-text">{{ item.message }}</span>

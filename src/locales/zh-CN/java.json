@@ -24,5 +24,10 @@
   "vendor": "供应商：{vendor}",
   "path": "路径：{path}",
   "scanComplete": "Java 扫描完成",
-  "alreadyExists": "该 Java 路径已存在"
+  "alreadyExists": "该 Java 路径已存在",
+  "defaultBadge": "默认",
+  "setAsDefault": "设为默认",
+  "clearDefault": "取消默认",
+  "defaultSetSuccess": "已将 Java {major} 设为全局默认",
+  "defaultClearedSuccess": "已恢复为智能自动匹配模式"
 }

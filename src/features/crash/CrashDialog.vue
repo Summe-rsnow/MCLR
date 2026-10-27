@@ -94,7 +94,7 @@ function onClose() {
       <div
         class="flex items-center gap-3 p-3 rounded-xl bg-danger-soft text-danger-fg border border-danger/20"
       >
-        <span class="w-5 h-5 i-lucide-alert-triangle shrink-0" />
+        <span class="w-5 h-5 i-lucide-triangle-alert shrink-0" />
         <div class="text-xs">
           <div class="font-semibold">{{ t('crash.dialog.subtitle') }}</div>
           <div class="flex flex-wrap items-center gap-x-4 mt-0.5 text-fg-muted">
@@ -181,7 +181,7 @@ function onClose() {
 
       <!-- Fallback when no causes detected -->
       <div v-else class="p-6 rounded-xl border border-line bg-sunken text-center space-y-2">
-        <span class="w-8 h-8 i-lucide-help-circle mx-auto text-fg-subtle block" />
+        <span class="w-8 h-8 i-lucide-circle-question-mark mx-auto text-fg-subtle block" />
         <h3 class="text-sm font-semibold text-fg">
           {{ t('crash.dialog.noCausesFoundTitle') }}
         </h3>

@@ -47,6 +47,7 @@ export { default as MMarkdown } from './MMarkdown.vue'
 export { default as MImage } from './MImage.vue'
 
 export * from './icons'
+export * from './floating'
 export * from './useDialog'
 export * from './useToast'
 export * from './theme'

@@ -55,8 +55,9 @@ function navigateToDevUi() {
       </MSettingRow>
 
       <!-- Mode -->
-      <MSettingRow :label="t('settingsAppearance.theme.mode')">
+      <MSettingRow :label="t('settingsAppearance.theme.mode')" stretch>
         <MSegmented
+          block
           :model-value="themeStore.mode"
           :options="modeOptions"
           @update:model-value="themeStore.setMode($event as ThemeMode)"
@@ -64,12 +65,13 @@ function navigateToDevUi() {
       </MSettingRow>
 
       <!-- Material -->
-      <MSettingRow :label="t('settingsAppearance.theme.material')">
+      <MSettingRow :label="t('settingsAppearance.theme.material')" stretch>
         <template #label>
           <span>{{ t('settingsAppearance.theme.material') }}</span>
           <MHelpTooltip :text="t('settingsAppearance.theme.materialDesc')" />
         </template>
         <MSegmented
+          block
           :model-value="themeStore.material"
           :options="materialOptions"
           @update:model-value="themeStore.setMaterial($event as MaterialMode)"
@@ -77,12 +79,13 @@ function navigateToDevUi() {
       </MSettingRow>
 
       <!-- Motion -->
-      <MSettingRow :label="t('settingsAppearance.motion.label')">
+      <MSettingRow :label="t('settingsAppearance.motion.label')" stretch>
         <template #label>
           <span>{{ t('settingsAppearance.motion.label') }}</span>
           <MHelpTooltip :text="t('settingsAppearance.motion.desc')" />
         </template>
         <MSegmented
+          block
           :model-value="themeStore.motion"
           :options="motionOptions"
           @update:model-value="themeStore.setMotion($event as MotionMode)"

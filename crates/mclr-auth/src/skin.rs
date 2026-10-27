@@ -132,6 +132,86 @@ pub fn crop_skin_head(skin_png_bytes: &[u8], account_id: &str) -> Result<String,
     Ok(format!("data:image/png;base64,{b64}"))
 }
 
+/// Generates a high-resolution head avatar from a skin PNG following the
+/// PCL-CE "皮肤头像生成器" algorithm:
+///
+/// - The 8x8 face region (`8,8`) is upscaled to `size - size / 8` and inset by
+///   `size / 16` on all sides, leaving a brim for the hair/hat overlay.
+/// - The 8x8 hat overlay region (`40,8`) is upscaled to the full canvas and
+///   alpha-composited on top, so brims extend past the face.
+///
+/// Accepts 64x64 / 64x32 skins and any integer upscale of them (128x128, 256x128, …).
+pub fn generate_head_avatar(skin_png_bytes: &[u8], size: u32) -> Result<Vec<u8>, AuthError> {
+    let img = image::load_from_memory(skin_png_bytes)
+        .map_err(|e| AuthError::SkinInvalidImage(format!("failed to load skin image: {e}")))?;
+
+    let (width, height) = img.dimensions();
+    let valid_shape = width >= 64 && width % 64 == 0 && (height == width || height * 2 == width);
+    if !valid_shape {
+        return Err(AuthError::SkinInvalidImage(format!(
+            "invalid skin dimensions: {width}x{height}, expected 64x64 / 64x32 or integer upscales"
+        )));
+    }
+
+    let out_size = size.clamp(16, 1024);
+    let scale = width / 64;
+    let face_span = out_size - out_size / 8;
+    let inset = out_size / 16;
+    let mut out = RgbaImage::new(out_size, out_size);
+
+    // 1. Face layer: nearest-neighbor upscale of the 8x8 face block.
+    for dy in 0..face_span {
+        let sy = 8 * scale + (dy * 8 / face_span);
+        for dx in 0..face_span {
+            let sx = 8 * scale + (dx * 8 / face_span);
+            out.put_pixel(inset + dx, inset + dy, img.get_pixel(sx, sy));
+        }
+    }
+
+    // 2. Hat/hair overlay: full-canvas upscale, alpha-composited over the face.
+    for dy in 0..out_size {
+        let sy = 8 * scale + (dy * 8 / out_size);
+        for dx in 0..out_size {
+            let sx = 40 * scale + (dx * 8 / out_size);
+            let hair = img.get_pixel(sx, sy);
+            let ha = hair[3] as f32 / 255.0;
+            if ha <= 0.0 {
+                continue;
+            }
+            if ha >= 1.0 {
+                out.put_pixel(dx, dy, hair);
+                continue;
+            }
+            let below = *out.get_pixel(dx, dy);
+            let ba = below[3] as f32 / 255.0;
+            let a_out = ha + ba * (1.0 - ha);
+            if a_out <= 0.0 {
+                continue;
+            }
+            let blend = |hc: u8, bc: u8| -> u8 {
+                (((hc as f32 * ha) + (bc as f32 * ba * (1.0 - ha))) / a_out)
+                    .round()
+                    .clamp(0.0, 255.0) as u8
+            };
+            out.put_pixel(
+                dx,
+                dy,
+                Rgba([
+                    blend(hair[0], below[0]),
+                    blend(hair[1], below[1]),
+                    blend(hair[2], below[2]),
+                    (a_out * 255.0).round().clamp(0.0, 255.0) as u8,
+                ]),
+            );
+        }
+    }
+
+    let mut buf = Cursor::new(Vec::new());
+    out.write_to(&mut buf, ImageFormat::Png)
+        .map_err(|e| AuthError::SkinInvalidImage(format!("failed to encode avatar PNG: {e}")))?;
+    Ok(buf.into_inner())
+}
+
 /// Uploads a custom skin to Minecraft services.
 pub async fn upload_skin(
     client: &reqwest::Client,
@@ -255,6 +335,54 @@ mod tests {
         let res = crop_skin_head(&bytes, "test-account");
         assert!(res.is_err());
     }
+    #[test]
+    fn test_generate_head_avatar_composites_hair_over_face() {
+        let mut skin = RgbaImage::new(64, 64);
+        for y in 8..16 {
+            for x in 8..16 {
+                skin.put_pixel(x, y, Rgba([255, 0, 0, 255]));
+            }
+        }
+        // Opaque blue hat covering only the top-left of the hat block.
+        for y in 8..12 {
+            for x in 40..44 {
+                skin.put_pixel(x, y, Rgba([0, 0, 255, 255]));
+            }
+        }
+
+        let mut buf = Cursor::new(Vec::new());
+        skin.write_to(&mut buf, ImageFormat::Png).unwrap();
+        let png = generate_head_avatar(&buf.into_inner(), 64).unwrap();
+
+        let out = image::load_from_memory(&png).unwrap();
+        assert_eq!(out.dimensions(), (64, 64));
+        // Top-left corner is hat-covered.
+        let hat_px = out.get_pixel(1, 1);
+        assert_eq!((hat_px[0], hat_px[1], hat_px[2]), (0, 0, 255));
+        // Center of the face stays red.
+        let face_px = out.get_pixel(32, 32);
+        assert_eq!((face_px[0], face_px[1], face_px[2]), (255, 0, 0));
+    }
+
+    #[test]
+    fn test_generate_head_avatar_respects_requested_size_and_rejects_bad_shape() {
+        let skin = RgbaImage::new(128, 64);
+        let mut buf = Cursor::new(Vec::new());
+        skin.write_to(&mut buf, ImageFormat::Png).unwrap();
+        let bytes = buf.into_inner();
+
+        let png = generate_head_avatar(&bytes, 256).unwrap();
+        assert_eq!(
+            image::load_from_memory(&png).unwrap().dimensions(),
+            (256, 256)
+        );
+
+        let bad = RgbaImage::new(100, 100);
+        let mut bad_buf = Cursor::new(Vec::new());
+        bad.write_to(&mut bad_buf, ImageFormat::Png).unwrap();
+        assert!(generate_head_avatar(&bad_buf.into_inner(), 64).is_err());
+    }
+
     #[test]
     fn test_default_head_data_url() {
         let classic = default_head_data_url("classic");

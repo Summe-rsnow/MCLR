@@ -464,6 +464,11 @@ pub fn select_java(
         }
     }
 
+    // When there is only one Java installation, it is automatically the default
+    if list.len() == 1 {
+        return Some(list[0].clone());
+    }
+
     // Filter by constraints
     let filtered: Vec<&JavaInstallation> = list
         .iter()

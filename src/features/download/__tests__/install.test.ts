@@ -10,6 +10,7 @@ import zhCnDownload from '../../../locales/zh-CN/download.json'
 import zhCnCommon from '../../../locales/zh-CN/common.json'
 import zhCnError from '../../../locales/zh-CN/error.json'
 import type { InstanceInfo } from '../../../ipc/client'
+import { useInstancesStore } from '../../instances/store'
 
 const i18n = createI18n({
   legacy: false,
@@ -120,8 +121,20 @@ describe('Download / Install feature', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('变更预览')
+    // Nothing changed yet: no diff affordance at all.
+    expect(wrapper.find('[data-testid="config-diff-hint"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('重置实例')
+
+    // Once a different loader is picked the summary becomes a hover diff.
+    const forgeBtn = wrapper.findAll('button').find((b) => b.text().includes('NeoForge'))
+    await forgeBtn!.trigger('click')
+    await flushPromises()
+    // The hint icon is the only hover target; the summary text stays plain.
+    const hint = wrapper.find('[data-testid="config-diff-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.find('span').classes().join(' ')).toContain('i-lucide-circle-alert')
+    expect(wrapper.find('[data-testid="config-diff"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('变更预览')
   })
 
   it('renders quilt warning in modify mode when instance has Quilt', async () => {
@@ -195,5 +208,131 @@ describe('Download / Install feature', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('48')
+  })
+
+  it('auto-names a LabyMod instance instead of leaving the bare MC version', async () => {
+    const wrapper = mount(InstallConfigurator, {
+      props: { mode: 'create', mcVersion: '1.20.1' },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const nameInput = () =>
+      wrapper.find('input[data-testid="instance-name"], input').element as HTMLInputElement
+    expect(nameInput().value).toBe('1.20.1')
+
+    const labymodBtn = wrapper.findAll('button').find((b) => b.text().includes('LabyMod'))
+    await labymodBtn!.trigger('click')
+    await flushPromises()
+
+    expect(nameInput().value).toBe('1.20.1-LabyMod_48')
+    // Version picker label and the bottom summary must use display names.
+    expect(wrapper.text()).toContain('LabyMod 版本选择')
+    expect(wrapper.text()).not.toContain('labymod 版本选择')
+    expect(wrapper.text()).toContain('LabyMod 48')
+  })
+
+  it('drops the loader suffix when switching back to vanilla', async () => {
+    const wrapper = mount(InstallConfigurator, {
+      props: { mode: 'create', mcVersion: '1.20.1' },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const nameInput = () => wrapper.find('input').element as HTMLInputElement
+    const loaderByText = (needle: string) =>
+      wrapper.findAll('button').find((b) => b.text().includes(needle))
+
+    await loaderByText('LabyMod')!.trigger('click')
+    await flushPromises()
+    expect(nameInput().value).toBe('1.20.1-LabyMod_48')
+
+    // Regression: returning to vanilla kept the stale `-LabyMod_48` suffix.
+    await loaderByText('原版纯净')!.trigger('click')
+    await flushPromises()
+    expect(nameInput().value).toBe('1.20.1')
+
+    // And switching between two loaders replaces the suffix rather than appending.
+    await loaderByText('NeoForge')!.trigger('click')
+    await flushPromises()
+    expect(nameInput().value).toContain('NeoForge')
+    expect(nameInput().value).not.toContain('LabyMod')
+  })
+
+  it('renders a translated duplicate-name message instead of the raw i18n key', async () => {
+    const wrapper = mount(InstallConfigurator, {
+      props: { mode: 'create', mcVersion: '1.20.1' },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const instancesStore = useInstancesStore()
+    instancesStore.instances = [
+      ...instancesStore.instances,
+      { ...instancesStore.instances[0], id: 'dup-1', name: '1.20.1' },
+    ]
+    await flushPromises()
+
+    const nameInput = wrapper.find('input')
+    await nameInput.setValue('1.20.1')
+    await flushPromises()
+
+    const error = wrapper.find('[data-testid="name-error"]')
+    expect(error.exists()).toBe(true)
+    expect(error.text()).toContain('已存在同名实例')
+    expect(error.text()).not.toContain('instance.name.duplicate')
+  })
+
+  it('keeps the plain auto name and reports the collision instead of renaming it', async () => {
+    const wrapper = mount(InstallConfigurator, {
+      props: { mode: 'create', mcVersion: '1.20.1' },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const instancesStore = useInstancesStore()
+    instancesStore.instances = [
+      ...instancesStore.instances,
+      { ...instancesStore.instances[0], id: 'dup-2', name: '1.20.1' },
+    ]
+    await flushPromises()
+
+    // The name stays exactly what the user expects; the collision is surfaced.
+    const nameInput = wrapper.find('input')
+    await nameInput.setValue('1.20.1')
+    await flushPromises()
+    expect((nameInput.element as HTMLInputElement).value).toBe('1.20.1')
+    expect(wrapper.find('[data-testid="name-error"]').text()).toContain('已存在同名实例')
+  })
+
+  it('hides incompatible extras and keeps loader cards compact', async () => {
+    const wrapper = mount(InstallConfigurator, {
+      props: { mode: 'create', mcVersion: '1.21.1' },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const loaderBtn = wrapper.findAll('button').find((b) => b.text().includes('NeoForge'))
+    await loaderBtn!.trigger('click')
+    await flushPromises()
+
+    // NeoForge + OptiFine is impossible: the card must be gone, not disabled.
+    expect(wrapper.text()).not.toContain('OptiFine 搭配增强')
+    expect(wrapper.text()).not.toContain('互不兼容')
+    // Selected card keeps its original highlight (outer ring + glow), untouched.
+    const selected = wrapper
+      .findAll('[data-testid="primary-loader-card"]')
+      .find((c) => c.classes().includes('border-primary'))
+    expect(selected).toBeTruthy()
+    const cls = selected!.classes().join(' ')
+    expect(cls).toContain('bg-primary/10')
+    expect(cls).toContain('ring-primary')
+    expect(cls).toContain('shadow-primary/20')
+    expect(cls).not.toContain('ring-inset')
+
+    // Cards share the row evenly (no wrap, no left-aligned dead space).
+    const grid = wrapper.find('[data-testid="primary-loader-grid"]')
+    expect(grid.classes().join(' ')).toContain('grid-cols-[repeat(auto-fit,minmax(150px,1fr))]')
+    expect(grid.classes()).not.toContain('flex-wrap')
   })
 })

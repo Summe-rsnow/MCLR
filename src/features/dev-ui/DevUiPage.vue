@@ -323,7 +323,7 @@ const contextMenuY = ref(0)
 const contextMenuItems = computed<ContextMenuItem[]>(() => [
   { key: 'edit', label: t('devUi.contextEdit'), icon: 'i-lucide-pencil' },
   { key: 'copy', label: t('devUi.contextCopy'), icon: 'i-lucide-copy' },
-  { key: 'delete', label: t('devUi.contextDelete'), icon: 'i-lucide-trash-2', danger: true },
+  { key: 'delete', label: t('devUi.contextDelete'), icon: 'i-lucide-trash', danger: true },
 ])
 
 function openContextMenu(evt: MouseEvent) {
@@ -415,7 +415,7 @@ async function triggerConfirmDialog() {
 
     <!-- 2. demo-layout: Layout and Containers -->
     <div data-testid="demo-layout" class="space-y-4">
-      <MSection :title="t('devUi.layoutTitle')" icon="i-lucide-layout">
+      <MSection :title="t('devUi.layoutTitle')" icon="i-lucide-layout-template">
         <!-- MPageHeader demonstration -->
         <div class="rounded-xl border border-line p-4 bg-sunken space-y-2">
           <div class="text-xs font-mono text-fg-muted"><code>MPageHeader</code></div>
@@ -540,7 +540,7 @@ async function triggerConfirmDialog() {
             <MButton variant="tonal" icon="i-lucide-sparkles">{{ t('devUi.btnTonal') }}</MButton>
             <MButton variant="outline" icon="i-lucide-folder">{{ t('devUi.btnOutline') }}</MButton>
             <MButton variant="text">{{ t('devUi.btnText') }}</MButton>
-            <MButton variant="danger" icon="i-lucide-trash-2">{{ t('devUi.btnDanger') }}</MButton>
+            <MButton variant="danger" icon="i-lucide-trash">{{ t('devUi.btnDanger') }}</MButton>
             <MButton variant="primary" loading>{{ t('devUi.btnLoading') }}</MButton>
             <MButton variant="primary" disabled>{{ t('devUi.btnDisabled') }}</MButton>
           </div>
@@ -569,7 +569,7 @@ async function triggerConfirmDialog() {
               :tooltip="t('devUi.iconBtnTip')"
             />
             <MIconButton
-              icon="i-lucide-trash-2"
+              icon="i-lucide-trash"
               size="lg"
               variant="danger"
               :tooltip="t('devUi.iconBtnTip')"

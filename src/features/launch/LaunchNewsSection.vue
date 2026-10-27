@@ -294,7 +294,7 @@ function onConfirmJump() {
             <MButton
               variant="tonal"
               size="xs"
-              icon="i-lucide-arrow-right-circle"
+              icon="i-lucide-circle-arrow-right"
               class="rounded-full shadow-2 bg-panel/90 backdrop-blur-md"
               data-testid="news-jump-btn"
               @click="openJumpDialog"

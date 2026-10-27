@@ -20,6 +20,8 @@ defineProps<{
   }
   currentRelPath?: string
   checkingUpdates?: boolean
+  selectedCount?: number
+  totalCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +40,7 @@ const emit = defineEmits<{
   (e: 'downloadMore'): void
   (e: 'export', format: 'txt' | 'csv'): void
   (e: 'checkUpdates'): void
+  (e: 'toggleSelectAll'): void
 }>()
 
 const { t } = useI18n()
@@ -61,6 +64,21 @@ function handleFileInputChange(e: Event) {
     <!-- Toolbar -->
     <div class="flex flex-wrap gap-2 min-w-0 items-center justify-between">
       <div class="flex flex-wrap items-center gap-2">
+        <!-- Select All Button (PCL Parity) -->
+        <MButton
+          v-if="totalCount !== undefined && totalCount > 0"
+          variant="tonal"
+          size="sm"
+          :icon="selectedCount === totalCount ? 'i-lucide-square-check' : 'i-lucide-square'"
+          @click="emit('toggleSelectAll')"
+        >
+          {{
+            selectedCount === totalCount
+              ? t('resources.selection.clear')
+              : t('resources.selection.selectAll')
+          }}
+        </MButton>
+
         <MButton variant="primary" size="sm" @click="triggerFileInput">
           <span class="i-lucide-plus mr-1 w-4 h-4" />
           {{ t('resources.actions.addFiles') }}
@@ -79,7 +97,7 @@ function handleFileInputChange(e: Event) {
           size="sm"
           @click="emit('batchUpdate')"
         >
-          <span class="i-lucide-arrow-up-circle mr-1 w-4 h-4 text-primary" />
+          <span class="i-lucide-circle-arrow-up mr-1 w-4 h-4 text-primary" />
           {{ t('resources.actions.updateAll') }} ({{ filterCounts.updatable }})
         </MButton>
         <MButton
@@ -109,7 +127,7 @@ function handleFileInputChange(e: Event) {
         </MButton>
 
         <MButton variant="tonal" size="sm" @click="emit('downloadMore')">
-          <span class="i-lucide-download-cloud mr-1 w-4 h-4" />
+          <span class="i-lucide-cloud-download mr-1 w-4 h-4" />
           {{ t('resources.downloadMore') }}
         </MButton>
 
@@ -119,7 +137,7 @@ function handleFileInputChange(e: Event) {
             {{ t('resources.actions.export') }}
           </MButton>
           <div
-            class="absolute top-full left-0 mt-1 hidden group-hover:flex flex-col bg-panel border border-line rounded-lg shadow-lg z-20 py-1 min-w-32"
+            class="absolute top-full right-0 mt-1 hidden group-hover:flex flex-col bg-panel border border-line rounded-lg shadow-lg z-20 py-1 min-w-32 max-w-[min(16rem,calc(100vw-2rem))]"
           >
             <button
               class="px-3 py-1.5 text-xs text-left hover:bg-sunken text-fg transition cursor-pointer"
@@ -143,7 +161,7 @@ function handleFileInputChange(e: Event) {
             {{ t('resources.title') }}
           </MButton>
           <div
-            class="absolute top-full left-0 mt-1 hidden group-hover:flex flex-col bg-panel border border-line rounded-lg shadow-lg z-20 py-1 min-w-32"
+            class="absolute top-full right-0 mt-1 hidden group-hover:flex flex-col bg-panel border border-line rounded-lg shadow-lg z-20 py-1 min-w-32 max-w-[min(16rem,calc(100vw-2rem))]"
           >
             <button
               class="px-3 py-1.5 text-xs text-left hover:bg-sunken text-fg transition cursor-pointer"

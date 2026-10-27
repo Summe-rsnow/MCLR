@@ -300,6 +300,27 @@ export function loaderIncompatibilities(
   return result
 }
 
+/** Display names for loader ids, used in summaries and picker labels. */
+export const LOADER_DISPLAY_NAME: Record<string, string> = {
+  none: 'Vanilla',
+  vanilla: 'Vanilla',
+  fabric: 'Fabric',
+  legacyfabric: 'Legacy Fabric',
+  legacyFabric: 'Legacy Fabric',
+  forge: 'Forge',
+  neoforge: 'NeoForge',
+  cleanroom: 'Cleanroom',
+  labymod: 'LabyMod',
+  quilt: 'Quilt',
+  liteloader: 'LiteLoader',
+  optifine: 'OptiFine',
+}
+
+export function loaderDisplayName(id?: string | null): string {
+  if (!id) return LOADER_DISPLAY_NAME.none
+  return LOADER_DISPLAY_NAME[id] ?? LOADER_DISPLAY_NAME[id.toLowerCase()] ?? id
+}
+
 export interface DefaultNameInput {
   mcVersion: string
   fabricVersion?: string | null
@@ -324,8 +345,8 @@ export function defaultName(input: DefaultNameInput): string {
     name += `-LegacyFabric_${input.legacyFabricVersion}`
   }
   if (input.labymodVersion) {
-    const channel = input.labymodChannel?.toLowerCase() === 'snapshot' ? 'Snapshot' : 'Production'
-    name += `-LabyMod_${input.labymodVersion}_${channel}`
+    const snapshot = input.labymodChannel?.toLowerCase() === 'snapshot'
+    name += `-LabyMod_${input.labymodVersion}${snapshot ? '_Snapshot' : ''}`
   }
   if (input.forgeVersion) {
     name += `-Forge_${input.forgeVersion}`

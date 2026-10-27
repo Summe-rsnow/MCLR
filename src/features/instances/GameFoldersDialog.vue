@@ -200,7 +200,7 @@ async function onRemoveFolder(path: string) {
             <MIconButton
               variant="text"
               size="sm"
-              icon="i-lucide-trash-2"
+              icon="i-lucide-trash"
               class="text-danger"
               data-testid="delete-folder-btn"
               :title="t('instances.folders.removeFolder')"

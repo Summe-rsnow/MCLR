@@ -223,11 +223,12 @@ pub async fn launch(params: LaunchPipelineParams<'_>) -> Result<LaunchStartResul
         authlib_injector_jar: authlib_jar.as_deref(),
     })?;
 
-    // 7. Pre-launch command
+    // 7. Pre-launch command (instance override wins over the global default)
     let pre_cmd = instance_config
         .pre_launch_command
         .as_deref()
-        .unwrap_or_default();
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(settings.launch.pre_launch_command.as_str());
     if !pre_cmd.trim().is_empty() {
         execute_pre_launch_command_async(
             pre_cmd,
@@ -237,6 +238,11 @@ pub async fn launch(params: LaunchPipelineParams<'_>) -> Result<LaunchStartResul
             &session.username,
         )
         .await?;
+    }
+
+    // 7b. Windows GPU preference so the game uses the discrete GPU.
+    if settings.launch.require_gpu_high_performance {
+        crate::launch::win32::set_gpu_high_performance(&spec.java_executable);
     }
 
     // 8. Spawn process
@@ -257,6 +263,10 @@ pub async fn launch(params: LaunchPipelineParams<'_>) -> Result<LaunchStartResul
             spec.java_executable.display()
         ))
     })?;
+
+    if let Some(pid) = child.id() {
+        crate::launch::win32::apply_process_priority(pid, &settings.launch.process_priority);
+    }
 
     let process_id = child.id().unwrap_or(0);
     info!(

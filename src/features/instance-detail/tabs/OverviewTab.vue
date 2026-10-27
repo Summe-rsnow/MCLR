@@ -189,7 +189,7 @@ function isCurrentIcon(key: string): boolean {
     <!-- Basic Info Section -->
     <MSection :title="t('instanceDetail.overview.title')" icon="i-lucide-info">
       <template #actions>
-        <MButton variant="text" size="xs" icon="i-lucide-edit-2" @click="openRename">
+        <MButton variant="text" size="xs" icon="i-lucide-square-pen" @click="openRename">
           {{ t('instanceDetail.overview.rename') }}
         </MButton>
       </template>
@@ -292,7 +292,7 @@ function isCurrentIcon(key: string): boolean {
           {{ t('instanceDetail.overview.repair') }}
         </MButton>
 
-        <MButton variant="danger" size="sm" icon="i-lucide-trash-2" @click="handleDelete($event)">
+        <MButton variant="danger" size="sm" icon="i-lucide-trash" @click="handleDelete($event)">
           {{ t('instanceDetail.overview.delete') }}
         </MButton>
       </div>

@@ -773,6 +773,20 @@ async toolsSaveSkin(path: string, dataUrl: string) : Promise<Result<null, AppErr
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Generates a head avatar PNG (data URL) from a skin file on disk.
+ * 
+ * Mirrors PCL-CE's "皮肤头像生成器": the 8x8 face is upscaled with an inset
+ * brim, then the hat/hair overlay is composited on top at full canvas size.
+ */
+async toolsGenerateSkinAvatar(skinPath: string, size: number) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("tools_generate_skin_avatar", { skinPath, size }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async toolsCacheInfo() : Promise<Result<CacheSizeInfo, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("tools_cache_info") };
@@ -974,7 +988,28 @@ export type LanguageSettings = { locale: string; formatCulture: string }
  * Runtime metadata for a launched Minecraft process.
  */
 export type LaunchProcessInfo = { processId: number; instanceId: string; accountName: string; startedAt: string; running: boolean; exitCode: number | null }
-export type LaunchSettings = { ramMode: string; ramCustomMb: number; jvmArgs: string; gameArgs: string; windowTitle: string; fullscreen: boolean; width: number; height: number; preferredIpStack: string; processPriority: string; closeLauncherOnStart: string; disableCrashAnalysis: boolean }
+export type LaunchSettings = { ramMode: string; ramCustomMb: number; jvmArgs: string; gameArgs: string; windowTitle: string; fullscreen: boolean; width: number; height: number; preferredIpStack: string; processPriority: string; closeLauncherOnStart: string; disableCrashAnalysis: boolean; 
+/**
+ * Software renderer bridge: `"default" | "software" | "d3d12" | "vulkan"`.
+ * Only applied when the bundled `mesa-loader` agent is available.
+ */
+renderer: string; 
+/**
+ * Global default pre-launch command (instance setting wins when set).
+ */
+preLaunchCommand: string; 
+/**
+ * Launch `java.exe` instead of `javaw.exe` so a console window stays attached.
+ */
+useJavaExe: boolean; 
+/**
+ * Register the Java executable as high-performance GPU in Windows settings.
+ */
+requireGpuHighPerformance: boolean; 
+/**
+ * Force `-Xms` to equal `-Xmx` (fixed heap, fewer GC pauses).
+ */
+lockMemory: boolean }
 /**
  * Result returned to IPC callers immediately upon launching.
  */

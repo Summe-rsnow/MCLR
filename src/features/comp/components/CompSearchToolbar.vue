@@ -120,7 +120,7 @@ const { t } = useI18n()
       <MInput
         v-model="query"
         :placeholder="searchPlaceholder"
-        :icon="loading ? 'i-lucide-loader-2 animate-spin' : 'i-lucide-search'"
+        :icon="loading ? 'i-lucide-loader-circle animate-spin' : 'i-lucide-search'"
         clearable
         @keydown.enter="emit('search')"
       />

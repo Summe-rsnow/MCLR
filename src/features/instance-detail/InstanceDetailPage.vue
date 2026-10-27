@@ -274,7 +274,7 @@ function handleLaunch() {
         </div>
       </div>
       <div v-else-if="!instance" class="py-20">
-        <MEmpty :title="t('instanceDetail.notFound')" icon="i-lucide-alert-circle">
+        <MEmpty :title="t('instanceDetail.notFound')" icon="i-lucide-circle-alert">
           <MButton variant="tonal" size="sm" icon="i-lucide-arrow-left" @click="goBack">
             {{ t('instanceDetail.back') }}
           </MButton>

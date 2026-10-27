@@ -519,6 +519,131 @@ mod tests {
         assert_eq!(classify_log_level(fatal_line), LogLevel::Fatal);
     }
 
+    /// Builds a minimal spec so launch-option tests stay focused on argument content.
+    fn build_test_spec(
+        launch_settings: LaunchSettings,
+        java_home: &Path,
+    ) -> crate::launch::LaunchCommandSpec {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mc_folder = temp_dir.path().to_path_buf();
+        let instance_id = "opt-instance";
+        let instance_dir = mc_folder.join("versions").join(instance_id);
+        fs::create_dir_all(&instance_dir).unwrap();
+        fs::write(
+            instance_dir.join(format!("{instance_id}.json")),
+            r#"{"id":"opt-instance","mainClass":"net.minecraft.client.main.Main"}"#,
+        )
+        .unwrap();
+        let natives_dir = instance_dir.join("natives");
+        fs::create_dir_all(&natives_dir).unwrap();
+
+        let bin = java_home.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(bin.join("java.exe"), b"stub").unwrap();
+        fs::write(bin.join("javaw.exe"), b"stub").unwrap();
+
+        let java = JavaInstallation {
+            path: bin.join("java.exe").to_string_lossy().to_string(),
+            home: java_home.to_string_lossy().to_string(),
+            version: "21.0.2".to_string(),
+            major: 21,
+            implementor: "Test".to_string(),
+            arch: "x64".to_string(),
+            is_jdk: true,
+            source: "test".to_string(),
+        };
+        let version_json = VersionJson {
+            id: instance_id.to_string(),
+            main_class: Some("net.minecraft.client.main.Main".to_string()),
+            ..Default::default()
+        };
+        let session = ResolvedAccountSession {
+            id: "opt-acc".to_string(),
+            kind: AccountKind::Offline,
+            username: "Steve".to_string(),
+            uuid: "00000000000000000000000000000000".to_string(),
+            access_token: "fake-token".to_string(),
+            user_type: "legacy".to_string(),
+            api_location: None,
+            xuid: None,
+        };
+        let game_settings = GameSettings::default();
+        let instance_config = InstanceConfig::default();
+
+        // Leak the tempdir so the paths stay valid for the returned spec.
+        std::mem::forget(temp_dir);
+        build_launch_command(&LaunchCommandInput {
+            mc_folder: &mc_folder,
+            instance_id,
+            version_json: &version_json,
+            java: &java,
+            launch_settings: &launch_settings,
+            game_settings: &game_settings,
+            instance_config: &instance_config,
+            session: &session,
+            natives_dir: &natives_dir,
+            authlib_injector_jar: None,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn test_lock_memory_mirrors_xmx_into_xms() {
+        let temp = tempfile::tempdir().unwrap();
+        let settings = LaunchSettings {
+            ram_mode: "custom".to_string(),
+            ram_custom_mb: 4096,
+            lock_memory: true,
+            ..Default::default()
+        };
+        let spec = build_test_spec(settings, temp.path());
+        let xmx = spec
+            .args
+            .iter()
+            .find(|a| a.starts_with("-Xmx"))
+            .expect("-Xmx present")
+            .clone();
+        let xms = spec
+            .args
+            .iter()
+            .find(|a| a.starts_with("-Xms"))
+            .expect("-Xms added by lock_memory")
+            .clone();
+        assert_eq!(xms, xmx.replace("-Xmx", "-Xms"));
+    }
+
+    #[test]
+    fn test_lock_memory_respects_user_supplied_xms() {
+        let temp = tempfile::tempdir().unwrap();
+        let settings = LaunchSettings {
+            jvm_args: "-Xms512m".to_string(),
+            lock_memory: true,
+            ..Default::default()
+        };
+        let spec = build_test_spec(settings, temp.path());
+        let xms_count = spec.args.iter().filter(|a| a.starts_with("-Xms")).count();
+        assert_eq!(xms_count, 1, "user -Xms must not be duplicated");
+    }
+
+    #[test]
+    fn test_use_java_exe_switches_binary() {
+        let temp = tempfile::tempdir().unwrap();
+        let launch = |use_java_exe: bool| {
+            let settings = LaunchSettings {
+                use_java_exe,
+                ..Default::default()
+            };
+            build_test_spec(settings, temp.path())
+                .java_executable
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_string()
+        };
+        assert_eq!(launch(false), "javaw.exe");
+        assert_eq!(launch(true), "java.exe");
+    }
+
     #[test]
     fn test_argfile_generation_over_8000_chars() {
         let temp_dir = tempfile::tempdir().unwrap();

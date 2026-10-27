@@ -259,6 +259,28 @@ pub async fn ensure_authlib_injector(
 }
 
 /// Helper substituting placeholders in launch argument strings.
+/// Builds the `-javaagent:` argument for the bundled Mesa bridge, if present.
+///
+/// The agent lives at `<data>/tools/mesa-loader/Loader.jar`; the option is a no-op
+/// when the file is missing so enabling it can never break a launch.
+fn renderer_agent_arg(renderer: &str) -> Option<String> {
+    let mode = match renderer {
+        "software" => "llvmpipe",
+        "d3d12" => "d3d12",
+        "vulkan" => "zink",
+        _ => return None,
+    };
+    let jar = paths::tools_dir().join("mesa-loader").join("Loader.jar");
+    if !jar.is_file() {
+        warn!(
+            "Renderer option '{mode}' requested but {} is missing; using the game default",
+            jar.display()
+        );
+        return None;
+    }
+    Some(format!("-javaagent:\"{}\"={mode}", jar.display()))
+}
+
 pub fn substitute_placeholders(arg: &str, subs: &HashMap<&str, String>) -> String {
     let mut result = arg.to_string();
     for (key, val) in subs {
@@ -314,12 +336,27 @@ pub fn build_launch_command(
         jvm_args.extend(custom_jvm.split_whitespace().map(|s| s.to_string()));
     }
 
+    // Software renderer bridge (Mesa): only injected when the agent jar exists,
+    // so the option is inert instead of breaking launches when it is absent.
+    if let Some(agent_arg) = renderer_agent_arg(&launch_settings.renderer) {
+        jvm_args.insert(0, agent_arg);
+    }
+
     jvm_args.push("-Dlog4j2.formatMsgNoLookups=true".to_string());
 
     let max_mb = compute_ram_mb(launch_settings, instance_config, &game_dir);
     let mn_mb = ((0.15 * max_mb as f64) as u32).max(128);
     jvm_args.push(format!("-Xmn{mn_mb}m"));
     jvm_args.push(format!("-Xmx{max_mb}m"));
+
+    // Lock memory: mirror -Xmx into -Xms unless the user already pinned it.
+    if launch_settings.lock_memory
+        && !jvm_args
+            .iter()
+            .any(|a| a.to_ascii_lowercase().starts_with("-xms"))
+    {
+        jvm_args.push(format!("-Xms{max_mb}m"));
+    }
 
     jvm_args.push("-Dfile.encoding=COMPAT".to_string());
     jvm_args.push("-Dstdout.encoding=UTF-8".to_string());
@@ -557,7 +594,11 @@ pub fn build_launch_command(
 
     let java_bin = PathBuf::from(&java.home).join("bin");
     let javaw_exe = java_bin.join("javaw.exe");
-    let java_executable = if javaw_exe.exists() {
+    let console_exe = java_bin.join("java.exe");
+    // `use_java_exe` keeps a console window attached so stdout/logs stay visible.
+    let java_executable = if launch_settings.use_java_exe && console_exe.exists() {
+        console_exe
+    } else if javaw_exe.exists() {
         javaw_exe
     } else {
         PathBuf::from(&java.path)

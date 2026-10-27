@@ -70,7 +70,8 @@
       "accountRequired": "账号不能为空",
       "passwordRequired": "密码不能为空",
       "uuidInvalid": "UUID 格式不正确，需为有效 UUID 或 32 位十六进制字符串"
-    }
+    },
+    "comingSoon": "敬请期待"
   },
   "skin": {
     "title": "皮肤与披风管理",

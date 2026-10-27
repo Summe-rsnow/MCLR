@@ -127,7 +127,7 @@ function handleBack() {
           class="p-3 rounded-xl border border-warning/30 bg-warning/10 flex items-center justify-between gap-3"
         >
           <div class="flex items-center gap-2.5">
-            <span class="w-5 h-5 i-lucide-alert-triangle text-warning shrink-0" />
+            <span class="w-5 h-5 i-lucide-triangle-alert text-warning shrink-0" />
             <div>
               <div class="font-semibold text-sm text-fg">{{ t('download.noFolderWarning') }}</div>
               <div class="text-xs text-fg-muted mt-0.5">{{ t('download.noFolderDesc') }}</div>

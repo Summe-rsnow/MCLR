@@ -362,14 +362,14 @@ onMounted(() => {
           />
 
           <MIconButton
-            icon="i-lucide-edit-2"
+            icon="i-lucide-square-pen"
             size="sm"
             :title="t('instanceDetail.servers.edit')"
             @click="openEditDialog(server)"
           />
 
           <MIconButton
-            icon="i-lucide-trash-2"
+            icon="i-lucide-trash"
             size="sm"
             class="text-danger hover:bg-danger/10"
             :title="t('instanceDetail.servers.delete')"

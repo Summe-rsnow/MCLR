@@ -118,6 +118,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         // [tools]
         crate::ipc::tools::tools_fetch_skin,
         crate::ipc::tools::tools_save_skin,
+        crate::ipc::tools::tools_generate_skin_avatar,
         crate::ipc::tools::tools_cache_info,
         crate::ipc::tools::tools_cache_clear,
         crate::ipc::tools::tools_custom_download,

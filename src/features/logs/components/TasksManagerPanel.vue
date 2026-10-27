@@ -117,10 +117,10 @@ async function onCancelTask(taskId: string) {
               <span
                 class="w-4 h-4 shrink-0"
                 :class="{
-                  'i-lucide-loader-2 animate-spin text-primary': task.state === 'running',
-                  'i-lucide-check-circle-2 text-success': task.state === 'success',
-                  'i-lucide-x-circle text-danger': task.state === 'failed',
-                  'i-lucide-pause-circle text-warning': task.state === 'paused',
+                  'i-lucide-loader-circle animate-spin text-primary': task.state === 'running',
+                  'i-lucide-circle-check-big text-success': task.state === 'success',
+                  'i-lucide-circle-x text-danger': task.state === 'failed',
+                  'i-lucide-circle-pause text-warning': task.state === 'paused',
                   'i-lucide-clock text-fg-muted': task.state === 'waiting',
                   'i-lucide-ban text-fg-muted': task.state === 'canceled',
                 }"
@@ -200,7 +200,7 @@ async function onCancelTask(taskId: string) {
                 <span
                   class="w-3.5 h-3.5 shrink-0"
                   :class="{
-                    'i-lucide-loader-2 animate-spin text-primary': child.state === 'running',
+                    'i-lucide-loader-circle animate-spin text-primary': child.state === 'running',
                     'i-lucide-check text-success': child.state === 'success',
                     'i-lucide-x text-danger': child.state === 'failed',
                     'i-lucide-pause text-warning': child.state === 'paused',

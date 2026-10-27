@@ -87,6 +87,45 @@ describe('Launch feature', () => {
     expect(store.runningProcesses.length).toBeGreaterThan(0)
   })
 
+  it('keeps the persisted instance selection while the instance list is still empty', () => {
+    // Regression: the heal watcher used to clear the stored id on first tick,
+    // before `fetchInstances()` resolved, so a restart never restored the
+    // last-used instance.
+    storage['mclr.launch.instanceId'] = '1.20.1-vanilla'
+
+    useInstancesStore()
+    const store = useLaunchStore()
+
+    expect(store.selectedInstanceId).toBe('1.20.1-vanilla')
+    expect(storage['mclr.launch.instanceId']).toBe('1.20.1-vanilla')
+  })
+
+  it('restores the persisted instance once the list loads after restart', async () => {
+    storage['mclr.launch.instanceId'] = '1.20.1-vanilla'
+
+    const instancesStore = useInstancesStore()
+    const store = useLaunchStore()
+    expect(store.selectedInstanceId).toBe('1.20.1-vanilla')
+
+    await instancesStore.fetchInstances()
+
+    expect(store.selectedInstance?.id).toBe('1.20.1-vanilla')
+    expect(storage['mclr.launch.instanceId']).toBe('1.20.1-vanilla')
+  })
+
+  it('heals a dangling persisted id only after the list has loaded', async () => {
+    storage['mclr.launch.instanceId'] = 'deleted-instance'
+
+    const instancesStore = useInstancesStore()
+    const store = useLaunchStore()
+
+    await instancesStore.fetchInstances()
+
+    expect(store.selectedInstance?.id).not.toBe('deleted-instance')
+    expect(store.selectedInstanceId).toBe(store.selectedInstance?.id)
+    expect(storage['mclr.launch.instanceId']).toBe(store.selectedInstance?.id)
+  })
+
   it('handles Java missing error and triggers recovery download', async () => {
     const store = useLaunchStore()
     expect(store.javaMissingMajor).toBeNull()
@@ -341,6 +380,45 @@ describe('Launch feature', () => {
     expect(previewCard.text()).not.toContain('versions/1.20.1-vanilla')
   })
 
+  it('gives instance dropdown options an instance icon like accounts show avatars', async () => {
+    const instancesStore = useInstancesStore()
+    await instancesStore.fetchInstances()
+    useLaunchStore()
+
+    const wrapper = mount(LaunchPage, {
+      global: { plugins: [i18n, router] },
+    })
+    await flushPromises()
+
+    const select = wrapper.findAllComponents({ name: 'MSelect' }).find((s) => {
+      const options = s.props('options') as Array<{ value: string; icon?: string }>
+      return options.some((o) => o.value === '1.20.1-vanilla')
+    })
+    expect(select).toBeTruthy()
+
+    const options = select!.props('options') as Array<{
+      label: string
+      value: string
+      icon?: string
+      avatar?: string
+      badge?: string
+    }>
+    const vanilla = options.find((o) => o.value === '1.20.1-vanilla')!
+    expect(vanilla.icon || vanilla.avatar).toBeTruthy()
+    expect(vanilla.badge).toBeTruthy()
+
+    // The trigger renders the selected instance icon next to its name.
+    const trigger = select!.find('button')
+    expect(trigger.exists()).toBe(true)
+    const iconEl = trigger.findAll('span, img').filter((el) => {
+      const cls = el.attributes('class') ?? ''
+      return (
+        cls.includes('i-lucide') || cls.includes('i-simple-icons') || el.element.tagName === 'IMG'
+      )
+    })
+    expect(iconEl.length).toBeGreaterThan(0)
+  })
+
   it('renders AccountPreviewCard with username and manage button', async () => {
     const wrapper = mount(LaunchPage, {
       global: {
@@ -396,5 +474,89 @@ describe('Launch feature', () => {
     await flushPromises()
 
     expect(killSpy).toHaveBeenCalledWith(2026)
+  })
+})
+
+describe('Launch store instance selection persistence', () => {
+  let storage: Record<string, string> = {}
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    setupMockIpc()
+    resetMockLaunchData()
+    storage = {}
+    Object.defineProperty(window, 'localStorage', {
+      value: {
+        getItem: (k: string) => (k in storage ? storage[k]! : null),
+        setItem: (k: string, v: string) => {
+          storage[k] = String(v)
+        },
+        removeItem: (k: string) => {
+          delete storage[k]
+        },
+        clear: () => {
+          storage = {}
+        },
+      },
+      writable: true,
+      configurable: true,
+    })
+  })
+
+  it('persists the chosen instance id and restores it in a fresh store', async () => {
+    const instancesStore = useInstancesStore()
+    await instancesStore.fetchInstances()
+    expect(instancesStore.instances.length).toBeGreaterThan(1)
+
+    const target = instancesStore.instances[1]!
+    const launchStore = useLaunchStore()
+    launchStore.selectInstance(target.id)
+    expect(storage['mclr.launch.instanceId']).toBe(target.id)
+
+    // Fresh pinia = fresh store, mimicking an app restart.
+    setActivePinia(createPinia())
+    const restartedInstances = useInstancesStore()
+    await restartedInstances.fetchInstances()
+    const restartedLaunch = useLaunchStore()
+    expect(restartedLaunch.selectedInstance?.id).toBe(target.id)
+  })
+
+  it('falls back to the first instance when the persisted id no longer exists', async () => {
+    storage['mclr.launch.instanceId'] = 'deleted-outside-the-app'
+    setActivePinia(createPinia())
+
+    const instancesStore = useInstancesStore()
+    await instancesStore.fetchInstances()
+    const launchStore = useLaunchStore()
+
+    expect(instancesStore.instances.length).toBeGreaterThan(0)
+    // Fallback order: pinned instance first, otherwise the first instance.
+    const expected =
+      instancesStore.instances.find((i) => i.config?.pinned)?.id ?? instancesStore.instances[0]!.id
+    expect(launchStore.selectedInstance?.id).toBe(expected)
+    expect(launchStore.lastUsedInstanceId).toBe(expected)
+    // The dangling pointer is healed on disk.
+    await flushPromises()
+    expect(storage['mclr.launch.instanceId']).toBe(expected)
+  })
+
+  it('stacks the instance and account selectors full width instead of a fixed 224px row', async () => {
+    const instancesStore = useInstancesStore()
+    await instancesStore.fetchInstances()
+    const accountsStore = useAccountsStore()
+    await accountsStore.fetchAccounts()
+
+    const wrapper = mount(LaunchPage, {
+      global: { plugins: [i18n, router] },
+    })
+    await flushPromises()
+
+    // Regression: `class="w-56"` inside a half-width card overflowed the panel.
+    for (const id of ['launch-instance-select', 'launch-account-select']) {
+      const select = wrapper.find(`[data-testid="${id}"]`)
+      expect(select.exists(), id).toBe(true)
+      expect(select.classes(), id).toContain('w-full')
+      expect(select.classes(), id).not.toContain('w-56')
+    }
   })
 })

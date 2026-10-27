@@ -114,7 +114,7 @@ function onClose(): void {
       <!-- Inspect Loading -->
       <div v-if="inspecting" class="py-3 space-y-2">
         <div class="text-xs text-fg-muted flex items-center space-x-2">
-          <span class="i-lucide-loader-2 animate-spin w-4 h-4 text-primary" />
+          <span class="i-lucide-loader-circle animate-spin w-4 h-4 text-primary" />
           <span>{{ t('comp.modpackImport.inspecting') }}</span>
         </div>
         <MSkeleton class="h-16 rounded-xl" />

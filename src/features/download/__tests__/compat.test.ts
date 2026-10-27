@@ -94,6 +94,34 @@ describe('compat defaultName', () => {
       }),
     ).toBe('24w14a')
   })
+
+  it('names LabyMod instances with the LabyMod version', () => {
+    expect(
+      defaultName({
+        mcVersion: '1.21.1',
+        labymodVersion: '4.2.4',
+        labymodChannel: 'production',
+      }),
+    ).toBe('1.21.1-LabyMod_4.2.4')
+
+    // Snapshot builds are marked; production stays suffix-free.
+    expect(
+      defaultName({
+        mcVersion: '1.21.1',
+        labymodVersion: '4.2.5',
+        labymodChannel: 'snapshot',
+      }),
+    ).toBe('1.21.1-LabyMod_4.2.5_Snapshot')
+
+    expect(
+      defaultName({
+        mcVersion: '1.21.1',
+        labymodVersion: '4.2.4',
+        liteloader: false,
+        optifineDisplay: '1.21.1 HD_U_J3',
+      }),
+    ).toBe('1.21.1-LabyMod_4.2.4-OptiFine_HD_U_J3')
+  })
 })
 
 describe('compat validateInstanceNameLocal', () => {

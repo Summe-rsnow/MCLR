@@ -95,7 +95,7 @@ const navGroups: NavGroup[] = [
       {
         key: 'about',
         titleKey: 'settings.nav.aboutHelp',
-        icon: 'i-lucide-help-circle',
+        icon: 'i-lucide-circle-question-mark',
         to: '/settings/about',
         path: '/settings/about',
       },

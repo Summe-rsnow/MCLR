@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { MInput, MBadge, MButton } from '../../../ui'
+import { MInput, MBadge, MButton, MHelpTooltip } from '../../../ui'
+import { useErrorText } from '../../../composables/useErrorText'
 
 defineProps<{
   mode: 'create' | 'modify'
@@ -23,6 +24,9 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+// Validation codes are error codes (`instance.name.duplicate`), which live under
+// the `error.` namespace; formatting them directly printed the raw key.
+const { formatError } = useErrorText()
 </script>
 
 <template>
@@ -47,23 +51,8 @@ const { t } = useI18n()
         :placeholder="t('download.configurator.namePlaceholder')"
         @update:model-value="(val) => emit('input-name', val)"
       />
-      <div v-if="nameValidationError" class="text-xs text-red-400">
-        {{ t(nameValidationError) }}
-      </div>
-    </div>
-
-    <!-- Section 6: Diff in Modify mode -->
-    <div
-      v-if="mode === 'modify' && !isQuiltInstance"
-      class="p-4 rounded-xl border border-white/10 bg-white/5 flex flex-col gap-1.5"
-    >
-      <div class="text-xs text-fg-muted">
-        {{ t('download.modify.diffLabel') }}
-      </div>
-      <div class="text-sm font-medium flex items-center gap-2">
-        <span>{{ initialSummary || 'Vanilla' }}</span>
-        <span class="i-lucide-arrow-right text-xs text-fg-muted" />
-        <span class="text-primary">{{ currentSelectionSummary }}</span>
+      <div v-if="nameValidationError" class="text-xs text-red-400" data-testid="name-error">
+        {{ formatError({ code: nameValidationError }) }}
       </div>
     </div>
 
@@ -71,8 +60,19 @@ const { t } = useI18n()
     <div
       class="p-4 bg-raised border border-line flex items-center justify-between rounded-xl shadow-sm mt-3"
     >
-      <div class="flex flex-col">
-        <div class="text-xs text-fg-muted">{{ t('download.configurator.summaryLabel') }}</div>
+      <div class="flex flex-col min-w-0">
+        <div class="text-xs text-fg-muted flex items-center gap-1">
+          <span>{{ t('download.configurator.summaryLabel') }}</span>
+          <!-- Reuses the shared hint component; only the icon (and tooltip target)
+               differs, so the summary text itself stays plain. -->
+          <MHelpTooltip
+            v-if="mode === 'modify' && isModified && !isQuiltInstance"
+            :text="`${initialSummary || 'Vanilla'} → ${currentSelectionSummary}`"
+            icon="i-lucide-circle-alert"
+            size="xs"
+            data-testid="config-diff-hint"
+          />
+        </div>
         <div class="text-sm font-semibold text-primary truncate max-w-xs sm:max-w-md">
           {{ currentSelectionSummary }}
         </div>

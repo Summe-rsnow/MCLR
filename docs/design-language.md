@@ -126,7 +126,8 @@ The application supports three distinct motion modes configured via `html[data-m
 
 - UI icons use `@iconify-json/lucide` (`i-lucide-*`).
 - Brand marks use `@iconify-json/simple-icons` via `<MBrandIcon>` (`i-simple-icons-{microsoft,modrinth,curseforge,github,mojangstudios,minecraft,xbox}`).
-- Mod loaders use `<MLoaderIcon :kind="..." :size="24|32|40|56" />` backed by `src/ui/icons.ts`.
+- Mod loaders use `<MLoaderIcon :kind="..." :size="24|32|40|56" />` backed by `src/ui/icons.ts`, which serves the official artwork in `public/assets/icons/loaders/` (plus `grass_block` for vanilla). Layer logos for Fabric, Forge, NeoForge, Quilt, LabyMod, OptiFine and Cleanroom come from each project's own branding; LiteLoader has no standalone official icon, so it keeps a lucide glyph tinted with its brand colour `oklch` hue 215. The tile is a **light** hue-tinted chip in both themes: loader logos are dark artwork and vanish on a dark tile. Layer artwork renders at 60–75% of the tile (larger than lucide glyphs) so brand detail survives.
+- The same logos feed `MSelect` options through `image` (square, `object-contain`); `avatar` is reserved for circular skin heads.
 - All icon names MUST be complete static string literals so UnoCSS can extract them from `.vue` and `.ts` files.
 
 ---

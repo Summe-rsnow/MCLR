@@ -19,16 +19,18 @@ const props = withDefaults(
 const meta = computed(() => getInstanceIconMeta(props.icon, props.kind))
 
 const sizeClasses = computed(() => {
+  // `image` is deliberately larger than `icon`: official loader artwork is
+  // detailed and unreadable at lucide-sized (16px) dimensions.
   switch (props.size) {
     case 24:
-      return { tile: 'w-6 h-6 rounded-md', icon: 'w-3.5 h-3.5' }
+      return { tile: 'w-6 h-6 rounded-md', icon: 'w-3.5 h-3.5', image: 'w-[18px] h-[18px]' }
     case 40:
-      return { tile: 'w-10 h-10 rounded-xl', icon: 'w-5 h-5' }
+      return { tile: 'w-10 h-10 rounded-xl', icon: 'w-5 h-5', image: 'w-[30px] h-[30px]' }
     case 56:
-      return { tile: 'w-14 h-14 rounded-2xl', icon: 'w-7 h-7' }
+      return { tile: 'w-14 h-14 rounded-2xl', icon: 'w-7 h-7', image: 'w-[44px] h-[44px]' }
     case 32:
     default:
-      return { tile: 'w-8 h-8 rounded-lg', icon: 'w-4 h-4' }
+      return { tile: 'w-8 h-8 rounded-lg', icon: 'w-4 h-4', image: 'w-6 h-6' }
   }
 })
 </script>
@@ -46,7 +48,7 @@ const sizeClasses = computed(() => {
       :alt="meta.label"
       pixelated
       fit="contain"
-      :class="sizeClasses.icon"
+      :class="sizeClasses.image"
     >
       <template #fallback>
         <span :class="[meta.icon, sizeClasses.icon]" />
@@ -58,12 +60,16 @@ const sizeClasses = computed(() => {
 
 <style scoped>
 .m-loader-tile {
-  background-color: oklch(0.92 0.06 var(--loader-hue, 140));
-  color: oklch(0.42 0.13 var(--loader-hue, 140));
+  /* Light chips in both themes: loader logos (Forge's grey anvil, Fabric's woven
+     swatch) are dark artwork and disappear on a dark tile. */
+  background-color: oklch(0.9 0.045 var(--loader-hue, 140));
+  color: oklch(0.38 0.11 var(--loader-hue, 140));
+  box-shadow: inset 0 0 0 1px oklch(0.82 0.05 var(--loader-hue, 140));
 }
 
 :global(:root[data-mode='dark']) .m-loader-tile {
-  background-color: oklch(0.32 0.07 var(--loader-hue, 140));
-  color: oklch(0.85 0.09 var(--loader-hue, 140));
+  background-color: oklch(0.93 0.03 var(--loader-hue, 140));
+  color: oklch(0.4 0.1 var(--loader-hue, 140));
+  box-shadow: inset 0 0 0 1px oklch(0.88 0.035 var(--loader-hue, 140));
 }
 </style>

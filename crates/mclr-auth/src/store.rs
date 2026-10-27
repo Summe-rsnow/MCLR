@@ -377,6 +377,45 @@ impl AccountStore {
         Ok(self.list_accounts().await)
     }
 
+    /// Repairs a dangling `last_used` pointer.
+    ///
+    /// The account store on disk can be edited or truncated while the launcher is
+    /// not running, leaving `last_used` pointing at an account that no longer
+    /// exists. In that case the whole list would report `selected == false` and
+    /// the home page would show no active account. Fall back to the first
+    /// available account (or `None` when the list is empty) and persist it.
+    pub async fn ensure_valid_selection(&self) -> Result<(), AuthError> {
+        let changed = {
+            let mut inner = self.inner.write().await;
+            let valid = inner
+                .data
+                .last_used
+                .as_deref()
+                .is_some_and(|id| inner.data.accounts.iter().any(|a| a.id() == id));
+            if valid {
+                false
+            } else {
+                let next = inner.data.accounts.first().map(|a| a.id().to_string());
+                if inner.data.last_used == next {
+                    false
+                } else {
+                    inner.data.last_used = next;
+                    true
+                }
+            }
+        };
+        if changed {
+            self.persist().await?;
+        }
+        Ok(())
+    }
+
+    /// Lists accounts after repairing a dangling selection pointer.
+    pub async fn list_accounts_healed(&self) -> Result<Vec<AccountView>, AuthError> {
+        self.ensure_valid_selection().await?;
+        Ok(self.list_accounts().await)
+    }
+
     pub async fn remove_account(&self, id: &str) -> Result<Vec<AccountView>, AuthError> {
         {
             let mut inner = self.inner.write().await;
@@ -905,5 +944,90 @@ impl AccountSessionProvider for AccountStore {
                 xuid: None,
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `MCLR_DATA_DIR` is process-global, so env-sensitive tests must not overlap.
+    static ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    /// Builds a store in `dir` with `n` offline accounts; the last one is `last_used`.
+    async fn seeded_store(dir: &std::path::Path, names: &[&str]) -> AccountStore {
+        let dir_str = dir.to_str().unwrap().to_string();
+        unsafe {
+            std::env::set_var("MCLR_DATA_DIR", &dir_str);
+        }
+        let store = AccountStore::open().expect("open store");
+        for name in names {
+            store
+                .add_offline(name, OfflineUuidMode::Standard, None)
+                .await
+                .expect("add offline account");
+        }
+        store
+    }
+
+    #[tokio::test]
+    async fn test_ensure_valid_selection_keeps_valid_pointer() {
+        let _guard = ENV_LOCK.lock().await;
+        let temp = tempfile::tempdir().unwrap();
+        let store = seeded_store(temp.path(), &["KeepA", "KeepB"]).await;
+
+        store.ensure_valid_selection().await.unwrap();
+        let list = store.list_accounts().await;
+        assert_eq!(list.len(), 2);
+        assert_eq!(list.iter().filter(|a| a.selected).count(), 1);
+        // KeepB was added last, so it stays selected.
+        assert!(list[1].selected);
+    }
+
+    #[tokio::test]
+    async fn test_ensure_valid_selection_heals_dangling_pointer_and_persists() {
+        let _guard = ENV_LOCK.lock().await;
+        let temp = tempfile::tempdir().unwrap();
+        let store = seeded_store(temp.path(), &["HealA", "HealB"]).await;
+        let survivor_id = store.list_accounts().await[0].id.clone();
+
+        // Simulate the selected account disappearing outside the launcher.
+        {
+            let mut inner = store.inner.write().await;
+            inner.data.last_used = Some("ghost-account-id".to_string());
+            inner.data.accounts.truncate(1);
+        }
+
+        // Nothing is selected until the repair runs.
+        let before = store.list_accounts().await;
+        assert_eq!(before.len(), 1);
+        assert!(!before[0].selected);
+
+        store.ensure_valid_selection().await.unwrap();
+        let healed = store.list_accounts().await;
+        assert_eq!(healed.len(), 1);
+        assert_eq!(healed[0].id, survivor_id);
+        assert!(healed[0].selected);
+
+        // A second repair pass is a no-op and must not disturb the healed pointer.
+        store.ensure_valid_selection().await.unwrap();
+        let again = store.list_accounts().await;
+        assert_eq!(again[0].id, survivor_id);
+        assert!(again[0].selected);
+    }
+
+    #[tokio::test]
+    async fn test_ensure_valid_selection_with_empty_store_clears_pointer() {
+        let _guard = ENV_LOCK.lock().await;
+        let temp = tempfile::tempdir().unwrap();
+        let store = seeded_store(temp.path(), &[]).await;
+        {
+            let mut inner = store.inner.write().await;
+            inner.data.last_used = Some("ghost-account-id".to_string());
+        }
+
+        store.ensure_valid_selection().await.unwrap();
+        let inner = store.inner.read().await;
+        assert!(inner.data.last_used.is_none());
     }
 }

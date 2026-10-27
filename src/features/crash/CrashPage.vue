@@ -25,7 +25,7 @@ onMounted(async () => {
     <MPageHeader
       :title="t('crash.dialog.title')"
       :description="t('crash.dialog.subtitle')"
-      icon="i-lucide-alert-triangle"
+      icon="i-lucide-triangle-alert"
     >
       <template #actions>
         <MButton

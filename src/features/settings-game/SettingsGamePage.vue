@@ -3,7 +3,17 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ipcClient, type LaunchSettings } from '../../ipc/client'
 import { useToast } from '../../ui/useToast'
-import { MInput, MSelect, MSlider, MSwitch, MSection, MSettingRow, MHelpTooltip } from '../../ui'
+import {
+  MInput,
+  MSelect,
+  MSlider,
+  MSwitch,
+  MSection,
+  MSettingRow,
+  MHelpTooltip,
+  MButton,
+  MTextarea,
+} from '../../ui'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -11,10 +21,17 @@ const toast = useToast()
 const isSaving = ref(false)
 
 // Launch settings form state
+/** Balanced JVM defaults, matching PCL's recommended JVM argument head. */
+const DEFAULT_JVM_ARGS =
+  '-XX:+UseG1GC -XX:+UseAdaptiveSizePolicy -XX:-OmitStackTraceInFastThrow ' +
+  '-Djdk.lang.Process.allowAmbiguousCommands=true -Dfml.ignoreInvalidMinecraftCertificates=True ' +
+  '-Dfml.ignorePatchDiscrepancies=True -Dlog4j2.formatMsgNoLookups=true'
+
+// Mirrors `launch::DEFAULT_JVM_ARGS` in mclr-core; keep both strings identical.
 const launchSettings = ref<LaunchSettings>({
   ramMode: 'auto',
   ramCustomMb: 4096,
-  jvmArgs: '',
+  jvmArgs: DEFAULT_JVM_ARGS,
   gameArgs: '',
   windowTitle: '',
   fullscreen: false,
@@ -24,7 +41,22 @@ const launchSettings = ref<LaunchSettings>({
   processPriority: 'normal',
   closeLauncherOnStart: 'keep',
   disableCrashAnalysis: false,
+  renderer: 'default',
+  preLaunchCommand: '',
+  useJavaExe: false,
+  requireGpuHighPerformance: true,
+  lockMemory: false,
 })
+
+function resetJvmArgs() {
+  launchSettings.value.jvmArgs = ''
+  void saveLaunchSettings()
+}
+
+function applyDefaultJvmArgs() {
+  launchSettings.value.jvmArgs = DEFAULT_JVM_ARGS
+  void saveLaunchSettings()
+}
 
 onMounted(async () => {
   try {
@@ -154,26 +186,125 @@ async function saveLaunchSettings() {
         </div>
       </MSection>
 
-      <!-- Advanced Args Section -->
-      <MSection :title="t('settingsGame.launch.argsSection')" icon="i-lucide-terminal">
+      <!-- Advanced Launch Options (PCL parity) -->
+      <MSection
+        :title="t('settingsGame.launch.advancedSection')"
+        icon="i-lucide-sliders-horizontal"
+      >
         <div class="flex flex-col">
-          <MSettingRow :label="t('settingsGame.launch.jvmArgs')">
-            <MInput
-              v-model="launchSettings.jvmArgs"
+          <MSettingRow :label="t('settingsGame.launch.renderer')">
+            <template #label>
+              <span>{{ t('settingsGame.launch.renderer') }}</span>
+              <MHelpTooltip :text="t('settingsGame.launch.rendererHint')" />
+            </template>
+            <MSelect
+              v-model="launchSettings.renderer"
+              :options="[
+                { label: t('settingsGame.launch.rendererDefault'), value: 'default' },
+                { label: t('settingsGame.launch.rendererSoftware'), value: 'software' },
+                { label: t('settingsGame.launch.rendererD3d12'), value: 'd3d12' },
+                { label: t('settingsGame.launch.rendererVulkan'), value: 'vulkan' },
+              ]"
               size="sm"
-              class="w-full sm:w-80"
+              class="w-56"
+              @update:model-value="saveLaunchSettings"
+            />
+          </MSettingRow>
+
+          <div class="flex flex-col gap-2 py-3">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm font-medium text-fg">
+                  {{ t('settingsGame.launch.jvmArgsHead') }}
+                </span>
+                <MHelpTooltip :text="t('settingsGame.launch.jvmArgsHeadHint')" />
+              </div>
+              <div class="flex items-center gap-1.5">
+                <MButton
+                  variant="text"
+                  size="xs"
+                  icon="i-lucide-sparkles"
+                  @click="applyDefaultJvmArgs"
+                >
+                  {{ t('settingsGame.launch.jvmArgsDefault') }}
+                </MButton>
+                <MButton variant="text" size="xs" icon="i-lucide-rotate-ccw" @click="resetJvmArgs">
+                  {{ t('settingsGame.launch.jvmArgsReset') }}
+                </MButton>
+              </div>
+            </div>
+            <MTextarea
+              v-model="launchSettings.jvmArgs"
+              :rows="4"
               :placeholder="t('settingsGame.launch.jvmArgsPlaceholder')"
+              class="font-mono text-xs"
+              @blur="saveLaunchSettings"
+            />
+          </div>
+
+          <MSettingRow :label="t('settingsGame.launch.gameArgsTail')">
+            <template #label>
+              <span>{{ t('settingsGame.launch.gameArgsTail') }}</span>
+              <MHelpTooltip :text="t('settingsGame.launch.gameArgsTailHint')" />
+            </template>
+            <MInput
+              v-model="launchSettings.gameArgs"
+              size="sm"
+              class="w-full"
+              :placeholder="t('settingsGame.launch.gameArgsPlaceholder')"
               @blur="saveLaunchSettings"
             />
           </MSettingRow>
 
-          <MSettingRow :label="t('settingsGame.launch.gameArgs')">
+          <MSettingRow :label="t('settingsGame.launch.preLaunchCommand')">
+            <template #label>
+              <span>{{ t('settingsGame.launch.preLaunchCommand') }}</span>
+              <MHelpTooltip :text="t('settingsGame.launch.preLaunchCommandHint')" />
+            </template>
             <MInput
-              v-model="launchSettings.gameArgs"
+              v-model="launchSettings.preLaunchCommand"
               size="sm"
-              class="w-full sm:w-80"
-              :placeholder="t('settingsGame.launch.gameArgsPlaceholder')"
+              class="w-full font-mono text-xs"
+              :placeholder="t('settingsGame.launch.preLaunchCommandPlaceholder')"
               @blur="saveLaunchSettings"
+            />
+          </MSettingRow>
+
+          <MSettingRow :label="t('settingsGame.launch.requireGpu')">
+            <template #label>
+              <span>{{ t('settingsGame.launch.requireGpu') }}</span>
+              <MHelpTooltip :text="t('settingsGame.launch.requireGpuHint')" />
+            </template>
+            <MSwitch
+              v-model="launchSettings.requireGpuHighPerformance"
+              @update:model-value="saveLaunchSettings"
+            />
+          </MSettingRow>
+
+          <MSettingRow :label="t('settingsGame.launch.useJavaExe')">
+            <template #label>
+              <span>{{ t('settingsGame.launch.useJavaExe') }}</span>
+              <MHelpTooltip :text="t('settingsGame.launch.useJavaExeHint')" />
+            </template>
+            <MSwitch v-model="launchSettings.useJavaExe" @update:model-value="saveLaunchSettings" />
+          </MSettingRow>
+
+          <MSettingRow :label="t('settingsGame.launch.lockMemory')">
+            <template #label>
+              <span>{{ t('settingsGame.launch.lockMemory') }}</span>
+              <MHelpTooltip :text="t('settingsGame.launch.lockMemoryHint')" />
+            </template>
+            <MSwitch v-model="launchSettings.lockMemory" @update:model-value="saveLaunchSettings" />
+          </MSettingRow>
+
+          <MSettingRow :label="t('settingsGame.launch.disableCrashAnalysis')">
+            <template #label>
+              <span>{{ t('settingsGame.launch.disableCrashAnalysis') }}</span>
+              <MHelpTooltip :text="t('settingsGame.launch.disableCrashAnalysisHint')" />
+            </template>
+            <MSwitch
+              v-model="launchSettings.disableCrashAnalysis"
+              @update:model-value="saveLaunchSettings"
             />
           </MSettingRow>
         </div>
@@ -191,8 +322,8 @@ async function saveLaunchSettings() {
               v-model="launchSettings.preferredIpStack"
               :options="[
                 { label: t('settingsGame.launch.ipStackAuto'), value: 'auto' },
-                { label: t('settingsGame.launch.ipStackV4'), value: 'v4' },
-                { label: t('settingsGame.launch.ipStackV6'), value: 'v6' },
+                { label: t('settingsGame.launch.ipStackV4'), value: 'ipv4' },
+                { label: t('settingsGame.launch.ipStackV6'), value: 'ipv6' },
               ]"
               size="sm"
               class="w-48"
@@ -205,7 +336,7 @@ async function saveLaunchSettings() {
               v-model="launchSettings.processPriority"
               :options="[
                 { label: t('settingsGame.launch.priorityNormal'), value: 'normal' },
-                { label: t('settingsGame.launch.priorityAboveNormal'), value: 'above-normal' },
+                { label: t('settingsGame.launch.priorityAboveNormal'), value: 'aboveNormal' },
                 { label: t('settingsGame.launch.priorityHigh'), value: 'high' },
               ]"
               size="sm"
@@ -224,13 +355,6 @@ async function saveLaunchSettings() {
               ]"
               size="sm"
               class="w-48"
-              @update:model-value="saveLaunchSettings"
-            />
-          </MSettingRow>
-
-          <MSettingRow :label="t('settingsGame.launch.disableCrashAnalysis')">
-            <MSwitch
-              v-model="launchSettings.disableCrashAnalysis"
               @update:model-value="saveLaunchSettings"
             />
           </MSettingRow>

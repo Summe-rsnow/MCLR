@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import {
   ipcClient,
@@ -22,11 +22,35 @@ export type LaunchStage =
   | 'spawn'
   | 'running'
 
+const LAST_INSTANCE_KEY = 'mclr.launch.instanceId'
+
+function readLastInstanceId(): string | null {
+  try {
+    if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function') {
+      return null
+    }
+    const val = localStorage.getItem(LAST_INSTANCE_KEY)
+    return val && val.trim() ? val : null
+  } catch {
+    return null
+  }
+}
+
+function writeLastInstanceId(id: string | null) {
+  try {
+    if (typeof localStorage === 'undefined' || typeof localStorage.setItem !== 'function') return
+    if (id) localStorage.setItem(LAST_INSTANCE_KEY, id)
+    else localStorage.removeItem(LAST_INSTANCE_KEY)
+  } catch {
+    // Ignore storage errors in restricted environments
+  }
+}
+
 export const useLaunchStore = defineStore('launch', () => {
   const instancesStore = useInstancesStore()
   const accountsStore = useAccountsStore()
 
-  const selectedInstanceId = ref<string | null>(null)
+  const selectedInstanceId = ref<string | null>(readLastInstanceId())
   const isLaunching = ref(false)
   const currentStage = ref<LaunchStage>('idle')
   const launchProgress = ref(0)
@@ -51,10 +75,43 @@ export const useLaunchStore = defineStore('launch', () => {
     }
     return (
       instancesStore.instances.find((i) => i.id === selectedInstanceId.value) ||
+      instancesStore.instances.find((i) => i.config?.pinned) ||
       instancesStore.instances[0] ||
       null
     )
   })
+
+  /**
+   * Effective "last used" instance id.
+   *
+   * Falls back to the pinned/first instance when the persisted id no longer
+   * exists (instance folder deleted outside the launcher, folder unmounted…),
+   * so the management page badge and the home page selection never disagree.
+   */
+  const lastUsedInstanceId = computed<string | null>(() => selectedInstance.value?.id ?? null)
+
+  // Heal a dangling persisted id once the instance list has actually loaded.
+  // Guarding on `initialized` and a non-empty list is essential: the watcher
+  // runs immediately, and an empty list at that moment must not be mistaken for
+  // "the persisted instance was deleted", which would erase the stored choice
+  // before `fetchInstances()` resolves and break restore-on-restart.
+  watch(
+    () =>
+      [
+        instancesStore.initialized,
+        instancesStore.instances.length,
+        selectedInstance.value?.id,
+      ] as const,
+    ([initialized, count]) => {
+      if (!initialized || count === 0) return
+      const effective = selectedInstance.value?.id ?? null
+      if (effective !== selectedInstanceId.value) {
+        selectedInstanceId.value = effective
+        writeLastInstanceId(effective)
+      }
+    },
+    { immediate: true },
+  )
 
   const selectedAccount = computed(() => accountsStore.selectedAccount)
 
@@ -137,6 +194,7 @@ export const useLaunchStore = defineStore('launch', () => {
 
   function selectInstance(id: string): void {
     selectedInstanceId.value = id
+    writeLastInstanceId(id)
   }
 
   async function startLaunch(): Promise<LaunchStartResult | null> {
@@ -217,6 +275,7 @@ export const useLaunchStore = defineStore('launch', () => {
 
   return {
     selectedInstanceId,
+    lastUsedInstanceId,
     selectedInstance,
     selectedAccount,
     isLaunching,

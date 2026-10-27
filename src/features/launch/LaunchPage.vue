@@ -6,7 +6,7 @@ import { useLaunchStore } from './store'
 import { useInstancesStore } from '../instances/store'
 import { useAccountsStore } from '../accounts/store'
 import { useHomeStore } from '../home/store'
-import { MSection, MSettingRow, MButton, MSelect } from '../../ui'
+import { MSection, MButton, MSelect, getInstanceIconMeta } from '../../ui'
 import LaunchHeroBanner from './LaunchHeroBanner.vue'
 import InstancePreviewCard from './InstancePreviewCard.vue'
 import AccountPreviewCard from './AccountPreviewCard.vue'
@@ -70,10 +70,17 @@ onMounted(async () => {
 })
 
 const instanceOptions = computed(() => {
-  return instancesStore.instances.map((i) => ({
-    label: `${i.name} (${i.mcVersion})`,
-    value: i.id,
-  }))
+  return instancesStore.instances.map((i) => {
+    const kind = i.kind || (i.loaders?.[0]?.toLowerCase() ?? 'vanilla')
+    const meta = getInstanceIconMeta(i.config?.icon, kind)
+    return {
+      label: i.name,
+      value: i.id,
+      avatar: meta.image ?? undefined,
+      icon: meta.icon,
+      badge: i.mcVersion || undefined,
+    }
+  })
 })
 
 const accountOptions = computed(() => {
@@ -131,19 +138,23 @@ function onInstanceSelectChange(id: string | number) {
             :instance="launchStore.selectedInstance"
           />
 
-          <MSettingRow :label="t('launch.selectInstance')">
+          <!-- Stacked + full width: these panels are half of a 2-column grid, so a
+               fixed-width row control overflows the card on narrow windows. -->
+          <div class="flex flex-col gap-1.5">
+            <span class="text-sm font-medium text-fg">{{ t('launch.selectInstance') }}</span>
             <MSelect
               v-if="instancesStore.instances.length > 0"
               :model-value="launchStore.selectedInstance?.id || ''"
               :options="instanceOptions"
               size="sm"
-              class="w-56"
+              class="w-full"
+              data-testid="launch-instance-select"
               @update:model-value="onInstanceSelectChange"
             />
             <p v-else class="text-sm text-fg-muted py-1">
               {{ t('launch.noInstanceHint') }}
             </p>
-          </MSettingRow>
+          </div>
         </div>
       </MSection>
 
@@ -166,19 +177,21 @@ function onInstanceSelectChange(id: string | number) {
             :account="launchStore.selectedAccount"
           />
 
-          <MSettingRow :label="t('launch.selectAccount')">
+          <div class="flex flex-col gap-1.5">
+            <span class="text-sm font-medium text-fg">{{ t('launch.selectAccount') }}</span>
             <MSelect
               v-if="accountsStore.accounts.length > 0"
               :model-value="launchStore.selectedAccount?.id || ''"
               :options="accountOptions"
               size="sm"
-              class="w-56"
+              class="w-full"
+              data-testid="launch-account-select"
               @update:model-value="onAccountSelectChange"
             />
             <p v-else class="text-sm text-fg-muted py-1">
               {{ t('launch.noAccountHint') }}
             </p>
-          </MSettingRow>
+          </div>
         </div>
       </MSection>
     </div>

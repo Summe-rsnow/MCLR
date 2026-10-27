@@ -80,6 +80,7 @@ async function onScanJava(force = true) {
   try {
     const list = await ipcClient.javaScan(force)
     javaInstallations.value = list.filter((item) => !hiddenJavaPaths.value.includes(item.path))
+    checkSingleJavaDefault()
     if (force) {
       toast.success(t('java.scanComplete', { count: javaInstallations.value.length }))
     }
@@ -152,6 +153,33 @@ async function onRemoveJava(item: JavaInstallation) {
     }
   }
   javaInstallations.value = javaInstallations.value.filter((i) => i.path !== item.path)
+}
+
+function isJavaDefault(item: JavaInstallation): boolean {
+  if (javaInstallations.value.length === 1) return true
+  return javaSettings.value.select === item.path
+}
+
+async function onToggleDefaultJava(item: JavaInstallation) {
+  if (isJavaDefault(item) && javaInstallations.value.length > 1) {
+    javaSettings.value.select = 'auto'
+    await saveJavaSettings()
+    toast.success(t('java.defaultClearedSuccess'))
+  } else {
+    javaSettings.value.select = item.path
+    await saveJavaSettings()
+    toast.success(t('java.defaultSetSuccess', { major: item.major }))
+  }
+}
+
+function checkSingleJavaDefault() {
+  if (javaInstallations.value.length === 1) {
+    const single = javaInstallations.value[0]
+    if (single && javaSettings.value.select !== single.path) {
+      javaSettings.value.select = single.path
+      saveJavaSettings()
+    }
+  }
 }
 </script>
 
@@ -242,6 +270,9 @@ async function onRemoveJava(item: JavaInstallation) {
                 <MBadge :variant="item.isJdk ? 'primary' : 'neutral'">
                   {{ item.isJdk ? t('java.jdkBadge') : t('java.jreBadge') }}
                 </MBadge>
+                <MBadge v-if="isJavaDefault(item)" variant="success">
+                  {{ t('java.defaultBadge') }}
+                </MBadge>
                 <MBadge variant="neutral">
                   {{ item.arch }}
                 </MBadge>
@@ -257,6 +288,16 @@ async function onRemoveJava(item: JavaInstallation) {
               </div>
             </template>
             <template #actions>
+              <MButton
+                v-if="javaInstallations.length > 1"
+                :variant="isJavaDefault(item) ? 'tonal' : 'text'"
+                size="xs"
+                :icon="isJavaDefault(item) ? 'i-lucide-circle-check' : 'i-lucide-circle'"
+                :class="isJavaDefault(item) ? 'text-success' : 'text-fg-muted'"
+                @click="onToggleDefaultJava(item)"
+              >
+                {{ isJavaDefault(item) ? t('java.defaultBadge') : t('java.setAsDefault') }}
+              </MButton>
               <MIconButton
                 icon="i-lucide-folder-open"
                 size="sm"
@@ -264,7 +305,7 @@ async function onRemoveJava(item: JavaInstallation) {
                 @click="onOpenJavaFolder(item.path)"
               />
               <MIconButton
-                icon="i-lucide-trash-2"
+                icon="i-lucide-trash"
                 size="sm"
                 class="text-danger"
                 :title="t('java.remove')"

@@ -78,6 +78,7 @@ function handleDuplicate() {
           :placeholder="t('instances.dialog.namePlaceholder')"
           :error="instanceNameError"
           @keyup.enter="handleRename"
+          @input="instanceNameError = ''"
         />
       </div>
       <template #footer>
@@ -105,6 +106,7 @@ function handleDuplicate() {
           :placeholder="t('instances.dialog.namePlaceholder')"
           :error="instanceNameError"
           @keyup.enter="handleDuplicate"
+          @input="instanceNameError = ''"
         />
       </div>
       <template #footer>

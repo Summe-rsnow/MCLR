@@ -10,7 +10,7 @@ import type {
   SchematicInfo,
 } from '../../ipc/client'
 import { ipcClient } from '../../ipc/client'
-import { MButton, MCheckbox, MEmpty, MSkeleton, MVirtualList, useToast, useDialog } from '../../ui'
+import { MButton, MEmpty, MSkeleton, MVirtualList, useToast, useDialog } from '../../ui'
 import { useInstancesStore } from '../instances/store'
 import ResourceToolbar from './components/ResourceToolbar.vue'
 import ResourceItemRow from './components/ResourceItemRow.vue'
@@ -607,7 +607,7 @@ watch(
 </script>
 
 <template>
-  <div class="flex flex-col h-full space-y-3">
+  <div class="relative flex flex-col gap-3 min-w-0">
     <!-- Toolbar -->
     <ResourceToolbar
       :kind="kind"
@@ -618,6 +618,8 @@ watch(
       :filter-counts="filterCounts"
       :current-rel-path="currentRelPath"
       :checking-updates="checkingUpdates"
+      :selected-count="selectedPaths.size"
+      :total-count="filteredEntries.length"
       @update:search-query="searchQuery = $event"
       @update:active-sort="activeSort = $event"
       @update:active-filter="activeFilter = $event"
@@ -629,9 +631,51 @@ watch(
       @download-more="handleDownloadMore"
       @export="handleExport"
       @check-updates="handleCheckUpdates"
+      @toggle-select-all="selectAll"
     />
+    <!-- Batch selection actions (inline, below the select-all row) -->
+    <Transition name="m-selection-bar">
+      <div v-if="selectedPaths.size > 0" class="min-w-0 overflow-hidden">
+        <div
+          class="rounded-xl border border-primary/25 bg-primary-soft/40 px-3 py-2 flex flex-wrap items-center justify-between gap-3"
+        >
+          <div class="flex items-center gap-3 text-sm min-w-0">
+            <span class="font-semibold text-primary-soft-fg truncate">
+              {{ t('resources.selection.selected', { count: selectedPaths.size }) }}
+            </span>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <MButton
+              v-if="kind === 'mod'"
+              variant="tonal"
+              size="sm"
+              icon="i-lucide-check"
+              @click="handleBatchToggle(true)"
+            >
+              {{ t('resources.actions.enable') }}
+            </MButton>
+            <MButton
+              v-if="kind === 'mod'"
+              variant="tonal"
+              size="sm"
+              icon="i-lucide-x"
+              @click="handleBatchToggle(false)"
+            >
+              {{ t('resources.actions.disable') }}
+            </MButton>
+            <MButton variant="danger" size="sm" icon="i-lucide-trash" @click="handleBatchDelete">
+              {{ t('resources.actions.delete') }}
+            </MButton>
+            <MButton variant="text" size="sm" @click="selectedPaths.clear()">
+              {{ t('resources.actions.cancel') }}
+            </MButton>
+          </div>
+        </div>
+      </div>
+    </Transition>
     <!-- Content / Skeletons / List -->
-    <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+    <div class="min-w-0">
       <div v-if="!initialized && loading" class="space-y-2">
         <div
           v-for="n in 5"
@@ -690,40 +734,6 @@ watch(
       </div>
     </div>
 
-    <!-- Floating Bottom Selection Bar -->
-    <div
-      v-if="selectedPaths.size > 0"
-      class="sticky bottom-0 left-0 right-0 bg-panel/95 backdrop-blur border border-line rounded-xl p-3 shadow-xl flex items-center justify-between transition-transform duration-200 z-10"
-    >
-      <div class="flex items-center space-x-3 text-sm">
-        <MCheckbox
-          :model-value="selectedPaths.size === filteredEntries.length"
-          @update:model-value="selectAll"
-        />
-        <span class="font-medium text-fg">
-          {{ t('resources.selection.selected', { count: selectedPaths.size }) }}
-        </span>
-      </div>
-
-      <div class="flex items-center space-x-2">
-        <MButton v-if="kind === 'mod'" variant="tonal" size="sm" @click="handleBatchToggle(true)">
-          <span class="i-lucide-check mr-1 w-4 h-4 text-primary" />
-          {{ t('resources.actions.enable') }}
-        </MButton>
-        <MButton v-if="kind === 'mod'" variant="tonal" size="sm" @click="handleBatchToggle(false)">
-          <span class="i-lucide-x mr-1 w-4 h-4 text-fg-muted" />
-          {{ t('resources.actions.disable') }}
-        </MButton>
-        <MButton variant="danger" size="sm" @click="handleBatchDelete">
-          <span class="i-lucide-trash mr-1 w-4 h-4" />
-          {{ t('resources.actions.delete') }}
-        </MButton>
-        <MButton variant="tonal" size="sm" @click="selectedPaths.clear()">
-          {{ t('resources.actions.cancel') }}
-        </MButton>
-      </div>
-    </div>
-
     <!-- Modals -->
     <ResourceModals
       :instance-id="instanceId"
@@ -751,3 +761,37 @@ watch(
     />
   </div>
 </template>
+
+<style scoped>
+/* Inline batch-selection row: height + fade + slight lift, 200 ms */
+.m-selection-bar-enter-active,
+.m-selection-bar-leave-active {
+  transition:
+    max-height var(--dur-base) var(--ease),
+    opacity var(--dur-base) var(--ease),
+    transform var(--dur-base) var(--ease),
+    margin-top var(--dur-base) var(--ease);
+  overflow: hidden;
+}
+
+.m-selection-bar-enter-from,
+.m-selection-bar-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-8px);
+  margin-top: -0.75rem;
+}
+
+.m-selection-bar-enter-to,
+.m-selection-bar-leave-from {
+  max-height: 120px;
+  opacity: 1;
+  transform: translateY(0);
+  margin-top: 0;
+}
+
+html[data-motion='reduced'] .m-selection-bar-enter-from,
+html[data-motion='reduced'] .m-selection-bar-leave-to {
+  transform: none;
+}
+</style>

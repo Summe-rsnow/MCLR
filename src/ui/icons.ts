@@ -19,7 +19,12 @@ export interface LoaderMetaItem {
 }
 
 export const loaderMeta: Record<LoaderKindKey, LoaderMetaItem> = {
-  vanilla: { icon: 'i-lucide-box', hue: 140, label: 'Vanilla' },
+  vanilla: {
+    icon: 'i-lucide-box',
+    hue: 140,
+    label: 'Vanilla',
+    image: '/assets/icons/blocks/grass_block.png',
+  },
   fabric: {
     icon: 'i-lucide-waypoints',
     hue: 75,
@@ -56,7 +61,7 @@ export const loaderMeta: Record<LoaderKindKey, LoaderMetaItem> = {
     label: 'OptiFine',
     image: '/assets/icons/loaders/optifine.png',
   },
-  liteloader: { icon: 'i-lucide-feather', hue: 200, label: 'LiteLoader' },
+  liteloader: { icon: 'i-lucide-feather', hue: 215, label: 'LiteLoader' },
   labymod: {
     icon: 'i-lucide-gem',
     hue: 260,

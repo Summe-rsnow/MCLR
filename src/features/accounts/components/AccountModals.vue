@@ -74,8 +74,10 @@ const skinModelOptions = computed(() => [
     <div class="flex flex-col gap-2.5 py-2">
       <button
         type="button"
-        class="w-full flex items-center px-4 py-3 rounded-xl border border-line/60 bg-raised hover:bg-sunken/60 active:scale-[0.99] transition-all cursor-pointer text-left select-none outline-none group"
-        @click="emit('start-add-microsoft')"
+        data-testid="add-microsoft"
+        aria-disabled="true"
+        class="relative w-full flex items-center px-4 py-3 rounded-xl border border-line/60 bg-raised transition-all text-left select-none outline-none group cursor-not-allowed opacity-70"
+        @click.prevent
       >
         <div
           class="w-10 h-10 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 text-primary"
@@ -86,6 +88,13 @@ const skinModelOptions = computed(() => [
           <span class="text-sm font-semibold text-fg">{{ t('accounts.types.microsoft') }}</span>
           <span class="text-xs text-fg-muted mt-0.5">OAuth 2.0 / Xbox Live</span>
         </div>
+        <!-- Coming-soon mask: veils the row but keeps the label readable. -->
+        <span class="absolute inset-0 rounded-xl bg-canvas/45" />
+        <span class="absolute inset-y-0 right-3 flex items-center">
+          <MBadge variant="warning" size="sm" data-testid="microsoft-coming-soon">
+            {{ t('accounts.dialog.comingSoon') }}
+          </MBadge>
+        </span>
       </button>
 
       <button

@@ -19,7 +19,7 @@ use tauri::{AppHandle, Emitter, State};
 pub async fn accounts_list(
     state: State<'_, Arc<AccountStore>>,
 ) -> Result<Vec<AccountView>, AppError> {
-    Ok(state.list_accounts().await)
+    state.list_accounts_healed().await.map_err(AppError::from)
 }
 
 #[tauri::command]

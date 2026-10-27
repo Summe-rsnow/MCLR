@@ -107,7 +107,7 @@ defineExpose({
         <div
           class="w-10 h-10 rounded-xl bg-primary-soft text-primary-soft-fg flex items-center justify-center shrink-0"
         >
-          <span class="i-lucide-trash-2 w-5 h-5 inline-block" />
+          <span class="i-lucide-trash w-5 h-5 inline-block" />
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5">

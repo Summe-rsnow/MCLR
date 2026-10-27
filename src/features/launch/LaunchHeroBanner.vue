@@ -167,7 +167,7 @@ async function onForceKillGame() {
         <div
           class="w-8 h-8 rounded-lg bg-danger/20 text-danger flex items-center justify-center shrink-0"
         >
-          <i class="i-lucide-alert-triangle text-lg" />
+          <i class="i-lucide-triangle-alert text-lg" />
         </div>
         <div>
           <h4 class="font-semibold text-danger text-sm">
@@ -242,7 +242,7 @@ async function onForceKillGame() {
             class="flex items-center gap-2 p-2 rounded-xl bg-warning/10 border border-warning/20 text-xs text-warning"
             data-testid="launch-no-folder-warning"
           >
-            <span class="w-4 h-4 i-lucide-alert-triangle shrink-0" />
+            <span class="w-4 h-4 i-lucide-triangle-alert shrink-0" />
             <span>{{ t('launch.noFolderWarning') }}</span>
             <MButton
               variant="tonal"

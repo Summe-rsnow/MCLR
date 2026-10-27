@@ -36,7 +36,10 @@ export function setupMockIpc(): void {
     launch: {
       ramMode: 'auto',
       ramCustomMb: 4096,
-      jvmArgs: '',
+      jvmArgs:
+        '-XX:+UseG1GC -XX:+UseAdaptiveSizePolicy -XX:-OmitStackTraceInFastThrow ' +
+        '-Djdk.lang.Process.allowAmbiguousCommands=true -Dfml.ignoreInvalidMinecraftCertificates=True ' +
+        '-Dfml.ignorePatchDiscrepancies=True -Dlog4j2.formatMsgNoLookups=true',
       gameArgs: '',
       windowTitle: '',
       fullscreen: false,
@@ -46,6 +49,11 @@ export function setupMockIpc(): void {
       processPriority: 'normal',
       closeLauncherOnStart: 'keep',
       disableCrashAnalysis: false,
+      renderer: 'default',
+      preLaunchCommand: '',
+      useJavaExe: false,
+      requireGpuHighPerformance: true,
+      lockMemory: false,
     },
     java: {
       custom: [],

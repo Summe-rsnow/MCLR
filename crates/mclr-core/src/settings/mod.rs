@@ -34,6 +34,26 @@ use tokio::time::{Duration, sleep};
 pub use ui::{MaterialMode, ThemeMode, UiSettings};
 pub use update::UpdateSettings;
 
+/// Current settings schema version; bumped whenever `migrate` changes stored values.
+pub const CURRENT_SCHEMA_VERSION: u32 = 2;
+
+/// Upgrades persisted settings in place. Returns `true` when values changed and
+/// the caller must write the file back.
+fn migrate(settings: &mut Settings) -> bool {
+    let mut changed = false;
+    if settings.schema_version < 2 {
+        // v2 introduced the recommended JVM argument head and the high-performance
+        // GPU default; existing profiles would otherwise keep an empty field.
+        if settings.launch.jvm_args.trim().is_empty() {
+            settings.launch.jvm_args = launch::DEFAULT_JVM_ARGS.to_string();
+        }
+        settings.launch.require_gpu_high_performance = true;
+        settings.schema_version = 2;
+        changed = true;
+    }
+    changed
+}
+
 /// Complete MCLR user settings.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
@@ -55,7 +75,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            schema_version: 1,
+            schema_version: CURRENT_SCHEMA_VERSION,
             ui: UiSettings::default(),
             language: LanguageSettings::default(),
             system: SystemSettings::default(),
@@ -140,6 +160,14 @@ impl SettingsStore {
             Settings::default()
         };
 
+        let mut settings = settings;
+        if migrate(&mut settings) {
+            // Persist immediately: the debounced writer only fires on patches.
+            if let Err(e) = Self::write_atomic(&file_path, &settings) {
+                tracing::warn!("Failed to persist settings migration: {}", e);
+            }
+        }
+
         let settings = Arc::new(RwLock::new(settings));
         let dirty_notify = Arc::new(Notify::new());
 
@@ -217,6 +245,49 @@ impl SettingsStore {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[tokio::test]
+    async fn test_open_path_migrates_v1_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        // v1 profile: empty JVM args, GPU preference off.
+        fs::write(
+            &path,
+            r#"{"schemaVersion":1,"launch":{"jvmArgs":"","requireGpuHighPerformance":false}}"#,
+        )
+        .unwrap();
+
+        let store = SettingsStore::open_path(&path).unwrap();
+        let settings = store.get().await;
+
+        assert_eq!(settings.schema_version, CURRENT_SCHEMA_VERSION);
+        assert_eq!(settings.launch.jvm_args, launch::DEFAULT_JVM_ARGS);
+        assert!(settings.launch.require_gpu_high_performance);
+
+        // Migration is persisted immediately, not only via the debounced writer.
+        let raw = fs::read_to_string(&path).unwrap();
+        assert!(raw.contains("-XX:+UseG1GC"));
+        assert!(raw.contains(&format!("\"schemaVersion\": {CURRENT_SCHEMA_VERSION}")));
+    }
+
+    #[tokio::test]
+    async fn test_open_path_keeps_custom_jvm_args_and_clears_are_respected_after_migration() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, r#"{"schemaVersion":2,"launch":{"jvmArgs":""}}"#).unwrap();
+
+        let store = SettingsStore::open_path(&path).unwrap();
+        assert_eq!(store.get().await.launch.jvm_args, "");
+
+        let path_v1 = dir.path().join("v1.json");
+        fs::write(
+            &path_v1,
+            r#"{"schemaVersion":1,"launch":{"jvmArgs":"-Xmx2g"}}"#,
+        )
+        .unwrap();
+        let store = SettingsStore::open_path(&path_v1).unwrap();
+        assert_eq!(store.get().await.launch.jvm_args, "-Xmx2g");
+    }
 
     #[tokio::test]
     async fn test_settings_default_and_merge_patch() {

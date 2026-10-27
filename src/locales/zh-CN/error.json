@@ -124,6 +124,10 @@
     "download": {
       "invalidUrl": "输入的下载链接无效"
     },
+    "avatar": {
+      "readFailed": "读取皮肤文件失败",
+      "invalidSize": "皮肤图片尺寸不正确，请选择 64x64 / 64x32 的皮肤文件"
+    },
     "shortcut": {
       "failed": "创建桌面快捷方式失败"
     },

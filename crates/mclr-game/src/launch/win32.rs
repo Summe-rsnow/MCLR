@@ -1,12 +1,21 @@
 //! Windows API integration for process window discovery and title polling.
 
+use std::os::windows::process::CommandExt;
+use std::path::Path;
+use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+use windows::Win32::Foundation::{BOOL, CloseHandle, HWND, LPARAM};
+use windows::Win32::System::Threading::{
+    ABOVE_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS, OpenProcess, PROCESS_SET_INFORMATION,
+    SetPriorityClass,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, SetWindowTextW,
 };
 use windows::core::PCWSTR;
+
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Finds the main window handle (HWND) belonging to the given process ID.
 pub fn find_window_for_pid(pid: u32) -> Option<HWND> {
@@ -96,4 +105,55 @@ pub(crate) fn spawn_window_title_poller(pid: u32, template: String) {
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
     });
+}
+
+/// Registers `java_exe` as a high-performance GPU app in Windows graphics settings.
+///
+/// Writes `HKCU\Software\Microsoft\DirectX\UserGpuPreferences` with
+/// `GpuPreference=2;`, the same value the Windows GUI produces. Failures are
+/// logged and ignored: the launch must never be blocked by a preference write.
+pub fn set_gpu_high_performance(java_exe: &Path) {
+    const KEY: &str = r"HKCU\Software\Microsoft\DirectX\UserGpuPreferences";
+    let status = Command::new("reg")
+        .args([
+            "add",
+            KEY,
+            "/v",
+            &java_exe.to_string_lossy(),
+            "/t",
+            "REG_SZ",
+            "/d",
+            "GpuPreference=2;",
+            "/f",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .status();
+    match status {
+        Ok(s) if s.success() => {}
+        Ok(s) => tracing::warn!("GPU preference registry write exited with {s}"),
+        Err(e) => tracing::warn!("Failed to write GPU preference registry value: {e}"),
+    }
+}
+
+/// Applies the configured process priority to a freshly spawned game process.
+pub fn apply_process_priority(pid: u32, priority: &str) {
+    let class = match priority {
+        "aboveNormal" | "above-normal" => ABOVE_NORMAL_PRIORITY_CLASS,
+        "high" => HIGH_PRIORITY_CLASS,
+        _ => return,
+    };
+    let handle = match unsafe { OpenProcess(PROCESS_SET_INFORMATION, false, pid) } {
+        Ok(h) if !h.is_invalid() => h,
+        Ok(_) => return,
+        Err(e) => {
+            tracing::warn!("OpenProcess for priority failed: {e}");
+            return;
+        }
+    };
+    if let Err(e) = unsafe { SetPriorityClass(handle, class) } {
+        tracing::warn!("SetPriorityClass failed: {e}");
+    }
+    let _ = unsafe { CloseHandle(handle) };
 }

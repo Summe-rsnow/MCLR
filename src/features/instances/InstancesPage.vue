@@ -21,6 +21,7 @@ import ModpackImportDialog from '../comp/ModpackImportDialog.vue'
 import GameFoldersDialog from './GameFoldersDialog.vue'
 import InstancesToolbar from './components/InstancesToolbar.vue'
 import InstanceCard from './components/InstanceCard.vue'
+import { useLaunchStore } from '../launch/store'
 import InstanceActionDialogs from './components/InstanceActionDialogs.vue'
 const showFolders = ref(false)
 
@@ -28,6 +29,7 @@ const showImportModpackDialog = ref(false)
 const { t } = useI18n()
 const router = useRouter()
 const instancesStore = useInstancesStore()
+const launchStore = useLaunchStore()
 const { confirmDanger } = useDialog()
 
 onMounted(async () => {
@@ -173,7 +175,7 @@ function onContextMenu(e: MouseEvent, inst: InstanceInfo) {
     {
       key: 'rename',
       label: t('instances.actions.rename'),
-      icon: 'i-lucide-edit-2',
+      icon: 'i-lucide-square-pen',
     },
     {
       key: 'duplicate',
@@ -188,7 +190,7 @@ function onContextMenu(e: MouseEvent, inst: InstanceInfo) {
     {
       key: isPermanent ? 'deletePermanent' : 'delete',
       label: isPermanent ? t('instances.actions.deletePermanent') : t('instances.actions.delete'),
-      icon: 'i-lucide-trash-2',
+      icon: 'i-lucide-trash',
       danger: true,
     },
   ]
@@ -379,6 +381,7 @@ function navigateToDetail(id: string, tab?: string) {
               v-for="inst in group.items"
               :key="inst.id"
               :instance="inst"
+              :last-used="launchStore.lastUsedInstanceId === inst.id"
               @click="navigateToDetail(inst.id)"
               @contextmenu="onContextMenu($event, inst)"
               @toggle-star="instancesStore.toggleStar(inst.id)"

@@ -3,8 +3,9 @@ import { useI18n } from 'vue-i18n'
 import type { InstanceInfo } from '../../../ipc/client'
 import { MCard, MLoaderIcon, MBadge } from '../../../ui'
 
-defineProps<{
+const props = defineProps<{
   instance: InstanceInfo
+  lastUsed?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -49,10 +50,15 @@ function getLoaderBadgeVariant(kind?: string): 'primary' | 'warning' | 'neutral'
           class="shrink-0"
         />
         <div class="min-w-0">
-          <div
-            class="font-bold text-sm text-fg truncate group-hover:text-primary transition-colors"
-          >
-            {{ instance.name }}
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span
+              class="font-bold text-sm text-fg truncate group-hover:text-primary transition-colors"
+            >
+              {{ instance.name }}
+            </span>
+            <MBadge v-if="props.lastUsed" variant="success" size="sm" class="shrink-0">
+              {{ t('instances.card.lastUsed') }}
+            </MBadge>
           </div>
           <div class="text-xs text-fg-muted font-mono truncate">
             {{ instance.mcVersion }}
@@ -93,7 +99,7 @@ function getLoaderBadgeVariant(kind?: string): 'primary' | 'warning' | 'neutral'
           :title="t('instances.card.more')"
           @click.stop="emit('contextmenu', $event, instance)"
         >
-          <span class="w-4 h-4 i-lucide-more-vertical" />
+          <span class="w-4 h-4 i-lucide-ellipsis-vertical" />
         </button>
       </div>
     </div>

@@ -98,7 +98,7 @@ function navigateToTasks() {
     class="flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 cursor-pointer transition-all duration-150 active:scale-95 shadow-sm"
     @click="navigateToTasks"
   >
-    <span class="w-3.5 h-3.5 i-lucide-loader-2 animate-spin" />
+    <span class="w-3.5 h-3.5 i-lucide-loader-circle animate-spin" />
     <span>{{ t('tasks.indicator.activeTasks', { count: displayedCount }) }}</span>
     <span class="text-fg-muted font-mono text-[11px]">{{
       t('tasks.indicator.speed', { speed: aggregateSpeed })

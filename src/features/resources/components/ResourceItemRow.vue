@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import type { ResourceEntry, ResourceKind } from '../../../ipc/client'
-import { MCheckbox, MBadge, MIconButton, MSwitch, MPopover, MImage } from '../../../ui'
+import { MBadge, MIconButton, MSwitch, MPopover, MImage } from '../../../ui'
 
 const props = defineProps<{
   entry: ResourceEntry
@@ -49,16 +49,23 @@ function onMenuDelete() {
 </script>
 <template>
   <div
-    class="flex items-center justify-between p-3 rounded-xl border transition group max-w-full overflow-hidden"
+    class="relative flex items-center justify-between p-3 rounded-xl border transition-all duration-150 group max-w-full overflow-hidden cursor-pointer select-none"
     :class="[
-      selected ? 'bg-primary/10 border-primary' : 'bg-panel hover:bg-sunken/60 border-line',
+      selected
+        ? 'bg-primary-soft/50 border-primary ring-1 ring-primary/30 shadow-sm'
+        : 'bg-panel hover:bg-sunken/60 border-line',
       !entry.enabled && kind === 'mod' ? 'opacity-70' : '',
     ]"
+    @click="emit('select', entry.path)"
   >
-    <!-- Left: Checkbox, Icon, Title, Tags, Description -->
-    <div class="flex items-center space-x-3 min-w-0 flex-1 mr-3 overflow-hidden">
-      <MCheckbox :model-value="selected" @update:model-value="emit('select', entry.path)" />
+    <!-- Left Active Accent Bar (PCL Parity) -->
+    <div
+      v-if="selected"
+      class="absolute left-0 top-2 bottom-2 w-1 bg-primary rounded-r transition-all duration-200"
+    />
 
+    <!-- Left: Icon, Title, Tags, Description -->
+    <div class="flex items-center space-x-3 min-w-0 flex-1 mr-3 overflow-hidden">
       <!-- Resource Icon / Thumbnail -->
       <div
         class="w-10 h-10 rounded-lg overflow-hidden bg-sunken shrink-0 flex items-center justify-center border border-line"
@@ -89,7 +96,7 @@ function onMenuDelete() {
 
       <div
         class="min-w-0 flex-1 cursor-pointer overflow-hidden"
-        @click="entry.isDir ? emit('navigateDir', entry) : emit('inspectSchematic', entry)"
+        @click.stop="entry.isDir ? emit('navigateDir', entry) : emit('inspectSchematic', entry)"
       >
         <div class="flex items-center space-x-2 min-w-0 overflow-hidden">
           <span
@@ -134,11 +141,11 @@ function onMenuDelete() {
     </div>
 
     <!-- Right: Actions & Switch -->
-    <div class="flex items-center space-x-1.5 shrink-0">
+    <div class="flex items-center space-x-1.5 shrink-0" @click.stop>
       <!-- Update arrow button -->
       <MIconButton
         v-if="kind === 'mod' && entry.updateAvailable"
-        icon="i-lucide-arrow-up-circle"
+        icon="i-lucide-circle-arrow-up"
         size="sm"
         variant="text"
         class="text-primary hover:bg-primary/10"
@@ -160,7 +167,7 @@ function onMenuDelete() {
       <MPopover v-model:open="menuOpen" placement="bottom-end">
         <template #trigger>
           <MIconButton
-            icon="i-lucide-more-vertical"
+            icon="i-lucide-ellipsis-vertical"
             size="sm"
             variant="text"
             class="text-fg-muted hover:text-fg"
@@ -194,7 +201,7 @@ function onMenuDelete() {
             class="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-danger/10 text-danger rounded-lg text-left transition cursor-pointer"
             @click="onMenuDelete"
           >
-            <span class="i-lucide-trash-2 w-4 h-4 shrink-0" />
+            <span class="i-lucide-trash w-4 h-4 shrink-0" />
             <span class="truncate">{{ t('resources.actions.delete') }}</span>
           </button>
         </div>

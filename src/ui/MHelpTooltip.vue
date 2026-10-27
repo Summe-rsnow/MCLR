@@ -9,7 +9,8 @@ const props = withDefaults(
     size?: 'xs' | 'sm' | 'md'
   }>(),
   {
-    icon: 'i-lucide-help-circle',
+    // `help-circle` was renamed in lucide; the old name silently rendered nothing.
+    icon: 'i-lucide-circle-question-mark',
     size: 'sm',
   },
 )

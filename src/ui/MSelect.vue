@@ -2,12 +2,15 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MImage from './MImage.vue'
+import { applyFloatingPosition } from './floating'
 
 export interface SelectOption {
   label: string
   value: string | number
   icon?: string
   avatar?: string
+  /** Square logo (loader/brand artwork); rendered uncropped, unlike `avatar`. */
+  image?: string
   badge?: string
   disabled?: boolean
 }
@@ -53,23 +56,50 @@ const selectedOption = computed(() =>
   props.options.find((o) => String(o.value) === String(props.modelValue)),
 )
 
+const popupRef = ref<HTMLDivElement | null>(null)
+/** Preferred dropdown width cap; the collision helper shrinks it further on narrow viewports. */
+const MAX_POPUP_WIDTH = 380
+
 function updatePopupPosition() {
   const el = triggerRef.value
+  const popup = popupRef.value
   if (!el) return
-  const rect = el.getBoundingClientRect()
-  const vh = typeof window !== 'undefined' ? window.innerHeight : 800
-  const spaceBelow = vh - rect.bottom
-  const openAbove = spaceBelow < 200 && rect.top > spaceBelow
+  if (!popup) {
+    // Pre-mount estimate so the very first paint is already clamped.
+    popupStyle.value = {
+      left: '8px',
+      top: `${el.getBoundingClientRect().bottom + 4}px`,
+      minWidth: `${Math.max(120, el.getBoundingClientRect().width)}px`,
+      maxWidth: '380px',
+      width: 'max-content',
+    }
+    return
+  }
 
-  const triggerWidth = rect.width
+  const triggerRect = el.getBoundingClientRect()
+  // `width: max-content` means the rendered width is the content width capped at
+  // 380px. `offsetWidth` (unlike `scrollWidth`) includes the 1px borders, so the
+  // clamp accounts for them.
+  const naturalWidth = Math.min(
+    MAX_POPUP_WIDTH,
+    Math.max(120, triggerRect.width, popup.scrollWidth, popup.offsetWidth),
+  )
+  const result = applyFloatingPosition(popup, el, {
+    preferred: 'bottom',
+    align: 'start',
+    offset: 4,
+    constrain: false,
+    size: { width: naturalWidth, height: popup.offsetHeight },
+  })
+  if (!result) return
+
   popupStyle.value = {
-    left: `${Math.max(8, rect.left)}px`,
-    minWidth: `${Math.max(120, triggerWidth)}px`,
-    maxWidth: '380px',
+    left: `${result.left}px`,
+    top: `${result.top}px`,
+    minWidth: `${Math.max(120, triggerRect.width)}px`,
+    maxWidth: `${result.maxWidth ?? MAX_POPUP_WIDTH}px`,
     width: 'max-content',
-    ...(openAbove
-      ? { bottom: `${Math.max(8, vh - rect.top + 4)}px` }
-      : { top: `${rect.bottom + 4}px` }),
+    ...(result.maxHeight !== undefined ? { maxHeight: `${result.maxHeight}px` } : {}),
   }
 }
 async function openListbox() {
@@ -165,17 +195,25 @@ function handleOutsideMouseDown(event: MouseEvent) {
   closeListbox()
 }
 
+// A fixed-positioned dropdown does not follow its panel when the page scrolls,
+// so it must be re-anchored on any scroll (capture, to catch nested containers).
+function onViewportChange() {
+  if (isOpen.value) updatePopupPosition()
+}
+
 onMounted(() => {
   if (typeof window !== 'undefined') {
     window.addEventListener('mousedown', handleOutsideMouseDown)
-    window.addEventListener('resize', updatePopupPosition)
+    window.addEventListener('resize', onViewportChange)
+    window.addEventListener('scroll', onViewportChange, true)
   }
 })
 
 onUnmounted(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('mousedown', handleOutsideMouseDown)
-    window.removeEventListener('resize', updatePopupPosition)
+    window.removeEventListener('resize', onViewportChange)
+    window.removeEventListener('scroll', onViewportChange, true)
   }
 })
 </script>
@@ -208,6 +246,12 @@ onUnmounted(() => {
           :src="selectedOption.avatar"
           fallback-icon="i-lucide-user"
           class="w-5 h-5 rounded-full object-cover shrink-0"
+        />
+        <MImage
+          v-else-if="selectedOption?.image"
+          :src="selectedOption.image"
+          :alt="selectedOption.label"
+          class="w-5 h-5 rounded object-contain shrink-0"
         />
         <span
           v-else-if="selectedOption?.icon"
@@ -259,6 +303,7 @@ onUnmounted(() => {
       <Transition name="m-pop">
         <div
           v-if="isOpen"
+          ref="popupRef"
           class="fixed z-50 m-overlay m-refract rounded-xl overflow-hidden select-none"
           :style="popupStyle"
         >
@@ -292,6 +337,12 @@ onUnmounted(() => {
                   :src="opt.avatar"
                   fallback-icon="i-lucide-user"
                   class="w-5 h-5 rounded-full object-cover shrink-0"
+                />
+                <MImage
+                  v-else-if="opt.image"
+                  :src="opt.image"
+                  :alt="opt.label"
+                  class="w-5 h-5 rounded object-contain shrink-0"
                 />
                 <span v-else-if="opt.icon" :class="opt.icon" class="w-4 h-4 shrink-0" />
                 <span class="truncate">{{ opt.label }}</span>

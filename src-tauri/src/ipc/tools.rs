@@ -224,6 +224,28 @@ pub async fn tools_save_skin(path: String, data_url: String) -> Result<(), AppEr
     Ok(())
 }
 
+/// Generates a head avatar PNG (data URL) from a skin file on disk.
+///
+/// Mirrors PCL-CE's "皮肤头像生成器": the 8x8 face is upscaled with an inset
+/// brim, then the hat/hair overlay is composited on top at full canvas size.
+#[tauri::command]
+#[specta::specta]
+pub async fn tools_generate_skin_avatar(skin_path: String, size: u32) -> Result<String, AppError> {
+    let bytes = tokio::fs::read(&skin_path)
+        .await
+        .map_err(|e| AppError::new("tools.avatar.readFailed").with_detail(e.to_string()))?;
+
+    super::run_blocking(move || -> Result<String, AppError> {
+        let png = mclr_auth::generate_head_avatar(&bytes, size)
+            .map_err(|e| AppError::new("tools.avatar.invalidSize").with_detail(e.to_string()))?;
+        Ok(format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(&png)
+        ))
+    })
+    .await
+}
+
 fn compute_dir_size(dir: &Path) -> u64 {
     if !dir.exists() {
         return 0;

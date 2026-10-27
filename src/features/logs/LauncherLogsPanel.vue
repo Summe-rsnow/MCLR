@@ -66,7 +66,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex-1 min-h-0 flex flex-col space-y-3 overflow-hidden">
+  <!-- `px-1 pt-1` keeps the outer focus rings of the controls inside this clipping panel. -->
+  <div class="flex-1 min-h-0 flex flex-col space-y-3 overflow-hidden px-1 pt-1">
     <!-- Controls Header -->
     <div class="flex flex-wrap items-center justify-between gap-3 shrink-0">
       <div class="w-full sm:w-80">

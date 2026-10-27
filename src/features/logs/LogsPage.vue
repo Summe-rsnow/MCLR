@@ -199,7 +199,7 @@ async function onKillClick() {
           <MButton
             variant="text"
             size="sm"
-            icon="i-lucide-trash-2"
+            icon="i-lucide-trash"
             data-testid="clear-logs-btn"
             @click="onClearLogs"
           >

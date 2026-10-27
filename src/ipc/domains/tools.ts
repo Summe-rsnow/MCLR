@@ -28,6 +28,8 @@ export const toolsIpc = {
     invokeCommand<SkinFetchResult>('tools_fetch_skin', { username }),
   toolsSaveSkin: (path: string, dataUrl: string): Promise<void> =>
     invokeCommand<void>('tools_save_skin', { path, dataUrl }),
+  toolsGenerateSkinAvatar: (skinPath: string, size: number): Promise<string> =>
+    invokeCommand<string>('tools_generate_skin_avatar', { skinPath, size }),
   toolsCacheInfo: (): Promise<CacheSizeInfo> => invokeCommand<CacheSizeInfo>('tools_cache_info'),
   toolsCacheClear: (
     clearCache: boolean,

@@ -143,4 +143,45 @@ describe('Java feature', () => {
     expect(wrapper.findAll('button[title="移除"]').length).toBe(initialCount - 1)
     expect(localStorage.getItem('mclr.hidden_java_paths')).toBeTruthy()
   })
+
+  it('sets single Java as default automatically and displays default badge', async () => {
+    vi.spyOn(ipcClient, 'javaScan').mockResolvedValueOnce([
+      {
+        path: 'C:\\Java\\jdk-21\\bin\\javaw.exe',
+        home: 'C:\\Java\\jdk-21',
+        version: '21.0.2',
+        major: 21,
+        isJdk: true,
+        arch: 'x64',
+        implementor: 'Oracle',
+        source: 'manual',
+      },
+    ])
+
+    const wrapper = mount(JavaPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('默认')
+  })
+
+  it('allows setting and toggling default Java when multiple installations exist', async () => {
+    const wrapper = mount(JavaPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+    await flushPromises()
+
+    const setDefaultBtns = wrapper.findAll('button').filter((b) => b.text().includes('设为默认'))
+    expect(setDefaultBtns.length).toBeGreaterThan(0)
+
+    await setDefaultBtns[0].trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('默认')
+  })
 })

@@ -133,4 +133,32 @@ describe('Accounts feature', () => {
     // 3 account cards on left, 1 skin card on right
     expect(cards.length).toBe(4)
   })
+
+  it('marks the Microsoft login entry as coming soon instead of starting OAuth', async () => {
+    const wrapper = mount(AccountsPage, {
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text().trim() === '添加账号')
+    await addBtn!.trigger('click')
+    await flushPromises()
+
+    // MDialog teleports to <body>, so query the document.
+    const ms = document.body.querySelector<HTMLButtonElement>('[data-testid="add-microsoft"]')
+    expect(ms).toBeTruthy()
+    expect(ms!.getAttribute('aria-disabled')).toBe('true')
+    expect(
+      document.body.querySelector('[data-testid="microsoft-coming-soon"]')?.textContent,
+    ).toContain('敬请期待')
+
+    // Clicking must not open the OAuth dialog.
+    ms!.click()
+    await flushPromises()
+    expect(document.body.textContent).not.toContain('设备代码')
+
+    // Offline and third-party entries stay usable.
+    const labels = [...document.body.querySelectorAll('button')].map((b) => b.textContent ?? '')
+    expect(labels.some((t) => t.includes('离线'))).toBe(true)
+  })
 })

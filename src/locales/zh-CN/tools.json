@@ -17,6 +17,20 @@
     "downloadSkin": "保存皮肤 PNG",
     "downloadSuccess": "皮肤已成功保存"
   },
+  "skinAvatar": {
+    "title": "皮肤头像生成器",
+    "subtitle": "从本地皮肤文件无损生成指定尺寸的高清头像",
+    "description": "选择 64x64 / 64x32 皮肤文件，按比例放大 8x8 面部并叠加帽子与头发图层，输出任意尺寸的高清头像 PNG。",
+    "fileFilter": "皮肤图片文件 (*.png)",
+    "selectSkin": "选择皮肤文件",
+    "save": "保存头像",
+    "size": "头像大小",
+    "sourceLabel": "皮肤原图",
+    "avatarLabel": "生成头像",
+    "generated": "头像生成成功",
+    "saved": "头像已保存",
+    "selectFirst": "请先选择皮肤文件"
+  },
   "cache": {
     "title": "存储与缓存清理",
     "desc": "清理启动器运行产生的网络缓存、日志文件以及皮肤缓存，释放磁盘空间",

@@ -69,7 +69,7 @@ const { t } = useI18n()
         />
         <MIconButton
           v-if="account.kind === 'offline'"
-          icon="i-lucide-edit-2"
+          icon="i-lucide-square-pen"
           size="sm"
           variant="text"
           :title="t('accounts.actions.rename')"
@@ -83,7 +83,7 @@ const { t } = useI18n()
           @click="emit('refresh', account)"
         />
         <MIconButton
-          icon="i-lucide-trash-2"
+          icon="i-lucide-trash"
           size="sm"
           variant="text"
           class="text-danger"

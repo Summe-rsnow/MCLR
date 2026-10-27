@@ -43,6 +43,11 @@ export interface LaunchSettings {
   processPriority: 'normal' | 'aboveNormal' | 'high'
   closeLauncherOnStart: 'keep' | 'hide' | 'exit'
   disableCrashAnalysis: boolean
+  renderer: 'default' | 'software' | 'd3d12' | 'vulkan'
+  preLaunchCommand: string
+  useJavaExe: boolean
+  requireGpuHighPerformance: boolean
+  lockMemory: boolean
 }
 
 export interface JavaSettings {

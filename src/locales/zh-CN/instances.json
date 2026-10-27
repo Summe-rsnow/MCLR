@@ -71,7 +71,9 @@
       "ok": "就绪",
       "broken": "配置损坏",
       "incomplete": "文件不完整"
-    }
+    },
+    "lastUsed": "最后使用",
+    "lastUsedTip": "启动页当前选中的实例"
   },
   "actions": {
     "manage": "管理实例",

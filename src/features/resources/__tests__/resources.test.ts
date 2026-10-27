@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { createPinia, setActivePinia } from 'pinia'
 import ResourceToolbar from '../components/ResourceToolbar.vue'
+import ResourceItemRow from '../components/ResourceItemRow.vue'
+import ResourceList from '../ResourceList.vue'
+import { ipcClient } from '../../../ipc/client'
 import zhCnResources from '../../../locales/zh-CN/resources.json'
 import type { ResourceEntry } from '../../../ipc/client'
 
@@ -248,5 +252,93 @@ describe('Resources feature unit tests', () => {
     const updated = entries.find((e) => e.fileName === 'fabric-api.jar')
     expect(updated?.updateAvailable).toBe(true)
     expect(updated?.latestFile?.name).toBe('fabric-api-0.93.0.jar')
+  })
+
+  it('emits toggleSelectAll from the toolbar and swaps label with selection state', async () => {
+    const i18n = createI18n({
+      legacy: false,
+      locale: 'zh-CN',
+      messages: { 'zh-CN': { resources: zhCnResources } },
+    })
+    const baseProps = {
+      kind: 'mod' as const,
+      searchQuery: '',
+      activeSort: 'name' as const,
+      sortOptions: [{ label: '名称', value: 'name' }],
+      activeFilter: 'all' as const,
+      filterCounts: { all: 3, enabled: 3, disabled: 0, updatable: 0, error: 0, duplicate: 0 },
+      checkingUpdates: false,
+      totalCount: 3,
+    }
+
+    const partial = mount(ResourceToolbar, {
+      props: { ...baseProps, selectedCount: 0 },
+      global: { plugins: [i18n] },
+    })
+    const selectAllBtn = partial.findAll('button').find((b) => b.text().includes('全选'))
+    expect(selectAllBtn).toBeDefined()
+    await selectAllBtn!.trigger('click')
+    expect(partial.emitted('toggleSelectAll')).toHaveLength(1)
+
+    const all = mount(ResourceToolbar, {
+      props: { ...baseProps, selectedCount: 3 },
+      global: { plugins: [i18n] },
+    })
+    const clearBtn = all.findAll('button').find((b) => b.text().includes('取消选择'))
+    expect(clearBtn).toBeDefined()
+    await clearBtn!.trigger('click')
+    expect(all.emitted('toggleSelectAll')).toHaveLength(1)
+  })
+
+  it('toggles selection by clicking anywhere on the row (no checkbox)', async () => {
+    const i18n = createI18n({
+      legacy: false,
+      locale: 'zh-CN',
+      messages: { 'zh-CN': { resources: zhCnResources } },
+    })
+    const entry = { ...dummyEntries[1]!, icon: null }
+
+    const row = mount(ResourceItemRow, {
+      props: { entry, kind: 'mod', selected: false },
+      global: { plugins: [i18n] },
+    })
+
+    expect(row.find('input[type="checkbox"]').exists()).toBe(false)
+    expect(row.classes().join(' ')).toContain('cursor-pointer')
+
+    await row.trigger('click')
+    expect(row.emitted('select')?.[0]).toEqual([entry.path])
+  })
+
+  it('reveals batch operations after select-all in ResourceList', async () => {
+    const i18n = createI18n({
+      legacy: false,
+      locale: 'zh-CN',
+      messages: { 'zh-CN': { resources: zhCnResources } },
+    })
+    const mods = dummyEntries.filter((e) => !e.isDir)
+    const listSpy = vi.spyOn(ipcClient, 'resourcesList').mockResolvedValue(mods)
+    const pinia = createPinia()
+    setActivePinia(pinia)
+
+    const wrapper = mount(ResourceList, {
+      props: { instanceId: 'inst-1', kind: 'mod' },
+      global: { plugins: [i18n, pinia] },
+    })
+    await flushPromises()
+    expect(listSpy).toHaveBeenCalled()
+    // Hidden while nothing is selected.
+    expect(wrapper.text()).not.toContain('已选择')
+
+    const selectAllBtn = wrapper.findAll('button').find((b) => b.text().includes('全选'))
+    expect(selectAllBtn).toBeDefined()
+    await selectAllBtn!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(`已选择 ${mods.length} 项`)
+    const actions = wrapper.findAll('button').map((b) => b.text())
+    expect(actions.some((t) => t.includes('启用'))).toBe(true)
+    expect(actions.some((t) => t.includes('禁用'))).toBe(true)
+    expect(actions.some((t) => t.includes('删除'))).toBe(true)
   })
 })

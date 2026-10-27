@@ -42,174 +42,262 @@ pub fn extract_mc_version(version_json: &VersionJson, fallback_id: &str) -> Stri
     }
 }
 
+/// Per-loader version extraction rules.
+///
+/// Mirrors PCL-CE: the game JSON arguments (`--fml.neoForgeVersion`,
+/// `--fml.forgeVersion`) are authoritative, Maven coordinates are the fallback,
+/// and each loader has its own way of encoding its version:
+///
+/// | Loader | Coordinate | Version part |
+/// | --- | --- | --- |
+/// | Fabric | `net.fabricmc:fabric-loader:0.15.11+build.1` | `0.15.11` |
+/// | Legacy Fabric | `net.legacyfabric:...` | `0.15.11` |
+/// | Quilt | `org.quiltmc:quilt-loader:0.23.1-beta.3` | whole |
+/// | Forge (1.13+) | `net.minecraftforge:forge:1.20.1-47.2.0-universal` | `47.2.0` |
+/// | Forge (≤1.12.2) | `net.minecraftforge:forge:1.12.2-14.23.5.2859` | `14.23.5.2859` |
+/// | NeoForge (1.20.1) | `net.neoforged:forge:1.20.1-47.1.99` | `47.1.99` |
+/// | NeoForge (1.20.2+) | `net.neoforged:neoforge:20.4.80-beta` | whole |
+/// | NeoForge (26.x+) | `net.neoforged:neoforge:26.3.0` | whole |
+/// | Cleanroom | `com.cleanroommc:cleanroom:0.2.4-alpha` | whole |
+/// | OptiFine | `optifine:OptiFine:1.20.1_HD_U_I6` | `HD_U_I6` |
+/// | LiteLoader | `com.mumfrey:liteloader:1.12.2-SNAPSHOT-r5` | whole |
+///
+/// `net.neoforged.fancymodloader:loader` carries the FancyModLoader version, which
+/// is **not** the NeoForge version, so it only proves presence.
+fn maven_version(coordinate: &str) -> &str {
+    coordinate.split(':').nth(2).unwrap_or("")
+}
+
+/// Drops Maven classifier suffixes while keeping semantic ones (`-beta`, `-pre`).
+fn strip_maven_classifier(version: &str) -> &str {
+    for suffix in [
+        "-universal",
+        "-client",
+        "-server",
+        "-installer",
+        "-shim",
+        "-extra",
+    ] {
+        if let Some(stripped) = version.strip_suffix(suffix) {
+            return stripped;
+        }
+    }
+    version
+}
+
+/// Forge-style coordinates embed the MC version: `1.20.1-47.2.0` → `47.2.0`.
+fn after_mc_prefix(version: &str) -> &str {
+    match version.split_once('-') {
+        Some((head, tail)) if head.chars().next().is_some_and(|c| c.is_ascii_digit()) => {
+            strip_maven_classifier(tail)
+        }
+        _ => strip_maven_classifier(version),
+    }
+}
+
+/// `0.15.11+build.1` → `0.15.11`.
+fn strip_build_metadata(version: &str) -> &str {
+    version.split('+').next().unwrap_or(version)
+}
+
+/// `1.20.1_HD_U_I6` → `HD_U_I6` (PCL shows OptiFine versions without the MC prefix).
+fn optifine_version(raw: &str) -> String {
+    match raw.find("HD_U_") {
+        Some(idx) => raw[idx..].to_string(),
+        None => raw.to_string(),
+    }
+}
+
+/// Reads `--fml.neoForgeVersion <ver>` / `--fml.forgeVersion <ver>` from game args.
+fn version_from_game_args(version_json: &VersionJson, flag: &str) -> Option<String> {
+    let args = version_json.arguments.as_ref()?;
+    let mut expect_value = false;
+    for game_arg in &args.game {
+        let s = match game_arg {
+            crate::version::ArgumentEntry::Plain(s) => s.as_str(),
+            crate::version::ArgumentEntry::Conditional(cond) => {
+                if let crate::version::ArgumentValue::Single(s) = &cond.value {
+                    s.as_str()
+                } else {
+                    ""
+                }
+            }
+        };
+        if expect_value {
+            if !s.is_empty() && !s.starts_with("--") {
+                return Some(s.to_string());
+            }
+            expect_value = false;
+        }
+        if s == flag {
+            expect_value = true;
+        }
+    }
+    None
+}
+
+#[derive(Default)]
+struct DetectedLoaders {
+    fabric: Option<String>,
+    legacy_fabric: Option<String>,
+    quilt: Option<String>,
+    forge: Option<String>,
+    neoforge: Option<String>,
+    cleanroom: Option<String>,
+    optifine: Option<String>,
+    liteloader: Option<String>,
+    labymod: bool,
+}
+
 /// Classify instance kind and extract loaders from version JSON and libraries.
 pub fn classify_instance(
     version_json: &VersionJson,
     mc_version: &str,
 ) -> (InstanceKind, Vec<String>) {
-    let mut detected_loaders = Vec::new();
-    let mut has_fabric = false;
-    let mut has_legacy_fabric = false;
-    let mut has_forge = false;
-    let mut has_neoforge = false;
-    let mut has_cleanroom = false;
-    let mut has_optifine = false;
-    let mut has_liteloader = false;
-    let mut has_labymod = false;
-    let mut has_quilt = false;
+    let mut found = DetectedLoaders::default();
 
-    // Check libraries Maven coordinates
+    // 1. Game arguments win: PCL reads the loader version from `--fml.*Version`.
+    found.neoforge = version_from_game_args(version_json, "--fml.neoForgeVersion");
+    found.forge = version_from_game_args(version_json, "--fml.forgeVersion");
+
+    // 2. Maven coordinates: first hit per loader family wins.
     for lib in &version_json.libraries {
         let name = &lib.name;
+        let version = maven_version(name);
+
         if name.starts_with("net.fabricmc:fabric-loader") {
-            has_fabric = true;
-            let ver = name.split(':').nth(2).unwrap_or("");
-            let clean_ver = ver.split("+build").next().unwrap_or(ver);
-            detected_loaders.push(format!("Fabric {clean_ver}"));
+            found.fabric.get_or_insert_with(|| {
+                strip_build_metadata(strip_maven_classifier(version)).to_string()
+            });
         } else if name.starts_with("net.legacyfabric") || name.contains("legacyfabric:intermediary")
         {
-            has_legacy_fabric = true;
-            let ver = name.split(':').nth(2).unwrap_or("");
-            let clean_ver = ver.split("+build").next().unwrap_or(ver);
-            detected_loaders.push(format!("LegacyFabric {clean_ver}"));
+            found.legacy_fabric.get_or_insert_with(|| {
+                strip_build_metadata(strip_maven_classifier(version)).to_string()
+            });
         } else if name.starts_with("org.quiltmc:quilt-loader") {
-            has_quilt = true;
-            let ver = name.split(':').nth(2).unwrap_or("");
-            let clean_ver = ver.split("+build").next().unwrap_or(ver);
-            detected_loaders.push(format!("Quilt {clean_ver}"));
-        } else if name.starts_with("com.cleanroommc:cleanroom") {
-            has_cleanroom = true;
-            let ver = name.split(':').nth(2).unwrap_or("");
-            detected_loaders.push(format!("Cleanroom {ver}"));
-        } else if name.starts_with("net.minecraftforge:forge:")
-            || name.starts_with("net.minecraftforge:minecraftforge:")
-        {
-            has_forge = true;
-            let ver = name.split(':').nth(2).unwrap_or("");
-            let clean_ver = ver.split('-').last().unwrap_or(ver);
-            detected_loaders.push(format!("Forge {clean_ver}"));
-        } else if name.starts_with("net.neoforged.fancymodloader:loader:")
-            || name.starts_with("net.neoforged:neoforge:")
+            found.quilt.get_or_insert_with(|| {
+                strip_build_metadata(strip_maven_classifier(version)).to_string()
+            });
+        } else if name.starts_with("net.neoforged.fancymodloader:loader") {
+            // FancyModLoader version ≠ NeoForge version; presence only.
+            if found.neoforge.is_none() {
+                found.neoforge = Some(String::new());
+            }
+        } else if name.starts_with("net.neoforged:neoforge:")
             || name.starts_with("net.neoforged:forge:")
         {
-            has_neoforge = true;
-            let ver = name.split(':').nth(2).unwrap_or("");
-            let clean_ver = ver.split('-').last().unwrap_or(ver);
-            detected_loaders.push(if clean_ver.is_empty() {
-                "NeoForge".to_string()
+            // 1.20.2+ coordinates carry no MC prefix (`20.4.80-beta`), while the
+            // 1.20.1-era `net.neoforged:forge` coordinate does (`1.20.1-47.1.99`).
+            let clean = if name.starts_with("net.neoforged:forge:") {
+                after_mc_prefix(version).to_string()
             } else {
-                format!("NeoForge {clean_ver}")
-            });
-        } else if name.starts_with("net.neoforged") {
-            has_neoforge = true;
+                strip_maven_classifier(version).to_string()
+            };
+            // A concrete versioned coordinate beats the presence-only FML marker.
+            if !clean.is_empty() && found.neoforge.as_deref().unwrap_or("").is_empty() {
+                found.neoforge = Some(clean);
+            }
+        } else if name.starts_with("net.minecraftforge:forge:")
+            || name.starts_with("net.minecraftforge:minecraftforge:")
+            || name.starts_with("net.minecraftforge:fmlloader:")
+        {
+            let clean = after_mc_prefix(version).to_string();
+            if found.forge.is_none() && !clean.is_empty() {
+                found.forge = Some(clean);
+            }
+        } else if name.starts_with("com.cleanroommc:cleanroom") {
+            found
+                .cleanroom
+                .get_or_insert_with(|| strip_maven_classifier(version).to_string());
         } else if name.starts_with("optifine:OptiFine") || name.to_lowercase().contains("optifine")
         {
-            has_optifine = true;
-            let ver = name.split(':').nth(2).unwrap_or("");
-            detected_loaders.push(format!("OptiFine {ver}"));
+            if found.optifine.is_none() && !version.is_empty() {
+                found.optifine = Some(optifine_version(version));
+            }
         } else if name.starts_with("com.mumfrey:liteloader") {
-            has_liteloader = true;
-            let ver = name.split(':').nth(2).unwrap_or("");
-            detected_loaders.push(format!("LiteLoader {ver}"));
+            found
+                .liteloader
+                .get_or_insert_with(|| strip_maven_classifier(version).to_string());
         } else if name.starts_with("net.labymod") {
-            has_labymod = true;
-            detected_loaders.push("LabyMod".to_string());
+            found.labymod = true;
         }
     }
 
-    // Check mainClass if not detected in libraries
+    // 3. mainClass hints only prove presence (no version information).
     if let Some(main) = &version_json.main_class {
-        if main.contains("fabricmc") && !has_fabric && !has_quilt {
-            has_fabric = true;
-            detected_loaders.push("Fabric".to_string());
-        } else if (main.contains("neoforged") || main.contains("neoforge")) && !has_neoforge {
-            has_neoforge = true;
-            detected_loaders.push("NeoForge".to_string());
+        if main.contains("fabricmc") && found.fabric.is_none() && found.quilt.is_none() {
+            found.fabric = Some(String::new());
+        } else if (main.contains("neoforged") || main.contains("neoforge"))
+            && found.neoforge.is_none()
+        {
+            found.neoforge = Some(String::new());
         } else if (main.contains("minecraftforge") || main.contains("fml"))
-            && !has_forge
-            && !has_neoforge
+            && found.forge.is_none()
+            && found.neoforge.is_none()
         {
-            has_forge = true;
-            detected_loaders.push("Forge".to_string());
-        } else if main.contains("OptiFine") && !has_optifine {
-            has_optifine = true;
-            detected_loaders.push("OptiFine".to_string());
+            found.forge = Some(String::new());
+        } else if main.contains("OptiFine") && found.optifine.is_none() {
+            found.optifine = Some(String::new());
         }
     }
 
-    // Check arguments for NeoForge / Forge if not detected yet
-    if !has_neoforge {
-        let mut found_ver = None;
-        if let Some(args) = &version_json.arguments {
-            let mut next_is_ver = false;
-            for game_arg in &args.game {
-                let s = match game_arg {
-                    crate::version::ArgumentEntry::Plain(s) => s.as_str(),
-                    crate::version::ArgumentEntry::Conditional(cond) => {
-                        if let crate::version::ArgumentValue::Single(s) = &cond.value {
-                            s.as_str()
-                        } else {
-                            ""
-                        }
-                    }
-                };
-                if next_is_ver && !s.is_empty() && !s.starts_with('-') {
-                    found_ver = Some(s.to_string());
-                    break;
-                }
-                if s == "--fml.neoForgeVersion" {
-                    next_is_ver = true;
-                }
+    // 4. Version id / name hints, last resort.
+    let id_lower = version_json.id.to_lowercase();
+    if found.neoforge.is_none() && id_lower.contains("neoforge") {
+        found.neoforge = Some(String::new());
+    }
+    if found.forge.is_none() && !id_lower.contains("neoforge") && id_lower.contains("forge") {
+        found.forge = Some(String::new());
+    }
+
+    fn label(name: &str, version: &Option<String>) -> Option<String> {
+        let v = version.as_deref().unwrap_or("").trim();
+        if v.is_empty() {
+            None
+        } else {
+            Some(format!("{name} {v}"))
+        }
+    }
+    fn entry(name: &str, version: &Option<String>) -> Option<String> {
+        version.as_ref().map(|v| {
+            let v = v.trim();
+            if v.is_empty() {
+                name.to_string()
+            } else {
+                format!("{name} {v}")
             }
-        }
-        if let Some(v) = found_ver {
-            has_neoforge = true;
-            detected_loaders.push(format!("NeoForge {v}"));
-        } else if version_json.id.to_lowercase().contains("neoforge")
-            || version_json
-                .main_class
-                .as_deref()
-                .unwrap_or("")
-                .contains("neoforge")
-        {
-            has_neoforge = true;
-            detected_loaders.push("NeoForge".to_string());
-        }
+        })
     }
 
-    if has_neoforge && !detected_loaders.iter().any(|l| l.starts_with("NeoForge")) {
-        let mut ver_str = None;
-        for lib in &version_json.libraries {
-            if lib.name.starts_with("net.neoforged") {
-                let v = lib.name.split(':').nth(2).unwrap_or("");
-                if !v.is_empty() {
-                    ver_str = Some(v.to_string());
-                    break;
-                }
-            }
-        }
-        detected_loaders.push(match ver_str {
-            Some(v) => format!("NeoForge {v}"),
-            None => "NeoForge".to_string(),
-        });
-    }
-
-    // Keep only the single most specific loader entry per loader family
-    let mut clean_loaders: Vec<String> = Vec::new();
-    let mut seen_families: std::collections::HashSet<String> = std::collections::HashSet::new();
-    detected_loaders.sort_by_key(|a| std::cmp::Reverse(a.len()));
-    for l in detected_loaders {
-        let family = l.split_whitespace().next().unwrap_or(&l).to_string();
-        if seen_families.insert(family) {
-            clean_loaders.push(l);
+    let mut detected_loaders: Vec<String> = Vec::new();
+    for (name, version) in [
+        ("Fabric", &found.fabric),
+        ("LegacyFabric", &found.legacy_fabric),
+        ("Quilt", &found.quilt),
+        ("NeoForge", &found.neoforge),
+        ("Forge", &found.forge),
+        ("Cleanroom", &found.cleanroom),
+        ("OptiFine", &found.optifine),
+        ("LiteLoader", &found.liteloader),
+    ] {
+        if let Some(entry) = label(name, version).or_else(|| entry(name, version)) {
+            detected_loaders.push(entry);
         }
     }
-    clean_loaders.sort();
-    detected_loaders = clean_loaders;
-
-    // Deduplicate loaders
+    if found.labymod {
+        detected_loaders.push("LabyMod".to_string());
+    }
     detected_loaders.sort();
-    detected_loaders.dedup();
+
+    let has_fabric = found.fabric.is_some();
+    let has_legacy_fabric = found.legacy_fabric.is_some();
+    let has_forge = found.forge.is_some();
+    let has_neoforge = found.neoforge.is_some();
+    let has_cleanroom = found.cleanroom.is_some();
+    let has_optifine = found.optifine.is_some();
+    let has_liteloader = found.liteloader.is_some();
+    let has_labymod = found.labymod;
+    let has_quilt = found.quilt.is_some();
 
     // Determine primary mod loader count (excluding OptiFine/LiteLoader in multiple loader count)
     let primary_loaders_count = [
@@ -486,4 +574,195 @@ pub fn classify_cards(instances: &mut [InstanceInfo]) {
         }
         b.name.cmp(&a.name)
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::version::{ArgumentEntry, Library, VersionJson};
+
+    fn vjson(id: &str, libs: &[&str], main: Option<&str>) -> VersionJson {
+        VersionJson {
+            id: id.to_string(),
+            inherits_from: Some("1.20.1".to_string()),
+            main_class: main.map(|s| s.to_string()),
+            libraries: libs
+                .iter()
+                .map(|name| Library {
+                    name: name.to_string(),
+                    url: None,
+                    downloads: None,
+                    rules: Vec::new(),
+                    natives: Default::default(),
+                    extract: None,
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    fn loaders(json: &VersionJson, mc: &str) -> Vec<String> {
+        classify_instance(json, mc).1
+    }
+
+    fn with_args(mut json: VersionJson, pairs: &[(&str, &str)]) -> VersionJson {
+        let mut game: Vec<ArgumentEntry> = Vec::new();
+        for (flag, value) in pairs {
+            game.push(ArgumentEntry::Plain(flag.to_string()));
+            game.push(ArgumentEntry::Plain(value.to_string()));
+        }
+        json.arguments = Some(crate::version::Arguments {
+            game,
+            jvm: Vec::new(),
+        });
+        json
+    }
+
+    #[test]
+    fn neoforge_uses_argument_version_not_fancymodloader() {
+        // 26.3 JSON: FML loader lib comes first, NeoForge coordinate second.
+        let json = with_args(
+            vjson(
+                "26.3-neoforge-26.3.0",
+                &[
+                    "net.neoforged.fancymodloader:loader:4.0.9",
+                    "net.neoforged:neoforge:26.3.0",
+                ],
+                Some("cpw.mods.bootstraplauncher.BootstrapLauncher"),
+            ),
+            &[("--fml.neoForgeVersion", "26.3.0")],
+        );
+        assert_eq!(loaders(&json, "26.3"), vec!["NeoForge 26.3.0"]);
+    }
+
+    #[test]
+    fn neoforge_keeps_prerelease_suffix() {
+        // 1.20.2+ scheme: 20.4.80-beta bundles the suffix in the version.
+        let json = vjson(
+            "1.20.4-neoforge-20.4.80-beta",
+            &["net.neoforged:neoforge:20.4.80-beta"],
+            None,
+        );
+        assert_eq!(loaders(&json, "1.20.4"), vec!["NeoForge 20.4.80-beta"]);
+    }
+
+    #[test]
+    fn neoforge_1_20_1_uses_mc_prefixed_coordinate() {
+        let json = vjson(
+            "1.20.1-neoforge-47.1.99",
+            &["net.neoforged:forge:1.20.1-47.1.99"],
+            None,
+        );
+        assert_eq!(loaders(&json, "1.20.1"), vec!["NeoForge 47.1.99"]);
+    }
+
+    #[test]
+    fn fancymodloader_alone_reports_loader_without_version() {
+        let json = vjson(
+            "26.3-neoforge",
+            &["net.neoforged.fancymodloader:loader:4.0.9"],
+            None,
+        );
+        assert_eq!(loaders(&json, "26.3"), vec!["NeoForge"]);
+    }
+
+    #[test]
+    fn forge_strips_universal_classifier() {
+        let json = vjson(
+            "1.20.1-forge-47.2.0",
+            &["net.minecraftforge:forge:1.20.1-47.2.0-universal"],
+            Some("cpw.mods.bootstraplauncher.BootstrapLauncher"),
+        );
+        assert_eq!(loaders(&json, "1.20.1"), vec!["Forge 47.2.0"]);
+    }
+
+    #[test]
+    fn forge_1_12_2_coordinate_and_argument_agree() {
+        let json = with_args(
+            vjson(
+                "1.12.2-forge-14.23.5.2860",
+                &[
+                    "net.minecraftforge:forge:1.12.2-14.23.5.2860",
+                    "net.minecraftforge:minecraftforge:1.12.2-14.23.5.2860",
+                ],
+                Some("net.minecraft.launchwrapper.Launch"),
+            ),
+            &[("--fml.forgeVersion", "14.23.5.2860")],
+        );
+        // Exactly one Forge entry, whatever the coordinate flavour.
+        assert_eq!(loaders(&json, "1.12.2"), vec!["Forge 14.23.5.2860"]);
+    }
+
+    #[test]
+    fn fabric_and_quilt_strip_build_metadata_but_keep_pre_tags() {
+        let fabric = vjson(
+            "1.20.1-fabric",
+            &[
+                "net.fabricmc:fabric-loader:0.15.11+build.1",
+                "net.fabricmc:intermediary:1.20.1",
+            ],
+            Some("net.fabricmc.loader.impl.launch.knot.KnotClient"),
+        );
+        assert_eq!(loaders(&fabric, "1.20.1"), vec!["Fabric 0.15.11"]);
+
+        let quilt = vjson(
+            "1.20.1-quilt",
+            &["org.quiltmc:quilt-loader:0.23.1-beta.3+build.7"],
+            Some("org.quiltmc.loader.impl.launch.knot.KnotClient"),
+        );
+        assert_eq!(loaders(&quilt, "1.20.1"), vec!["Quilt 0.23.1-beta.3"]);
+    }
+
+    #[test]
+    fn cleanroom_keeps_alpha_suffix() {
+        let json = vjson(
+            "1.12.2-cleanroom",
+            &["com.cleanroommc:cleanroom:0.2.4-alpha"],
+            Some("com.cleanroommc.boot.Main"),
+        );
+        assert_eq!(loaders(&json, "1.12.2"), vec!["Cleanroom 0.2.4-alpha"]);
+    }
+
+    #[test]
+    fn optifine_reports_hd_u_version() {
+        let json = vjson(
+            "1.20.1-optifine",
+            &["optifine:OptiFine:1.20.1_HD_U_I6"],
+            Some("net.minecraft.launchwrapper.Launch"),
+        );
+        assert_eq!(loaders(&json, "1.20.1"), vec!["OptiFine HD_U_I6"]);
+    }
+
+    #[test]
+    fn liteloader_and_labymod_keep_their_versions() {
+        let lite = vjson(
+            "1.12.2-liteloader",
+            &["com.mumfrey:liteloader:1.12.2-SNAPSHOT-r5"],
+            None,
+        );
+        assert_eq!(
+            loaders(&lite, "1.12.2"),
+            vec!["LiteLoader 1.12.2-SNAPSHOT-r5"]
+        );
+
+        let laby = vjson("26.3-labymod", &["net.labymod:LabyMod:4"], None);
+        assert_eq!(loaders(&laby, "26.3"), vec!["LabyMod"]);
+    }
+
+    #[test]
+    fn multiple_loaders_each_report_their_own_version_once() {
+        let json = vjson(
+            "1.20.1-forge-optifine",
+            &[
+                "net.minecraftforge:forge:1.20.1-47.2.0",
+                "optifine:OptiFine:1.20.1_HD_U_I6",
+                "net.minecraftforge:fmlloader:1.20.1-47.2.0",
+            ],
+            Some("cpw.mods.bootstraplauncher.BootstrapLauncher"),
+        );
+        assert_eq!(
+            loaders(&json, "1.20.1"),
+            vec!["Forge 47.2.0", "OptiFine HD_U_I6"]
+        );
+    }
 }

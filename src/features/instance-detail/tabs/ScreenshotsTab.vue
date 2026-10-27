@@ -293,7 +293,7 @@ watch(
               @click.stop="handleReveal(item)"
             />
             <MIconButton
-              icon="i-lucide-trash-2"
+              icon="i-lucide-trash"
               size="sm"
               class="text-danger hover:bg-danger/10"
               :title="t('instanceDetail.screenshots.delete')"

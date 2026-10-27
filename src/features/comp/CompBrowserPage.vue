@@ -201,14 +201,17 @@ const mcVersionOptions = computed(() => {
   ]
 })
 
+/** Official loader artwork, shared with `MLoaderIcon` via the same public assets. */
+const LOADER_LOGO = (kind: string) => `/assets/icons/loaders/${kind}.png`
+
 const loaderOptions = computed(() => [
-  { label: t('comp.search.allLoaders'), value: '' },
-  { label: 'Fabric', value: 'fabric' },
-  { label: 'Forge', value: 'forge' },
-  { label: 'NeoForge', value: 'neoforge' },
-  { label: 'Quilt', value: 'quilt' },
-  { label: 'OptiFine', value: 'optifine' },
-  { label: 'Iris', value: 'iris' },
+  { label: t('comp.search.allLoaders'), value: '', icon: 'i-lucide-layers' },
+  { label: 'Fabric', value: 'fabric', image: LOADER_LOGO('fabric') },
+  { label: 'Forge', value: 'forge', image: LOADER_LOGO('forge') },
+  { label: 'NeoForge', value: 'neoforge', image: LOADER_LOGO('neoforge') },
+  { label: 'Quilt', value: 'quilt', image: LOADER_LOGO('quilt') },
+  { label: 'OptiFine', value: 'optifine', image: LOADER_LOGO('optifine') },
+  { label: 'Iris', value: 'iris', icon: 'i-lucide-gem' },
 ])
 
 function onTabChange(tabValue: string): void {

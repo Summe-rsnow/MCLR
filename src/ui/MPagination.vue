@@ -66,7 +66,7 @@ function onSelect(target: number) {
     >
       <span
         v-if="loading"
-        class="i-lucide-loader-2 animate-spin w-4 h-4 text-primary ml-1 shrink-0"
+        class="i-lucide-loader-circle animate-spin w-4 h-4 text-primary ml-1 shrink-0"
       />
 
       <MIconButton

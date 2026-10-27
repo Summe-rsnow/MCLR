@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { applyFloatingPosition } from './floating'
 
 const props = withDefaults(
   defineProps<{
@@ -23,25 +24,27 @@ function updatePosition() {
   const el = anchorRef.value?.firstElementChild
     ? anchorRef.value
     : (anchorRef.value?.parentElement ?? anchorRef.value)
+  const panel = panelRef.value
   if (!el) return
-  const rect = el.getBoundingClientRect()
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
-  const vh = typeof window !== 'undefined' ? window.innerHeight : 800
-  const style: Record<string, string> = {}
+  if (!panel) return
 
-  if (props.placement.startsWith('top')) {
-    style.bottom = `${Math.max(8, vh - rect.top + 6)}px`
-  } else {
-    style.top = `${Math.max(8, rect.bottom + 6)}px`
+  // Anchor the panel to the trigger's own box, not the inline wrapper, so a
+  // wrapper that also holds the teleported content is not measured twice.
+  const result = applyFloatingPosition(panel, el, {
+    preferred: props.placement.startsWith('top') ? 'top' : 'bottom',
+    align: props.placement.endsWith('end') ? 'end' : 'start',
+    offset: 6,
+    constrain: false,
+    size: { width: panel.offsetWidth, height: panel.offsetHeight },
+  })
+  if (!result) return
+
+  posStyle.value = {
+    left: `${result.left}px`,
+    top: `${result.top}px`,
+    ...(result.maxWidth !== undefined ? { maxWidth: `${result.maxWidth}px` } : {}),
+    ...(result.maxHeight !== undefined ? { maxHeight: `${result.maxHeight}px` } : {}),
   }
-
-  if (props.placement.endsWith('end')) {
-    style.right = `${Math.max(8, vw - rect.right)}px`
-  } else {
-    style.left = `${Math.max(8, rect.left)}px`
-  }
-
-  posStyle.value = style
 }
 
 watch(
@@ -54,6 +57,10 @@ watch(
   },
   { immediate: true },
 )
+
+function onViewportChange() {
+  if (props.open) updatePosition()
+}
 
 function handlePointerDown(event: MouseEvent) {
   if (!props.open) return
@@ -77,7 +84,8 @@ onMounted(() => {
   if (typeof window !== 'undefined') {
     window.addEventListener('mousedown', handlePointerDown)
     window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('resize', updatePosition)
+    window.addEventListener('resize', onViewportChange)
+    window.addEventListener('scroll', onViewportChange, true)
   }
 })
 
@@ -85,7 +93,8 @@ onUnmounted(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('mousedown', handlePointerDown)
     window.removeEventListener('keydown', handleKeyDown)
-    window.removeEventListener('resize', updatePosition)
+    window.removeEventListener('resize', onViewportChange)
+    window.removeEventListener('scroll', onViewportChange, true)
   }
 })
 </script>

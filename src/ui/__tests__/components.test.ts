@@ -204,6 +204,88 @@ describe('UI Components', () => {
     wrapper.unmount()
     await nextTick()
   })
+  it('MSelect keeps a right-edge dropdown inside the viewport', async () => {
+    // jsdom reports zero-size rects, so the trigger rect is stubbed explicitly.
+    const wrapper = mount(MSelect, {
+      props: {
+        modelValue: 'a',
+        options: Array.from({ length: 30 }, (_, i) => ({ label: `Option ${i}`, value: `v${i}` })),
+      },
+      attachTo: document.body,
+    })
+    const trigger = wrapper.find('button[role="combobox"]').element as HTMLElement
+    trigger.getBoundingClientRect = () =>
+      ({
+        top: 120,
+        bottom: 152,
+        left: 900,
+        right: 1020,
+        width: 120,
+        height: 32,
+        x: 900,
+        y: 120,
+        toJSON: () => ({}),
+      }) as DOMRect
+
+    Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true })
+    Object.defineProperty(window, 'innerHeight', { value: 768, configurable: true })
+
+    await wrapper.find('button[role="combobox"]').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const popup = document.body.querySelector('.m-select-list')?.parentElement as HTMLElement
+    expect(popup).toBeTruthy()
+    const left = Number.parseFloat(popup.style.left)
+    expect(Number.isNaN(left)).toBe(false)
+    expect(left).toBeLessThanOrEqual(1024 - 8 - 120)
+    wrapper.unmount()
+  })
+
+  it('every loader kind renders its official artwork through MLoaderIcon', () => {
+    const wrapper = mount(MLoaderIcon, {
+      props: { kind: 'vanilla', size: 24 },
+    })
+    const img = wrapper.find('img')
+    expect(img.exists()).toBe(true)
+    expect(img.attributes('src')).toContain('/assets/icons/')
+
+    const cases: Array<[string, string]> = [
+      ['fabric', 'fabric'],
+      ['forge', 'forge'],
+      ['neoforge', 'neoforge'],
+      ['quilt', 'quilt'],
+      ['labymod', 'labymod'],
+      ['optifine', 'optifine'],
+      ['cleanroom', 'cleanroom'],
+    ]
+    for (const [kind, file] of cases) {
+      const w = mount(MLoaderIcon, { props: { kind, size: 24 } })
+      const src = w.find('img').attributes('src') ?? ''
+      expect(src, kind).toContain(`/assets/icons/loaders/${file}`)
+    }
+  })
+
+  it('MSelect renders a square logo option uncropped alongside avatars', async () => {
+    const wrapper = mount(MSelect, {
+      props: {
+        modelValue: 'fabric',
+        options: [
+          { label: 'Fabric', value: 'fabric', image: '/assets/icons/loaders/fabric.png' },
+          { label: 'Steve', value: 'steve', avatar: '/head.png' },
+        ],
+      },
+    })
+    const trigger = wrapper.find('button[role="combobox"]')
+    const img = trigger.find('img')
+    expect(img.exists()).toBe(true)
+    expect(img.attributes('src')).toContain('loaders/fabric.png')
+    // MImage applies the sizing classes to its wrapper, not the <img>.
+    const frame = img.element.closest('[class*="object-contain"]')
+    expect(frame, 'logo frame uses object-contain').toBeTruthy()
+    expect(frame!.className).not.toContain('rounded-full')
+  })
+
   it('MSelect disabled and empty options state prevents opening and displays placeholder', async () => {
     const wrapper = mount(MSelect, {
       props: {
@@ -358,6 +440,36 @@ describe('UI Components', () => {
     expect(toast.toasts.value.some((t) => t.id === id)).toBe(false)
   })
 
+  it('MSegmented keeps icon option labels and exposes accessible names', async () => {
+    const wrapper = mount(MSegmented, {
+      props: {
+        modelValue: 'light',
+        block: true,
+        options: [
+          { label: '浅色模式', value: 'light', icon: 'i-lucide-sun' },
+          { label: '深色模式', value: 'dark', icon: 'i-lucide-moon' },
+          { label: '跟随系统', value: 'system', icon: 'i-lucide-laptop' },
+        ],
+      },
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    // Regression: an `v-else-if` chain tied the label to the icon branch, so any
+    // option with an icon lost its visible text.
+    const buttons = wrapper.findAll('button[data-seg-btn]')
+    expect(buttons).toHaveLength(3)
+    expect(buttons[0].text()).toContain('浅色模式')
+    expect(buttons[2].text()).toContain('跟随系统')
+
+    // Icon-only collapse must stay reachable: every button carries its label.
+    for (const [i, expected] of ['浅色模式', '深色模式', '跟随系统'].entries()) {
+      expect(buttons[i].attributes('title')).toBe(expected)
+      expect(buttons[i].attributes('aria-label')).toBe(expected)
+    }
+    wrapper.unmount()
+  })
+
   it('MTooltip renders slot content and teleports tooltip on hover', async () => {
     const wrapper = mount(MTooltip, {
       props: { text: 'Help text' },
@@ -373,7 +485,7 @@ describe('UI Components', () => {
       props: { text: 'Helpful explanation', size: 'sm' },
     })
     expect(wrapper.find('button').exists()).toBe(true)
-    expect(wrapper.find('.i-lucide-help-circle').exists()).toBe(true)
+    expect(wrapper.find('.i-lucide-circle-question-mark').exists()).toBe(true)
     await wrapper.find('.relative').trigger('mouseenter')
     expect(document.body.innerHTML).toContain('Helpful explanation')
   })
@@ -405,6 +517,34 @@ describe('UI Components', () => {
       btn.click()
       await nextTick()
     }
+  })
+
+  it('MContextMenu clamps a bottom-right right-click inside the viewport', async () => {
+    Object.defineProperty(window, 'innerWidth', { value: 800, configurable: true })
+    Object.defineProperty(window, 'innerHeight', { value: 600, configurable: true })
+
+    const wrapper = mount(MContextMenu, {
+      props: {
+        open: true,
+        x: 790,
+        y: 590,
+        items: [{ key: 'edit', label: 'Edit' }],
+      },
+      attachTo: document.body,
+    })
+    await nextTick()
+    await nextTick()
+
+    // Teleported menus from earlier tests may still be mounted; take the newest.
+    const menus = [...document.body.querySelectorAll<HTMLElement>('[data-testid="m-context-menu"]')]
+    const menu = menus[menus.length - 1] ?? null
+    expect(menu, document.body.innerHTML.slice(0, 400)).toBeTruthy()
+    const left = Number.parseFloat(menu!.style.left)
+    const top = Number.parseFloat(menu!.style.top)
+    // Right-click at (790, 590) would overflow; the menu is pulled back by its width.
+    expect(left).toBe(800 - 8 - 176)
+    expect(top).toBeLessThanOrEqual(600 - 8)
+    wrapper.unmount()
   })
 
   it('MColorPicker emits hex color update', async () => {

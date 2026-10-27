@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CompFile, LoaderVersionEntry } from '../../../ipc/client'
-import { MCard, MSelect, MBadge, MSwitch, MSkeleton } from '../../../ui'
+import { MCard, MSelect, MBadge, MSwitch, MSkeleton, MLoaderIcon } from '../../../ui'
 
 export type PrimaryLoaderId =
   | 'none'
@@ -16,7 +17,8 @@ export interface LoaderDef {
   id: PrimaryLoaderId
   label: string
   visible: boolean
-  icon: string
+  /** Loader kind understood by `MLoaderIcon` / `getLoaderMeta` (official artwork). */
+  kind: string
 }
 
 export interface IncompInfo {
@@ -35,7 +37,7 @@ export interface VisibilityInfo {
   optifine: boolean
 }
 
-defineProps<{
+const props = defineProps<{
   primaryLoaderDefs: LoaderDef[]
   visibility: VisibilityInfo
   incomp: IncompInfo
@@ -52,6 +54,12 @@ defineProps<{
 }>()
 
 const selectedPrimary = defineModel<PrimaryLoaderId>('selectedPrimary', { required: true })
+/** Human-readable label of the selected loader ("LabyMod", not the raw `labymod` id). */
+const selectedLoaderLabel = computed(
+  () =>
+    props.primaryLoaderDefs.find((d) => d.id === selectedPrimary.value)?.label ??
+    String(selectedPrimary.value),
+)
 const selectedPrimaryVersion = defineModel<string>('selectedPrimaryVersion', { required: true })
 const optifineEnabled = defineModel<boolean>('optifineEnabled', { required: true })
 const selectedOptifineVersion = defineModel<string>('selectedOptifineVersion', { required: true })
@@ -69,6 +77,17 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+/**
+ * Incompatible extras are hidden instead of shown disabled: a card the user can
+ * never enable is dead weight (it also kept reserving a whole row).
+ */
+const showOptifineCard = computed(
+  () => props.visibility.optifine && !props.incomp.optifineDisabledReason,
+)
+const showLiteloaderCard = computed(
+  () => props.visibility.liteloader && !props.incomp.liteloaderDisabledReason,
+)
 </script>
 
 <template>
@@ -78,13 +97,17 @@ const { t } = useI18n()
       <div class="text-sm font-semibold text-fg-muted flex items-center gap-2">
         <span>{{ t('download.configurator.primaryLoader') }}</span>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      <div
+        class="m-loader-grid grid gap-2 p-1 grid-cols-[repeat(auto-fit,minmax(150px,1fr))]"
+        data-testid="primary-loader-grid"
+      >
         <button
           v-for="loader in primaryLoaderDefs"
           v-show="loader.visible"
           :key="loader.id"
           type="button"
-          class="flex items-center gap-2.5 p-2.5 rounded-xl border transition-all text-left group cursor-pointer"
+          data-testid="primary-loader-card"
+          class="flex items-center gap-2 py-1.5 pl-1.5 pr-3 rounded-xl border transition-all text-left group cursor-pointer min-w-0"
           :class="[
             selectedPrimary === loader.id
               ? 'border-primary bg-primary/10 shadow-sm shadow-primary/20 ring-1 ring-primary'
@@ -92,63 +115,57 @@ const { t } = useI18n()
           ]"
           @click="emit('select-primary', loader.id)"
         >
-          <span
-            :class="[loader.icon, 'text-xl']"
-            :style="{
-              color: selectedPrimary === loader.id ? 'var(--primary)' : 'var(--fg-muted)',
-            }"
-          />
-          <div class="flex flex-col">
-            <span class="font-medium text-sm text-primary">{{ loader.label }}</span>
-            <span v-if="selectedPrimary === loader.id" class="text-xs text-fg-muted">{{
+          <MLoaderIcon :kind="loader.kind" :size="24" />
+          <div class="flex flex-col min-w-0">
+            <span
+              class="font-medium text-sm truncate"
+              :class="selectedPrimary === loader.id ? 'text-primary' : 'text-fg'"
+              >{{ loader.label }}</span
+            >
+            <span v-if="selectedPrimary === loader.id" class="text-xs text-fg-muted truncate">{{
               t('download.configurator.selected')
             }}</span>
           </div>
         </button>
       </div>
 
-      <!-- Primary loader version select -->
-      <div
-        v-if="selectedPrimary !== 'none'"
-        class="mt-1 p-3 rounded-xl border border-white/10 bg-white/5 flex flex-col gap-2 min-h-[76px] justify-center"
-      >
-        <div class="text-xs text-fg-muted flex items-center justify-between">
-          <span>{{ selectedPrimary }} {{ t('download.configurator.versionSelect') }}</span>
-          <span v-if="loadingPrimaryVersions" class="text-xs text-fg-muted animate-pulse">
-            {{ t('download.configurator.fetchingVersions') }}
-          </span>
+      <!-- Primary loader version select (compact, next to the loader label) -->
+      <div v-if="selectedPrimary !== 'none'" class="mt-1 flex flex-wrap items-center gap-3">
+        <span class="text-xs text-fg-muted shrink-0">
+          {{ selectedLoaderLabel }} {{ t('download.configurator.versionSelect') }}
+        </span>
+        <div class="w-64 max-w-full">
+          <MSkeleton v-if="loadingPrimaryVersions" class="h-9 w-full rounded-lg" />
+          <MSelect
+            v-else
+            v-model="selectedPrimaryVersion"
+            :options="
+              primaryVersions.map((v) => ({
+                label: `${v.version}${v.stable ? ' ' + t('download.configurator.recommended') : ''}`,
+                value: v.version,
+              }))
+            "
+            size="sm"
+            @update:model-value="emit('update-auto-name')"
+          />
         </div>
-        <MSkeleton v-if="loadingPrimaryVersions" class="h-10 w-full rounded-lg" />
-        <MSelect
-          v-else
-          v-model="selectedPrimaryVersion"
-          :options="
-            primaryVersions.map((v) => ({
-              label: `${v.version}${v.stable ? ' ' + t('download.configurator.recommended') : ''}`,
-              value: v.version,
-            }))
-          "
-          @update:model-value="emit('update-auto-name')"
-        />
+        <span v-if="loadingPrimaryVersions" class="text-xs text-fg-muted animate-pulse">
+          {{ t('download.configurator.fetchingVersions') }}
+        </span>
       </div>
     </div>
 
-    <!-- Section 2: Additional Combinations (OptiFine, LiteLoader) -->
-    <div v-if="visibility.optifine || visibility.liteloader" class="flex flex-col gap-3">
+    <!-- Section 2: Additional Combinations — incompatible extras are hidden, not disabled -->
+    <div v-if="showOptifineCard || showLiteloaderCard" class="flex flex-col gap-3">
       <div class="text-sm font-semibold text-fg-muted">
         {{ t('download.configurator.additional') }}
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <!-- OptiFine Card -->
-        <MCard
-          v-if="visibility.optifine"
-          padding="none"
-          class="p-3 flex flex-col gap-2.5"
-          :class="[incomp.optifineDisabledReason ? 'opacity-50 pointer-events-none' : '']"
-        >
+        <MCard v-if="showOptifineCard" padding="none" class="p-3 flex flex-col gap-2.5">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
-              <span class="i-lucide-sparkles text-xl text-amber-400" />
+              <MLoaderIcon kind="optifine" :size="24" />
               <div>
                 <div class="font-medium text-sm">
                   {{ t('download.configurator.optifineTitle') }}
@@ -158,11 +175,7 @@ const { t } = useI18n()
                 </div>
               </div>
             </div>
-            <MSwitch v-model="optifineEnabled" :disabled="Boolean(incomp.optifineDisabledReason)" />
-          </div>
-
-          <div v-if="incomp.optifineDisabledReason" class="text-xs text-amber-400/90">
-            {{ t(incomp.optifineDisabledReason) }}
+            <MSwitch v-model="optifineEnabled" />
           </div>
 
           <!-- OptiFine Version Picker -->
@@ -183,15 +196,10 @@ const { t } = useI18n()
         </MCard>
 
         <!-- LiteLoader Card -->
-        <MCard
-          v-if="visibility.liteloader"
-          padding="none"
-          class="p-3 flex flex-col gap-2.5"
-          :class="[incomp.liteloaderDisabledReason ? 'opacity-50 pointer-events-none' : '']"
-        >
+        <MCard v-if="showLiteloaderCard" padding="none" class="p-3 flex flex-col gap-2.5">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
-              <span class="i-lucide-feather text-xl text-cyan-400" />
+              <MLoaderIcon kind="liteloader" :size="24" />
               <div>
                 <div class="font-medium text-sm">
                   {{ t('download.configurator.liteloaderTitle') }}
@@ -201,14 +209,7 @@ const { t } = useI18n()
                 </div>
               </div>
             </div>
-            <MSwitch
-              v-model="liteloaderEnabled"
-              :disabled="Boolean(incomp.liteloaderDisabledReason)"
-            />
-          </div>
-
-          <div v-if="incomp.liteloaderDisabledReason" class="text-xs text-amber-400/90">
-            {{ t(incomp.liteloaderDisabledReason) }}
+            <MSwitch v-model="liteloaderEnabled" />
           </div>
 
           <!-- LiteLoader Version Picker -->
@@ -320,7 +321,7 @@ const { t } = useI18n()
         v-if="selectedPrimary === 'fabric' && !fabricApiEnabled"
         class="p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-center gap-2.5"
       >
-        <span class="i-lucide-alert-circle text-base shrink-0" />
+        <span class="i-lucide-circle-alert text-base shrink-0" />
         <span>{{ t('download.hints.fabricApiMissing') }}</span>
       </div>
 
@@ -329,7 +330,7 @@ const { t } = useI18n()
         v-if="selectedPrimary === 'legacyFabric' && !legacyFabricApiEnabled"
         class="p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-center gap-2.5"
       >
-        <span class="i-lucide-alert-circle text-base shrink-0" />
+        <span class="i-lucide-circle-alert text-base shrink-0" />
         <span>{{ t('download.hints.legacyFabricApiMissing') }}</span>
       </div>
 
@@ -338,7 +339,7 @@ const { t } = useI18n()
         v-if="selectedPrimary === 'fabric' && optifineEnabled && !optiFabricEnabled"
         class="p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-center gap-2.5"
       >
-        <span class="i-lucide-alert-circle text-base shrink-0" />
+        <span class="i-lucide-circle-alert text-base shrink-0" />
         <span>{{ t('download.hints.optifabricMissing') }}</span>
       </div>
 

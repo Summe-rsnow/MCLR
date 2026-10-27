@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.24`
-- **Next Milestone**: `v0.0.25` (towards `v0.1.0`)
+- **Current Version**: `0.0.25`
+- **Next Milestone**: `v0.0.26` (towards `v0.1.0`)
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -28,3 +28,4 @@
 | v0.0.21 | Unified overlay architecture, codebase health overhaul & UX consistency | done | v0.0.21 | v0.0.21 | 2026-10-26 |
 | v0.0.23 | Design system overhaul, solid flat material, rich iconography & universal MImage | done | v0.0.23 | v0.0.23 | 2026-10-26 |
 | v0.0.24 | Sidebar scale tracking, overflow fixes, drawer frosting & concurrent mod update checks | done | v0.0.24 | v0.0.24 | 2026-10-26 |
+| v0.0.25 | Advanced launch options, loader artwork & PCL version rules, floating collision, responsive layout | done | v0.0.25 | v0.0.25 | 2026-10-28 |
