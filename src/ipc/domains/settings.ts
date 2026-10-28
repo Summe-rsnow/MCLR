@@ -42,17 +42,18 @@ export interface LaunchSettings {
   preferredIpStack: 'auto' | 'ipv4' | 'ipv6'
   processPriority: 'normal' | 'aboveNormal' | 'high'
   closeLauncherOnStart: 'keep' | 'hide' | 'exit'
-  disableCrashAnalysis: boolean
+  crashAnalysis: boolean
   renderer: 'default' | 'software' | 'd3d12' | 'vulkan'
   preLaunchCommand: string
   useJavaExe: boolean
   requireGpuHighPerformance: boolean
   lockMemory: boolean
+  legacyFix: boolean
+  lwjglUnsafeAgent: boolean
 }
 
 export interface JavaSettings {
   custom: string[]
-  select: string
   preferJdk: boolean
 }
 
@@ -118,6 +119,4 @@ export const settingsIpc = {
     invokeCommand<Settings>('settings_patch', { patch }),
   windowSetMaterial: (glass: boolean): Promise<void> =>
     invokeCommand<void>('window_set_material', { glass }),
-  javaDownload: (component: string): Promise<string> =>
-    invokeCommand<string>('java_download', { component }),
 }

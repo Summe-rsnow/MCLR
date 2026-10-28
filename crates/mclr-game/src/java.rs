@@ -1,6 +1,5 @@
 //! Java discovery, scanning, version parsing, and Mojang runtime downloads.
 
-use crate::error::GameError;
 use mclr_core::paths;
 use mclr_core::settings::JavaSettings;
 use serde::{Deserialize, Serialize};
@@ -35,16 +34,6 @@ pub struct JavaConstraint {
     pub max_major: Option<u32>,
     #[serde(default)]
     pub exact_majors: Vec<u32>,
-}
-
-/// File specification for downloading Mojang Java runtime.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeFileSpec {
-    pub url: String,
-    pub dest: PathBuf,
-    pub size: u64,
-    pub sha1: String,
 }
 
 /// Parses Java version string to major version number.
@@ -446,52 +435,40 @@ pub fn scan_java(custom_paths: &[String]) -> Vec<JavaInstallation> {
     result
 }
 
-/// Selects the best Java installation matching constraints and settings.
+/// Selects the best installed Java for a version requirement.
+///
+/// There is no global "default Java": the choice is derived from the version's own
+/// requirement. Ranking, in order:
+/// 1. closest to the requirement — an exact major match wins, otherwise the **smallest**
+///    major above it (a Java 17 instance must not be handed a Java 25 runtime);
+/// 2. 64-bit over 32-bit;
+/// 3. preferred JDK/JRE kind;
+/// 4. newest build of the same major.
+///
+/// Installations below the requirement are never candidates.
 pub fn select_java(
     list: &[JavaInstallation],
     constraint: &JavaConstraint,
     settings: &JavaSettings,
 ) -> Option<JavaInstallation> {
-    // If user specified custom explicit path in settings
-    if settings.select != "auto" && !settings.select.is_empty() {
-        let sel_norm = settings.select.replace('/', "\\").to_lowercase();
-        if let Some(found) = list.iter().find(|j| {
-            let p_norm = j.path.replace('/', "\\").to_lowercase();
-            let h_norm = j.home.replace('/', "\\").to_lowercase();
-            p_norm == sel_norm || h_norm == sel_norm
-        }) {
-            return Some(found.clone());
-        }
-    }
+    let target = constraint.min_major.or(constraint.max_major);
 
-    // When there is only one Java installation, it is automatically the default
-    if list.len() == 1 {
-        return Some(list[0].clone());
-    }
-
-    // Filter by constraints
-    let filtered: Vec<&JavaInstallation> = list
+    let mut filtered: Vec<&JavaInstallation> = list
         .iter()
         .filter(|j| {
-            // Check exact majors if specified
             if !constraint.exact_majors.is_empty() && !constraint.exact_majors.contains(&j.major) {
                 return false;
             }
-
-            // Check min major
-            if let Some(min) = constraint.min_major {
-                if j.major < min {
-                    return false;
-                }
+            if let Some(min) = constraint.min_major
+                && j.major < min
+            {
+                return false;
             }
-
-            // Check max major
-            if let Some(max) = constraint.max_major {
-                if j.major > max {
-                    return false;
-                }
+            if let Some(max) = constraint.max_major
+                && j.major > max
+            {
+                return false;
             }
-
             true
         })
         .collect();
@@ -500,132 +477,26 @@ pub fn select_java(
         return None;
     }
 
-    // Sort preference:
-    // 1. prefer_jdk match
-    // 2. 64-bit arch
-    // 3. major version (highest or exact)
-    let mut sorted = filtered;
-    sorted.sort_by(|a, b| {
-        let a_jdk = a.is_jdk == settings.prefer_jdk;
-        let b_jdk = b.is_jdk == settings.prefer_jdk;
-
+    filtered.sort_by(|a, b| {
+        let distance = |j: &JavaInstallation| match target {
+            Some(t) => (j.major as i64 - t as i64).abs(),
+            None => 0,
+        };
+        let a_exact = target.is_some_and(|t| a.major == t);
+        let b_exact = target.is_some_and(|t| b.major == t);
         let a_64 = a.arch.contains("64");
         let b_64 = b.arch.contains("64");
 
-        b_jdk
-            .cmp(&a_jdk)
+        b_exact
+            .cmp(&a_exact)
+            .then_with(|| distance(a).cmp(&distance(b)))
             .then_with(|| b_64.cmp(&a_64))
-            .then_with(|| b.major.cmp(&a.major))
+            .then_with(|| (b.is_jdk == settings.prefer_jdk).cmp(&(a.is_jdk == settings.prefer_jdk)))
             .then_with(|| b.version.cmp(&a.version))
+            .then_with(|| a.path.cmp(&b.path))
     });
 
-    sorted.first().copied().cloned()
-}
-
-/// Manifest structure for Mojang Java runtime.
-#[derive(Debug, Deserialize)]
-struct MojangAllManifest {
-    #[serde(rename = "windows-x64")]
-    windows_x64: Option<HashMap<String, Vec<MojangComponentEntry>>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct MojangComponentEntry {
-    manifest: MojangComponentManifestInfo,
-}
-
-#[derive(Debug, Deserialize)]
-struct MojangComponentManifestInfo {
-    url: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct MojangFileManifest {
-    files: HashMap<String, MojangFileEntry>,
-}
-
-#[derive(Debug, Deserialize)]
-struct MojangFileEntry {
-    #[serde(rename = "type")]
-    entry_type: String, // "file" or "directory"
-    downloads: Option<MojangFileDownloads>,
-}
-
-#[derive(Debug, Deserialize)]
-struct MojangFileDownloads {
-    raw: Option<MojangFileRaw>,
-}
-
-#[derive(Debug, Deserialize)]
-struct MojangFileRaw {
-    sha1: String,
-    size: u64,
-    url: String,
-}
-
-/// Resolves Mojang runtime download file specifications for a given component
-/// (e.g. `java-runtime-gamma`, `java-runtime-alpha`, `jre-legacy`).
-pub async fn resolve_mojang_runtime_downloads(
-    client: &reqwest::Client,
-    component: &str,
-    dest_dir: &Path,
-) -> Result<Vec<RuntimeFileSpec>, GameError> {
-    const ALL_URL: &str = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
-
-    let resp = client
-        .get(ALL_URL)
-        .send()
-        .await
-        .map_err(|e| GameError::RuntimeManifest(e.to_string()))?;
-
-    let all: MojangAllManifest = resp
-        .json()
-        .await
-        .map_err(|e| GameError::RuntimeManifest(e.to_string()))?;
-
-    let win_x64 = all
-        .windows_x64
-        .ok_or_else(|| GameError::RuntimeManifest("Missing windows-x64 in all.json".to_string()))?;
-
-    let entries = win_x64.get(component).ok_or_else(|| {
-        GameError::RuntimeManifest(format!("Component {component} not found for windows-x64"))
-    })?;
-
-    let entry = entries
-        .first()
-        .ok_or_else(|| GameError::RuntimeManifest(format!("No entries for {component}")))?;
-
-    // Fetch component file manifest
-    let manifest_resp = client
-        .get(&entry.manifest.url)
-        .send()
-        .await
-        .map_err(|e| GameError::RuntimeManifest(e.to_string()))?;
-
-    let file_manifest: MojangFileManifest = manifest_resp
-        .json()
-        .await
-        .map_err(|e| GameError::RuntimeManifest(e.to_string()))?;
-
-    let mut specs = Vec::new();
-
-    for (rel_path, item) in file_manifest.files {
-        if item.entry_type == "file" {
-            if let Some(dl) = item.downloads {
-                if let Some(raw) = dl.raw {
-                    let dest = dest_dir.join(rel_path.replace('/', "\\"));
-                    specs.push(RuntimeFileSpec {
-                        url: raw.url,
-                        dest,
-                        size: raw.size,
-                        sha1: raw.sha1,
-                    });
-                }
-            }
-        }
-    }
-
-    Ok(specs)
+    filtered.first().copied().cloned()
 }
 
 #[cfg(test)]
@@ -714,14 +585,54 @@ OS_ARCH="x86_64"
         let sel = select_java(&list, &c17, &settings).unwrap();
         assert_eq!(sel.major, 17);
 
-        // Min major 17 (prefers highest, so 25)
+        // Min major 17: the closest match wins, so 17 — not the newest (25).
+        // Handing a Java 17 instance a Java 25 runtime breaks agents and old mixins.
         let c_min17 = JavaConstraint {
             min_major: Some(17),
             max_major: None,
             exact_majors: vec![],
         };
         let sel = select_java(&list, &c_min17, &settings).unwrap();
-        assert_eq!(sel.major, 25);
+        assert_eq!(sel.major, 17);
+
+        // Only newer runtimes available: the smallest one above the requirement wins.
+        let newer_only = vec![j25.clone(), {
+            let mut j = j25.clone();
+            j.major = 30;
+            j.version = "30.0.1".to_string();
+            j.path = "C:\\Java\\jdk30\\bin\\java.exe".to_string();
+            j.home = "C:\\Java\\jdk30".to_string();
+            j
+        }];
+        let sel = select_java(&newer_only, &c_min17, &settings).unwrap();
+        assert_eq!(sel.major, 25, "Java 25 is closer to 17 than Java 30");
+
+        // A lone installation must still honour the constraint: Java 21 cannot run MC 26.x
+        // (previously the single-entry shortcut returned it anyway and the JVM threw
+        // UnsupportedClassVersionError at startup).
+        let only21 = vec![JavaInstallation {
+            path: "C:\\Java\\jdk21\\bin\\java.exe".to_string(),
+            home: "C:\\Java\\jdk21".to_string(),
+            version: "21.0.5".to_string(),
+            major: 21,
+            implementor: "Microsoft".to_string(),
+            arch: "x86_64".to_string(),
+            is_jdk: true,
+            source: "test".to_string(),
+        }];
+        let c_min25 = JavaConstraint {
+            min_major: Some(25),
+            max_major: None,
+            exact_majors: vec![],
+        };
+        assert!(
+            select_java(&only21, &c_min25, &settings).is_none(),
+            "a single Java 21 must not satisfy a Java 25+ requirement"
+        );
+
+        // The same lone installation is still used when it does satisfy the requirement.
+        let sel = select_java(&only21, &c_min17, &settings).unwrap();
+        assert_eq!(sel.major, 21);
 
         // Max major 8
         let c_max8 = JavaConstraint {

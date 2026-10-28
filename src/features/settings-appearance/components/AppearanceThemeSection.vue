@@ -16,6 +16,8 @@ import {
 } from '../../../ui'
 
 const { t } = useI18n()
+/** `/dev/ui` is only registered by the dev build. */
+const isDevBuild = import.meta.env.DEV
 const router = useRouter()
 const themeStore = useThemeStore()
 
@@ -37,6 +39,7 @@ const motionOptions = computed(() => [
 ])
 
 function navigateToDevUi() {
+  if (!isDevBuild) return
   if (router && typeof router.push === 'function') {
     router.push('/dev/ui')
   }
@@ -110,7 +113,9 @@ function navigateToDevUi() {
           <div class="text-xs font-medium text-fg-muted">
             {{ t('settingsAppearance.theme.livePreview') }}
           </div>
+          <!-- Hidden in release builds: `/dev/ui` is not registered there. -->
           <MButton
+            v-if="isDevBuild"
             variant="text"
             size="xs"
             icon-right="i-lucide-arrow-right"

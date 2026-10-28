@@ -33,6 +33,7 @@ To ensure long-term maintainability, backend crates avoid oversized single-file 
   - `launch/args.rs`: Command-line flag assembly, JVM argument parser, and `@argfile` generation.
   - `launch/win32.rs`: Win32 process creation flags (`CREATE_NO_WINDOW`, process job objects).
   - `launch/process.rs`: Asynchronous process monitoring, exit code tracking, and stdout/stderr stream piping.
+  - `java.rs`: Java discovery/selection. Java runtimes are never downloaded by MCLR — the launcher only picks among installed ones. **There is no global "default Java"**: `javaSettings` carries only user-added paths (`custom`) and the JDK preference, and every launch derives the runtime from the version JSON's `javaVersion` (Java 21 for 1.21.x, Java 25 for 26.x). Ranking prefers an exact major match, then the closest major above it; anything below the requirement is never chosen. A per-instance pin is honoured only when it can run that version — otherwise a compatible install is used, or launch fails fast with `launch.java.tooOld` / `launch.java.notFound` and a one-click jump to Java management.
 - **`mclr-game::instance`**:
   - `instance/classifier.rs`: Instance categorization (PCL-parity release/snapshot/ancient/fool classification).
   - `instance/scanner.rs`: Multi-directory instance scanning and version JSON parsing.
@@ -75,6 +76,7 @@ src/ipc/
     ├── saves.ts         # World saves, datapacks, backups & screenshots
     ├── servers.ts       # Server list, SLP ping & quick-play
     ├── settings.ts      # Settings store get & JSON merge-patch
+    ├── tasks.ts         # Task list, cancel, pause and resume
     ├── tools.ts         # Cache cleaning, desktop shortcuts, skin tools
     └── update.ts        # Self-updater checks & launcher logs
 ```

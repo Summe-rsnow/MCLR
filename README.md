@@ -5,7 +5,7 @@
 ## Features
 
 - **Multi-Account Authentication (`mclr-auth`)**:
-  - **Microsoft OAuth 2.0 Device Code Flow**: Full 6-step Xbox Live / XSTS / Minecraft Services chain with `XErr` diagnostics, skin upload, and cape switching.
+  - **Microsoft OAuth 2.0 Device Code Flow**: Full 6-step Xbox Live / XSTS / Minecraft Services chain (backend implemented; the add-account entry is temporarily masked as 「敬请期待」) with `XErr` diagnostics, skin upload, and cape switching.
   - **Third-Party Authlib-Injector & Yggdrasil Connect**: Automatic `X-Authlib-Injector-Api-Location` discovery, multi-profile selection, and OIDC support.
   - **Offline Accounts**: Standard RFC 4122 v3 MD5 (`OfflinePlayer:<name>`), legacy hash, and custom 32-hex UUIDs.
   - **Encrypted Storage at Rest**: Accounts stored in `%APPDATA%/MCLR/accounts.enc` (AES-256-GCM) with a 32-byte master key in `%APPDATA%/MCLR/master.key` protected by Windows DPAPI (`CryptProtectData`).

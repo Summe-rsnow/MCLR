@@ -166,7 +166,25 @@ pub fn extract_natives(
                     continue;
                 }
             };
-            let _ = std::io::copy(&mut entry, &mut out);
+            // A short write would leave a truncated DLL that the size check above
+            // then treats as valid forever, surfacing as UnsatisfiedLinkError.
+            match std::io::copy(&mut entry, &mut out) {
+                Ok(written) if written == entry.size() => {}
+                Ok(written) => {
+                    warn!(
+                        "Short read extracting {}: {written}/{} bytes",
+                        dest_file.display(),
+                        entry.size()
+                    );
+                    drop(out);
+                    let _ = fs::remove_file(&dest_file);
+                }
+                Err(e) => {
+                    warn!("Failed to extract {}: {e}", dest_file.display());
+                    drop(out);
+                    let _ = fs::remove_file(&dest_file);
+                }
+            }
         }
     }
 
@@ -334,6 +352,28 @@ pub fn build_launch_command(
         .unwrap_or(&launch_settings.jvm_args);
     if !custom_jvm.trim().is_empty() {
         jvm_args.extend(custom_jvm.split_whitespace().map(|s| s.to_string()));
+    }
+
+    // Bundled compatibility agents, injected at the head of the JVM arguments
+    // (PCL order). Both are best-effort: if the jar cannot be materialized the
+    // launch simply proceeds without it.
+    //
+    // * LegacyFix: Minecraft 1.5.x and older on a modern JRE.
+    // * LWJGL unsafe agent: LWJGL 3.4.1 (26.1+) regains the `sun.misc.Unsafe`
+    //   native-memory path instead of the slow FFM path on JDK 25+.
+    if launch_settings.legacy_fix
+        && super::agents::needs_legacy_fix(version_json.release_time.as_deref())
+    {
+        if let Some(path) = super::agents::ensure_agent(super::agents::LaunchAgent::LegacyFix) {
+            jvm_args.insert(0, format!("-javaagent:{}", path.display()));
+        }
+    }
+    let lwjgl_matches = super::agents::lwjgl_version(&version_json.libraries)
+        .is_some_and(|v| v == super::agents::LWJGL_UNSAFE_TARGET_VERSION);
+    if launch_settings.lwjgl_unsafe_agent && lwjgl_matches {
+        if let Some(path) = super::agents::ensure_agent(super::agents::LaunchAgent::LwjglUnsafe) {
+            jvm_args.insert(0, format!("-javaagent:{}", path.display()));
+        }
     }
 
     // Software renderer bridge (Mesa): only injected when the agent jar exists,

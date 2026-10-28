@@ -208,9 +208,23 @@ mod tests {
         let staging = mc_folder.join(".mclr-staging");
 
         std::fs::create_dir_all(&incomplete).unwrap();
-        std::fs::write(incomplete.join(".mclr-installing"), b"").unwrap();
+        let stale_marker = incomplete.join(".mclr-installing");
+        std::fs::write(&stale_marker, b"").unwrap();
+        // Backdate the marker: only genuinely abandoned installs are reclaimed.
+        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(24 * 60 * 60);
+        std::fs::File::options()
+            .write(true)
+            .open(&stale_marker)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
         std::fs::create_dir_all(&complete).unwrap();
         std::fs::write(complete.join("complete_inst.json"), b"{}").unwrap();
+        // A recent marker must be left alone: a finished install whose marker
+        // could not be unlinked must not lose its instance.
+        let fresh = versions.join("fresh_inst");
+        std::fs::create_dir_all(&fresh).unwrap();
+        std::fs::write(fresh.join(".mclr-installing"), b"").unwrap();
         std::fs::create_dir_all(&staging).unwrap();
         std::fs::write(staging.join("temp.txt"), b"temp").unwrap();
 
@@ -218,6 +232,7 @@ mod tests {
 
         assert!(!incomplete.exists());
         assert!(complete.exists());
+        assert!(fresh.exists(), "recent marker must not trigger deletion");
         assert!(!staging.exists());
     }
 

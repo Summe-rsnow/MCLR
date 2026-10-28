@@ -29,7 +29,8 @@
       "tokenExpired": "微软登录已超时，请重新尝试",
       "accessDenied": "用户拒绝了登录授权",
       "noProfile": "该微软账号尚未购买 Minecraft 或未创建角色名",
-      "refreshFailed": "刷新微软登录凭证失败"
+      "refreshFailed": "刷新微软登录凭证失败",
+      "expiredToken": "登录状态已过期，请重新登录微软账号"
     },
     "xsts": {
       "banned": "Xbox 账号已被封禁",
@@ -50,6 +51,18 @@
     },
     "cape": {
       "setFailed": "披风更新失败"
+    },
+    "accountNotFound": "找不到该账号，请重新登录",
+    "crypto": "账号凭据解密失败，可能因为系统密钥已变更，请重新登录",
+    "http": "账号服务器连接失败，请检查网络后重试",
+    "io": "读写账号数据失败",
+    "json": "账号数据格式损坏，请重新登录",
+    "other": "账号操作失败",
+    "store": {
+      "corrupted": "账号数据已损坏，请重新登录以恢复"
+    },
+    "yggdrasil": {
+      "invalidCredentials": "第三方账号用户名或密码错误"
     }
   },
   "install": {
@@ -63,7 +76,12 @@
     "versionNotFound": "未找到指定的 Mod 加载器版本",
     "installFailed": "Mod 加载器安装失败",
     "installerDownload": "下载 Mod 加载器安装包失败",
-    "installerExec": "执行 Mod 加载器安装程序失败"
+    "installerExec": "执行 Mod 加载器安装程序失败",
+    "installerFailed": "加载器安装失败，请查看日志了解详情",
+    "io": "读写加载器文件失败",
+    "json": "加载器元数据格式损坏",
+    "metadata": "加载器元数据获取失败",
+    "zip": "加载器安装包损坏"
   },
   "launch": {
     "pathInvalid": "游戏或实例路径包含非法字符 ! 或 ;",
@@ -74,7 +92,15 @@
     "nativesExtractFailed": "解压运行依赖原生库失败",
     "preLaunchFailed": "启动前脚本执行失败",
     "spawnFailed": "启动游戏进程失败",
-    "processNotFound": "未找到指定的正在运行的游戏进程"
+    "processNotFound": "未找到指定的正在运行的游戏进程",
+    "invalidPath": "游戏路径无效，请检查路径中是否包含非法字符",
+    "java": {
+      "notFound": "没有找到可用的 Java 运行环境，请先在 Java 管理中安装或指定",
+      "tooOld": "当前选择的 Java {actual} 版本过低，此游戏版本需要 Java {required}"
+    },
+    "loginRequirement": "该实例需要登录账号后才能启动",
+    "nativesFailed": "本地库解压失败，请检查实例文件完整性",
+    "processFailed": "游戏进程启动失败"
   },
   "comp": {
     "cf": {
@@ -83,7 +109,14 @@
     "searchFailed": "搜索社区资源失败",
     "projectFailed": "获取社区项目详情失败",
     "filesFailed": "获取文件列表失败",
-    "downloadFailed": "下载社区资源失败"
+    "downloadFailed": "下载社区资源失败",
+    "fileNotFound": "找不到该文件",
+    "http": "资源平台连接失败，请检查网络或代理设置",
+    "invalidParams": "请求参数无效",
+    "io": "读写资源文件失败",
+    "json": "资源数据格式损坏",
+    "projectNotFound": "找不到该项目，可能已被作者删除或隐藏",
+    "zip": "压缩包损坏或格式不受支持"
   },
   "modpack": {
     "quiltUnsupported": "暂不支持 Quilt 整合包导入",
@@ -108,7 +141,14 @@
   "crash": {
     "analyzeFailed": "崩溃日志分析失败",
     "exportFailed": "导出崩溃诊断报告失败",
-    "logNotFound": "未找到相关的崩溃日志文件"
+    "logNotFound": "未找到相关的崩溃日志文件",
+    "comp": "崩溃报告压缩失败",
+    "custom": "自定义崩溃分析失败",
+    "game": "游戏异常退出",
+    "instanceNotFound": "找不到该实例，无法分析崩溃",
+    "io": "读写崩溃报告失败",
+    "json": "崩溃数据格式损坏",
+    "zip": "崩溃报告打包失败"
   },
   "tools": {
     "invalidSkinData": "皮肤数据无效",
@@ -158,5 +198,27 @@
   "resource": {
     "toggleConflict": "同时存在启用与禁用文件且内容不同，无法直接切换",
     "notModable": "当前实例未安装模组加载器，无法导入模组"
+  },
+  "core": {
+    "io": "读写本地文件失败，请检查磁盘空间与文件权限",
+    "json": "数据文件格式损坏，已重置为默认值",
+    "pathDenied": "该路径不在允许的目录内，操作已拒绝"
+  },
+  "net": {
+    "canceled": "下载已取消",
+    "hashMismatch": "下载文件校验失败，可能被篡改或传输损坏，请重试",
+    "http": "网络请求失败，请检查网络或代理设置",
+    "invalidUrl": "下载地址无效",
+    "io": "下载写入失败，请检查磁盘空间",
+    "proxy": "代理连接失败，请检查代理设置",
+    "racingFailed": "线路测速失败，已回退到默认线路",
+    "sizeMismatch": "下载文件大小不符，请重试",
+    "sourcesExhausted": "所有下载源均不可用，请稍后重试",
+    "timeout": "网络请求超时，请检查网络后重试"
+  },
+  "task": {
+    "alreadyExists": "该任务已存在",
+    "invalidState": "任务当前状态不允许该操作",
+    "notFound": "任务不存在或已结束"
   }
 }

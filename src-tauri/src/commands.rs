@@ -30,7 +30,6 @@ pub fn builder() -> Builder<tauri::Wry> {
         // [java]
         crate::ipc::java::java_scan,
         crate::ipc::java::java_list,
-        crate::ipc::java::java_download,
         // [accounts]
         crate::ipc::accounts::accounts_list,
         crate::ipc::accounts::accounts_select,

@@ -1130,8 +1130,7 @@ async function triggerConfirmDialog() {
 
     <!-- Context menu component instance -->
     <MContextMenu
-      v-model="contextMenuOpen"
-      :open="contextMenuOpen"
+      v-model:open="contextMenuOpen"
       :x="contextMenuX"
       :y="contextMenuY"
       :items="contextMenuItems"

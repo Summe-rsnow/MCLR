@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.26] - 2026-10-28
+
+### Added
+- **Launch-time agents (PCL parity)**: bundled `lwjgl-unsafe-agent.jar` (injected only for LWJGL 3.4.1 / MC 26.x) and `legacyfix.jar` (injected only when `releaseTime < 2013-06-25`), written atomically to `<data>/tools/agents/` on first use, each switchable in 高级启动选项 and disabled by default-off semantics that never break launch when extraction fails. Inherits-from chains (NeoForge 26.x, Forge 1.5.2) are resolved before either rule is evaluated.
+- **Java management without a global default**: `java.select` is gone (settings schema v5). Every launch derives the runtime from the version's own `javaVersion` requirement and picks the installed Java closest to it — exact major first, then the nearest major above; anything below the requirement is never used. `26.3` and the `26.x` snapshot scheme map to Java 25.
+- **Per-instance Java override** (实例详情 → 设置) is honoured only when it can actually run that version; otherwise a compatible install is used and the fallback is logged.
+- **Fast, actionable missing-Java failure**: launch aborts before repair work, the banner names the required major and offers a one-click jump to Java management.
+- **Production CSP** (`script-src 'self'`, `connect-src` limited to the IPC bridge, remote images enumerated per real source) with `nosniff`/COOP/permissions headers and five drift-guard tests.
+- **IPC path whitelist** (`src-tauri/src/security.rs`): writes/deletes confined to the launcher directory, reads/opens reject system directories.
+- **Material-aware selected states**: the sidebar active pill is now styled per material — solid tonal block in `flat`, translucent accent wash with blur, inner highlight and glow in `glass` (`.m-nav-pill` / `.m-nav-accent`).
+- **Desktop hardening in release builds**: native context menu, reload and devtools shortcuts are blocked; `devtools: false`.
+
+### Changed
+- Launch switches are positive (`开 = 启用`) and every default-on item now starts enabled; schema v4 migration inverts the old `disable*` keys without losing intent.
+- Java selection prefers precision over novelty: a Java 17 instance no longer receives a Java 25 runtime, and the chosen runtime is logged (`Launching instance … with Java 25.0.3 …`).
+- The Java cache is rescanned when a cached list cannot satisfy a requirement, so a runtime installed after the last scan is found on the next attempt.
+- Java page header now matches the instances/accounts pattern (primary action + ⟳ icon button); the JDK preference moved next to the installed-runtime list.
+- Resource toolbar hover menus became `MPopover` instances, gaining collision handling, click and keyboard access.
+
+### Fixed
+- **MC 26.x failed to start with `UnsupportedClassVersionError`**: the version scheme (`26.3`, `26.4-snapshot-6`) fell through the legacy Java branches, and a pinned global Java overrode the real requirement. Both paths are gone; verified live on 26.3 (Java 25) and 1.21.1 NeoForge (Java 21).
+- **Instance context menu never appeared** (wrong prop watched) and was dismissed by the very right-click that opened it (window `contextmenu` listener); it now closes on outside pointer-down or `Esc` only.
+- **Instance card top edge clipped on hover** inside the collapse animation container.
+- **Path traversal**: modpack `files[].path`, Forge `maven/` zip entries and `remove_mod_files` are now validated through `safe_join` (absolute, drive-letter and `..` paths rejected, with unit tests).
+- **Data loss risks**: Create failure no longer deletes an existing instance directory, stale `.mclr-installing` markers expire after six hours, corrupt `config.json` is backed up as `config.json.bak`, and short native writes clean up their partial files.
+- **Silent failures**: LabyMod install without a chosen build no longer installs vanilla; `modify` honours `removeModFiles`; `resources://patchBatch` event name matches the emitter; OptiFine install errors surface instead of being swallowed; duplicated log lines removed.
+- `cleanup_stale` no longer removes live files; auto memory stays below the safety cap; crash-report tokens are redacted in snake_case too.
+- 48 backend error codes and 9 task titles gained copy (83/83 backend codes covered); 15 invalid lucide icon names rendered blank and were replaced.
+
+### Removed
+- **Java runtime auto-download**: `java_download`, the Mojang runtime manifest resolver and the banner's download button are gone. MCLR only picks among installed runtimes and points at Java management.
+- Global "default Java" (`java.select`) and the automatic pinning of a lone detected runtime.
+
 ## [0.0.25] - 2026-10-28
 
 ### Added

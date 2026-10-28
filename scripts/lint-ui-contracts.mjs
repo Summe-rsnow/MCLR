@@ -68,6 +68,12 @@ function parseComponentContract(filePath) {
     }
   }
 
+  // `defineModel<boolean>('open')` declares a prop just like `defineProps` does.
+  for (const match of scriptContent.matchAll(/defineModel\s*(?:<[^>]*>)?\s*\(\s*(['"]([^'"]+)['"])?/g)) {
+    const raw = match[2] ?? 'modelValue'
+    props.add(toCamelCase(raw))
+  }
+
   function visitTemplate(node) {
     if (!node) return
     if (node.type === 1 && node.tag === 'slot') {

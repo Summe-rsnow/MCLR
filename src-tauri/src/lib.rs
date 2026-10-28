@@ -5,6 +5,7 @@ pub mod commands;
 pub mod events;
 pub mod http;
 pub mod ipc;
+pub mod security;
 
 use mclr_auth::AccountStore;
 use mclr_core::{SettingsStore, TaskCenter, TaskNode, init_logging, paths};

@@ -70,7 +70,7 @@ describe('Settings Game feature', () => {
     expect(text).toContain('要求 Java 使用高性能显卡')
     expect(text).toContain('使用 java.exe 而不是 javaw.exe')
     expect(text).toContain('锁定内存分配')
-    expect(text).toContain('禁用内置崩溃分析')
+    expect(text).toContain('内置崩溃分析')
   })
 
   it('persists the new advanced launch toggles', async () => {
@@ -116,7 +116,7 @@ describe('Settings Game feature', () => {
       'requireGpuHint',
       'useJavaExeHint',
       'lockMemoryHint',
-      'disableCrashAnalysisHint',
+      'crashAnalysisHint',
     ]) {
       const text = i18n.global.t(`settingsGame.launch.${key}`)
       expect((zhCnSettingsGame.launch as Record<string, string>)[key], key).toBeTruthy()

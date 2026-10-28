@@ -34,8 +34,42 @@ use tokio::time::{Duration, sleep};
 pub use ui::{MaterialMode, ThemeMode, UiSettings};
 pub use update::UpdateSettings;
 
+/// Rewrites launch flags that used to be stored negated (`disableX`) into their
+/// positive form (`x`), inverting the value.
+///
+/// Done on the raw JSON so `deny_unknown_fields` never rejects a config written by
+/// an older build — and so the user's choice survives the rename.
+fn migrate_negated_launch_flags(value: &mut Value) {
+    let Some(launch) = value.get_mut("launch").and_then(|v| v.as_object_mut()) else {
+        return;
+    };
+    for (old, new) in [
+        ("disableLegacyFix", "legacyFix"),
+        ("disableLwjglUnsafeAgent", "lwjglUnsafeAgent"),
+        ("disableCrashAnalysis", "crashAnalysis"),
+    ] {
+        if let Some(previous) = launch.remove(old)
+            && !launch.contains_key(new)
+        {
+            let disabled = previous.as_bool().unwrap_or(false);
+            launch.insert(new.to_string(), Value::Bool(!disabled));
+        }
+    }
+}
+
+/// Removes settings that no longer exist so `deny_unknown_fields` keeps accepting
+/// previously written configs.
+///
+/// `java.select` was the single global "default Java"; Java is now resolved per instance
+/// from the version requirement, so the pin is dropped rather than migrated into anything.
+fn strip_removed_keys(value: &mut Value) {
+    if let Some(java) = value.get_mut("java").and_then(|v| v.as_object_mut()) {
+        java.remove("select");
+    }
+}
+
 /// Current settings schema version; bumped whenever `migrate` changes stored values.
-pub const CURRENT_SCHEMA_VERSION: u32 = 2;
+pub const CURRENT_SCHEMA_VERSION: u32 = 5;
 
 /// Upgrades persisted settings in place. Returns `true` when values changed and
 /// the caller must write the file back.
@@ -49,6 +83,30 @@ fn migrate(settings: &mut Settings) -> bool {
         }
         settings.launch.require_gpu_high_performance = true;
         settings.schema_version = 2;
+        changed = true;
+    }
+    if settings.schema_version < 3 {
+        // v3: ship the launch options that are a net win by default —
+        // `java.exe` keeps the game console (and its crash output) attached, and
+        // a locked heap (`-Xms == -Xmx`) removes GC jitter on modded packs.
+        // Both remain user-toggleable in 高级启动选项.
+        settings.launch.use_java_exe = true;
+        settings.launch.lock_memory = true;
+        settings.schema_version = 3;
+        changed = true;
+    }
+    if settings.schema_version < 4 {
+        // v4: the launch switches became positive ("开 = 启用"). Earlier configs
+        // stored the negated flags; they were already migrated to the enabled
+        // state above, so only the schema marker is needed here.
+        settings.schema_version = 4;
+        changed = true;
+    }
+    if settings.schema_version < 5 {
+        // v5: the global "default Java" (`java.select`) is gone — Java is resolved per
+        // instance from the version's requirement. The raw JSON is scrubbed before
+        // deserialization, so only the schema marker is needed here.
+        settings.schema_version = 5;
         changed = true;
     }
     changed
@@ -148,12 +206,31 @@ impl SettingsStore {
         let file_path = path.into();
         let settings = if file_path.exists() {
             let content = fs::read_to_string(&file_path)?;
-            serde_json::from_str(&content).unwrap_or_else(|e| {
-                tracing::warn!(
-                    "Failed to parse settings at {:?}: {}, resetting to default",
-                    file_path,
-                    e
-                );
+            let parsed = serde_json::from_str::<Value>(&content)
+                .map_err(|e| e.to_string())
+                .and_then(|mut value| {
+                    migrate_negated_launch_flags(&mut value);
+                    strip_removed_keys(&mut value);
+                    serde_json::from_value::<Settings>(value).map_err(|e| e.to_string())
+                });
+            parsed.unwrap_or_else(|e| {
+                // Never destroy the user's settings silently: keep a copy next to
+                // the file (a newer build's config, a stray key or a partial write
+                // would otherwise be replaced by defaults on the next patch).
+                let backup = file_path.with_extension("json.bak");
+                match fs::copy(&file_path, &backup) {
+                    Ok(_) => tracing::warn!(
+                        "Failed to parse settings at {:?}: {}. Reset to default; original kept at {:?}",
+                        file_path,
+                        e,
+                        backup
+                    ),
+                    Err(copy_err) => tracing::warn!(
+                        "Failed to parse settings at {:?}: {}. Reset to default (backup failed: {copy_err})",
+                        file_path,
+                        e
+                    ),
+                }
                 Settings::default()
             })
         } else {
@@ -245,6 +322,92 @@ impl SettingsStore {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[tokio::test]
+    async fn corrupt_settings_are_backed_up_instead_of_lost() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let garbage = r#"{"schemaVersion":2,"ui":{"unexpectedKey":true}}"#;
+        fs::write(&path, garbage).unwrap();
+
+        let store = SettingsStore::open_path(&path).unwrap();
+        // Falls back to defaults...
+        assert_eq!(store.get().await.ui.seed, Settings::default().ui.seed);
+        // ...but the original bytes survive in `config.json.bak`.
+        let backup = path.with_extension("json.bak");
+        assert_eq!(fs::read_to_string(&backup).unwrap(), garbage);
+    }
+
+    /// The global "default Java" pin was removed: a v4 config carrying `java.select`
+    /// must still load (not be discarded as corrupt) and must come back without it.
+    #[tokio::test]
+    async fn test_legacy_java_select_is_dropped_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r##"{"schemaVersion":4,"ui":{"seed":"#123456"},"java":{"custom":["C:\\Java\\jdk8"],"select":"C:\\Java\\jdk21\\bin\\java.exe","preferJdk":true}}"##,
+        )
+        .unwrap();
+
+        let store = SettingsStore::open_path(&path).unwrap();
+        let settings = store.get().await;
+
+        assert_eq!(settings.schema_version, CURRENT_SCHEMA_VERSION);
+        assert_eq!(settings.ui.seed, "#123456", "user choices must survive");
+        assert_eq!(settings.java.custom, vec!["C:\\Java\\jdk8".to_string()]);
+        assert!(settings.java.prefer_jdk);
+        assert!(
+            !path.with_extension("json.bak").exists(),
+            "a known legacy key must not trigger the corrupt-config fallback"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_legacy_disabled_flags_are_inverted_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        // v3 config written before the switches became positive.
+        fs::write(
+            &path,
+            r#"{"schemaVersion":3,"launch":{"disableLegacyFix":true,"disableLwjglUnsafeAgent":false,"disableCrashAnalysis":true}}"#,
+        )
+        .unwrap();
+
+        let store = SettingsStore::open_path(&path).unwrap();
+        let launch = store.get().await.launch;
+
+        // The user's intent is preserved, only the polarity flips.
+        assert!(!launch.legacy_fix);
+        assert!(launch.lwjgl_unsafe_agent);
+        assert!(!launch.crash_analysis);
+    }
+
+    #[tokio::test]
+    async fn test_open_path_migrates_v2_launch_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        // v2 profile: the launch conveniences were still off.
+        fs::write(
+            &path,
+            r#"{"schemaVersion":2,"launch":{"useJavaExe":false,"lockMemory":false}}"#,
+        )
+        .unwrap();
+
+        let store = SettingsStore::open_path(&path).unwrap();
+        let settings = store.get().await;
+
+        assert_eq!(settings.schema_version, CURRENT_SCHEMA_VERSION);
+        assert!(settings.launch.use_java_exe);
+        assert!(settings.launch.lock_memory);
+        // Disabling afterwards must stick (no re-migration on the next open).
+        let patch = serde_json::json!({"launch": {"useJavaExe": false}});
+        store.patch(&patch).await.unwrap();
+        // `patch` only schedules the debounced writer.
+        store.save_sync().await.unwrap();
+        let reopened = SettingsStore::open_path(&path).unwrap();
+        assert!(!reopened.get().await.launch.use_java_exe);
+    }
 
     #[tokio::test]
     async fn test_open_path_migrates_v1_settings() {

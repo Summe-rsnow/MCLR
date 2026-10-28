@@ -62,7 +62,8 @@ describe('Java feature', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Java 运行时管理')
-    expect(wrapper.text()).toContain('扫描本机 Java')
+    // Scan is an icon button titled like the instances-page refresh control.
+    expect(wrapper.find('[title="扫描本机 Java"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('优先使用 JDK 而非 JRE')
     expect(wrapper.text()).toContain('已检测到的 Java 运行时')
   })
@@ -144,20 +145,7 @@ describe('Java feature', () => {
     expect(localStorage.getItem('mclr.hidden_java_paths')).toBeTruthy()
   })
 
-  it('sets single Java as default automatically and displays default badge', async () => {
-    vi.spyOn(ipcClient, 'javaScan').mockResolvedValueOnce([
-      {
-        path: 'C:\\Java\\jdk-21\\bin\\javaw.exe',
-        home: 'C:\\Java\\jdk-21',
-        version: '21.0.2',
-        major: 21,
-        isJdk: true,
-        arch: 'x64',
-        implementor: 'Oracle',
-        source: 'manual',
-      },
-    ])
-
+  it('has no global default-Java control any more', async () => {
     const wrapper = mount(JavaPage, {
       global: {
         plugins: [i18n],
@@ -165,23 +153,10 @@ describe('Java feature', () => {
     })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('默认')
-  })
-
-  it('allows setting and toggling default Java when multiple installations exist', async () => {
-    const wrapper = mount(JavaPage, {
-      global: {
-        plugins: [i18n],
-      },
-    })
-    await flushPromises()
-
-    const setDefaultBtns = wrapper.findAll('button').filter((b) => b.text().includes('设为默认'))
-    expect(setDefaultBtns.length).toBeGreaterThan(0)
-
-    await setDefaultBtns[0].trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('默认')
+    // Java is resolved per version; a single global pin caused 26.x to run on Java 21.
+    const labels = wrapper.findAll('button').map((b) => b.text())
+    expect(labels.some((l) => l.includes('设为默认'))).toBe(false)
+    expect(wrapper.text()).not.toContain('默认 Java')
+    expect(wrapper.text()).toContain('Java 25')
   })
 })

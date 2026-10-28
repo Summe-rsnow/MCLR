@@ -61,25 +61,6 @@ function isGroupOpen(id: string, index: number): boolean {
 function toggleGroup(id: string, index: number) {
   openState.value[id] = !isGroupOpen(id, index)
 }
-const canonicalMcVersions = [
-  '26.3',
-  '26.2',
-  '26.1',
-  '1.21',
-  '1.20',
-  '1.19',
-  '1.18',
-  '1.17',
-  '1.16',
-  '1.12',
-]
-
-const availableLoaders = [
-  { label: 'Quilt', value: 'quilt' },
-  { label: 'NeoForge', value: 'neoforge' },
-  { label: 'Forge', value: 'forge' },
-  { label: 'Fabric', value: 'fabric' },
-]
 </script>
 
 <template>
@@ -108,18 +89,18 @@ const availableLoaders = [
           {{ t('comp.filter.all') }}
         </button>
         <button
-          v-for="ver in canonicalMcVersions"
-          :key="ver"
+          v-for="option in mcVersionFilterOptions"
+          :key="option.value"
           type="button"
           class="px-2 py-0.5 rounded-lg transition cursor-pointer font-mono"
           :class="
-            selectedMcVersion === ver
+            selectedMcVersion === option.value
               ? 'bg-primary text-white shadow-xs font-semibold'
               : 'text-fg-muted hover:text-fg hover:bg-sunken'
           "
-          @click="selectedMcVersion = ver"
+          @click="selectedMcVersion = option.value"
         >
-          {{ ver }}
+          {{ option.label }}
         </button>
       </div>
 
@@ -141,7 +122,7 @@ const availableLoaders = [
           {{ t('comp.filter.all') }}
         </button>
         <button
-          v-for="ldr in availableLoaders"
+          v-for="ldr in loaderFilterOptions"
           :key="ldr.value"
           type="button"
           class="px-2.5 py-0.5 rounded-lg transition cursor-pointer capitalize"

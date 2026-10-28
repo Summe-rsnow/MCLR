@@ -26,6 +26,10 @@ fn allow_dir<R: Runtime>(app: &AppHandle<R>, dir: &Path) {
 }
 
 /// Allow a user-picked directory (background image / music folder) recursively.
+///
+/// The directory comes from a native dialog, but the command is still callable
+/// from the webview, so obviously system-critical locations are rejected: the
+/// asset protocol must never be able to read `C:\Windows` or a whole drive.
 #[tauri::command]
 #[specta::specta]
 pub fn assets_allow(app: AppHandle, path: String) -> Result<(), AppError> {
@@ -35,7 +39,36 @@ pub fn assets_allow(app: AppHandle, path: String) -> Result<(), AppError> {
     } else {
         p.parent().unwrap_or(p)
     };
+
+    reject_dangerous_dir(dir)?;
+
     app.asset_protocol_scope()
         .allow_directory(dir, true)
         .map_err(|e| AppError::new("app.assetScope").with_detail(e.to_string()))
+}
+
+/// Refuses whole drives and the Windows system directories.
+fn reject_dangerous_dir(dir: &Path) -> Result<(), AppError> {
+    let resolved = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    if resolved.parent().is_none() {
+        return Err(AppError::new("core.pathDenied").with_detail(format!(
+            "refusing to expose a filesystem root: {}",
+            resolved.display()
+        )));
+    }
+
+    let lowered = resolved.to_string_lossy().to_ascii_lowercase();
+    let forbidden = [
+        "\\windows",
+        "\\windows\\system32",
+        "\\program files",
+        "\\program files (x86)",
+    ];
+    if forbidden.iter().any(|f| lowered.contains(f)) {
+        return Err(AppError::new("core.pathDenied").with_detail(format!(
+            "refusing to expose a system directory: {}",
+            resolved.display()
+        )));
+    }
+    Ok(())
 }

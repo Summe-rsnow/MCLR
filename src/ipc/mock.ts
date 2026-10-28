@@ -48,12 +48,14 @@ export function setupMockIpc(): void {
       preferredIpStack: 'auto',
       processPriority: 'normal',
       closeLauncherOnStart: 'keep',
-      disableCrashAnalysis: false,
+      crashAnalysis: true,
       renderer: 'default',
       preLaunchCommand: '',
-      useJavaExe: false,
+      useJavaExe: true,
       requireGpuHighPerformance: true,
-      lockMemory: false,
+      lockMemory: true,
+      legacyFix: true,
+      lwjglUnsafeAgent: true,
     },
     java: {
       custom: [],
@@ -87,7 +89,8 @@ export function setupMockIpc(): void {
     },
   }
   const handlers: MockHandlers = {
-    app_info: () => ({ name: 'MCLR', version: '0.0.13' }),
+    // Keep in sync with package.json on release; a stale value hides version bugs.
+    app_info: () => ({ name: 'MCLR', version: '0.0.26' }),
     secrets_status: () => ({
       msClientId: false,
       curseforgeApiKey: false,

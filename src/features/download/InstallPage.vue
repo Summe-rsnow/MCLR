@@ -3,7 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createResource } from '../../composables/useResource'
 import { ipcClient, type VersionManifestEntry, type VersionManifestList } from '../../ipc/client'
-import { MButton, MCard, MEmpty, MInput, MPageHeader, MSkeleton } from '../../ui'
+import { MButton, MCard, MEmpty, MInput, MPageHeader, MSkeleton, useToast } from '../../ui'
+
+const toast = useToast()
 import InstallConfigurator from './InstallConfigurator.vue'
 import VersionCategoryTabs, { type LatestVersionItem } from './components/VersionCategoryTabs.vue'
 import { classifyVersion } from './compat'
@@ -91,7 +93,7 @@ async function onPickAndSetGameFolder() {
     const name = parts[parts.length - 1] || '.minecraft'
     await instancesStore.addFolder(name, path)
   } catch (err) {
-    console.error('Failed to select game folder:', err)
+    toast.danger(String(err))
   }
 }
 

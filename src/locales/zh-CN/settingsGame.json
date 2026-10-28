@@ -38,7 +38,6 @@
     "closeLauncherKeep": "保持窗口显示",
     "closeLauncherHide": "隐藏启动器窗口",
     "closeLauncherExit": "退出启动器",
-    "disableCrashAnalysis": "禁用内置崩溃分析",
     "advancedSection": "高级启动选项",
     "renderer": "渲染器",
     "rendererDefault": "游戏默认",
@@ -61,7 +60,12 @@
     "gameArgsTailHint": "追加在游戏参数末尾的内容，例如 -server 127.0.0.1 或自定义调试开关。",
     "requireGpuHint": "在 Windows 图形设置中把该 Java 标记为「高性能」，避免笔记本双显卡时误用核显导致帧数过低。",
     "useJavaExeHint": "默认使用 javaw.exe 隐藏控制台窗口；开启后改用 java.exe，可以看到游戏的标准输出，便于排查崩溃。",
-    "disableCrashAnalysisHint": "关闭启动后自动崩溃分析。关闭后游戏异常退出不会生成分析报告，适合自行查看原始日志的场景。"
+    "legacyFix": "LegacyFix 兼容补丁",
+    "legacyFixHint": "启动 1.5.x 及更早版本时自动注入兼容补丁，修复老版本在现代 Java 上的问题。默认启用。",
+    "lwjglUnsafeAgent": "LWJGL Unsafe 加速补丁",
+    "lwjglUnsafeAgentHint": "Minecraft 26.1 起使用 LWJGL 3.4.1，在 JDK 25+ 上走 FFM 访问本地内存可能严重掉帧；补丁恢复 Unsafe 快路径。仅对 LWJGL 3.4.1 生效，默认启用。",
+    "crashAnalysis": "内置崩溃分析",
+    "crashAnalysisHint": "游戏异常退出后自动分析日志并给出原因与建议。默认启用。"
   },
   "java": {
     "selectSection": "默认 Java 版本选择",

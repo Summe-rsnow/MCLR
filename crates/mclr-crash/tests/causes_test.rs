@@ -501,4 +501,17 @@ fn test_preparer_sanitization() {
     assert!(masked.contains("Bearer ***"));
     assert!(!masked.contains("Administrator"));
     assert!(masked.contains("C:\\Users\\***\\AppData"));
+
+    // Snake_case JSON and form-body tokens must be masked too: these files are
+    // attached to public bug reports.
+    let snake = r#"{"access_token":"secretAccess","refresh_token":"secretRefresh","client_token":"secretClient"}"#;
+    let masked_snake = mask_sensitive(snake);
+    assert!(!masked_snake.contains("secretAccess"), "{masked_snake}");
+    assert!(!masked_snake.contains("secretRefresh"), "{masked_snake}");
+    assert!(!masked_snake.contains("secretClient"), "{masked_snake}");
+
+    let form = "device_code=abc&access_token=secretForm&refresh_token=secretForm2";
+    let masked_form = mask_sensitive(form);
+    assert!(!masked_form.contains("secretForm"), "{masked_form}");
+    assert!(!masked_form.contains("secretForm2"), "{masked_form}");
 }

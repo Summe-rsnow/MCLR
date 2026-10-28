@@ -127,6 +127,7 @@ const placementClass = computed(() => {
           </div>
         </slot>
         <button
+          :aria-label="t('common.close')"
           type="button"
           class="text-fg-muted hover:text-fg hover:bg-sunken cursor-pointer p-1.5 rounded-lg transition-colors shrink-0"
           @click="onClose"

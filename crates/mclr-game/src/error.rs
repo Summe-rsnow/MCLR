@@ -42,8 +42,14 @@ pub enum GameError {
     #[error("Login requirement not satisfied: required '{required}', but got '{actual}'")]
     LaunchLoginRequirement { required: String, actual: String },
 
+    #[error("Java {actual} is too old for this instance (requires Java {required})")]
+    LaunchJavaTooOld { required: u32, actual: u32 },
     #[error("Matching Java installation not found for major version {major}")]
-    LaunchJavaNotFound { major: u32 },
+    LaunchJavaNotFound {
+        major: u32,
+        /// Mojang runtime component that provides `major` (e.g. `java-runtime-epsilon`).
+        component: Option<String>,
+    },
 
     #[error("Failed to extract natives: {0}")]
     LaunchNativesFailed(String),
@@ -71,6 +77,7 @@ impl GameError {
             GameError::LaunchInvalidPath(_) => "launch.invalidPath",
             GameError::LaunchLoginRequirement { .. } => "launch.loginRequirement",
             GameError::LaunchJavaNotFound { .. } => "launch.java.notFound",
+            GameError::LaunchJavaTooOld { .. } => "launch.java.tooOld",
             GameError::LaunchNativesFailed(_) => "launch.nativesFailed",
             GameError::LaunchProcessFailed(_) => "launch.processFailed",
             GameError::LaunchProcessNotFound(_) => "launch.processNotFound",
@@ -96,8 +103,15 @@ impl From<GameError> for AppError {
         let detail = err.to_string();
         let app_err = AppError::new(code).with_detail(detail);
         match err {
-            GameError::LaunchJavaNotFound { major } => {
-                app_err.with_param("major", major.to_string())
+            GameError::LaunchJavaTooOld { required, actual } => app_err
+                .with_param("required", required.to_string())
+                .with_param("actual", actual.to_string()),
+            GameError::LaunchJavaNotFound { major, component } => {
+                let app_err = app_err.with_param("major", major.to_string());
+                match component {
+                    Some(component) => app_err.with_param("component", component),
+                    None => app_err,
+                }
             }
             GameError::LaunchLoginRequirement { required, actual } => app_err
                 .with_param("required", required)

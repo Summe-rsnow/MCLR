@@ -163,14 +163,20 @@ fn extract_maven_entries_from_zip(
         let name = file.name().to_string();
         if name.starts_with("maven/") && !file.is_dir() {
             let rel_path = &name["maven/".len()..];
-            let dest = mc_folder
-                .join("libraries")
-                .join(rel_path.replace('/', std::path::MAIN_SEPARATOR_STR));
-            if let Some(parent) = dest.parent() {
-                std::fs::create_dir_all(parent)?;
+            // Installer jars come from remote mirrors: never let a crafted entry
+            // (`maven/../../evil.dll`, `maven/C:/evil`) escape `libraries/`.
+            if let Some(dest) =
+                mclr_core::safe_path::safe_join(&mc_folder.join("libraries"), rel_path)
+            {
+                if let Some(parent) = dest.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                let mut out = std::fs::File::create(&dest)?;
+                std::io::copy(&mut file, &mut out)?;
+                continue;
             }
-            let mut out = std::fs::File::create(&dest)?;
-            std::io::copy(&mut file, &mut out)?;
+            debug!("Skipping unsafe maven entry: {name}");
+            continue;
         }
     }
     Ok(())

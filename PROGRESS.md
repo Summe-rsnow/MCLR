@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.25`
-- **Next Milestone**: `v0.0.26` (towards `v0.1.0`)
+- **Current Version**: `0.0.26`
+- **Next Milestone**: `v0.0.27` (towards `v0.1.0`)
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -26,6 +26,8 @@
 | v0.0.19 | Tasks in logs, Java folder reveal, MSelect adaptive width, layout refinements & PCL comp parity | done | v0.0.19 | v0.0.19 | 2026-10-25 |
 | v0.0.20 | Oxc toolchain, NeoForge detection, simplified instance card, liquid glass titlebar & PCL polish | done | v0.0.20 | v0.0.20 | 2026-10-26 |
 | v0.0.21 | Unified overlay architecture, codebase health overhaul & UX consistency | done | v0.0.21 | v0.0.21 | 2026-10-26 |
+| v0.0.22 | — (skipped: fold into 0.0.23) | skipped | — | — | 2026-10-26 |
 | v0.0.23 | Design system overhaul, solid flat material, rich iconography & universal MImage | done | v0.0.23 | v0.0.23 | 2026-10-26 |
 | v0.0.24 | Sidebar scale tracking, overflow fixes, drawer frosting & concurrent mod update checks | done | v0.0.24 | v0.0.24 | 2026-10-26 |
 | v0.0.25 | Advanced launch options, loader artwork & PCL version rules, floating collision, responsive layout | done | v0.0.25 | v0.0.25 | 2026-10-28 |
+| v0.0.26 | Launch agents, security hardening, Java resolution rework & material-aware selection | done | v0.0.26 | v0.0.26 | 2026-10-28 |

@@ -40,12 +40,14 @@ const launchSettings = ref<LaunchSettings>({
   preferredIpStack: 'auto',
   processPriority: 'normal',
   closeLauncherOnStart: 'keep',
-  disableCrashAnalysis: false,
+  crashAnalysis: true,
   renderer: 'default',
   preLaunchCommand: '',
-  useJavaExe: false,
+  useJavaExe: true,
   requireGpuHighPerformance: true,
-  lockMemory: false,
+  lockMemory: true,
+  legacyFix: true,
+  lwjglUnsafeAgent: true,
 })
 
 function resetJvmArgs() {
@@ -297,13 +299,32 @@ async function saveLaunchSettings() {
             <MSwitch v-model="launchSettings.lockMemory" @update:model-value="saveLaunchSettings" />
           </MSettingRow>
 
-          <MSettingRow :label="t('settingsGame.launch.disableCrashAnalysis')">
+          <MSettingRow :label="t('settingsGame.launch.legacyFix')">
             <template #label>
-              <span>{{ t('settingsGame.launch.disableCrashAnalysis') }}</span>
-              <MHelpTooltip :text="t('settingsGame.launch.disableCrashAnalysisHint')" />
+              <span>{{ t('settingsGame.launch.legacyFix') }}</span>
+              <MHelpTooltip :text="t('settingsGame.launch.legacyFixHint')" />
+            </template>
+            <MSwitch v-model="launchSettings.legacyFix" @update:model-value="saveLaunchSettings" />
+          </MSettingRow>
+
+          <MSettingRow :label="t('settingsGame.launch.lwjglUnsafeAgent')">
+            <template #label>
+              <span>{{ t('settingsGame.launch.lwjglUnsafeAgent') }}</span>
+              <MHelpTooltip :text="t('settingsGame.launch.lwjglUnsafeAgentHint')" />
             </template>
             <MSwitch
-              v-model="launchSettings.disableCrashAnalysis"
+              v-model="launchSettings.lwjglUnsafeAgent"
+              @update:model-value="saveLaunchSettings"
+            />
+          </MSettingRow>
+
+          <MSettingRow :label="t('settingsGame.launch.crashAnalysis')">
+            <template #label>
+              <span>{{ t('settingsGame.launch.crashAnalysis') }}</span>
+              <MHelpTooltip :text="t('settingsGame.launch.crashAnalysisHint')" />
+            </template>
+            <MSwitch
+              v-model="launchSettings.crashAnalysis"
               @update:model-value="saveLaunchSettings"
             />
           </MSettingRow>

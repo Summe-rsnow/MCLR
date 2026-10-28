@@ -35,8 +35,8 @@
   },
   "javaMissing": {
     "title": "未检测到可用的 Java 运行环境",
-    "message": "启动此游戏版本需要 Java {major}。您可以前往设置手动指定，或点击下方按钮直接下载 Mojang 官方运行时。",
-    "downloadAction": "自动下载 Java"
+    "message": "启动此游戏版本需要 Java {major}，当前没有可用的匹配版本。请前往 Java 管理安装或指定该版本。",
+    "manageAction": "前往 Java 管理"
   },
   "runningCard": {
     "title": "正在运行",

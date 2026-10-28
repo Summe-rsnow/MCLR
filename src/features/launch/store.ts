@@ -59,7 +59,6 @@ export const useLaunchStore = defineStore('launch', () => {
 
   // Java missing recovery state
   const javaMissingMajor = ref<string | null>(null)
-  const isDownloadingJava = ref(false)
 
   let unlistenStarted: UnlistenFn | null = null
   let unlistenExit: UnlistenFn | null = null
@@ -244,23 +243,17 @@ export const useLaunchStore = defineStore('launch', () => {
       launchProgress.value = 0
       isLaunching.value = false
 
-      if (err instanceof AppErrorEx && err.code === 'launch.java.notFound') {
-        javaMissingMajor.value = err.params?.major || '17'
+      // `java.tooOld` (an incompatible JRE was selected) recovers through the same
+      // download path as `java.notFound`, since both mean "this JVM cannot run it".
+      if (
+        err instanceof AppErrorEx &&
+        (err.code === 'launch.java.notFound' || err.code === 'launch.java.tooOld')
+      ) {
+        javaMissingMajor.value = err.params?.required || err.params?.major || '17'
       }
       throw err
     } finally {
       isLaunching.value = false
-    }
-  }
-
-  async function downloadJavaRuntime(component = 'java-runtime-gamma'): Promise<string> {
-    isDownloadingJava.value = true
-    try {
-      const taskId = await ipcClient.javaDownload(component)
-      javaMissingMajor.value = null
-      return taskId
-    } finally {
-      isDownloadingJava.value = false
     }
   }
 
@@ -285,13 +278,11 @@ export const useLaunchStore = defineStore('launch', () => {
     runningProcesses,
     activeProcess,
     javaMissingMajor,
-    isDownloadingJava,
     startListening,
     stopListening,
     fetchProcesses,
     selectInstance,
     startLaunch,
-    downloadJavaRuntime,
     killProcess,
   }
 })

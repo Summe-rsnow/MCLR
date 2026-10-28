@@ -114,9 +114,9 @@
       "placeholder": "例如：mc.hypixel.net",
       "hint": "启动游戏后直接跳过主菜单进入指定服务器"
     },
-    "useGlobal": "使用全局设置",
+    "useGlobal": "自动（按版本要求智能匹配）",
     "javaLabel": "Java 运行环境",
-    "javaHint": "选择启动此实例所使用的 Java 虚拟机，或使用全局设置"
+    "javaHint": "留空 = 自动：按该版本要求（如 1.21.1 → Java 21、26.3 → Java 25）选择最接近的已安装 Java。手动指定一个不满足要求的版本时会被自动替换。"
   },
   "files": {
     "empty": "暂无文件",

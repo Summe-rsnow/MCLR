@@ -203,7 +203,22 @@ fn urlencoding_encode(s: &str) -> String {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn tools_save_skin(path: String, data_url: String) -> Result<(), AppError> {
+pub async fn tools_save_skin(
+    settings_state: State<'_, SettingsStore>,
+    path: String,
+    data_url: String,
+) -> Result<(), AppError> {
+    let settings = settings_state.get().await;
+    // Writes are confined to the launcher's own directories.
+    let target = crate::security::ensure_allowed(Path::new(&path), &settings)?;
+    write_skin_png(&target, &data_url).await
+}
+
+/// Decodes a `data:image/png;base64,…` payload and writes it to `path`.
+///
+/// Split out from the command so the decoder stays unit-testable without a
+/// `SettingsStore`/containment context.
+async fn write_skin_png(path: &Path, data_url: &str) -> Result<(), AppError> {
     const PREFIX: &str = "data:image/png;base64,";
     let base64_data = data_url
         .strip_prefix(PREFIX)
@@ -217,7 +232,7 @@ pub async fn tools_save_skin(path: String, data_url: String) -> Result<(), AppEr
         return Err(AppError::new("tools.invalidSkinData"));
     }
 
-    tokio::fs::write(&path, &bytes)
+    tokio::fs::write(path, &bytes)
         .await
         .map_err(|e| AppError::new("tools.saveFailed").with_detail(e.to_string()))?;
 
@@ -231,6 +246,9 @@ pub async fn tools_save_skin(path: String, data_url: String) -> Result<(), AppEr
 #[tauri::command]
 #[specta::specta]
 pub async fn tools_generate_skin_avatar(skin_path: String, size: u32) -> Result<String, AppError> {
+    let skin_path = crate::security::ensure_not_system_path(Path::new(&skin_path))?
+        .to_string_lossy()
+        .to_string();
     let bytes = tokio::fs::read(&skin_path)
         .await
         .map_err(|e| AppError::new("tools.avatar.readFailed").with_detail(e.to_string()))?;
@@ -374,7 +392,9 @@ pub async fn tools_custom_download(
     let parsed_url = Url::parse(&url)
         .map_err(|e| AppError::new("tools.download.invalidUrl").with_detail(e.to_string()))?;
 
-    let dest = PathBuf::from(&dest_path);
+    // Arbitrary write target: confine it to the launcher's own directories.
+    let settings_snapshot = settings_state.get().await;
+    let dest = crate::security::ensure_allowed(Path::new(&dest_path), &settings_snapshot)?;
     if let Some(parent) = dest.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -756,13 +776,13 @@ mod tests {
 
         // Valid 1x1 base64 png
         let valid_data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-        let res = tools_save_skin(target_str.clone(), valid_data_url.to_string()).await;
+        let res = write_skin_png(std::path::Path::new(&target_str), valid_data_url).await;
         assert!(res.is_ok());
         assert!(target.exists());
         assert!(fs::metadata(&target).unwrap().len() > 0);
 
         // Invalid prefix
-        let err_res = tools_save_skin(target_str.clone(), "not_data_url".to_string()).await;
+        let err_res = write_skin_png(std::path::Path::new(&target_str), "not_data_url").await;
         assert!(err_res.is_err());
         assert_eq!(err_res.unwrap_err().code, "tools.invalidSkinData");
 

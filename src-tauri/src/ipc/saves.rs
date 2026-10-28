@@ -121,23 +121,40 @@ pub async fn screenshots_list_paged(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn screenshot_thumb(path: String) -> Result<String, AppError> {
+pub async fn screenshot_thumb(
+    state: State<'_, SettingsStore>,
+    path: String,
+) -> Result<String, AppError> {
     let _permit = THUMB_SEMAPHORE
         .acquire()
         .await
         .map_err(|e| AppError::new("media.semaphore").with_detail(e.to_string()))?;
-    super::run_blocking(move || mclr_saves::generate_screenshot_thumb(&path)).await
+    let settings = state.get().await;
+    let target = crate::security::ensure_allowed(Path::new(&path), &settings)?;
+    let target = target.to_string_lossy().to_string();
+    super::run_blocking(move || mclr_saves::generate_screenshot_thumb(&target)).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn screenshot_delete(path: String) -> Result<(), AppError> {
-    super::run_blocking(move || mclr_saves::delete_screenshot_path(Path::new(&path))).await
+pub async fn screenshot_delete(
+    state: State<'_, SettingsStore>,
+    path: String,
+) -> Result<(), AppError> {
+    let settings = state.get().await;
+    let target = crate::security::ensure_allowed(Path::new(&path), &settings)?;
+    super::run_blocking(move || mclr_saves::delete_screenshot_path(&target)).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn screenshot_reveal(path: String) -> Result<(), AppError> {
+pub async fn screenshot_reveal(
+    state: State<'_, SettingsStore>,
+    path: String,
+) -> Result<(), AppError> {
+    let settings = state.get().await;
+    let target = crate::security::ensure_allowed(Path::new(&path), &settings)?;
+    let path = target.to_string_lossy().to_string();
     super::run_blocking(move || {
         let p = Path::new(&path);
         if !p.exists() {
@@ -171,8 +188,15 @@ pub async fn screenshot_reveal(path: String) -> Result<(), AppError> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn screenshot_open(app: tauri::AppHandle, path: String) -> Result<(), AppError> {
+pub async fn screenshot_open(
+    app: tauri::AppHandle,
+    state: State<'_, SettingsStore>,
+    path: String,
+) -> Result<(), AppError> {
     use tauri_plugin_opener::OpenerExt;
+    let settings = state.get().await;
+    let target = crate::security::ensure_allowed(Path::new(&path), &settings)?;
+    let path = target.to_string_lossy().to_string();
     super::run_blocking(move || {
         app.opener()
             .open_path(path, None::<&str>)
@@ -183,6 +207,12 @@ pub async fn screenshot_open(app: tauri::AppHandle, path: String) -> Result<(), 
 
 #[tauri::command]
 #[specta::specta]
-pub async fn screenshot_copy(path: String) -> Result<(), AppError> {
-    super::run_blocking(move || mclr_saves::copy_image_to_clipboard(&path)).await
+pub async fn screenshot_copy(
+    state: State<'_, SettingsStore>,
+    path: String,
+) -> Result<(), AppError> {
+    let settings = state.get().await;
+    let target = crate::security::ensure_allowed(Path::new(&path), &settings)?;
+    let target = target.to_string_lossy().to_string();
+    super::run_blocking(move || mclr_saves::copy_image_to_clipboard(&target)).await
 }

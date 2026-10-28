@@ -38,3 +38,21 @@ YOU AGREE THAT THE HARMONYOS SANS FONTS ARE PROVIDED BY LICENSOR ON AN "AS IS" B
 IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY DIRECT OR INDIRECT, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES (INCLUDING WITHOUT LIMITATION, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE OF OR INABILITY TO USE HARMONYOS SANS FONTS, WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHER LEGAL THEORY, EVEN IF LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 YOU EXPRESSLY ASSUME ALL LIABILITIES AND RISKS FOR USE OF HARMONYOS SANS FONTS. SHOULD THE HARMONYOS SANS FONTS PROVE DEFECTIVE, YOU ASSUME THE ENTIRE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
+
+---
+
+## Launch Agents (PCL-CE)
+
+`crates/mclr-game/assets/legacyfix.jar` and
+`crates/mclr-game/assets/lwjgl-unsafe-agent.jar` are taken from
+[PCL-CE](https://github.com/PCL-Community/PCL-CE) and are licensed under the
+Apache License 2.0 (see the full license text in that repository).
+
+- `legacyfix.jar` — compatibility shims for Minecraft 1.5.x and older, injected
+  only for releases published before 2013-06-25.
+- `lwjgl-unsafe-agent.jar` — restores the `sun.misc.Unsafe` native-memory path
+  for LWJGL 3.4.1 (Minecraft 26.1+), injected only when the instance depends on
+  that LWJGL version.
+
+Both are embedded in the binary and written to `<data>/tools/agents/` on first
+use; they can be disabled per user in `设置 → 启动 → 高级启动选项`.

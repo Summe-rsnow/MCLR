@@ -13,7 +13,8 @@ export type { ExtraCandidates, ExtraMod, CurrentExtras, CurrentInstallInfo, Laby
 
 export type InstallMode =
   | { type: 'create' }
-  | { type: 'modify'; removeModFiles?: string[]; remove_mod_files?: string[] }
+  // Rust field name is snake_case: the enum's `rename_all` only renames variants.
+  | { type: 'modify'; remove_mod_files?: string[] }
 
 export type InstallRequest = Omit<BindingsInstallRequest, 'mode'> & {
   mode: InstallMode

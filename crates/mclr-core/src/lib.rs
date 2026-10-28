@@ -4,6 +4,7 @@ pub mod account_session;
 pub mod error;
 pub mod logging;
 pub mod paths;
+pub mod safe_path;
 pub mod secrets;
 pub mod settings;
 pub mod tasks;

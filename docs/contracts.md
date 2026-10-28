@@ -15,7 +15,7 @@
 ---
 
 ## 2. Settings Store (`mclr_core::settings`)
-- Unified `Settings` struct: `#[serde(rename_all="camelCase", default)]` with `schemaVersion: u32 = 1`.
+- Unified `Settings` struct: `#[serde(rename_all="camelCase", default)]` with `schemaVersion: u32 = 2` (v1 configs are migrated on load: recommended JVM arguments + GPU preference).
 - Persistence: Atomic write (write to `.tmp` then rename), debounced 300 ms save.
 - IPC API:
   - `settings_get() -> Settings`
@@ -27,7 +27,7 @@
 
 ## 3. Error Handling
 - Each backend crate maintains a `thiserror` enum implementing `fn code(&self) -> &'static str` (`<crate>.<kind>`, e.g. `net.timeout`, `auth.xsts.noXboxAccount`) and an `Into<AppError>` conversion.
-- IPC handlers return `Result<T, AppError>`. `AppError` serializes to `{ "code": "...", "message": "...", "details": ... }`.
+- IPC handlers return `Result<T, AppError>`. `AppError` serializes to `{ "code": "...", "params": { ... }, "detail": "..." }`; the UI renders `error.<code>` from `src/locales/zh-CN/error.json` via `useErrorText()`.
 - Frontend maps error codes to localized strings in `locales/*/error.json`.
 
 ---
@@ -132,3 +132,27 @@ The gate executes the following sequence:
 9. `node scripts/lint-i18n.mjs`
 10. `node scripts/lint-ui-contracts.mjs`
 11. `vite build`
+
+## Content Security Policy
+
+`src-tauri/tauri.conf.json → app.security.csp` is enforced in the webview (`devCsp` is the looser dev variant: Vite HMR needs `ws://localhost:*` and inline bootstrap scripts).
+
+Design rules, guarded by `src-tauri/tests/csp_test.rs`:
+
+- `script-src 'self'` in production — no `'unsafe-eval'`, no `'unsafe-inline'`.
+- `connect-src 'self' ipc: http://ipc.localhost` — **the webview never talks to the internet**; every request goes through Rust. An injected script cannot exfiltrate or fetch arbitrary URLs.
+- `img-src` enumerates every remote host the UI renders (Modrinth / ForgeCDN / the Minecraft+Microsoft news domains whitelisted in `ipc/home.rs`), plus `data:` (skin heads, SVG noise) and `asset:` (local screenshots, backgrounds). Never a blanket `https:`.
+- `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, `form-action 'none'`.
+- Local files are exposed through the `asset:` protocol only for paths granted at runtime (`ipc::assets::allow_defaults` → data dir + configured game folders); the static scope list stays empty.
+- Supported hardening headers are set via `app.security.headers` (`X-Content-Type-Options: nosniff`, `Cross-Origin-Opener-Policy: same-origin`, a camera/mic/geolocation-denying `Permissions-Policy`). `Referrer-Policy` is not in Tauri's allow-list.
+
+## Path containment (IPC)
+
+Tauri v2 capabilities only restrict **plugin** commands; the app's own `#[tauri::command]`s are callable by anything inside the webview. Every command that accepts a path therefore validates it in `src-tauri/src/security.rs`:
+
+| Tier | Used by | Rule |
+|---|---|---|
+| `ensure_allowed` / `ensure_all_allowed` | `resources_delete`, `resource_toggle`, `resources_import`, `screenshot_*`, `tools_save_skin`, `tools_custom_download` | Must resolve inside the launcher data dir, cache/logs/runtime/tools dirs, or a configured game folder |
+| `ensure_not_system_path` | `modpack_inspect`, `schematic_inspect`, `tools_generate_skin_avatar`, `path_open`, `assets_allow` | Dialog-picked files may live anywhere the user owns, but filesystem roots, `\Windows`, `Program Files`, `ProgramData\Microsoft` etc. are refused |
+
+Both tiers canonicalize the nearest existing ancestor, so `..` segments, junctions and Windows verbatim (`\\?\`) prefixes cannot be used to slip past `starts_with`.

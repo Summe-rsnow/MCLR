@@ -1,11 +1,25 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 import { useToast } from './useToast'
+
+let t = (key: string) => key
+try {
+  const i18n = useI18n()
+  t = i18n.t
+} catch {
+  // Mounted without vue-i18n (unit tests): fall back to the raw key.
+}
 
 const { toasts, remove } = useToast()
 </script>
 
 <template>
-  <div class="fixed top-12 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+  <div
+    class="fixed top-12 right-6 z-50 flex flex-col gap-2 pointer-events-none"
+    role="status"
+    aria-live="polite"
+  >
     <TransitionGroup name="toast">
       <div
         v-for="item in toasts"
@@ -23,6 +37,7 @@ const { toasts, remove } = useToast()
         />
         <span class="flex-1 text-fg select-text">{{ item.message }}</span>
         <button
+          :aria-label="t('common.close')"
           type="button"
           class="text-fg-muted hover:text-fg cursor-pointer p-0.5 rounded transition-colors"
           @click="remove(item.id)"

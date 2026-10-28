@@ -554,10 +554,21 @@ impl OptiFineInstaller {
                         .arg("cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED");
                 }
                 cmd.arg("-cp").arg(&installer_jar).arg("optifine.Installer");
-                let _ = cmd.status();
+                // Blocking on purpose: the caller already runs this staging step in
+                // spawn_blocking. A failed installer must not silently produce an
+                // instance whose version JSON is the default (no mainClass/libs).
+                let status = cmd.status().map_err(|e| {
+                    LoaderError::Metadata(format!("OptiFine installer failed to start: {e}"))
+                })?;
+                if !status.success() {
+                    return Err(LoaderError::Metadata(format!(
+                        "OptiFine installer exited with {status}"
+                    )));
+                }
             }
 
             let versions_dir = ctx.staging_dir.join("versions");
+            let mut found = false;
             if let Ok(entries) = std::fs::read_dir(&versions_dir) {
                 for entry in entries.flatten() {
                     let name = entry.file_name().to_string_lossy().to_string();
@@ -567,12 +578,18 @@ impl OptiFineInstaller {
                             if let Ok(content) = std::fs::read_to_string(&j_path) {
                                 if let Ok(vj) = VersionJson::parse(&content) {
                                     version_json = vj;
+                                    found = true;
                                     break;
                                 }
                             }
                         }
                     }
                 }
+            }
+            if !found {
+                return Err(LoaderError::Metadata(
+                    "OptiFine installer produced no version JSON".to_string(),
+                ));
             }
         } else {
             let lib_dir = ctx

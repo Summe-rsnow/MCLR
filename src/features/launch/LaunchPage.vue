@@ -6,7 +6,10 @@ import { useLaunchStore } from './store'
 import { useInstancesStore } from '../instances/store'
 import { useAccountsStore } from '../accounts/store'
 import { useHomeStore } from '../home/store'
-import { MSection, MButton, MSelect, getInstanceIconMeta } from '../../ui'
+import { MSection, MButton, MSelect, getInstanceIconMeta, useToast } from '../../ui'
+import InstanceContextMenu from '../instances/components/InstanceContextMenu.vue'
+
+const toast = useToast()
 import LaunchHeroBanner from './LaunchHeroBanner.vue'
 import InstancePreviewCard from './InstancePreviewCard.vue'
 import AccountPreviewCard from './AccountPreviewCard.vue'
@@ -104,7 +107,7 @@ async function onPickAndSetGameFolder() {
     await instancesStore.addFolder(name, path)
     await instancesStore.fetchInstances()
   } catch (err) {
-    console.error('Failed to select game folder:', err)
+    toast.danger(String(err))
   }
 }
 
@@ -115,12 +118,40 @@ function onAccountSelectChange(id: string | number) {
 function onInstanceSelectChange(id: string | number) {
   launchStore.selectInstance(String(id))
 }
+
+// Right-click menu for the instance cards on this page (same component as the
+// instances page, limited to the non-destructive entries).
+const contextMenuOpen = ref(false)
+const contextMenuX = ref(0)
+const contextMenuY = ref(0)
+
+function onInstanceContextMenu(ev: MouseEvent, instance: { id: string }) {
+  ev.preventDefault()
+  launchStore.selectInstance(instance.id)
+  contextMenuX.value = ev.clientX
+  contextMenuY.value = ev.clientY
+  contextMenuOpen.value = true
+}
+
+function handleContextAction(key: string, instance: { id: string }) {
+  if (key === 'manage') {
+    router.push('/instances/' + encodeURIComponent(instance.id))
+  } else if (key === 'openFolder') {
+    void instancesStore.openFolder(instance.id)
+  } else if (key === 'star') {
+    void instancesStore.toggleStar(instance.id)
+  }
+}
 </script>
 
 <template>
   <div class="m-page">
     <!-- Hero Banner (Title, actions, java warning, hero card & launch CTA) -->
-    <LaunchHeroBanner v-model:is-repairing="isRepairing" @pick-folder="onPickAndSetGameFolder" />
+    <LaunchHeroBanner
+      v-model:is-repairing="isRepairing"
+      @pick-folder="onPickAndSetGameFolder"
+      @contextmenu="(ev) => onInstanceContextMenu(ev, launchStore.selectedInstance!)"
+    />
 
     <!-- Selection Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -136,6 +167,7 @@ function onInstanceSelectChange(id: string | number) {
           <InstancePreviewCard
             v-if="launchStore.selectedInstance"
             :instance="launchStore.selectedInstance"
+            @contextmenu="onInstanceContextMenu"
           />
 
           <!-- Stacked + full width: these panels are half of a 2-column grid, so a
@@ -195,6 +227,15 @@ function onInstanceSelectChange(id: string | number) {
         </div>
       </MSection>
     </div>
+
+    <InstanceContextMenu
+      v-model:open="contextMenuOpen"
+      :instance="launchStore.selectedInstance"
+      compact
+      :x="contextMenuX"
+      :y="contextMenuY"
+      @action="handleContextAction"
+    />
 
     <!-- News & Announcements Section -->
     <LaunchNewsSection v-model:show-news="showNews" @refresh="loadNewsAndAnnouncements" />

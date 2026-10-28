@@ -49,11 +49,16 @@ pub fn count_mods_in_dir(mods_dir: &Path) -> u32 {
 }
 
 /// Calculates memory in MB according to auto-RAM formula:
-/// `required = 2048 + mod_count * 25`, capped at `0.8 * free_ram_mb` and `16384`, minimum `2048`.
+/// `required = 2048 + mod_count * 25`, capped at `0.8 * free_ram_mb` and `16384`.
+///
+/// The `2048` floor applies only while it fits under the safety cap: on a machine
+/// with very little free RAM the cap must win, otherwise `-Xmx` would promise
+/// more memory than physically exists.
 pub fn compute_ram_mb_auto(mod_count: u32, free_ram_mb: u64) -> u32 {
     let required = 2048 + mod_count * 25;
     let cap = ((0.8 * (free_ram_mb as f64)) as u32).min(16384);
-    required.min(cap).max(2048)
+    let floor = 2048.min(cap);
+    required.min(cap).max(floor)
 }
 
 /// Calculates RAM allocation in MB.

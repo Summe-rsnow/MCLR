@@ -13,18 +13,22 @@ export interface ContextMenuItem {
 const props = withDefaults(
   defineProps<{
     items: ContextMenuItem[]
-    open?: boolean
-    modelValue?: boolean
     x: number
     y: number
   }>(),
   {
-    open: false,
-    modelValue: undefined,
     x: 0,
     y: 0,
   },
 )
+
+/**
+ * Visibility is owned by the caller through `v-model:open`.
+ *
+ * This used to be a plain `open` prop plus an unused `modelValue` alias: callers
+ * that wrote `v-model` set `modelValue` and the menu never appeared.
+ */
+const open = defineModel<boolean>('open', { default: false })
 
 const menuRef = ref<HTMLElement | null>(null)
 const size = ref<{ width: number; height: number }>({ width: 176, height: 0 })
@@ -45,9 +49,9 @@ const menuStyle = computed<Record<string, string>>(() => {
 })
 
 watch(
-  () => [props.open, props.x, props.y] as const,
-  async ([open]) => {
-    if (!open) return
+  () => [open.value, props.x, props.y] as const,
+  async ([isOpen]) => {
+    if (!isOpen) return
     await nextTick()
     const el = menuRef.value
     if (el) size.value = { width: el.offsetWidth, height: el.offsetHeight }
@@ -55,30 +59,39 @@ watch(
 )
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', val: boolean): void
   (e: 'select', key: string): void
 }>()
 
 function onItemClick(item: ContextMenuItem) {
   if (item.disabled) return
   emit('select', item.key)
-  emit('update:modelValue', false)
+  open.value = false
 }
 
 function onClickOutside() {
-  if (props.open) {
-    emit('update:modelValue', false)
+  if (open.value) {
+    open.value = false
+  }
+}
+
+function onKeyDown(ev: KeyboardEvent) {
+  if (ev.key === 'Escape' && open.value) {
+    ev.stopPropagation()
+    open.value = false
   }
 }
 
 onMounted(() => {
-  window.addEventListener('click', onClickOutside)
-  window.addEventListener('contextmenu', onClickOutside)
+  // Dismiss on any pointer press. A `contextmenu` listener used to close the menu
+  // on the very right-click that opened it (the open-state update can land before
+  // the event bubbles to `window`), which made the menu flash or never appear.
+  window.addEventListener('pointerdown', onClickOutside, true)
+  window.addEventListener('keydown', onKeyDown)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('click', onClickOutside)
-  window.removeEventListener('contextmenu', onClickOutside)
+  window.removeEventListener('pointerdown', onClickOutside, true)
+  window.removeEventListener('keydown', onKeyDown)
 })
 </script>
 

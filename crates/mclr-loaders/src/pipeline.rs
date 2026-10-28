@@ -18,7 +18,7 @@ use mclr_net::{DownloadSpec, Downloader};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::path::{Path, PathBuf};
-use tracing::info;
+use tracing::{info, warn};
 use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -221,6 +221,11 @@ pub async fn install_instance<'a>(
         .join(format!("{}-{}", req.instance_name, hex_suffix));
     let instance_dir = env.mc_folder.join("versions").join(&req.instance_name);
 
+    // Whether *this* call created the directory. Cleanup on failure may only
+    // remove a directory we created — otherwise a failed install over an
+    // existing instance (or a modpack that pre-created it) wipes user saves.
+    let created_here = !instance_dir.exists();
+
     std::fs::create_dir_all(&instance_dir)?;
     let marker_path = instance_dir.join(".mclr-installing");
     std::fs::write(&marker_path, b"")?;
@@ -268,7 +273,14 @@ pub async fn install_instance<'a>(
             let _ = std::fs::remove_dir_all(&staging_dir);
             match req.mode {
                 InstallMode::Create => {
-                    let _ = std::fs::remove_dir_all(&instance_dir);
+                    if created_here {
+                        let _ = std::fs::remove_dir_all(&instance_dir);
+                    } else {
+                        warn!(
+                            "Install of {:?} failed; leaving the pre-existing instance directory intact",
+                            req.instance_name
+                        );
+                    }
                 }
                 InstallMode::Modify { .. } => {
                     let b_json = backup_dir.join(format!("{}.json", req.instance_name));
@@ -471,13 +483,21 @@ async fn run_pipeline_steps(
 
     if let InstallMode::Modify { remove_mod_files } = &req.mode {
         for rm_file in remove_mod_files {
-            let f_path = mods_dir.join(rm_file);
+            // `rm_file` comes from IPC: an absolute or `..`-prefixed value would
+            // let `Path::join` escape `mods/` and delete arbitrary files.
+            let Some(f_path) = mclr_core::safe_path::safe_join(&mods_dir, rm_file) else {
+                warn!("Skipping unsafe mod removal path: {rm_file}");
+                continue;
+            };
             if f_path.exists() {
-                let _ = std::fs::remove_file(f_path);
+                let _ = std::fs::remove_file(&f_path);
             }
-            let disabled_path = mods_dir.join(format!("{rm_file}.disabled"));
-            if disabled_path.exists() {
-                let _ = std::fs::remove_file(disabled_path);
+            let disabled_name = format!("{rm_file}.disabled");
+            if let Some(disabled_path) = mclr_core::safe_path::safe_join(&mods_dir, &disabled_name)
+            {
+                if disabled_path.exists() {
+                    let _ = std::fs::remove_file(disabled_path);
+                }
             }
         }
     }

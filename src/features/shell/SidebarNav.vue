@@ -228,7 +228,7 @@ function setItemRef(path: string, el: unknown) {
       <div ref="navContainerRef" class="relative flex-1 overflow-y-auto flex flex-col gap-2">
         <div
           v-if="pillVisible"
-          class="absolute left-0 right-0 rounded-xl bg-primary-soft pointer-events-none transition-all duration-240"
+          class="m-nav-pill absolute left-0 right-0 rounded-xl pointer-events-none transition-all duration-240"
           :style="{
             top: `${pillTop}px`,
             height: `${pillHeight}px`,
@@ -236,7 +236,9 @@ function setItemRef(path: string, el: unknown) {
           }"
         >
           <!-- Left Accent Bar -->
-          <span class="absolute left-1 top-2.5 bottom-2.5 w-[3px] bg-primary rounded-full" />
+          <span
+            class="m-nav-accent absolute left-1 top-2.5 bottom-2.5 w-[3px] bg-primary rounded-full"
+          />
         </div>
 
         <div

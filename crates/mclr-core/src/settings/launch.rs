@@ -24,7 +24,8 @@ pub struct LaunchSettings {
     pub preferred_ip_stack: String,      // "auto" | "ipv4" | "ipv6"
     pub process_priority: String,        // "normal" | "aboveNormal" | "high"
     pub close_launcher_on_start: String, // "keep" | "hide" | "exit"
-    pub disable_crash_analysis: bool,
+    /// Run the built-in crash analysis when the game exits abnormally.
+    pub crash_analysis: bool,
     /// Software renderer bridge: `"default" | "software" | "d3d12" | "vulkan"`.
     /// Only applied when the bundled `mesa-loader` agent is available.
     pub renderer: String,
@@ -36,6 +37,10 @@ pub struct LaunchSettings {
     pub require_gpu_high_performance: bool,
     /// Force `-Xms` to equal `-Xmx` (fixed heap, fewer GC pauses).
     pub lock_memory: bool,
+    /// Inject the bundled LegacyFix agent for Minecraft 1.5.x and older.
+    pub legacy_fix: bool,
+    /// Inject the bundled LWJGL unsafe agent (only relevant for LWJGL 3.4.1).
+    pub lwjgl_unsafe_agent: bool,
 }
 
 impl Default for LaunchSettings {
@@ -52,12 +57,14 @@ impl Default for LaunchSettings {
             preferred_ip_stack: "auto".to_string(),
             process_priority: "normal".to_string(),
             close_launcher_on_start: "keep".to_string(),
-            disable_crash_analysis: false,
+            crash_analysis: true,
             renderer: "default".to_string(),
             pre_launch_command: String::new(),
-            use_java_exe: false,
+            use_java_exe: true,
             require_gpu_high_performance: true,
-            lock_memory: false,
+            lock_memory: true,
+            legacy_fix: true,
+            lwjgl_unsafe_agent: true,
         }
     }
 }

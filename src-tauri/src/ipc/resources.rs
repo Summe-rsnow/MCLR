@@ -142,7 +142,7 @@ pub async fn resources_list(
         tokio::spawn(async move {
             let batcher = crate::events::spawn_default(move |patches: Vec<ResourcePatch>| {
                 let _ = app_handle.emit(
-                    "resources://patchBatch",
+                    "resources://patch",
                     ResourcesPatchEvent {
                         request_id: req_id.clone(),
                         instance_id: inst_id.clone(),
@@ -252,21 +252,27 @@ pub async fn resources_list(
 #[tauri::command]
 #[specta::specta]
 pub async fn resource_toggle(
-    _state: State<'_, SettingsStore>,
+    state: State<'_, SettingsStore>,
     _instance_id: String,
     path: String,
 ) -> Result<String, AppError> {
-    super::run_blocking(move || toggle_resource(Path::new(&path))).await
+    let settings = state.get().await;
+    let target = crate::security::ensure_allowed(Path::new(&path), &settings)?;
+    super::run_blocking(move || toggle_resource(&target)).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn resources_delete(paths: Vec<String>, permanent: bool) -> Result<(), AppError> {
-    super::run_blocking(move || {
-        let p: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
-        delete_resources(&p, permanent)
-    })
-    .await
+pub async fn resources_delete(
+    state: State<'_, SettingsStore>,
+    paths: Vec<String>,
+    permanent: bool,
+) -> Result<(), AppError> {
+    // Destructive: only files inside the launcher's own directories.
+    let settings = state.get().await;
+    let requested: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    let validated = crate::security::ensure_all_allowed(&requested, &settings)?;
+    super::run_blocking(move || delete_resources(&validated, permanent)).await
 }
 
 #[tauri::command]
@@ -294,8 +300,11 @@ pub async fn resources_import(
     })
     .await?;
 
+    let settings = state.get().await;
     let p: Vec<PathBuf> = sources.into_iter().map(PathBuf::from).collect();
-    super::run_blocking(move || import_resources(kind, &game_dir, modable, &p, policy)).await
+    let validated = crate::security::ensure_all_allowed(&p, &settings)?;
+    super::run_blocking(move || import_resources(kind, &game_dir, modable, &validated, policy))
+        .await
 }
 
 #[tauri::command]
@@ -310,5 +319,6 @@ pub async fn resources_export(
 #[tauri::command]
 #[specta::specta]
 pub async fn schematic_inspect(path: String) -> Result<SchematicInfo, AppError> {
-    super::run_blocking(move || schematic_info(Path::new(&path))).await
+    let target = crate::security::ensure_not_system_path(Path::new(&path))?;
+    super::run_blocking(move || schematic_info(&target)).await
 }

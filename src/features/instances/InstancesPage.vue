@@ -10,19 +10,21 @@ import {
   MButton,
   MIconButton,
   MCard,
-  MContextMenu,
   MEmpty,
   MSkeleton,
   MCollapse,
   useDialog,
-  type ContextMenuItem,
+  useToast,
 } from '../../ui'
 import ModpackImportDialog from '../comp/ModpackImportDialog.vue'
 import GameFoldersDialog from './GameFoldersDialog.vue'
 import InstancesToolbar from './components/InstancesToolbar.vue'
 import InstanceCard from './components/InstanceCard.vue'
+import InstanceContextMenu from './components/InstanceContextMenu.vue'
 import { useLaunchStore } from '../launch/store'
 import InstanceActionDialogs from './components/InstanceActionDialogs.vue'
+
+const toast = useToast()
 const showFolders = ref(false)
 
 const showImportModpackDialog = ref(false)
@@ -89,7 +91,7 @@ async function onPickAndAddFolder() {
     const name = parts[parts.length - 1] || '.minecraft'
     await instancesStore.addFolder(name, path)
   } catch (err) {
-    console.error('Failed to add folder:', err)
+    toast.danger(String(err))
   }
 }
 // Dialog State
@@ -146,61 +148,18 @@ async function handleDelete(inst: InstanceInfo, permanent = false) {
 const contextMenuOpen = ref(false)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
-const activeContextItems = ref<ContextMenuItem[]>([])
+const contextMenuPermanent = ref(false)
 
 function onContextMenu(e: MouseEvent, inst: InstanceInfo) {
   e.preventDefault()
   contextMenuX.value = e.clientX
   contextMenuY.value = e.clientY
-  const isStarred = inst.config?.starred || inst.config?.pinned
-  const isHidden = inst.card === 'hidden' || inst.config?.cardType === 'hidden'
-  const isPermanent = e.shiftKey
-
-  activeContextItems.value = [
-    {
-      key: 'manage',
-      label: t('instances.actions.manage'),
-      icon: 'i-lucide-settings-2',
-    },
-    {
-      key: 'openFolder',
-      label: t('instances.actions.openFolder'),
-      icon: 'i-lucide-folder-open',
-    },
-    {
-      key: 'star',
-      label: isStarred ? t('instances.actions.unstar') : t('instances.actions.star'),
-      icon: isStarred ? 'i-lucide-star-off' : 'i-lucide-star',
-    },
-    {
-      key: 'rename',
-      label: t('instances.actions.rename'),
-      icon: 'i-lucide-square-pen',
-    },
-    {
-      key: 'duplicate',
-      label: t('instances.actions.duplicate'),
-      icon: 'i-lucide-copy',
-    },
-    {
-      key: 'hide',
-      label: isHidden ? t('instances.actions.unhide') : t('instances.actions.hide'),
-      icon: isHidden ? 'i-lucide-eye' : 'i-lucide-eye-off',
-    },
-    {
-      key: isPermanent ? 'deletePermanent' : 'delete',
-      label: isPermanent ? t('instances.actions.deletePermanent') : t('instances.actions.delete'),
-      icon: 'i-lucide-trash',
-      danger: true,
-    },
-  ]
   targetInstance.value = inst
+  contextMenuPermanent.value = e.shiftKey
   contextMenuOpen.value = true
 }
 
-function handleContextMenuSelect(key: string) {
-  if (!targetInstance.value) return
-  const inst = targetInstance.value
+function handleContextMenuSelect(key: string, inst: InstanceInfo) {
   switch (key) {
     case 'manage':
       navigateToDetail(inst.id, 'settings')
@@ -375,7 +334,7 @@ function navigateToDetail(id: string, tab?: string) {
           <TransitionGroup
             name="m-list"
             tag="div"
-            class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4"
+            class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 pt-2"
           >
             <InstanceCard
               v-for="inst in group.items"
@@ -402,12 +361,13 @@ function navigateToDetail(id: string, tab?: string) {
     />
 
     <!-- Context Menu Component -->
-    <MContextMenu
-      v-model="contextMenuOpen"
-      :items="activeContextItems"
+    <InstanceContextMenu
+      v-model:open="contextMenuOpen"
+      :instance="targetInstance"
+      :permanent="contextMenuPermanent"
       :x="contextMenuX"
       :y="contextMenuY"
-      @select="handleContextMenuSelect"
+      @action="handleContextMenuSelect"
     />
 
     <!-- Modpack Import Dialog -->

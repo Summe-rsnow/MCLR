@@ -73,6 +73,7 @@ function onConfirm() {
           <h3 class="text-lg font-bold text-fg">{{ title }}</h3>
         </slot>
         <button
+          :aria-label="t('common.close')"
           type="button"
           class="text-fg-muted hover:text-fg hover:bg-sunken cursor-pointer p-1.5 rounded-lg transition-colors"
           @click="onCancel"

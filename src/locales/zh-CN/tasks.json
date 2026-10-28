@@ -41,6 +41,30 @@
     },
     "comp": {
       "download": "正在下载社区资源"
-    }
+    },
+    "auth": {
+      "microsoft": "微软账号登录"
+    },
+    "export": {
+      "title": "导出资源列表"
+    },
+    "launch": "启动游戏",
+    "update": {
+      "download": "下载更新"
+    },
+    "compDownload": "社区资源下载",
+    "customDownload": "自定义文件下载",
+    "modpackImport": "导入整合包",
+    "modpackInstall": "安装整合包"
+  },
+  "titles": {
+    "compDownload": "社区资源下载",
+    "customDownload": "自定义文件下载",
+    "modpackImport": "导入整合包",
+    "modpackInstall": "安装整合包",
+    "launch": "启动游戏",
+    "auth.microsoft": "微软账号登录",
+    "update.download": "下载更新",
+    "export.title": "导出资源列表"
   }
 }

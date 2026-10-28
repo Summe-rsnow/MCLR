@@ -49,7 +49,7 @@ Additional CSS variables set by `applyTheme`:
 
 ## 3. Spacing, Radius, Typography & Motion
 
-- **Grid & Spacing**: 4 px grid; page padding `px-8 py-6` (`32px` / `24px`), section gap `24px` (`gap-6`), card padding `20px` (`p-5`), setting row min-height `52px`.
+- **Grid & Spacing**: 4 px grid; page padding `pt-4 px-8 pb-6` (`16px` / `32px` / `24px`, matching `.m-page` in `material.css`), section gap `24px` (`gap-6`), card padding `20px` (`p-5`), setting row min-height `52px`.
 - **Radius**: `rounded-sm` (`8px`), `rounded`/`rounded-md` (`10px`), `rounded-lg` (`14px` — buttons/inputs), `rounded-xl` (`18px` — cards), `rounded-2xl` (`24px` — dialogs & drawers), `rounded-full` (badges/pills).
 - **Typography**: Bundled `'HarmonyOS Sans SC'` (Regular `400`, Medium `500 600`, Bold `700`) with `'Segoe UI Variable Text', 'Microsoft YaHei UI', system-ui, sans-serif` fallbacks. Monospace uses `'Cascadia Mono', Consolas, monospace`.
 - **Motion Constants**: `--dur-fast: 0.12s`, `--dur-base: 0.2s`, `--dur-slow: 0.32s`, `--ease: cubic-bezier(0.2, 0.8, 0.2, 1)`.
@@ -120,6 +120,17 @@ The application supports three distinct motion modes configured via `html[data-m
 - **`<MEmpty>`**: Empty state illustration with description and action slot (`#action` or `:actionText`).
 - **`<MImage>`**: Universal image container replacing raw `<img>` tags across the application. Features built-in loading transitions, automatic error fallback (`fallbackSrc` or `fallbackIcon`), pixelated texture rendering support (`:pixelated="true"` for Minecraft blocks/skins), and compliant lazy decoding.
 
+### 6b. Material-Aware Selected States
+
+Selections that sit *on* a material surface must be styled per material, not with one fixed fill. The sidebar active pill is the reference implementation (`.m-nav-pill` / `.m-nav-accent` in `theme/material.css`):
+
+| Material | Pill fill | Blur | Border | Shadow |
+|---|---|---|---|---|
+| `flat` (default) | solid `--c-primary-soft` | none | none (dark: `primary` @14%) | none |
+| `glass` | `--c-primary` @16% (dark: 26%) | `blur(14px) saturate(1.7)` | `--c-primary` @26% (dark: white @16%) | inset white highlight + coloured drop shadow (dark: black) |
+
+The accent bar keeps `bg-primary` in both materials; in glass it additionally glows (`0 0 10px` primary @75%). Rule of thumb: **flat = opaque tonal block, glass = translucent accent wash that inherits the panel's refraction** — never a solid tint dropped onto glass, and never a blur inside flat.
+
 ---
 
 ## 7. Icons
@@ -129,6 +140,27 @@ The application supports three distinct motion modes configured via `html[data-m
 - Mod loaders use `<MLoaderIcon :kind="..." :size="24|32|40|56" />` backed by `src/ui/icons.ts`, which serves the official artwork in `public/assets/icons/loaders/` (plus `grass_block` for vanilla). Layer logos for Fabric, Forge, NeoForge, Quilt, LabyMod, OptiFine and Cleanroom come from each project's own branding; LiteLoader has no standalone official icon, so it keeps a lucide glyph tinted with its brand colour `oklch` hue 215. The tile is a **light** hue-tinted chip in both themes: loader logos are dark artwork and vanish on a dark tile. Layer artwork renders at 60–75% of the tile (larger than lucide glyphs) so brand detail survives.
 - The same logos feed `MSelect` options through `image` (square, `object-contain`); `avatar` is reserved for circular skin heads.
 - All icon names MUST be complete static string literals so UnoCSS can extract them from `.vue` and `.ts` files.
+
+---
+
+## 7b. Launch-Time Agents
+
+`crates/mclr-game/src/launch/agents.rs` embeds two PCL-CE agents (Apache-2.0)
+and materializes them under `<data>/tools/agents/` on first use:
+
+| Agent | Applied when | Setting (on = 启用, default on) |
+|---|---|---|
+| `legacyfix.jar` | instance release time < `2013-06-25` (Minecraft ≤ 1.5.x) | `legacyFix` — 设置 → 启动 → LegacyFix 兼容补丁 |
+| `lwjgl-unsafe-agent.jar` | instance depends on LWJGL `3.4.1` (Minecraft 26.1+) | `lwjglUnsafeAgent` — 设置 → 启动 → LWJGL Unsafe 加速补丁 |
+
+All launch switches are **positive**: on means enabled, and every one that is a net
+win defaults to on (`requireGpuHighPerformance`, `useJavaExe`, `lockMemory`,
+`legacyFix`, `lwjglUnsafeAgent`, `crashAnalysis`).
+
+Both are best-effort: if the jar cannot be written, the launch proceeds without
+it instead of failing. MCLR has no Java Launch Wrapper (PCL's `JLW`): arguments
+are passed as an argv array, so there is nothing to wrap — that is why the
+`禁用 JLW` option deliberately does not exist here.
 
 ---
 

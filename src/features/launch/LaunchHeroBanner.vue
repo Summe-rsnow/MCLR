@@ -16,6 +16,7 @@ defineProps<{
 const emit = defineEmits<{
   'update:isRepairing': [val: boolean]
   pickFolder: []
+  contextmenu: [ev: MouseEvent]
 }>()
 
 const { t } = useI18n()
@@ -72,25 +73,8 @@ async function onRepairClick() {
   }
 }
 
-async function onDownloadJavaClick() {
-  try {
-    const comp =
-      launchStore.javaMissingMajor === '8'
-        ? 'jre-legacy'
-        : launchStore.javaMissingMajor === '21'
-          ? 'java-runtime-delta'
-          : 'java-runtime-gamma'
-    await launchStore.downloadJavaRuntime(comp)
-    toast.show({
-      message: t('launch.stage.idle'),
-      type: 'success',
-    })
-  } catch (err: unknown) {
-    toast.show({
-      message: String(err),
-      type: 'danger',
-    })
-  }
+function onGoToJavaClick() {
+  void router.push('/java')
 }
 
 async function onForceKillGame() {
@@ -181,17 +165,22 @@ async function onForceKillGame() {
       <MButton
         variant="danger"
         size="sm"
-        :loading="launchStore.isDownloadingJava"
-        icon="i-lucide-download"
+        icon="i-lucide-wrench"
         class="shrink-0"
-        @click="onDownloadJavaClick"
+        @click="onGoToJavaClick"
       >
-        {{ t('launch.javaMissing.downloadAction') }}
+        {{ t('launch.javaMissing.manageAction') }}
       </MButton>
     </div>
 
     <!-- Hero Card -->
-    <MCard variant="tinted" padding="lg" class="relative">
+    <MCard
+      variant="tinted"
+      padding="lg"
+      class="relative"
+      data-testid="launch-hero-card"
+      @contextmenu="launchStore.selectedInstance && emit('contextmenu', $event)"
+    >
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div class="flex items-center gap-5 min-w-0">
           <MLoaderIcon

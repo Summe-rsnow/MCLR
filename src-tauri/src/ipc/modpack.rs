@@ -18,10 +18,8 @@ use super::current_mc_folder;
 #[tauri::command]
 #[specta::specta]
 pub async fn modpack_inspect(archive_path: String) -> Result<ModpackInspectResult, AppError> {
-    super::run_blocking(move || {
-        inspect_modpack(std::path::Path::new(&archive_path)).map(|p| p.inspect)
-    })
-    .await
+    let target = crate::security::ensure_not_system_path(std::path::Path::new(&archive_path))?;
+    super::run_blocking(move || inspect_modpack(target.as_path()).map(|p| p.inspect)).await
 }
 
 #[tauri::command]

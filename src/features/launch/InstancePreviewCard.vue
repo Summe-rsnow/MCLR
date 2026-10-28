@@ -10,6 +10,10 @@ const props = defineProps<{
   instance: InstanceInfo
 }>()
 
+const emit = defineEmits<{
+  (e: 'contextmenu', ev: MouseEvent, instance: InstanceInfo): void
+}>()
+
 const { t } = useI18n()
 const router = useRouter()
 const instancesStore = useInstancesStore()
@@ -41,6 +45,7 @@ function onManageInstance() {
     padding="sm"
     class="flex items-center justify-between gap-3"
     data-testid="instance-preview-card"
+    @contextmenu="emit('contextmenu', $event, instance)"
   >
     <!-- Left: Loader / Instance Icon -->
     <MLoaderIcon :kind="instanceLoaderKind" :icon="instance.config?.icon" :size="40" />

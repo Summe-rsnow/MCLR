@@ -517,7 +517,7 @@ async function handleInstall() {
       props.mode === 'modify'
         ? {
             type: 'modify',
-            removeModFiles: installedModFiles.value,
+            remove_mod_files: installedModFiles.value,
           }
         : { type: 'create' }
 
@@ -535,7 +535,14 @@ async function handleInstall() {
         selectedPrimary.value === 'neoforge' ? selectedPrimaryVersion.value || 'latest' : null,
       cleanroom:
         selectedPrimary.value === 'cleanroom' ? selectedPrimaryVersion.value || 'latest' : null,
-      labymod: null,
+      labymod:
+        selectedPrimary.value === 'labymod'
+          ? {
+              channel: selectedLabyModChannel.value ?? 'production',
+              commitRef: selectedPrimaryVersion.value || 'latest',
+              baseVersion: selectedPrimaryVersion.value || 'latest',
+            }
+          : null,
       liteloader: liteloaderEnabled.value ? selectedLiteloaderVersion.value || 'latest' : null,
       optifine: optifineEnabled.value ? selectedOptifineVersion.value || 'latest' : null,
       extraMods,

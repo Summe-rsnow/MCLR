@@ -181,6 +181,9 @@ pub async fn repair_instance(
     Ok(count)
 }
 
+/// A `.mclr-installing` marker older than this is treated as an abandoned install.
+const STALE_MARKER_AGE_SECS: u64 = 6 * 60 * 60;
+
 /// Remove incomplete instance folders (containing `.mclr-installing`) and `.mclr-staging` dirs left behind by interrupted installs.
 pub fn cleanup_stale(mc_folder: &std::path::Path) {
     let versions_dir = mc_folder.join("versions");
@@ -188,9 +191,25 @@ pub fn cleanup_stale(mc_folder: &std::path::Path) {
         if let Ok(entries) = std::fs::read_dir(&versions_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_dir() && path.join(".mclr-installing").exists() {
-                    tracing::info!("Cleaning up incomplete instance: {}", path.display());
-                    let _ = std::fs::remove_dir_all(&path);
+                let marker = path.join(".mclr-installing");
+                if path.is_dir() && marker.exists() {
+                    // Only delete markers that are genuinely stale. A finished
+                    // install whose marker failed to unlink (AV lock, read-only
+                    // attribute) must never lose the whole instance on next start.
+                    let age = std::fs::metadata(&marker)
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|t| t.elapsed().ok());
+                    let stale = age.is_some_and(|d| d.as_secs() >= STALE_MARKER_AGE_SECS);
+                    if stale {
+                        tracing::info!("Cleaning up incomplete instance: {}", path.display());
+                        let _ = std::fs::remove_dir_all(&path);
+                    } else {
+                        tracing::warn!(
+                            "Skipping cleanup of {}: install marker is recent",
+                            path.display()
+                        );
+                    }
                 }
             }
         }

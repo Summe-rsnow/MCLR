@@ -507,6 +507,7 @@ describe('UI Components', () => {
     mount(MContextMenu, {
       props: {
         open: true,
+        'onUpdate:open': () => {},
         x: 100,
         y: 100,
         items: [{ key: 'edit', label: 'Edit' }],
@@ -526,6 +527,7 @@ describe('UI Components', () => {
     const wrapper = mount(MContextMenu, {
       props: {
         open: true,
+        'onUpdate:open': () => {},
         x: 790,
         y: 590,
         items: [{ key: 'edit', label: 'Edit' }],
@@ -889,5 +891,37 @@ describe('UI Components', () => {
     })
     await errorImg.find('img').trigger('error')
     expect(errorImg.find('img').attributes('src')).toBe('https://fallback.png')
+  })
+
+  it('MContextMenu survives the very contextmenu event that opened it', async () => {
+    const wrapper = mount(MContextMenu, {
+      props: {
+        open: false,
+        'onUpdate:open': (val: boolean) => wrapper.setProps({ open: val }),
+        x: 120,
+        y: 140,
+        items: [{ key: 'manage', label: 'Manage' }],
+      },
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    const menus = () => document.body.querySelectorAll('[data-testid="m-context-menu"]').length
+    const before = menus()
+
+    // Simulate the page handler: open, then let the same event bubble to window.
+    await wrapper.setProps({ open: true })
+    await nextTick()
+    const evt = new MouseEvent('contextmenu', { bubbles: true })
+    document.body.dispatchEvent(evt)
+    await nextTick()
+    expect(menus()).toBe(before + 1)
+
+    // …while a pointer press elsewhere does dismiss it.
+    const pointer = new Event('pointerdown', { bubbles: true })
+    document.body.dispatchEvent(pointer)
+    await nextTick()
+    expect(menus()).toBe(before)
+    wrapper.unmount()
   })
 })

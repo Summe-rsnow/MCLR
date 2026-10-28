@@ -29,6 +29,8 @@ pub struct ModpackImportContext<'a> {
     pub install_base_game: bool,
 }
 
+pub use mclr_core::safe_path::safe_join;
+
 pub fn extract_modpack_overrides(
     archive_path: &Path,
     instance_dir: &Path,
@@ -60,19 +62,11 @@ pub fn extract_modpack_overrides(
                     continue;
                 }
 
-                let rel_path = Path::new(rel);
-                // Security: Prevent path traversal
-                if rel_path.components().any(|c| {
-                    matches!(
-                        c,
-                        std::path::Component::ParentDir | std::path::Component::Prefix(_)
-                    )
-                }) {
+                // Security: reject traversal / absolute entries.
+                let Some(target_path) = safe_join(instance_dir, rel) else {
                     debug!("Skipping unsafe path traversal entry: {}", rel);
                     continue;
-                }
-
-                let target_path = instance_dir.join(rel_path);
+                };
 
                 if let Some(parent) = target_path.parent() {
                     std::fs::create_dir_all(parent).map_err(CompError::Io)?;
@@ -264,7 +258,10 @@ pub async fn import_modpack(ctx: ModpackImportContext<'_>) -> Result<InstanceInf
         if file.rel_path.is_empty() {
             continue;
         }
-        let dest = instance_dir.join(&file.rel_path);
+        let Some(dest) = safe_join(&instance_dir, file.rel_path.as_str()) else {
+            debug!("Skipping unsafe modpack file path: {}", file.rel_path);
+            continue;
+        };
         let urls: Vec<Url> = file
             .urls
             .iter()

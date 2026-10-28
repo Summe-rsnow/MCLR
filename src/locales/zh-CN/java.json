@@ -1,10 +1,6 @@
 {
   "nav": "Java 管理",
   "title": "Java 运行时管理",
-  "subtitle": "扫描、添加并配置游戏启动所需的 Java 运行环境",
-  "selectSection": "默认 Java 版本选择",
-  "selectionMode": "Java 选择模式",
-  "selectionAuto": "自动选择（根据版本推荐最匹配的 Java）",
   "preferJdk": "优先使用 JDK 而非 JRE",
   "preferJdkDesc": "开启后将优先挑选 JDK 运行时以获得更好的调试与高级特性支持",
   "scanButton": "扫描本机 Java",
@@ -25,9 +21,5 @@
   "path": "路径：{path}",
   "scanComplete": "Java 扫描完成",
   "alreadyExists": "该 Java 路径已存在",
-  "defaultBadge": "默认",
-  "setAsDefault": "设为默认",
-  "clearDefault": "取消默认",
-  "defaultSetSuccess": "已将 Java {major} 设为全局默认",
-  "defaultClearedSuccess": "已恢复为智能自动匹配模式"
+  "subtitle": "扫描并管理用于启动游戏的 Java 运行环境"
 }

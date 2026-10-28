@@ -10,7 +10,7 @@ use mclr_core::account_session::ResolvedAccountSession;
 use mclr_core::settings::Settings;
 use mclr_core::tasks::TaskCenter;
 use tokio::io::AsyncBufReadExt;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use super::args::{
     LaunchCommandInput, build_launch_command, ensure_authlib_injector, extract_natives,
@@ -18,8 +18,8 @@ use super::args::{
 use super::win32::spawn_window_title_poller;
 use super::{
     LaunchProcessInfo, LaunchStartResult, LaunchWatcher, LogLevel, LogLine, check_launch_paths,
-    check_login_requirement, classify_log_level, resolve_java_installation, sanitize_log_line,
-    version_java_constraint,
+    check_login_requirement, classify_log_level, resolve_java_installation_with_component,
+    sanitize_log_line, version_java_component, version_java_constraint,
 };
 use crate::error::GameError;
 use crate::install::{load_resolved_version_json, repair_instance};
@@ -159,12 +159,33 @@ pub async fn launch(params: LaunchPipelineParams<'_>) -> Result<LaunchStartResul
             if installed_javas.is_empty() {
                 installed_javas = scan_java(&custom_javas);
             }
-            let selected_java = resolve_java_installation(
+            let component = version_java_component(&version_json);
+            let selected_java = match resolve_java_installation_with_component(
                 &installed_javas,
                 &constraint,
                 &settings_clone,
                 &cfg_clone,
-            )?;
+                component.as_deref(),
+            ) {
+                Ok(java) => java,
+                // A stale cache may predate a Java the user installed afterwards:
+                // rescan once before reporting the requirement as unmet.
+                Err(err) => {
+                    debug!("Java resolution from cache failed ({err}); rescanning installs");
+                    let rescanned = scan_java(&custom_javas);
+                    resolve_java_installation_with_component(
+                        &rescanned,
+                        &constraint,
+                        &settings_clone,
+                        &cfg_clone,
+                        component.as_deref(),
+                    )?
+                }
+            };
+            info!(
+                "Launching instance {inst_id} with Java {} ({}) for constraint {:?}",
+                selected_java.version, selected_java.path, constraint
+            );
             Ok::<_, GameError>((selected_java, version_json))
         })
         .await

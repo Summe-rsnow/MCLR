@@ -25,7 +25,7 @@ export const useCrashStore = defineStore('crash', () => {
         const { instanceId } = event.payload
         try {
           const settings = await ipcClient.settingsGet()
-          if (settings.launch?.disableCrashAnalysis) {
+          if (settings.launch && settings.launch.crashAnalysis === false) {
             return
           }
         } catch {

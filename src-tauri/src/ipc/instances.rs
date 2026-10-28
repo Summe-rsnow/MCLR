@@ -1,7 +1,5 @@
 //! Instance management IPC commands.
 
-use std::path::PathBuf;
-
 use mclr_core::{AppError, SettingsStore};
 use mclr_game::instance::{delete_instance_ext, ensure_game_folder};
 use mclr_game::{
@@ -102,7 +100,8 @@ pub async fn instance_open_path(
 #[tauri::command]
 #[specta::specta]
 pub async fn path_open(app: AppHandle, path: String) -> Result<(), AppError> {
-    let p = PathBuf::from(&path);
+    // Only directories the launcher owns may be revealed in Explorer.
+    let p = crate::security::ensure_not_system_path(std::path::Path::new(&path))?;
     if !p.is_dir() {
         return Err(AppError::new("game.folderNotFound").with_param("path", path));
     }

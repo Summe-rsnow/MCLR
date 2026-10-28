@@ -13,7 +13,6 @@ export const useLogsStore = defineStore('logs', () => {
   const autoScroll = ref(true)
   const loading = ref(false)
 
-  let unlistenLog: UnlistenFn | null = null
   let unlistenBatch: UnlistenFn | null = null
   let unlistenStarted: UnlistenFn | null = null
   let unlistenExit: UnlistenFn | null = null
@@ -75,13 +74,9 @@ export const useLogsStore = defineStore('logs', () => {
   })
 
   async function startListening() {
-    if (unlistenLog) return
+    if (unlistenBatch) return
 
     try {
-      unlistenLog = await listen<LogLine>('launch://log', (event) => {
-        enqueueLogs([event.payload])
-      })
-
       unlistenBatch = await listen<{ instanceId: string; lines: LogLine[] }>(
         'launch://logBatch',
         (event) => {
@@ -116,10 +111,6 @@ export const useLogsStore = defineStore('logs', () => {
   }
 
   function stopListening() {
-    if (unlistenLog) {
-      unlistenLog()
-      unlistenLog = null
-    }
     if (unlistenBatch) {
       unlistenBatch()
       unlistenBatch = null

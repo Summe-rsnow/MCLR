@@ -1,5 +1,6 @@
 //! Minecraft launch pipeline, arguments builder, natives extraction, and process watcher.
 
+pub mod agents;
 pub mod args;
 pub mod process;
 pub mod ram;
@@ -33,6 +34,7 @@ use crate::error::GameError;
 use crate::instance::InstanceConfig;
 use crate::java::{JavaConstraint, JavaInstallation, inspect_java, select_java};
 use crate::version::VersionJson;
+use tracing::warn;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 const MAX_LOG_LINES: usize = 5000;
@@ -298,6 +300,30 @@ pub fn check_login_requirement(
     Ok(())
 }
 
+/// Mojang runtime component that supplies the Java runtime for a version JSON
+/// (e.g. `java-runtime-epsilon` for Java 25). `None` when the JSON omits it.
+pub fn version_java_component(version_json: &VersionJson) -> Option<String> {
+    version_json
+        .java_version
+        .as_ref()
+        .map(|jv| jv.component.trim().to_string())
+        .filter(|c| !c.is_empty())
+}
+
+/// Detects Mojang's post-"1.x" version scheme and returns its release series.
+/// E.g. "26.3" -> 26, "26.4-snapshot-6" -> 26, "1.21.4" -> None.
+pub fn new_scheme_series(mc_version: &str) -> Option<u32> {
+    let clean = mc_version.trim();
+    let digits: String = clean.chars().take_while(|c| c.is_ascii_digit()).collect();
+    let rest = clean.get(digits.len()..)?;
+    // Legacy "1.x" keeps a series of 1, and "24w14a" snapshots start with "24w".
+    if digits.is_empty() || !rest.starts_with('.') {
+        return None;
+    }
+    let series = digits.parse::<u32>().ok()?;
+    (series >= 20).then_some(series)
+}
+
 /// Helper to parse Minecraft minor and patch version numbers from version string.
 /// E.g. "1.20.5" -> (20, 5), "1.18" -> (18, 0), "1.5.2" -> (5, 2).
 pub fn parse_mc_minor_patch(mc_version: &str) -> (u32, u32) {
@@ -348,6 +374,19 @@ pub fn version_java_constraint(version_json: &VersionJson, mc_version: &str) -> 
         }
     }
 
+    // Mojang's post-1.x numbering ("26.3", "26.4-snapshot-6") always ships Java 25.
+    // Without this, "26.3" fell through to the legacy branches below and resolved to Java 8/17,
+    // launching with an older JRE and failing with UnsupportedClassVersionError.
+    if let Some(series) = new_scheme_series(mc_version) {
+        if series >= 26 {
+            return JavaConstraint {
+                min_major: Some(25),
+                max_major: None,
+                exact_majors: Vec::new(),
+            };
+        }
+    }
+
     let (minor, patch) = parse_mc_minor_patch(mc_version);
 
     if minor > 20 || (minor == 20 && patch >= 5) {
@@ -389,6 +428,24 @@ pub fn version_java_constraint(version_json: &VersionJson, mc_version: &str) -> 
     }
 }
 
+/// Whether `java` can run a version with `constraint` (never a JVM older than the class files).
+pub fn java_satisfies(java: &JavaInstallation, constraint: &JavaConstraint) -> bool {
+    if !constraint.exact_majors.is_empty() && !constraint.exact_majors.contains(&java.major) {
+        return false;
+    }
+    if let Some(min) = constraint.min_major
+        && java.major < min
+    {
+        return false;
+    }
+    if let Some(max) = constraint.max_major
+        && java.major > max
+    {
+        return false;
+    }
+    true
+}
+
 /// Resolves the Java installation to use, checking per-instance override first, then settings.
 pub fn resolve_java_installation(
     installed_list: &[JavaInstallation],
@@ -396,7 +453,25 @@ pub fn resolve_java_installation(
     settings: &Settings,
     instance_config: &InstanceConfig,
 ) -> Result<JavaInstallation, GameError> {
-    // 1. Per-instance override
+    resolve_java_installation_with_component(
+        installed_list,
+        constraint,
+        settings,
+        instance_config,
+        None,
+    )
+}
+
+/// Same as [`resolve_java_installation`], but carries the Mojang runtime component that
+/// satisfies the constraint so the caller can offer/perform the right download.
+pub fn resolve_java_installation_with_component(
+    installed_list: &[JavaInstallation],
+    constraint: &JavaConstraint,
+    settings: &Settings,
+    instance_config: &InstanceConfig,
+    component: Option<&str>,
+) -> Result<JavaInstallation, GameError> {
+    // 1. Per-instance override — honoured only when it can actually run this version.
     if let Some(custom) = &instance_config.java {
         let trimmed = custom.trim();
         if !trimmed.is_empty() && trimmed != "auto" {
@@ -406,28 +481,50 @@ pub fn resolve_java_installation(
             } else {
                 custom_p
             };
-            if exe.exists() {
-                if let Some(inst) = inspect_java(&exe, "instanceCustom") {
-                    return Ok(inst);
+            let candidate = if exe.exists() {
+                inspect_java(&exe, "instanceCustom")
+            } else {
+                let sel_norm = trimmed.replace('/', "\\").to_lowercase();
+                installed_list
+                    .iter()
+                    .find(|j| {
+                        j.path.replace('/', "\\").to_lowercase() == sel_norm
+                            || j.home.replace('/', "\\").to_lowercase() == sel_norm
+                    })
+                    .cloned()
+            };
+
+            if let Some(found) = candidate {
+                if java_satisfies(&found, constraint) {
+                    return Ok(found);
                 }
-            }
-            let sel_norm = trimmed.replace('/', "\\").to_lowercase();
-            if let Some(found) = installed_list.iter().find(|j| {
-                j.path.replace('/', "\\").to_lowercase() == sel_norm
-                    || j.home.replace('/', "\\").to_lowercase() == sel_norm
-            }) {
-                return Ok(found.clone());
+                // The pinned runtime cannot load this version's class files; a compatible
+                // install beats a guaranteed JVM crash.
+                if let Some(auto) = select_java(installed_list, constraint, &settings.java) {
+                    warn!(
+                        "Instance Java {} ({}) cannot run this version (requires {:?}); using {}",
+                        found.version, found.path, constraint, auto.version
+                    );
+                    return Ok(auto);
+                }
+                return Err(GameError::LaunchJavaTooOld {
+                    required: constraint.min_major.unwrap_or(found.major),
+                    actual: found.major,
+                });
             }
         }
     }
 
-    // 2. Settings selection
+    // 2. Smart selection: no global default exists, ranking comes from the requirement.
     if let Some(found) = select_java(installed_list, constraint, &settings.java) {
         return Ok(found);
     }
 
     let major = constraint.min_major.or(constraint.max_major).unwrap_or(8);
-    Err(GameError::LaunchJavaNotFound { major })
+    Err(GameError::LaunchJavaNotFound {
+        major,
+        component: component.map(str::to_string),
+    })
 }
 
 /// Sanitizes access token and Windows username in log lines.
@@ -492,6 +589,93 @@ mod tests {
         let c4 = version_java_constraint(&empty_json, "1.5.2");
         assert_eq!(c4.min_major, None);
         assert_eq!(c4.max_major, Some(8));
+    }
+
+    /// MC 26.x renamed the version scheme; without the new-scheme branch "26.3" resolved to
+    /// the legacy Java 8/17 rules and launched with an older JRE (UnsupportedClassVersionError).
+    #[test]
+    fn test_version_java_constraint_new_scheme() {
+        let empty_json = VersionJson::default();
+
+        for id in ["26.3", "26.1", "26.4-snapshot-6", "26.3-pre-2"] {
+            let c = version_java_constraint(&empty_json, id);
+            assert_eq!(c.min_major, Some(25), "{id} must require Java 25");
+            assert_eq!(c.max_major, None, "{id} must not cap the major version");
+        }
+
+        // Legacy 1.x and old weekly snapshots keep their established requirements.
+        assert_eq!(
+            version_java_constraint(&empty_json, "1.21.4").min_major,
+            Some(21)
+        );
+        assert_eq!(
+            version_java_constraint(&empty_json, "24w14a").min_major,
+            Some(21)
+        );
+        assert_eq!(new_scheme_series("1.21.4"), None);
+        assert_eq!(new_scheme_series("24w14a"), None);
+        assert_eq!(new_scheme_series("26.4-snapshot-6"), Some(26));
+
+        // The manifest's own javaVersion always wins over the guesswork.
+        let declared = VersionJson {
+            java_version: Some(crate::version::JavaVersionInfo {
+                component: "java-runtime-epsilon".to_string(),
+                major_version: 25,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            version_java_constraint(&declared, "26.3").min_major,
+            Some(25)
+        );
+        assert_eq!(
+            version_java_component(&declared).as_deref(),
+            Some("java-runtime-epsilon")
+        );
+        assert_eq!(version_java_component(&empty_json), None);
+    }
+
+    /// A per-instance Java pin that cannot run the version must not be honoured:
+    /// a compatible install is used instead, or the requirement is reported.
+    #[test]
+    fn test_pinned_instance_java_does_not_break_newer_versions() {
+        let java_install = |major: u32, version: &str| JavaInstallation {
+            path: format!("C:\\Java\\jdk{major}\\bin\\java.exe"),
+            home: format!("C:\\Java\\jdk{major}"),
+            version: version.to_string(),
+            major,
+            implementor: "Test".to_string(),
+            arch: "x86_64".to_string(),
+            is_jdk: true,
+            source: "test".to_string(),
+        };
+        let j21 = java_install(21, "21.0.5");
+        let j25 = java_install(25, "25.0.3");
+        let constraint = JavaConstraint {
+            min_major: Some(25),
+            max_major: None,
+            exact_majors: vec![],
+        };
+        let settings = Settings::default();
+        let mut config = InstanceConfig::default();
+        config.java = Some(j21.path.clone());
+
+        let picked =
+            resolve_java_installation(&[j21.clone(), j25.clone()], &constraint, &settings, &config)
+                .expect("a compatible Java 25 is installed");
+        assert_eq!(picked.major, 25);
+
+        // Only the incompatible pin exists: fail loudly with the requirement, not with a
+        // JVM crash at startup.
+        let err =
+            resolve_java_installation(std::slice::from_ref(&j21), &constraint, &settings, &config)
+                .expect_err("Java 21 cannot run a Java 25 instance");
+        match err {
+            GameError::LaunchJavaTooOld { required, actual } => {
+                assert_eq!((required, actual), (25, 21));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]
@@ -587,6 +771,173 @@ mod tests {
         .unwrap()
     }
 
+    /// Builds a spec from a raw version JSON so launch-time agents can be asserted.
+    fn build_spec_with_json(
+        json: &str,
+        settings: LaunchSettings,
+    ) -> crate::launch::LaunchCommandSpec {
+        build_spec_with_version(VersionJson::parse(json).unwrap(), settings)
+    }
+
+    fn build_spec_with_version(
+        version_json: VersionJson,
+        settings: LaunchSettings,
+    ) -> crate::launch::LaunchCommandSpec {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mc_folder = temp_dir.path().to_path_buf();
+        let instance_id = "agent-instance";
+        let instance_dir = mc_folder.join("versions").join(instance_id);
+        fs::create_dir_all(&instance_dir).unwrap();
+        fs::write(
+            instance_dir.join(format!("{instance_id}.json")),
+            serde_json::to_string(&version_json).unwrap(),
+        )
+        .unwrap();
+        let natives_dir = instance_dir.join("natives");
+        fs::create_dir_all(&natives_dir).unwrap();
+
+        let java_home = mc_folder.join("jdk21");
+        let java = JavaInstallation {
+            path: java_home
+                .join("bin")
+                .join("java.exe")
+                .to_string_lossy()
+                .to_string(),
+            home: java_home.to_string_lossy().to_string(),
+            version: "21.0.2".to_string(),
+            major: 21,
+            implementor: "Test".to_string(),
+            arch: "x64".to_string(),
+            is_jdk: true,
+            source: "test".to_string(),
+        };
+        let session = ResolvedAccountSession {
+            id: "agent-acc".to_string(),
+            kind: AccountKind::Offline,
+            username: "Steve".to_string(),
+            uuid: "00000000000000000000000000000000".to_string(),
+            access_token: "fake-token".to_string(),
+            user_type: "legacy".to_string(),
+            api_location: None,
+            xuid: None,
+        };
+        let game_settings = GameSettings::default();
+        let instance_config = InstanceConfig::default();
+
+        std::mem::forget(temp_dir);
+        build_launch_command(&LaunchCommandInput {
+            mc_folder: &mc_folder,
+            instance_id,
+            version_json: &version_json,
+            java: &java,
+            launch_settings: &settings,
+            game_settings: &game_settings,
+            instance_config: &instance_config,
+            session: &session,
+            natives_dir: &natives_dir,
+            authlib_injector_jar: None,
+        })
+        .unwrap()
+    }
+
+    const LWJGL_341_JSON: &str = r#"{
+        "id":"26.1-vanilla",
+        "mainClass":"net.minecraft.client.main.Main",
+        "releaseTime":"2026-03-01T00:00:00+00:00",
+        "libraries":[{"name":"org.lwjgl:lwjgl:3.4.1"},{"name":"org.lwjgl:lwjgl-glfw:3.4.1"}]
+    }"#;
+
+    const LEGACY_JSON: &str = r#"{
+        "id":"1.5.2-vanilla",
+        "mainClass":"net.minecraft.client.main.Main",
+        "releaseTime":"2013-05-02T00:00:00+00:00",
+        "libraries":[{"name":"org.lwjgl:lwjgl:2.9.0"}]
+    }"#;
+
+    fn agent_args(spec: &crate::launch::LaunchCommandSpec) -> Vec<String> {
+        spec.args
+            .iter()
+            .filter(|a| a.starts_with("-javaagent:"))
+            .cloned()
+            .collect()
+    }
+
+    #[test]
+    fn injects_lwjgl_unsafe_agent_only_for_3_4_1() {
+        let spec = build_spec_with_json(LWJGL_341_JSON, LaunchSettings::default());
+        let agents = agent_args(&spec);
+        assert_eq!(agents.len(), 1, "{agents:?}");
+        assert!(agents[0].ends_with("lwjgl-unsafe-agent.jar"), "{agents:?}");
+
+        // Older LWJGL stays untouched.
+        let spec = build_spec_with_json(LEGACY_JSON, LaunchSettings::default());
+        assert!(
+            agent_args(&spec)
+                .iter()
+                .all(|a| !a.contains("lwjgl-unsafe-agent")),
+            "3.4.1-only agent leaked into an old instance"
+        );
+    }
+
+    #[test]
+    fn agents_apply_to_instances_that_inherit_their_parent_json() {
+        // Modded instance: no releaseTime / lwjgl of its own.
+        let child = VersionJson::parse(
+            r#"{"id":"26.3-neoforge","inheritsFrom":"26.3",
+                "libraries":[{"name":"net.neoforged:neoforge:26.3.0"}]}"#,
+        )
+        .unwrap();
+        let parent = VersionJson::parse(LWJGL_341_JSON).unwrap();
+        let merged = crate::version::merge_version_json(child, parent);
+
+        let spec = build_spec_with_version(merged.clone(), LaunchSettings::default());
+        let agents = agent_args(&spec);
+        assert_eq!(agents.len(), 1, "{agents:?}");
+        assert!(agents[0].ends_with("lwjgl-unsafe-agent.jar"), "{agents:?}");
+
+        let legacy_child = VersionJson::parse(
+            r#"{"id":"1.5.2-forge","inheritsFrom":"1.5.2","libraries":[{"name":"net.minecraftforge:forge:1.5.2-7.8.1.738"}]}"#,
+        )
+        .unwrap();
+        let legacy_parent = VersionJson::parse(LEGACY_JSON).unwrap();
+        let merged = crate::version::merge_version_json(legacy_child, legacy_parent);
+        let spec = build_spec_with_version(merged, LaunchSettings::default());
+        let agents = agent_args(&spec);
+        assert_eq!(agents.len(), 1, "{agents:?}");
+        assert!(agents[0].ends_with("legacyfix.jar"), "{agents:?}");
+    }
+
+    #[test]
+    fn lwjgl_unsafe_agent_can_be_disabled() {
+        let settings = LaunchSettings {
+            lwjgl_unsafe_agent: false,
+            ..Default::default()
+        };
+        let spec = build_spec_with_json(LWJGL_341_JSON, settings);
+        assert!(agent_args(&spec).is_empty(), "{:?}", agent_args(&spec));
+    }
+
+    #[test]
+    fn injects_legacy_fix_only_for_old_releases() {
+        let spec = build_spec_with_json(LEGACY_JSON, LaunchSettings::default());
+        let agents = agent_args(&spec);
+        assert_eq!(agents.len(), 1, "{agents:?}");
+        assert!(agents[0].ends_with("legacyfix.jar"), "{agents:?}");
+
+        let spec = build_spec_with_json(LWJGL_341_JSON, LaunchSettings::default());
+        assert!(
+            agent_args(&spec).iter().all(|a| !a.contains("legacyfix")),
+            "legacyfix leaked into a modern instance"
+        );
+
+        let settings = LaunchSettings {
+            legacy_fix: false,
+            ..Default::default()
+        };
+        let spec = build_spec_with_json(LEGACY_JSON, settings);
+        assert!(agent_args(&spec).is_empty());
+    }
+
     #[test]
     fn test_lock_memory_mirrors_xmx_into_xms() {
         let temp = tempfile::tempdir().unwrap();
@@ -628,6 +979,15 @@ mod tests {
     #[test]
     fn test_use_java_exe_switches_binary() {
         let temp = tempfile::tempdir().unwrap();
+        // Default is `java.exe` (console attached); the switch turns it off.
+        assert_eq!(
+            build_test_spec(LaunchSettings::default(), temp.path())
+                .java_executable
+                .file_name()
+                .unwrap()
+                .to_string_lossy(),
+            "java.exe"
+        );
         let launch = |use_java_exe: bool| {
             let settings = LaunchSettings {
                 use_java_exe,
@@ -772,7 +1132,9 @@ mod tests {
         // mods = 100 (needs 4548) -> capped at 2400
         assert_eq!(compute_ram_mb_auto(100, 3000), 2400);
 
-        // Minimum 2048 even if 0.8 * free is lower
-        assert_eq!(compute_ram_mb_auto(10, 1000), 2048);
+        // The 2 GB floor must not override the safety cap: with only ~1 GB free,
+        // promising 2048 MB would exceed physical memory.
+        assert_eq!(compute_ram_mb_auto(10, 1000), 800);
+        assert_eq!(compute_ram_mb_auto(0, 2048), 1638);
     }
 }

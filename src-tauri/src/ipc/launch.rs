@@ -85,7 +85,8 @@ pub async fn launch_instance(
                                 let _ = app_handle.emit("launch://started", &info);
                             }
                             WatcherEvent::Log(log) if log.process_id == target_pid => {
-                                let _ = app_handle.emit("launch://log", &log);
+                                // Only the batcher emits: sending both `launch://log`
+                                // and `launch://logBatch` made every line appear twice.
                                 log_batcher.push(log);
                             }
                             WatcherEvent::Crashed(payload) if payload.process_id == target_pid => {

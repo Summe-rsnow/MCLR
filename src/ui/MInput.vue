@@ -1,5 +1,15 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 import { onMounted, ref } from 'vue'
+
+let t = (key: string) => key
+try {
+  const i18n = useI18n()
+  t = i18n.t
+} catch {
+  // Mounted without vue-i18n (unit tests): fall back to the raw key.
+}
 
 const props = withDefaults(
   defineProps<{
@@ -146,6 +156,7 @@ function onClear() {
         class="mr-2 inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin text-fg-subtle shrink-0"
       />
       <button
+        :aria-label="t('common.clear')"
         v-else-if="clearable && modelValue && !disabled"
         type="button"
         class="mr-2 text-fg-subtle hover:text-fg cursor-pointer p-0.5 rounded shrink-0"

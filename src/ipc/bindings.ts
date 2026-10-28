@@ -32,6 +32,10 @@ async windowSetMaterial(glass: boolean) : Promise<Result<null, AppError>> {
 },
 /**
  * Allow a user-picked directory (background image / music folder) recursively.
+ * 
+ * The directory comes from a native dialog, but the command is still callable
+ * from the webview, so obviously system-critical locations are rejected: the
+ * asset protocol must never be able to read `C:\Windows` or a whole drive.
  */
 async assetsAllow(path: string) : Promise<Result<null, AppError>> {
     try {
@@ -160,14 +164,6 @@ async javaScan(forceRefresh: boolean | null) : Promise<Result<JavaInstallation[]
 async javaList() : Promise<Result<JavaInstallation[], AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("java_list") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async javaDownload(component: string) : Promise<Result<string, AppError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("java_download", { component }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -980,7 +976,11 @@ export type JarInJarNode = { id: string; name: string; version: string; path: st
  * Description of an installed Java runtime on the machine.
  */
 export type JavaInstallation = { path: string; home: string; version: string; major: number; implementor: string; arch: string; isJdk: boolean; source: string }
-export type JavaSettings = { custom: string[]; select: string; preferJdk: boolean }
+export type JavaSettings = { 
+/**
+ * Extra paths the user added by hand; scanned together with auto-discovered ones.
+ */
+custom: string[]; preferJdk: boolean }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type LabyModSel = { channel: string; commitRef: string; baseVersion: string }
 export type LanguageSettings = { locale: string; formatCulture: string }
@@ -988,7 +988,11 @@ export type LanguageSettings = { locale: string; formatCulture: string }
  * Runtime metadata for a launched Minecraft process.
  */
 export type LaunchProcessInfo = { processId: number; instanceId: string; accountName: string; startedAt: string; running: boolean; exitCode: number | null }
-export type LaunchSettings = { ramMode: string; ramCustomMb: number; jvmArgs: string; gameArgs: string; windowTitle: string; fullscreen: boolean; width: number; height: number; preferredIpStack: string; processPriority: string; closeLauncherOnStart: string; disableCrashAnalysis: boolean; 
+export type LaunchSettings = { ramMode: string; ramCustomMb: number; jvmArgs: string; gameArgs: string; windowTitle: string; fullscreen: boolean; width: number; height: number; preferredIpStack: string; processPriority: string; closeLauncherOnStart: string; 
+/**
+ * Run the built-in crash analysis when the game exits abnormally.
+ */
+crashAnalysis: boolean; 
 /**
  * Software renderer bridge: `"default" | "software" | "d3d12" | "vulkan"`.
  * Only applied when the bundled `mesa-loader` agent is available.
@@ -1009,7 +1013,15 @@ requireGpuHighPerformance: boolean;
 /**
  * Force `-Xms` to equal `-Xmx` (fixed heap, fewer GC pauses).
  */
-lockMemory: boolean }
+lockMemory: boolean; 
+/**
+ * Inject the bundled LegacyFix agent for Minecraft 1.5.x and older.
+ */
+legacyFix: boolean; 
+/**
+ * Inject the bundled LWJGL unsafe agent (only relevant for LWJGL 3.4.1).
+ */
+lwjglUnsafeAgent: boolean }
 /**
  * Result returned to IPC callers immediately upon launching.
  */

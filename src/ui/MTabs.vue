@@ -63,6 +63,7 @@ onUnmounted(() => {
 <template>
   <div
     ref="containerRef"
+    role="tablist"
     class="relative flex items-center gap-1 border-b border-line select-none overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     @wheel.passive="onWheel"
   >
@@ -71,6 +72,8 @@ onUnmounted(() => {
       :key="tab.key"
       data-tab-btn
       type="button"
+      role="tab"
+      :aria-selected="modelValue === tab.key"
       class="relative inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer shrink-0"
       :class="modelValue === tab.key ? 'text-primary' : 'text-fg-muted hover:text-fg'"
       @click="emit('update:modelValue', tab.key)"

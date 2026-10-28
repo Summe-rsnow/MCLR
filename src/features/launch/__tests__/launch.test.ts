@@ -16,7 +16,7 @@ import zhCnSettingsGame from '../../../locales/zh-CN/settingsGame.json'
 import zhCnInstances from '../../../locales/zh-CN/instances.json'
 import zhCnAccounts from '../../../locales/zh-CN/accounts.json'
 import zhCnLogs from '../../../locales/zh-CN/logs.json'
-import { ipcClient } from '../../../ipc/client'
+import { ipcClient, AppErrorEx } from '../../../ipc/client'
 import { useDialog } from '../../../ui/useDialog'
 const i18n = createI18n({
   legacy: false,
@@ -126,12 +126,31 @@ describe('Launch feature', () => {
     expect(storage['mclr.launch.instanceId']).toBe(store.selectedInstance?.id)
   })
 
-  it('handles Java missing error and triggers recovery download', async () => {
-    const store = useLaunchStore()
-    expect(store.javaMissingMajor).toBeNull()
+  it('reports the required Java major without offering a download', async () => {
+    const instancesStore = useInstancesStore()
+    const accountsStore = useAccountsStore()
+    await instancesStore.fetchInstances()
+    await accountsStore.fetchAccounts()
 
-    const taskId = await store.downloadJavaRuntime('java-runtime-gamma')
-    expect(taskId).toContain('task-java-java-runtime-gamma')
+    const store = useLaunchStore()
+    const original = ipcClient.launchInstance
+    ipcClient.launchInstance = (async () => {
+      throw new AppErrorEx({
+        code: 'launch.java.tooOld',
+        detail: 'Java 21 is too old for this instance (requires Java 25)',
+        params: { required: '25', actual: '21' },
+      })
+    }) as typeof ipcClient.launchInstance
+
+    try {
+      await expect(store.startLaunch()).rejects.toBeTruthy()
+    } finally {
+      ipcClient.launchInstance = original
+    }
+
+    // The banner must ask the user to fix Java, not silently download a runtime.
+    expect(store.javaMissingMajor).toBe('25')
+    expect('downloadJavaRuntime' in store).toBe(false)
   })
 
   it('renders LaunchPage correctly and displays instance & account info', async () => {
@@ -149,6 +168,25 @@ describe('Launch feature', () => {
     expect(wrapper.text()).toContain('StevePro')
     expect(wrapper.text()).toContain('微软')
     expect(wrapper.text()).not.toContain('microsoft')
+  })
+
+  it('points to Java management instead of downloading a runtime', async () => {
+    const instancesStore = useInstancesStore()
+    await instancesStore.fetchInstances()
+    const launchStore = useLaunchStore()
+    launchStore.javaMissingMajor = '25'
+
+    const wrapper = mount(LaunchPage, {
+      global: { plugins: [i18n, router] },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('需要 Java 25')
+    expect(wrapper.text()).toContain('前往 Java 管理')
+    // MCLR never downloads Java runtimes on the user's behalf.
+    expect(wrapper.text()).not.toContain('自动下载 Java')
+
+    wrapper.unmount()
   })
 
   it('renders LaunchPage in empty state when no instances exist', async () => {

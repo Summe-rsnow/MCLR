@@ -508,6 +508,52 @@ async function handleSchematicInspect(entry: ResourceEntry) {
     inspectingSchematic.value = false
   }
 }
+/**
+ * Imports user-picked files through the native dialog.
+ *
+ * A browser `<input type="file">` cannot hand the backend a real filesystem
+ * path, so the toolbar only emits an intent and the path selection happens here.
+ */
+async function handleAddFiles() {
+  try {
+    const dialog = await import('@tauri-apps/plugin-dialog')
+    const picked = await dialog.open({
+      multiple: true,
+      directory: false,
+      filters: [{ name: props.kind, extensions: importExtensions(props.kind) }],
+    })
+    const sources = (Array.isArray(picked) ? picked : picked ? [picked] : []).filter(
+      (p): p is string => typeof p === 'string',
+    )
+    if (sources.length === 0) return
+    const result = await ipcClient.resourcesImport(
+      props.instanceId,
+      props.kind,
+      sources,
+      'overwrite',
+    )
+    toast.success(t('resources.actions.addFiles') + ': ' + String(result.imported))
+    await loadResources()
+  } catch (err) {
+    toast.danger(String(err))
+  }
+}
+
+function importExtensions(resourceKind: string): string[] {
+  switch (resourceKind) {
+    case 'mod':
+    case 'datapack':
+      return ['jar', 'zip']
+    case 'resourcepack':
+    case 'shaderpack':
+      return ['zip']
+    case 'schematic':
+      return ['schematic', 'litematic']
+    default:
+      return []
+  }
+}
+
 async function handleCheckUpdates() {
   if (checkingUpdates.value) return
   checkingUpdates.value = true
@@ -632,6 +678,7 @@ watch(
       @export="handleExport"
       @check-updates="handleCheckUpdates"
       @toggle-select-all="selectAll"
+      @add-files="handleAddFiles"
     />
     <!-- Batch selection actions (inline, below the select-all row) -->
     <Transition name="m-selection-bar">

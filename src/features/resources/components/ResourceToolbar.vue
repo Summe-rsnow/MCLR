@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ResourceKind } from '../../../ipc/client'
-import { MButton, MSelect, MSearchBar } from '../../../ui'
+import { MButton, MSelect, MSearchBar, MPopover } from '../../../ui'
 
 defineProps<{
   kind: ResourceKind
@@ -31,7 +31,9 @@ const emit = defineEmits<{
     e: 'update:activeFilter',
     val: 'all' | 'enabled' | 'disabled' | 'updatable' | 'error' | 'duplicate',
   ): void
-  (e: 'addFiles', files: FileList): void
+  /** Asks the parent to open a native file picker (a web `<input type=file>`
+   *  cannot hand a real filesystem path to the backend). */
+  (e: 'addFiles'): void
   (e: 'batchUpdate'): void
   (e: 'batchEnableAll'): void
   (e: 'batchDisableAll'): void
@@ -44,18 +46,19 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const fileInputRef = ref<HTMLInputElement | null>(null)
 
-function triggerFileInput() {
-  fileInputRef.value?.click()
+const exportMenuOpen = ref(false)
+const batchMenuOpen = ref(false)
+
+function pickExport(format: 'txt' | 'csv') {
+  exportMenuOpen.value = false
+  emit('export', format)
 }
 
-function handleFileInputChange(e: Event) {
-  const target = e.target as HTMLInputElement
-  if (target.files && target.files.length > 0) {
-    emit('addFiles', target.files)
-    target.value = ''
-  }
+function pickBatch(action: 'batchEnableAll' | 'batchDisableAll') {
+  batchMenuOpen.value = false
+  if (action === 'batchEnableAll') emit('batchEnableAll')
+  else emit('batchDisableAll')
 }
 </script>
 
@@ -79,17 +82,15 @@ function handleFileInputChange(e: Event) {
           }}
         </MButton>
 
-        <MButton variant="primary" size="sm" @click="triggerFileInput">
-          <span class="i-lucide-plus mr-1 w-4 h-4" />
+        <MButton
+          variant="primary"
+          size="sm"
+          icon="i-lucide-plus"
+          data-testid="resources-add-files"
+          @click="emit('addFiles')"
+        >
           {{ t('resources.actions.addFiles') }}
         </MButton>
-        <input
-          ref="fileInputRef"
-          type="file"
-          multiple
-          class="hidden"
-          @change="handleFileInputChange"
-        />
 
         <MButton
           v-if="kind === 'mod' && filterCounts.updatable > 0"
@@ -131,52 +132,53 @@ function handleFileInputChange(e: Event) {
           {{ t('resources.downloadMore') }}
         </MButton>
 
-        <div class="relative group">
-          <MButton variant="tonal" size="sm">
-            <span class="i-lucide-file-output mr-1 w-4 h-4" />
-            {{ t('resources.actions.export') }}
-          </MButton>
-          <div
-            class="absolute top-full right-0 mt-1 hidden group-hover:flex flex-col bg-panel border border-line rounded-lg shadow-lg z-20 py-1 min-w-32 max-w-[min(16rem,calc(100vw-2rem))]"
-          >
+        <!-- Collision-aware menu (MPopover flips/shifts inside the viewport). -->
+        <MPopover v-model:open="exportMenuOpen" placement="bottom-end">
+          <template #trigger>
+            <MButton variant="tonal" size="sm" @click="exportMenuOpen = !exportMenuOpen">
+              <span class="i-lucide-file-output mr-1 w-4 h-4" />
+              {{ t('resources.actions.export') }}
+            </MButton>
+          </template>
+          <div class="flex flex-col min-w-32" data-testid="resource-export-menu">
             <button
-              class="px-3 py-1.5 text-xs text-left hover:bg-sunken text-fg transition cursor-pointer"
-              @click="emit('export', 'txt')"
+              class="px-3 py-1.5 text-xs text-left rounded-lg hover:bg-sunken text-fg transition cursor-pointer"
+              @click="pickExport('txt')"
             >
               {{ t('resources.actions.exportTxt') }}
             </button>
             <button
-              class="px-3 py-1.5 text-xs text-left hover:bg-sunken text-fg transition cursor-pointer"
-              @click="emit('export', 'csv')"
+              class="px-3 py-1.5 text-xs text-left rounded-lg hover:bg-sunken text-fg transition cursor-pointer"
+              @click="pickExport('csv')"
             >
               {{ t('resources.actions.exportCsv') }}
             </button>
           </div>
-        </div>
+        </MPopover>
 
         <!-- Batch Quick Actions (PCL parity) -->
-        <div v-if="kind === 'mod'" class="relative group">
-          <MButton variant="tonal" size="sm">
-            <span class="i-lucide-list-checks mr-1 w-4 h-4" />
-            {{ t('resources.title') }}
-          </MButton>
-          <div
-            class="absolute top-full right-0 mt-1 hidden group-hover:flex flex-col bg-panel border border-line rounded-lg shadow-lg z-20 py-1 min-w-32 max-w-[min(16rem,calc(100vw-2rem))]"
-          >
+        <MPopover v-if="kind === 'mod'" v-model:open="batchMenuOpen" placement="bottom-end">
+          <template #trigger>
+            <MButton variant="tonal" size="sm" @click="batchMenuOpen = !batchMenuOpen">
+              <span class="i-lucide-list-checks mr-1 w-4 h-4" />
+              {{ t('resources.title') }}
+            </MButton>
+          </template>
+          <div class="flex flex-col min-w-32" data-testid="resource-batch-menu">
             <button
-              class="px-3 py-1.5 text-xs text-left hover:bg-sunken text-fg transition cursor-pointer"
-              @click="emit('batchEnableAll')"
+              class="px-3 py-1.5 text-xs text-left rounded-lg hover:bg-sunken text-fg transition cursor-pointer"
+              @click="pickBatch('batchEnableAll')"
             >
               {{ t('resources.actions.enableAll') }}
             </button>
             <button
-              class="px-3 py-1.5 text-xs text-left hover:bg-sunken text-fg transition cursor-pointer"
-              @click="emit('batchDisableAll')"
+              class="px-3 py-1.5 text-xs text-left rounded-lg hover:bg-sunken text-fg transition cursor-pointer"
+              @click="pickBatch('batchDisableAll')"
             >
               {{ t('resources.actions.disableAll') }}
             </button>
           </div>
-        </div>
+        </MPopover>
       </div>
 
       <div class="flex items-center gap-2">
