@@ -191,7 +191,10 @@ pub fn apply_patch(current: &Settings, patch: &Value) -> Result<Settings, CoreEr
 /// Thread-safe settings store with debounced asynchronous save and synchronous fallback.
 pub struct SettingsStore {
     file_path: PathBuf,
-    settings: Arc<RwLock<Settings>>,
+    /// The live settings are immutable: `patch` replaces the whole `Arc` while holding
+    /// the write lock, so readers only ever clone a pointer and never observe a
+    /// partially patched tree.
+    settings: Arc<RwLock<Arc<Settings>>>,
     dirty_notify: Arc<Notify>,
 }
 
@@ -245,7 +248,7 @@ impl SettingsStore {
             }
         }
 
-        let settings = Arc::new(RwLock::new(settings));
+        let settings = Arc::new(RwLock::new(Arc::new(settings)));
         let dirty_notify = Arc::new(Notify::new());
 
         // Spawn background debounced save task
@@ -283,20 +286,32 @@ impl SettingsStore {
         })
     }
 
-    /// Gets a cloned snapshot of current settings.
-    pub async fn get(&self) -> Settings {
+    /// Cheap reference to the current settings; the pointed-at tree is immutable and only
+    /// replaced wholesale by `patch`. Prefer this over `get` on hot paths.
+    pub async fn snapshot(&self) -> Arc<Settings> {
         self.settings.read().await.clone()
+    }
+
+    /// Gets a cloned snapshot of current settings.
+    ///
+    /// Kept for callers that need an owned tree; internal hot paths should use `snapshot`.
+    pub async fn get(&self) -> Settings {
+        (*self.snapshot().await).clone()
     }
 
     /// Applies an RFC 7386 patch, schedules debounced save, and returns the updated settings.
     pub async fn patch(&self, patch: &Value) -> Result<Settings, CoreError> {
-        let mut lock = self.settings.write().await;
-        let updated = apply_patch(&lock, patch)?;
-        *lock = updated.clone();
-        drop(lock);
+        // One write-lock acquisition: build the replacement tree from the current one and
+        // publish it atomically, so concurrent patches never lose an update.
+        let updated = {
+            let mut lock = self.settings.write().await;
+            let next = Arc::new(apply_patch(&lock, patch)?);
+            *lock = Arc::clone(&next);
+            next
+        };
 
         self.dirty_notify.notify_one();
-        Ok(updated)
+        Ok((*updated).clone())
     }
 
     /// Writes settings immediately to disk atomically.

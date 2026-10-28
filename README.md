@@ -106,4 +106,7 @@ cargo run -p mclr-cli -- update check --channel stable
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](LICENSE).
+No license is granted at this time — all rights reserved. This may change in a future release.
+
+Third-party components keep their own licenses; see
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

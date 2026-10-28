@@ -282,8 +282,8 @@ onMounted(() => {
             class="w-14 h-14 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 border border-line overflow-hidden text-primary"
           >
             <MImage
-              v-if="save.iconPath || save.iconDataUrl"
-              :src="save.iconPath ? convertFileSrc(save.iconPath) : (save.iconDataUrl ?? undefined)"
+              v-if="save.iconPath"
+              :src="convertFileSrc(save.iconPath)"
               alt="World Icon"
               fallback-icon="i-lucide-compass"
               class="w-full h-full"

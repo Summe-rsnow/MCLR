@@ -131,3 +131,23 @@ All floating, modal, and drawer surfaces follow a unified overlay architecture r
   - `compute_cache_sizes` & `clean_cache`: Toolbox log cache size calculation and clearing.
   - `launcher_logs_list`: Launcher log file browser on the `/logs?tab=launcher` panel.
 - **Async IPC Access**: `launcher_logs_list` and `launcher_log_read` execute via `run_blocking` to avoid disk I/O on Tokio's async worker threads.
+
+---
+
+## Launcher Self-Update (`mclr-update` + `ipc::update`)
+
+Self-update is a **placeholder in this build** and the UI says so (「敬请期待」)
+instead of failing:
+
+- `update_check` reads the signed Tauri updater manifest, which requires
+  `MCLR_UPDATE_ENDPOINT` + `MCLR_UPDATE_PUBKEY` (env, `<data>/.env` or `./.env` via
+  `mclr_core::get_secret`). Without both it returns `notConfigured`.
+- The Settings → 检查更新 tab asks `secrets_status` first: when the pair is missing
+  it renders a disabled button plus a 「敬请期待」 badge and never calls the command,
+  so the tab has no error path to explain.
+- `mclr-cli update check --channel stable` still exercises the manifest path when
+  the secrets are present (CI/staging builds).
+- No GitHub repository, release feed or issue tracker is wired up yet; the About
+  page's repository / feedback actions are disabled placeholders for the same
+  reason. When a feed exists, drop the `updaterConfigured` gate in
+  `SystemUpdateSection.vue`.

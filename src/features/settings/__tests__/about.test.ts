@@ -30,7 +30,6 @@ describe('SettingsAboutPage & Help Center', () => {
     })
 
     expect(wrapper.text()).toContain(`v${pkg.version}`)
-    expect(wrapper.text()).toContain('Apache-2.0')
     expect(wrapper.text()).toContain('MCLR')
     expect(wrapper.text()).toContain('GitHub 仓库')
   })
@@ -96,7 +95,10 @@ describe('SettingsAboutPage & Help Center', () => {
     expect(wrapper.text()).toContain('问题反馈')
     expect(wrapper.text()).toContain('提交问题前建议检查')
     expect(wrapper.text()).toContain('前往 GitHub 提交反馈')
-    const btn = wrapper.find('[data-testid="open-github-btn"]')
-    expect(btn.exists()).toBe(true)
+    // The GitHub actions stay disabled until the repository is published.
+    expect(wrapper.find('[data-testid="issues-coming-soon"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="github-coming-soon"]').exists()).toBe(true)
+    const buttons = wrapper.findAll('button').filter((b) => b.attributes('disabled') !== undefined)
+    expect(buttons.length).toBeGreaterThanOrEqual(2)
   })
 })

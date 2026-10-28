@@ -1,13 +1,24 @@
 //! Screenshot enumeration, pagination, thumbnail generation, and clipboard integration.
 
 use sha1::Digest;
+use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
+use std::time::SystemTime;
 
 use super::{ScreenshotMeta, ScreenshotsPagedResult, format_system_time};
 use crate::error::SavesError;
 
 const SUPPORTED_SCREENSHOT_EXTS: &[&str] = &["png", "jpg", "jpeg", "bmp", "webp", "tiff"];
+
+/// Cached listing for one screenshots directory: `(directory mtime, sorted screenshots)`.
+type ScreenshotCache = HashMap<PathBuf, (SystemTime, Vec<ScreenshotMeta>)>;
+
+/// Per-directory cache of the already-sorted screenshot list, keyed by the directory's
+/// mtime so an unchanged folder reuses the previous scan and only slices the page.
+static SCREENSHOT_CACHE: LazyLock<Mutex<ScreenshotCache>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Lists screenshots with pagination, supporting common image formats and sorting newest first.
 pub fn list_screenshots_paged(
@@ -21,6 +32,24 @@ pub fn list_screenshots_paged(
             items: Vec::new(),
             total: 0,
         });
+    }
+
+    // Directory mtime changes whenever a file is added, removed or renamed inside it,
+    // which is exactly when the cached listing must be rebuilt.
+    let dir_mtime = fs::metadata(screenshots_dir)
+        .and_then(|m| m.modified())
+        .ok();
+
+    if let Some(mtime) = dir_mtime {
+        let cache = SCREENSHOT_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        let hit = cache
+            .get(screenshots_dir)
+            .filter(|(cached_mtime, _)| *cached_mtime == mtime);
+        if let Some((_, cached)) = hit {
+            let total = cached.len();
+            let items = cached.iter().skip(offset).take(limit).cloned().collect();
+            return Ok(ScreenshotsPagedResult { items, total });
+        }
     }
 
     let mut screenshots = Vec::new();
@@ -73,8 +102,24 @@ pub fn list_screenshots_paged(
     }
 
     screenshots.sort_by_key(|a| std::cmp::Reverse(a.created_ms));
+
     let total = screenshots.len();
-    let items = screenshots.into_iter().skip(offset).take(limit).collect();
+    let items = screenshots
+        .iter()
+        .skip(offset)
+        .take(limit)
+        .cloned()
+        .collect();
+
+    if let Some(mtime) = dir_mtime {
+        let mut cache = SCREENSHOT_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        // Keep the cache bounded: drop everything when it grows unexpectedly large
+        // (e.g. many instances x many screenshots).
+        if cache.len() > 64 {
+            cache.clear();
+        }
+        cache.insert(screenshots_dir.to_path_buf(), (mtime, screenshots));
+    }
 
     Ok(ScreenshotsPagedResult { items, total })
 }
@@ -190,4 +235,41 @@ pub fn copy_image_to_clipboard(image_path: &str) -> Result<(), SavesError> {
         "Failed to copy image to clipboard after 5 attempts: {:?}",
         last_err
     ))))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_paged_listing_is_stable_across_calls() {
+        let dir = tempdir().unwrap();
+        let ss_dir = dir.path().join("screenshots");
+        fs::create_dir_all(&ss_dir).unwrap();
+        for name in ["a.png", "b.png", "c.png"] {
+            fs::write(ss_dir.join(name), b"png-bytes").unwrap();
+        }
+
+        let first_page = list_screenshots_paged(&ss_dir, 0, 2).unwrap();
+        let second_page = list_screenshots_paged(&ss_dir, 2, 2).unwrap();
+        assert_eq!(first_page.total, 3);
+        assert_eq!(second_page.total, 3);
+        assert_eq!(first_page.items.len(), 2);
+        assert_eq!(second_page.items.len(), 1);
+
+        // Repeating the same queries hits the cache and must return identical pages.
+        assert_eq!(list_screenshots_paged(&ss_dir, 0, 2).unwrap(), first_page);
+        assert_eq!(list_screenshots_paged(&ss_dir, 2, 2).unwrap(), second_page);
+
+        // A new file changes the directory mtime, forcing a fresh scan.
+        fs::write(ss_dir.join("d.png"), b"png-bytes").unwrap();
+        let after = list_screenshots_paged(&ss_dir, 0, 10).unwrap();
+        assert_eq!(after.total, 4);
+        assert!(
+            after.items.iter().any(|s| s.file_name == "d.png"),
+            "newly added screenshot must show up: {:?}",
+            after.items
+        );
+    }
 }

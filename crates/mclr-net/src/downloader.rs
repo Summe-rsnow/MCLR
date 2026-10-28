@@ -14,7 +14,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::Mutex;
+use tokio::task::JoinSet;
 use tracing::warn;
 use url::Url;
 
@@ -34,6 +35,49 @@ pub struct DownloadSpec {
     pub sha1: Option<String>,
     pub sha256: Option<String>,
     pub md5: Option<String>,
+}
+
+/// Digests computed while a single-stream transfer writes the body to disk.
+///
+/// Only the algorithms required by the [`DownloadSpec`] are populated, so the
+/// caller can compare them against the expected values without re-reading the
+/// finished file.
+#[derive(Debug, Clone, Default)]
+pub struct StreamHashes {
+    pub sha1: Option<String>,
+    pub sha256: Option<String>,
+    pub md5: Option<String>,
+}
+
+/// How the body of a single file reached the part file.
+enum FileOutcome {
+    /// Written by the single-stream path; digests were computed while streaming.
+    Streamed(StreamHashes),
+    /// Written by the multi-connection path; the caller must verify from disk.
+    Chunked,
+}
+
+/// Failure of the chunked path — either fatal, or "this server ignores `Range`"
+/// which the caller answers by falling back to a single stream.
+enum ChunkedError {
+    Fatal(NetError),
+    RangeUnsupported,
+}
+
+/// Expected hash value when the spec actually requires that algorithm.
+fn required_hash(expected: &Option<String>) -> Option<&str> {
+    expected.as_deref().filter(|value| !value.is_empty())
+}
+
+fn ensure_hash(expected: &str, actual: &str) -> Result<(), NetError> {
+    if actual.eq_ignore_ascii_case(expected) {
+        Ok(())
+    } else {
+        Err(NetError::HashMismatch {
+            expected: expected.to_string(),
+            actual: actual.to_string(),
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -118,23 +162,33 @@ impl Downloader {
                 .download_single_file(url, &spec, &part_path, task_center)
                 .await;
             match download_result {
-                Ok(()) => match self.verify_file(&part_path, &spec).await {
-                    Ok(()) => {
-                        // Atomic rename
-                        tokio::fs::rename(&part_path, &spec.dest).await?;
-                        return Ok(());
+                Ok(outcome) => {
+                    // The stream path already hashed the bytes it wrote; only the
+                    // chunked path needs the extra full-file read.
+                    let verified = match &outcome {
+                        FileOutcome::Streamed(hashes) => {
+                            self.verify_streamed(&part_path, &spec, hashes).await
+                        }
+                        FileOutcome::Chunked => self.verify_file(&part_path, &spec).await,
+                    };
+                    match verified {
+                        Ok(()) => {
+                            // Atomic rename
+                            tokio::fs::rename(&part_path, &spec.dest).await?;
+                            return Ok(());
+                        }
+                        Err(verify_err) => {
+                            warn!(
+                                "Verification failed for {} (attempt {}): {}",
+                                spec.dest.display(),
+                                attempt + 1,
+                                verify_err
+                            );
+                            let _ = tokio::fs::remove_file(&part_path).await;
+                            last_err = verify_err;
+                        }
                     }
-                    Err(verify_err) => {
-                        warn!(
-                            "Verification failed for {} (attempt {}): {}",
-                            spec.dest.display(),
-                            attempt + 1,
-                            verify_err
-                        );
-                        let _ = tokio::fs::remove_file(&part_path).await;
-                        last_err = verify_err;
-                    }
-                },
+                }
                 Err(err) => {
                     warn!(
                         "Download attempt {} from {} failed: {}",
@@ -157,37 +211,63 @@ impl Downloader {
         spec: &DownloadSpec,
         part_path: &Path,
         task_center: Option<(&TaskCenter, &str)>,
-    ) -> Result<(), NetError> {
-        // If size is known and < 4 MiB, download directly in one stream
-        if let Some(size) = spec.size
-            && size < SMALL_FILE_THRESHOLD
-        {
+    ) -> Result<FileOutcome, NetError> {
+        // A known size makes the range probe pointless: pick the path directly.
+        if let Some(size) = spec.size {
+            if size < SMALL_FILE_THRESHOLD {
+                return self
+                    .download_stream(url, part_path, Some(size), task_center, spec)
+                    .await
+                    .map(FileOutcome::Streamed);
+            }
             return self
-                .download_stream(url, part_path, Some(size), task_center)
+                .download_chunked_or_stream(url, part_path, size, task_center, spec)
                 .await;
         }
 
-        // Otherwise probe range support
-        let probe = self.probe_range(url).await;
-        match probe {
+        // Only an unknown size needs to probe range support
+        match self.probe_range(url).await {
+            Ok(Some(total_size)) if total_size < SMALL_FILE_THRESHOLD => self
+                .download_stream(url, part_path, Some(total_size), task_center, spec)
+                .await
+                .map(FileOutcome::Streamed),
             Ok(Some(total_size)) => {
-                if total_size < SMALL_FILE_THRESHOLD {
-                    self.download_stream(url, part_path, Some(total_size), task_center)
-                        .await
-                } else {
-                    self.download_chunked(url, part_path, total_size, task_center)
-                        .await
-                }
-            }
-            Ok(None) => {
-                // Server returned 200 OK without partial content or doesn't support range
-                self.download_stream(url, part_path, spec.size, task_center)
+                self.download_chunked_or_stream(url, part_path, total_size, task_center, spec)
                     .await
             }
-            Err(_) => {
-                // Range probe error, fallback to stream
-                self.download_stream(url, part_path, spec.size, task_center)
+            // Server returned 200 OK without partial content, or the probe failed
+            Ok(None) | Err(_) => self
+                .download_stream(url, part_path, spec.size, task_center, spec)
+                .await
+                .map(FileOutcome::Streamed),
+        }
+    }
+
+    /// Chunked transfer that falls back to a single stream when the server
+    /// refuses `Range` requests.
+    async fn download_chunked_or_stream(
+        &self,
+        url: &Url,
+        part_path: &Path,
+        total_size: u64,
+        task_center: Option<(&TaskCenter, &str)>,
+        spec: &DownloadSpec,
+    ) -> Result<FileOutcome, NetError> {
+        match self
+            .download_chunked(url, part_path, total_size, task_center)
+            .await
+        {
+            Ok(()) => Ok(FileOutcome::Chunked),
+            Err(ChunkedError::Fatal(err)) => Err(err),
+            Err(ChunkedError::RangeUnsupported) => {
+                warn!(
+                    "Range requests unsupported by {}, falling back to a single stream",
+                    url
+                );
+                let _ = tokio::fs::remove_file(part_path).await;
+                self.download_stream(url, part_path, Some(total_size), task_center, spec)
                     .await
+                    .map(FileOutcome::Streamed)
             }
         }
     }
@@ -215,18 +295,26 @@ impl Downloader {
         Ok(None)
     }
 
-    /// Fallback single-stream download (64 KiB buffer)
+    /// Fallback single-stream download (64 KiB buffer).
+    ///
+    /// Digests the spec requires are computed while the bytes are written, so the
+    /// caller never has to read the finished file back.
     async fn download_stream(
         &self,
         url: &Url,
         part_path: &Path,
         total_size: Option<u64>,
         task_center: Option<(&TaskCenter, &str)>,
-    ) -> Result<(), NetError> {
+        spec: &DownloadSpec,
+    ) -> Result<StreamHashes, NetError> {
         let resp = self.client.get(url.clone()).send().await?;
         if !resp.status().is_success() {
             return Err(NetError::Http(resp.error_for_status().unwrap_err()));
         }
+
+        let mut sha1_hasher = required_hash(&spec.sha1).map(|_| Sha1::new());
+        let mut sha256_hasher = required_hash(&spec.sha256).map(|_| Sha256::new());
+        let mut md5_hasher = required_hash(&spec.md5).map(|_| Md5::new());
 
         let mut file = File::create(part_path).await?;
         let mut stream = resp.bytes_stream();
@@ -238,6 +326,15 @@ impl Downloader {
         while let Some(chunk_res) = stream.next().await {
             let chunk = chunk_res.map_err(NetError::Http)?;
             file.write_all(&chunk).await?;
+            if let Some(hasher) = sha1_hasher.as_mut() {
+                hasher.update(&chunk);
+            }
+            if let Some(hasher) = sha256_hasher.as_mut() {
+                hasher.update(&chunk);
+            }
+            if let Some(hasher) = md5_hasher.as_mut() {
+                hasher.update(&chunk);
+            }
             downloaded += chunk.len() as u64;
 
             if let Some((tc, tid)) = task_center
@@ -260,7 +357,11 @@ impl Downloader {
         }
 
         file.flush().await?;
-        Ok(())
+        Ok(StreamHashes {
+            sha1: sha1_hasher.map(|hasher| hex::encode(hasher.finalize())),
+            sha256: sha256_hasher.map(|hasher| hex::encode(hasher.finalize())),
+            md5: md5_hasher.map(|hasher| hex::encode(hasher.finalize())),
+        })
     }
 
     /// Multi-connection chunked download for files >= 4 MiB
@@ -270,7 +371,7 @@ impl Downloader {
         part_path: &Path,
         total_size: u64,
         task_center: Option<(&TaskCenter, &str)>,
-    ) -> Result<(), NetError> {
+    ) -> Result<(), ChunkedError> {
         // 1. Pre-allocate part file
         let mut file = OpenOptions::new()
             .read(true)
@@ -278,9 +379,14 @@ impl Downloader {
             .create(true)
             .truncate(true)
             .open(part_path)
-            .await?;
-        file.set_len(total_size).await?;
-        file.flush().await?;
+            .await
+            .map_err(|e| ChunkedError::Fatal(NetError::Io(e)))?;
+        file.set_len(total_size)
+            .await
+            .map_err(|e| ChunkedError::Fatal(NetError::Io(e)))?;
+        file.flush()
+            .await
+            .map_err(|e| ChunkedError::Fatal(NetError::Io(e)))?;
         drop(file);
 
         // 2. Initial chunks
@@ -375,11 +481,13 @@ impl Downloader {
                                 chunk.retries += 1;
                                 lock.push_back(chunk);
                             } else {
-                                return Err(NetError::Timeout("Chunk retries exceeded".into()));
+                                return Err(ChunkedError::Fatal(NetError::Timeout(
+                                    "Chunk retries exceeded".into(),
+                                )));
                             }
                         }
                         Err(ChunkError::Io(e)) => {
-                            return Err(NetError::Io(e));
+                            return Err(ChunkedError::Fatal(NetError::Io(e)));
                         }
                         Err(ChunkError::Http(e)) => {
                             let mut lock = queue_clone.lock().await;
@@ -387,8 +495,11 @@ impl Downloader {
                                 chunk.retries += 1;
                                 lock.push_back(chunk);
                             } else {
-                                return Err(NetError::Http(e));
+                                return Err(ChunkedError::Fatal(NetError::Http(e)));
                             }
+                        }
+                        Err(ChunkError::RangeUnsupported) => {
+                            return Err(ChunkedError::RangeUnsupported);
                         }
                         Err(ChunkError::PrematureEof) => {
                             let mut lock = queue_clone.lock().await;
@@ -396,12 +507,14 @@ impl Downloader {
                                 chunk.retries += 1;
                                 lock.push_back(chunk);
                             } else {
-                                return Err(NetError::Timeout("Premature EOF in chunk".into()));
+                                return Err(ChunkedError::Fatal(NetError::Timeout(
+                                    "Premature EOF in chunk".into(),
+                                )));
                             }
                         }
                     }
                 }
-                Ok::<(), NetError>(())
+                Ok::<(), ChunkedError>(())
             });
             worker_handles.push(handle);
         }
@@ -440,17 +553,40 @@ impl Downloader {
             }
         }
 
+        let mut first_error: Option<NetError> = None;
+        let mut range_unsupported = false;
         for h in worker_handles {
-            h.await
-                .map_err(|e| NetError::Io(std::io::Error::other(e.to_string())))??;
+            match h.await {
+                Ok(Ok(())) => {}
+                Ok(Err(ChunkedError::RangeUnsupported)) => range_unsupported = true,
+                Ok(Err(ChunkedError::Fatal(err))) => {
+                    if first_error.is_none() {
+                        first_error = Some(err);
+                    }
+                }
+                Err(join_err) => {
+                    if first_error.is_none() {
+                        first_error =
+                            Some(NetError::Io(std::io::Error::other(join_err.to_string())));
+                    }
+                }
+            }
+        }
+
+        if range_unsupported {
+            return Err(ChunkedError::RangeUnsupported);
+        }
+
+        if let Some(err) = first_error {
+            return Err(ChunkedError::Fatal(err));
         }
 
         let downloaded_final = total_downloaded.load(Ordering::SeqCst);
         if downloaded_final != total_size {
-            return Err(NetError::SizeMismatch {
+            return Err(ChunkedError::Fatal(NetError::SizeMismatch {
                 expected: total_size,
                 actual: downloaded_final,
-            });
+            }));
         }
 
         if let Some((tc, tid)) = task_center {
@@ -532,6 +668,49 @@ impl Downloader {
         Ok(())
     }
 
+    /// Verify a part file that was written by the single-stream path, reusing the
+    /// digests computed while streaming. No second full-file read happens here.
+    async fn verify_streamed(
+        &self,
+        path: &Path,
+        spec: &DownloadSpec,
+        hashes: &StreamHashes,
+    ) -> Result<(), NetError> {
+        let file_len = tokio::fs::metadata(path).await?.len();
+        if let Some(expected_size) = spec.size
+            && file_len != expected_size
+        {
+            return Err(NetError::SizeMismatch {
+                expected: expected_size,
+                actual: file_len,
+            });
+        }
+
+        if let Some(expected) = required_hash(&spec.sha1) {
+            match hashes.sha1.as_deref() {
+                Some(actual) => ensure_hash(expected, actual)?,
+                // Defensive: the stream skipped this algorithm, so read the file.
+                None => return self.verify_file(path, spec).await,
+            }
+        }
+
+        if let Some(expected) = required_hash(&spec.sha256) {
+            match hashes.sha256.as_deref() {
+                Some(actual) => ensure_hash(expected, actual)?,
+                None => return self.verify_file(path, spec).await,
+            }
+        }
+
+        if let Some(expected) = required_hash(&spec.md5) {
+            match hashes.md5.as_deref() {
+                Some(actual) => ensure_hash(expected, actual)?,
+                None => return self.verify_file(path, spec).await,
+            }
+        }
+
+        Ok(())
+    }
+
     /// Batch download multiple files concurrently with global limit `max_concurrent_files`.
     pub async fn download_many(
         &self,
@@ -548,44 +727,75 @@ impl Downloader {
             let _ = tc.update_title_params(tid, count_map).await;
         }
         let max_files = (self.settings.max_concurrent_files as usize).clamp(1, 128);
-        let sem = Arc::new(Semaphore::new(max_files));
 
         let total_bytes: u64 = specs.iter().map(|s| s.size.unwrap_or(0)).sum();
         let completed_bytes = Arc::new(AtomicU64::new(0));
 
-        let mut tasks = Vec::new();
-        for spec in specs {
-            let sem_clone = Arc::clone(&sem);
+        // Fixed-size worker pool over a shared queue: the number of live tasks never
+        // exceeds `max_files`, no per-file `tokio::spawn` and no `is_finished` sweep.
+        let worker_count = max_files.min(specs.len());
+        let queue = Arc::new(Mutex::new(VecDeque::from_iter(
+            specs.into_iter().enumerate(),
+        )));
+
+        let mut workers = JoinSet::new();
+        for _ in 0..worker_count {
+            let queue = Arc::clone(&queue);
+            let completed_bytes = Arc::clone(&completed_bytes);
             let client = self.client.clone();
             let settings = self.settings.clone();
-            let completed_bytes_clone = Arc::clone(&completed_bytes);
             let slow_check_duration = self.slow_check_duration;
             let slow_speed_threshold = self.slow_speed_threshold;
 
-            let handle = tokio::spawn(async move {
-                let _permit = sem_clone.acquire().await.unwrap();
+            workers.spawn(async move {
                 let dl = Downloader::new(client, settings)
                     .with_slow_check(slow_check_duration, slow_speed_threshold);
-                let spec_size = spec.size.unwrap_or(0);
-                dl.download(spec, None).await?;
-                completed_bytes_clone.fetch_add(spec_size, Ordering::Relaxed);
-                Ok::<(), NetError>(())
+                let mut results: Vec<(usize, Result<(), NetError>)> = Vec::new();
+
+                loop {
+                    let next = {
+                        let mut queue = queue.lock().await;
+                        queue.pop_front()
+                    };
+                    let Some((index, spec)) = next else {
+                        break;
+                    };
+
+                    let spec_size = spec.size.unwrap_or(0);
+                    let result = dl.download(spec, None).await;
+                    if result.is_ok() {
+                        completed_bytes.fetch_add(spec_size, Ordering::Relaxed);
+                    }
+                    results.push((index, result));
+                }
+
+                results
             });
-            tasks.push(handle);
         }
 
-        // Aggregate progress monitor
+        // Aggregate progress monitor: report on the same 250ms cadence, driven by
+        // worker completions and a 50ms ticker instead of an O(n) sweep.
         let start_time = Instant::now();
         let mut last_report = Instant::now();
+        let mut ticker = tokio::time::interval(Duration::from_millis(50));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-        let mut all_tasks_done = false;
-        while !all_tasks_done {
-            all_tasks_done = true;
-            for t in &mut tasks {
-                if !t.is_finished() {
-                    all_tasks_done = false;
-                    break;
+        let mut results: Vec<(usize, Result<(), NetError>)> = Vec::new();
+        let mut join_error: Option<NetError> = None;
+
+        loop {
+            tokio::select! {
+                joined = workers.join_next() => {
+                    match joined {
+                        Some(Ok(mut batch)) => results.append(&mut batch),
+                        Some(Err(err)) => {
+                            join_error = Some(NetError::Io(std::io::Error::other(err.to_string())));
+                            break;
+                        }
+                        None => break,
+                    }
                 }
+                _ = ticker.tick() => {}
             }
 
             if let Some((tc, tid)) = task_center
@@ -606,16 +816,18 @@ impl Downloader {
                 let _ = tc.update_progress(tid, prog, speed).await;
                 last_report = Instant::now();
             }
-
-            if !all_tasks_done {
-                tokio::time::sleep(Duration::from_millis(50)).await;
-            }
         }
 
-        for t in tasks {
-            t.await
-                .map_err(|e| NetError::Io(std::io::Error::other(e.to_string())))??;
+        if let Some(err) = join_error {
+            return Err(err);
         }
+
+        // Report the first failure in spec order, matching the old join order.
+        results.sort_by_key(|(index, _)| *index);
+        for (_, result) in results {
+            result?;
+        }
+
         if let Some((tc, tid)) = task_center {
             let _ = tc.update_progress(tid, 1.0, 0).await;
         }
@@ -629,6 +841,8 @@ enum ChunkError {
     Io(std::io::Error),
     Http(reqwest::Error),
     PrematureEof,
+    /// Server answered with a full-body success instead of `206 Partial Content`.
+    RangeUnsupported,
 }
 
 async fn download_single_chunk(
@@ -655,6 +869,11 @@ async fn download_single_chunk(
         .map_err(ChunkError::Http)?;
 
     if resp.status() != StatusCode::PARTIAL_CONTENT {
+        // A 2xx here means the server ignored `Range` and started the whole body:
+        // report it so the caller can fall back to a single stream.
+        if resp.status().is_success() {
+            return Err(ChunkError::RangeUnsupported);
+        }
         return Err(ChunkError::Http(resp.error_for_status().unwrap_err()));
     }
 

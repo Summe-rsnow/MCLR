@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;
 use std::fs;
+use std::io::{Read, Seek, SeekFrom};
+use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 use tauri_plugin_updater::UpdaterExt;
@@ -27,18 +29,21 @@ pub async fn update_check(
     settings_state: State<'_, SettingsStore>,
     channel_override: Option<String>,
 ) -> Result<UpdateCheckResult, AppError> {
-    let settings = settings_state.get().await;
+    let settings = settings_state.snapshot().await;
     let channel = channel_override
         .filter(|c| !c.trim().is_empty())
-        .unwrap_or(settings.update.channel);
+        .unwrap_or_else(|| settings.update.channel.clone());
 
-    let config = UpdateConfig::from_runtime(&channel)?;
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| AppError::new("update.http").with_detail(e.to_string()))?;
 
     let current_version = env!("CARGO_PKG_VERSION");
+    // Launcher self-update stays a placeholder for now: it only works when the
+    // build was shipped with signed-updater secrets. The UI shows "敬请期待"
+    // instead of a failure when they are missing.
+    let config = UpdateConfig::from_runtime(&channel)?;
     let result = check_update_manifest(&client, &config, current_version).await?;
     Ok(result)
 }
@@ -206,19 +211,88 @@ pub async fn launcher_log_read(file_name: String) -> Result<String, AppError> {
             );
         }
 
-        let content_bytes = fs::read(&file_path)
-            .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?;
-
-        // Keep last 200 KB if file is larger
-        const MAX_BYTES: usize = 200 * 1024;
-        let slice = if content_bytes.len() > MAX_BYTES {
-            &content_bytes[content_bytes.len() - MAX_BYTES..]
-        } else {
-            &content_bytes[..]
-        };
-
-        let text = String::from_utf8_lossy(slice).to_string();
-        Ok(text)
+        read_log_tail(&file_path)
     })
     .await
+}
+
+/// Maximum number of trailing bytes returned by [`read_log_tail`].
+const LAUNCHER_LOG_MAX_BYTES: usize = 200 * 1024;
+
+/// Reads at most the last [`LAUNCHER_LOG_MAX_BYTES`] bytes of `path` and decodes them lossily.
+///
+/// Only the tail is read from disk, so a multi-megabyte log does not have to be
+/// loaded in full. Seeking may land the window in the middle of a multi-byte UTF-8
+/// character; `from_utf8_lossy` replaces that partial sequence with `U+FFFD`,
+/// which is the same decoding behaviour the previous full-read implementation used.
+fn read_log_tail(path: &Path) -> Result<String, AppError> {
+    let io_err = |e: std::io::Error| AppError::new("core.io").with_detail(e.to_string());
+
+    let mut file = fs::File::open(path).map_err(io_err)?;
+    let len = file.metadata().map_err(io_err)?.len();
+
+    if len > LAUNCHER_LOG_MAX_BYTES as u64 {
+        file.seek(SeekFrom::End(-(LAUNCHER_LOG_MAX_BYTES as i64)))
+            .map_err(io_err)?;
+    }
+
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).map_err(io_err)?;
+
+    Ok(String::from_utf8_lossy(&buf).to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_log_path(tag: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "mclr-launcher-log-{}-{tag}-{nanos}.log",
+            std::process::id()
+        ))
+    }
+
+    #[test]
+    fn read_log_tail_returns_only_the_trailing_200kb() {
+        const TOTAL: usize = 5 * 1024 * 1024;
+        let path = temp_log_path("big");
+
+        let mut content = String::with_capacity(TOTAL + 128);
+        content.push_str("HEAD-MARKER this line must not be part of the tail\n");
+        while content.len() < TOTAL {
+            content.push_str("12345 [main/INFO] launcher log line padding padding padding\n");
+        }
+        fs::write(&path, &content).unwrap();
+        let file_len = fs::metadata(&path).unwrap().len();
+        assert!(file_len > LAUNCHER_LOG_MAX_BYTES as u64);
+
+        let tail = read_log_tail(&path).unwrap();
+        let _ = fs::remove_file(&path);
+
+        assert!(
+            tail.len() <= LAUNCHER_LOG_MAX_BYTES,
+            "tail must be capped at 200 KB, got {}",
+            tail.len()
+        );
+        assert_eq!(tail.len(), LAUNCHER_LOG_MAX_BYTES);
+        // Content is the file's tail: a suffix of the whole file, nothing from the head.
+        assert!(content.ends_with(&tail));
+        assert!(!tail.contains("HEAD-MARKER"));
+    }
+
+    #[test]
+    fn read_log_tail_reads_short_files_whole() {
+        let path = temp_log_path("small");
+        fs::write(&path, "hello\nworld\n").unwrap();
+
+        let text = read_log_tail(&path).unwrap();
+        let _ = fs::remove_file(&path);
+
+        assert_eq!(text, "hello\nworld\n");
+    }
 }

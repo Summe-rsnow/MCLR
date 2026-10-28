@@ -217,4 +217,58 @@ describe('Logs feature', () => {
     expect(wrapper.text()).not.toContain('批量下载 (')
     expect(wrapper.text()).not.toContain('个项目')
   })
+
+  it('flushes 10000 queued lines in under 50ms', async () => {
+    const store = useLogsStore()
+
+    store.enqueueLogs(makeLines(0, 10000))
+    const start = performance.now()
+    store.flushNow()
+    const elapsed = performance.now() - start
+
+    expect(store.logs.length).toBe(10000)
+    expect(store.filteredLogs.length).toBe(10000)
+    expect(elapsed).toBeLessThan(50)
+  })
+
+  it('grows filteredLogs by only the new lines on append with an unchanged filter', async () => {
+    const store = useLogsStore()
+
+    store.enqueueLogs(makeLines(0, 20))
+    store.flushNow()
+
+    const before = store.filteredLogs
+    expect(before.length).toBe(20)
+
+    store.enqueueLogs(makeLines(20, 20))
+    store.flushNow()
+
+    expect(store.filteredLogs.length).toBe(40)
+    // 旧条目按引用保留，不做全量重过滤
+    for (let i = 0; i < before.length; i++) {
+      expect(store.filteredLogs[i]).toBe(before[i])
+    }
+  })
+
+  it('caps logs at 10000 and trims the filtered prefix in step', async () => {
+    const store = useLogsStore()
+
+    store.enqueueLogs(makeLines(0, 10050))
+    store.flushNow()
+
+    expect(store.logs.length).toBe(10000)
+    expect(store.filteredLogs.length).toBe(10000)
+    expect(store.filteredLogs[0]).toBe(store.logs[0])
+  })
 })
+
+function makeLines(from: number, count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    lineId: from + i,
+    processId: 1,
+    instanceId: '1.20.1-vanilla',
+    level: 'info' as const,
+    text: `line ${from + i}`,
+    timestamp: '2026-01-01T00:00:00.000Z',
+  }))
+}

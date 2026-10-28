@@ -11,7 +11,7 @@ use mclr_core::paths;
 use mclr_core::settings::{GameSettings, JavaSettings, NetSettings};
 use mclr_core::tasks::TaskCenter;
 use mclr_game::gamedir::resolve_game_dir;
-use mclr_game::install::{fetch_version_manifest, repair_instance};
+use mclr_game::install::{RepairMode, fetch_version_manifest, repair_instance};
 use mclr_game::instance::{InstanceConfig, InstanceInfo, InstanceState, classify_instance};
 use mclr_game::version::{VersionJson, merge_version_json};
 use mclr_net::{DownloadSpec, Downloader};
@@ -542,6 +542,7 @@ async fn run_pipeline_steps(
         &env.mc_folder,
         &req.instance_name,
         task_ctx,
+        RepairMode::Full,
     )
     .await?;
 

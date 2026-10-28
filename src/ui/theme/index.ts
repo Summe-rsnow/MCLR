@@ -169,7 +169,24 @@ export function resolveEffectiveMode(mode: ThemeMode): 'light' | 'dark' {
   return mode
 }
 
+const PALETTE_CACHE_LIMIT = 8
+const paletteCache = new Map<string, ThemePalette>()
+
 export function generatePalette(seedHex: string, effectiveMode: 'light' | 'dark'): ThemePalette {
+  const cacheKey = `${seedHex}|${effectiveMode}`
+  const cached = paletteCache.get(cacheKey)
+  if (cached) return cached
+
+  const palette = computePalette(seedHex, effectiveMode)
+  paletteCache.set(cacheKey, palette)
+  if (paletteCache.size > PALETTE_CACHE_LIMIT) {
+    const oldest = paletteCache.keys().next().value
+    if (oldest !== undefined) paletteCache.delete(oldest)
+  }
+  return palette
+}
+
+function computePalette(seedHex: string, effectiveMode: 'light' | 'dark'): ThemePalette {
   const seedOklch = parseHexToOklch(seedHex)
   const h = seedOklch.h ?? 250
   const isNeutral = (seedOklch.c || 0) < 0.08
@@ -274,7 +291,75 @@ export function generatePalette(seedHex: string, effectiveMode: 'light' | 'dark'
   }
 }
 
+type ThemeFrameCallback = () => void
+
+let pendingConfig: ThemeConfig | null = null
+let pendingRaf: number | null = null
+let frameCallbacks: ThemeFrameCallback[] = []
+
+function hasAnimationFrame(): boolean {
+  return typeof requestAnimationFrame === 'function'
+}
+
+function flushFrame(): void {
+  pendingRaf = null
+  const config = pendingConfig
+  pendingConfig = null
+  if (config) writeTheme(config)
+  if (frameCallbacks.length > 0) {
+    const callbacks = frameCallbacks
+    frameCallbacks = []
+    for (const callback of callbacks) callback()
+  }
+}
+
+function ensureFrame(): void {
+  if (pendingRaf !== null) return
+  pendingRaf = requestAnimationFrame(flushFrame)
+}
+
+/**
+ * Runs `callback` in the same animation frame as the pending theme write, after it.
+ * Used so theme variables and typography never land in different frames.
+ */
+export function scheduleThemeFrame(callback: ThemeFrameCallback): void {
+  if (!hasAnimationFrame()) {
+    callback()
+    return
+  }
+  frameCallbacks.push(callback)
+  ensureFrame()
+}
+
+/**
+ * Coalesces theme writes: every call in the same tick performs at most one
+ * palette lookup + one batch of custom property writes, using the last config.
+ */
 export function applyTheme(config: ThemeConfig): void {
+  if (typeof document === 'undefined') return
+
+  if (!hasAnimationFrame()) {
+    writeTheme(config)
+    return
+  }
+
+  pendingConfig = config
+  ensureFrame()
+}
+
+/** Synchronous escape hatch for tests: cancels any pending frame and writes now. */
+export function applyThemeNow(config: ThemeConfig): void {
+  if (typeof document === 'undefined') return
+
+  if (pendingRaf !== null && hasAnimationFrame()) {
+    cancelAnimationFrame(pendingRaf)
+  }
+  pendingRaf = null
+  pendingConfig = config
+  flushFrame()
+}
+
+function writeTheme(config: ThemeConfig): void {
   if (typeof document === 'undefined') return
 
   const effectiveMode = resolveEffectiveMode(config.mode)

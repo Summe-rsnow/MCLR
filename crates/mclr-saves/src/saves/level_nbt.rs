@@ -5,7 +5,6 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
 
-use base64::Engine;
 use fastnbt::Value;
 use flate2::Compression;
 use flate2::read::GzDecoder;
@@ -272,21 +271,10 @@ pub fn parse_save_info_from_nbt(
     // 8. LastPlayed:
     let last_played = data.get("LastPlayed").and_then(as_i64).unwrap_or(0);
 
-    // 9. Icon data URL
+    // 9. Icon path (the PNG itself is served through the asset protocol; never inlined)
     let icon_file = save_dir.join("icon.png");
     let icon_path_str = if icon_file.exists() {
         Some(icon_file.to_string_lossy().to_string())
-    } else {
-        None
-    };
-    let icon_data_url = if icon_file.exists() {
-        match fs::read(&icon_file) {
-            Ok(bytes) => {
-                let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                Some(format!("data:image/png;base64,{}", b64))
-            }
-            Err(_) => None,
-        }
     } else {
         None
     };
@@ -303,7 +291,6 @@ pub fn parse_save_info_from_nbt(
         last_played,
         data_version,
         icon_path: icon_path_str,
-        icon_data_url,
     })
 }
 

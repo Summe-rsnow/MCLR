@@ -17,7 +17,6 @@ export interface SaveInfo {
   playTime: number
   lastPlayed: number
   dataVersion?: number | null
-  iconDataUrl?: string | null
   iconPath?: string | null
 }
 

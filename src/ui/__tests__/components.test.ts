@@ -56,12 +56,16 @@ describe('Theme Engine', () => {
     expect(palette.raised).toMatch(/^\d+\s+\d+\s+\d+$/)
     expect(palette.fg).toMatch(/^\d+\s+\d+\s+\d+$/)
   })
-  it('applies theme attributes and css variables to documentElement', () => {
+  it('applies theme attributes and css variables to documentElement', async () => {
     applyTheme({
       seed: '#10b981',
       mode: 'dark',
       material: 'glass',
     })
+
+    const { promise, resolve } = Promise.withResolvers<void>()
+    requestAnimationFrame(() => resolve())
+    await promise
 
     const root = document.documentElement
     expect(root.dataset.mode).toBe('dark')

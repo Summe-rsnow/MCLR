@@ -39,7 +39,6 @@ pub struct SaveInfo {
     pub last_played: i64,
     pub data_version: Option<i32>,
     pub icon_path: Option<String>,
-    pub icon_data_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -385,7 +384,7 @@ mod tests {
         assert_eq!(imported_info.name, "ExportWorld");
         assert_eq!(imported_info.seed, "777");
         assert_eq!(imported_info.spawn, SaveSpawn { x: 5, y: 60, z: 7 });
-        assert!(imported_info.icon_data_url.is_some());
+        assert!(imported_info.icon_path.is_some());
     }
 
     #[test]

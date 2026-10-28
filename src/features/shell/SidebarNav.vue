@@ -156,8 +156,20 @@ function updatePill() {
 
 let containerResizeObserver: ResizeObserver | null = null
 
+let scrollRaf: number | null = null
+
+// Coalesce scroll events to at most one geometry update per frame so scrolling
+// never forces several synchronous layouts in the same frame.
 function onContainerScroll() {
-  updatePill()
+  if (typeof requestAnimationFrame !== 'function') {
+    updatePill()
+    return
+  }
+  if (scrollRaf !== null) return
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = null
+    updatePill()
+  })
 }
 
 watch(
@@ -185,6 +197,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (scrollRaf !== null) {
+    cancelAnimationFrame(scrollRaf)
+    scrollRaf = null
+  }
   if (navContainerRef.value) {
     navContainerRef.value.removeEventListener('scroll', onContainerScroll)
   }
@@ -226,9 +242,11 @@ function setItemRef(path: string, el: unknown) {
 
       <!-- Nav Groups -->
       <div ref="navContainerRef" class="relative flex-1 overflow-y-auto flex flex-col gap-2">
+        <!-- Only transition what actually changes: geometry plus the fill, border,
+             shadow and backdrop blur used by theme/material switches. -->
         <div
           v-if="pillVisible"
-          class="m-nav-pill absolute left-0 right-0 rounded-xl pointer-events-none transition-all duration-240"
+          class="m-nav-pill absolute left-0 right-0 rounded-xl pointer-events-none transition-[top,height,background-color,border-color,box-shadow,backdrop-filter] duration-240"
           :style="{
             top: `${pillTop}px`,
             height: `${pillHeight}px`,

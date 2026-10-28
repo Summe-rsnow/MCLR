@@ -18,7 +18,7 @@ pub mod version;
 pub use compat::{VersionCompatInfo, compute_version_compat};
 pub use error::GameError;
 pub use install::{
-    VersionManifestEntry, VersionManifestList, collect_version_download_specs,
+    RepairMode, VersionManifestEntry, VersionManifestList, collect_version_download_specs,
     fetch_version_manifest, install_vanilla, load_resolved_version_json, maven_coordinate_to_path,
     repair_instance,
 };

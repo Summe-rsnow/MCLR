@@ -99,6 +99,13 @@ const navGroups: NavGroup[] = [
         to: '/settings/about',
         path: '/settings/about',
       },
+      {
+        key: 'sponsor',
+        titleKey: 'settings.nav.sponsor',
+        icon: 'i-lucide-heart-handshake',
+        to: '/settings/sponsor',
+        path: '/settings/sponsor',
+      },
     ],
   },
 ]

@@ -8,8 +8,10 @@ use mclr_net::{Downloader, SourceKind, race_get_bytes};
 use tracing::{error, info};
 use url::Url;
 
+use super::RepairMode;
 use super::manifest::{fetch_version_manifest, load_resolved_version_json};
 use super::specs::{collect_version_download_specs, verify_specs_cached};
+use super::verified_manifest::{self, VerifiedManifest};
 use crate::error::GameError;
 use crate::instance::{InstanceConfig, InstanceInfo, classify_instance, validate_instance_name};
 use crate::version::VersionJson;
@@ -148,14 +150,40 @@ pub async fn install_vanilla(
 
 /// Repairs an existing Minecraft instance by checking and downloading missing/corrupted files.
 /// Returns the number of files downloaded.
+///
+/// With [`RepairMode::Fast`] a matching `.mclr-verified.json` short-circuits the run before the
+/// asset index is read, so a normal launch only pays for the version JSON parse.
 pub async fn repair_instance(
     client: &reqwest::Client,
     net_settings: &NetSettings,
     mc_folder: &Path,
     instance_id: &str,
     task_ctx: Option<(&TaskCenter, &str)>,
+    mode: RepairMode,
 ) -> Result<usize, GameError> {
+    let instance_dir = mc_folder.join("versions").join(instance_id);
+    let version_json_file = instance_dir.join(format!("{instance_id}.json"));
+
     let resolved_json = load_resolved_version_json(mc_folder, instance_id)?;
+    let asset_index_id = resolved_json
+        .asset_index
+        .as_ref()
+        .map(|a| a.id.clone())
+        .unwrap_or_default();
+
+    // Fast path: the version JSON and asset index id are unchanged since the last
+    // successful full repair, so every file was verified then and nothing on disk
+    // has been touched since. Skipping here is what keeps startup cheap.
+    if mode == RepairMode::Fast
+        && let Some(manifest) = verified_manifest::load(&instance_dir)
+        && let Some((mtime_ms, len)) = verified_manifest::file_fingerprint(&version_json_file)
+        && manifest.version_json_mtime_ms == mtime_ms
+        && manifest.version_json_len == len
+        && manifest.asset_index_id == asset_index_id
+    {
+        info!("Repair: skipped (verified manifest)");
+        return Ok(0);
+    }
 
     let specs = collect_version_download_specs(
         client,
@@ -178,6 +206,21 @@ pub async fn repair_instance(
             return Err(e.into());
         }
     }
+
+    // Only a completed repair may leave a fingerprint behind; an interrupted or
+    // failed one must stay untrusted so the next launch repairs in full.
+    if let Some((mtime_ms, len)) = verified_manifest::file_fingerprint(&version_json_file) {
+        verified_manifest::save(
+            &instance_dir,
+            &VerifiedManifest {
+                version_json_mtime_ms: mtime_ms,
+                version_json_len: len,
+                asset_index_id,
+                lib_count: resolved_json.libraries.len() as u32,
+            },
+        );
+    }
+
     Ok(count)
 }
 

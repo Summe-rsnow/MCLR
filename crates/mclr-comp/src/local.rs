@@ -1,6 +1,6 @@
 //! Local mod management: scanning, parsing, hash identification, toggling, and updates.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{Cursor, Read, Seek};
 use std::path::Path;
@@ -53,6 +53,18 @@ struct LocalModCacheItem {
     pub mtime_secs: u64,
     pub project_id: Option<String>,
     pub update_file: Option<CompFile>,
+    /// Unix seconds of the last Modrinth project-id lookup for this file (`0` = never).
+    #[serde(default)]
+    pub cached_at_secs: u64,
+}
+
+/// Chunk size used when hashing a mod file without loading it into memory.
+const HASH_CHUNK: usize = 64 * 1024;
+
+/// Bytes stripped before CurseForge fingerprinting: `\t`, `\n`, `\r` and space.
+#[inline]
+fn is_curseforge_whitespace(b: u8) -> bool {
+    b == 9 || b == 10 || b == 13 || b == 32
 }
 
 /// Computes the exact CurseForge MurmurHash2 (32-bit, seed = 1, m = 0x5bd1e995, r = 24)
@@ -61,9 +73,38 @@ pub fn compute_curseforge_murmur2(data: &[u8]) -> u32 {
     let filtered: Vec<u8> = data
         .iter()
         .copied()
-        .filter(|&b| b != 9 && b != 10 && b != 13 && b != 32)
+        .filter(|&b| !is_curseforge_whitespace(b))
         .collect();
+    murmur2_fold(&filtered)
+}
 
+/// Streaming counterpart of [`compute_curseforge_murmur2`]: hashes `r` in 64 KiB chunks so
+/// the unfiltered file is never resident. The result is byte-for-byte identical to the
+/// slice version.
+///
+/// MurmurHash2 mixes the *filtered* length into its seed (`1 ^ len`), so blocks can only be
+/// folded once the stream ends; the whitespace-stripped bytes are retained (a single
+/// allocation, smaller than the source) instead of the two buffers the slice path needs.
+pub fn compute_curseforge_murmur2_reader(r: &mut impl Read) -> std::io::Result<u32> {
+    let mut filtered: Vec<u8> = Vec::new();
+    let mut chunk = vec![0u8; HASH_CHUNK];
+    loop {
+        let n = r.read(&mut chunk)?;
+        if n == 0 {
+            break;
+        }
+        filtered.extend(
+            chunk[..n]
+                .iter()
+                .copied()
+                .filter(|&b| !is_curseforge_whitespace(b)),
+        );
+    }
+    Ok(murmur2_fold(&filtered))
+}
+
+/// Folds an already whitespace-stripped buffer with CurseForge's MurmurHash2 variant.
+fn murmur2_fold(filtered: &[u8]) -> u32 {
     let m: u32 = 0x5bd1e995;
     let r: u32 = 24;
 
@@ -161,23 +202,38 @@ fn read_entry_text<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> O
 
 /// Parses mod metadata from zip archive bytes of a jar file.
 pub fn parse_mod_metadata(bytes: &[u8], fallback_name: &str) -> ModMetadata {
-    let cursor = Cursor::new(bytes);
-    let mut archive = match ZipArchive::new(cursor) {
-        Ok(a) => a,
-        Err(_) => {
-            return ModMetadata {
-                mod_id: fallback_name.to_string(),
-                name: fallback_name.to_string(),
-                version: String::new(),
-                description: None,
-                authors: Vec::new(),
-                loader: "Unknown".to_string(),
-            };
-        }
-    };
+    match ZipArchive::new(Cursor::new(bytes)) {
+        Ok(mut archive) => parse_archive_metadata(&mut archive, fallback_name),
+        Err(_) => fallback_metadata(fallback_name),
+    }
+}
 
+/// Parses mod metadata straight from a jar on disk, reading only the handful of entries that
+/// carry metadata. Returns `None` when the file cannot be opened or is not a zip archive.
+pub fn parse_mod_metadata_path(path: &Path, fallback_name: &str) -> Option<ModMetadata> {
+    let file = fs::File::open(path).ok()?;
+    let mut archive = ZipArchive::new(file).ok()?;
+    Some(parse_archive_metadata(&mut archive, fallback_name))
+}
+
+/// Metadata for a jar whose format could not be recognised (or could not be opened).
+fn fallback_metadata(fallback_name: &str) -> ModMetadata {
+    ModMetadata {
+        mod_id: fallback_name.to_string(),
+        name: fallback_name.to_string(),
+        version: String::new(),
+        description: None,
+        authors: Vec::new(),
+        loader: "Unknown".to_string(),
+    }
+}
+
+fn parse_archive_metadata<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    fallback_name: &str,
+) -> ModMetadata {
     // 1. Check fabric.mod.json
-    if let Some(text) = read_entry_text(&mut archive, "fabric.mod.json")
+    if let Some(text) = read_entry_text(archive, "fabric.mod.json")
         && let Ok(val) = serde_json::from_str::<serde_json::Value>(&text)
     {
         let id = val
@@ -224,7 +280,7 @@ pub fn parse_mod_metadata(bytes: &[u8], fallback_name: &str) -> ModMetadata {
     }
 
     // 2. Check quilt.mod.json
-    if let Some(text) = read_entry_text(&mut archive, "quilt.mod.json")
+    if let Some(text) = read_entry_text(archive, "quilt.mod.json")
         && let Ok(val) = serde_json::from_str::<serde_json::Value>(&text)
     {
         let ql = val.get("quilt_loader");
@@ -284,7 +340,7 @@ pub fn parse_mod_metadata(bytes: &[u8], fallback_name: &str) -> ModMetadata {
     };
 
     let toml_text = if !toml_entry_name.is_empty() {
-        read_entry_text(&mut archive, toml_entry_name)
+        read_entry_text(archive, toml_entry_name)
     } else {
         None
     };
@@ -318,7 +374,7 @@ pub fn parse_mod_metadata(bytes: &[u8], fallback_name: &str) -> ModMetadata {
 
         // Handle ${file.jarVersion} substitution from MANIFEST.MF
         if (version.contains("${file.jarVersion}") || version.is_empty())
-            && let Some(m_text) = read_entry_text(&mut archive, "META-INF/MANIFEST.MF")
+            && let Some(m_text) = read_entry_text(archive, "META-INF/MANIFEST.MF")
             && let Some(impl_ver) = get_manifest_attribute(&m_text, "Implementation-Version")
         {
             if version.is_empty() {
@@ -355,7 +411,7 @@ pub fn parse_mod_metadata(bytes: &[u8], fallback_name: &str) -> ModMetadata {
     }
 
     // 4. Check mcmod.info (legacy Forge)
-    if let Some(text) = read_entry_text(&mut archive, "mcmod.info")
+    if let Some(text) = read_entry_text(archive, "mcmod.info")
         && let Ok(val) = serde_json::from_str::<serde_json::Value>(&text)
     {
         let first_mod = if let Some(arr) = val.as_array() {
@@ -412,14 +468,20 @@ pub fn parse_mod_metadata(bytes: &[u8], fallback_name: &str) -> ModMetadata {
     }
 
     // 5. Fallback
-    ModMetadata {
-        mod_id: fallback_name.to_string(),
-        name: fallback_name.to_string(),
-        version: String::new(),
-        description: None,
-        authors: Vec::new(),
-        loader: "Unknown".to_string(),
-    }
+    fallback_metadata(fallback_name)
+}
+
+/// Number of hashes sent per Modrinth `version_files` request.
+pub const MODRINTH_LOOKUP_BATCH: usize = 100;
+
+/// How long a failed Modrinth project-id lookup is remembered before retrying.
+const PROJECT_LOOKUP_TTL_SECS: u64 = 6 * 3600;
+
+fn current_timestamp_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 fn load_cache() -> HashMap<String, LocalModCacheItem> {
@@ -437,6 +499,73 @@ fn save_cache(cache: &HashMap<String, LocalModCacheItem>) {
     if let Ok(json) = serde_json::to_string(cache) {
         let _ = fs::write(&cache_file, json);
     }
+}
+
+/// SHA1s of `mods` whose Modrinth project id should be resolved now: hashes never looked up,
+/// and hashes whose last lookup found nothing and is older than six hours. Already-resolved
+/// mods are skipped (a project id never changes for a given SHA1).
+pub fn mods_needing_project_lookup(mods: &[LocalModInfo]) -> Vec<String> {
+    if mods.is_empty() {
+        return Vec::new();
+    }
+    let cache = load_cache();
+    let now = current_timestamp_secs();
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut pending = Vec::new();
+    for m in mods {
+        if m.project_id.is_some() || m.sha1.is_empty() || !seen.insert(m.sha1.as_str()) {
+            continue;
+        }
+        let expired = match cache.get(&m.path) {
+            Some(item) => now.saturating_sub(item.cached_at_secs) >= PROJECT_LOOKUP_TTL_SECS,
+            None => true,
+        };
+        if expired {
+            pending.push(m.sha1.clone());
+        }
+    }
+    pending
+}
+
+/// Records the outcome of the Modrinth lookups for `lookups` (`sha1 -> project id`, a `None`
+/// value meaning "looked up, not on Modrinth"), refreshing the six-hour retry window.
+pub fn record_project_ids(lookups: &HashMap<String, Option<String>>) {
+    if lookups.is_empty() {
+        return;
+    }
+    let mut cache = load_cache();
+    let now = current_timestamp_secs();
+    let mut modified = false;
+    for item in cache.values_mut() {
+        if let Some(project_id) = lookups.get(&item.sha1) {
+            item.project_id = project_id.clone();
+            item.cached_at_secs = now;
+            modified = true;
+        }
+    }
+    if modified {
+        save_cache(&cache);
+    }
+}
+
+/// Streams a jar from disk to compute its SHA1 (64 KiB reads) and CurseForge fingerprint
+/// without ever holding the whole file.
+fn hash_file(path: &Path) -> std::io::Result<(String, u32)> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = Sha1::new();
+    let mut buf = vec![0u8; HASH_CHUNK];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    let sha1 = hex::encode(hasher.finalize());
+
+    file.seek(std::io::SeekFrom::Start(0))?;
+    let murmur2 = compute_curseforge_murmur2_reader(&mut file)?;
+    Ok((sha1, murmur2))
 }
 
 /// Scans the given `mods_dir` for `.jar` and `.jar.disabled` files, parsing metadata,
@@ -506,15 +635,10 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
             continue;
         }
 
-        let bytes = match fs::read(&path) {
-            Ok(b) => b,
+        let (sha1, murmur2) = match hash_file(&path) {
+            Ok(hashes) => hashes,
             Err(_) => continue,
         };
-
-        let mut hasher = Sha1::new();
-        hasher.update(&bytes);
-        let sha1 = hex::encode(hasher.finalize());
-        let murmur2 = compute_curseforge_murmur2(&bytes);
 
         let fallback_name = if let Some(stem) = file_name.strip_suffix(".jar.disabled") {
             stem
@@ -524,7 +648,8 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
             &file_name
         };
 
-        let mod_meta = parse_mod_metadata(&bytes, fallback_name);
+        let mod_meta = parse_mod_metadata_path(&path, fallback_name)
+            .unwrap_or_else(|| fallback_metadata(fallback_name));
 
         let cache_item = LocalModCacheItem {
             mod_id: mod_meta.mod_id.clone(),
@@ -539,6 +664,7 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
             mtime_secs,
             project_id: None,
             update_file: None,
+            cached_at_secs: 0,
         };
 
         cache.insert(path_key.clone(), cache_item);
@@ -745,10 +871,12 @@ pub async fn check_local_mods_updates(
 
     // Update disk cache with identified project_id and update_file
     let mut cache = load_cache();
+    let now_secs = current_timestamp_secs();
     for m in &mods {
         if let Some(entry) = cache.get_mut(&m.path) {
             entry.project_id = m.project_id.clone();
             entry.update_file = m.update_file.clone();
+            entry.cached_at_secs = now_secs;
         }
     }
     save_cache(&cache);

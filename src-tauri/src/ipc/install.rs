@@ -7,8 +7,8 @@ use mclr_core::{AppError, SettingsStore, TaskCenter};
 use mclr_game::gamedir::resolve_game_dir;
 use mclr_game::instance::classify_instance;
 use mclr_game::{
-    VersionCompatInfo, VersionManifestList, compute_version_compat, fetch_version_manifest,
-    install_vanilla as game_install_vanilla, load_resolved_version_json,
+    RepairMode, VersionCompatInfo, VersionManifestList, compute_version_compat,
+    fetch_version_manifest, install_vanilla as game_install_vanilla, load_resolved_version_json,
     repair_instance as game_repair_instance,
 };
 use mclr_loaders::{InstallEnv, InstallRequest};
@@ -314,6 +314,7 @@ pub async fn install_repair(
             &mc_folder,
             &instance_id,
             Some((&tc, &tid)),
+            RepairMode::Full,
         )
         .await
         {

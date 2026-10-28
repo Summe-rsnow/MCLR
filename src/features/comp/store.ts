@@ -62,10 +62,24 @@ export const useCompStore = defineStore('comp', () => {
     }
   }
 
+  // Favourite lookup set: one key per (platform, projectId) and per (platform, slug).
+  // Membership is then O(1) instead of a linear scan per rendered row, and is exactly
+  // equivalent to the previous `f.projectId === x || f.slug === x` comparison.
+  const favoriteKeys = computed(() => {
+    const keys = new Set<string>()
+    for (const f of favorites.value) {
+      keys.add(`${f.platform}:${f.projectId}`)
+      keys.add(`${f.platform}:${f.slug}`)
+    }
+    return keys
+  })
+
+  function hasFavorite(pPlatform: CompPlatform | string, idOrSlug: string): boolean {
+    return favoriteKeys.value.has(`${pPlatform}:${idOrSlug}`)
+  }
+
   function isFavorite(pPlatform: CompPlatform | string, idOrSlug: string): boolean {
-    return favorites.value.some(
-      (f) => f.platform === pPlatform && (f.projectId === idOrSlug || f.slug === idOrSlug),
-    )
+    return hasFavorite(pPlatform, idOrSlug)
   }
 
   async function toggleFavorite(project: CompProject | CompFavoriteEntry): Promise<boolean> {
@@ -291,6 +305,7 @@ export const useCompStore = defineStore('comp', () => {
     filesLoading,
     loadFavorites,
     isFavorite,
+    hasFavorite,
     toggleFavorite,
     search,
     partialError,

@@ -24,64 +24,59 @@ const activeCount = computed(() => tasksStore.activeTasksCount)
 const aggregateSpeed = computed(() => formatSpeed(tasksStore.aggregateSpeedBps))
 const progressPercent = computed(() => Math.round(tasksStore.aggregateProgress * 100))
 
-// Tweened active count & progress percentage (~300ms rAF interpolation)
+// Tweened active count & progress percentage.
+// A single persistent rAF loop eases both values toward their targets instead of
+// cancelling/restarting a fresh tween on every store event (download progress fires
+// per chunk, so the old restart-per-event tween never settled).
 const displayedCount = ref(activeCount.value)
-const displayedProgress = ref(progressPercent.value)
+const displayedProgress = ref(Math.round(progressPercent.value))
 
-let countRaf: number | null = null
-let progressRaf: number | null = null
+let rafId: number | null = null
+let currentProgress = progressPercent.value
+let targetProgress = progressPercent.value
+let currentCount = activeCount.value
+let targetCount = activeCount.value
 
-function tweenValue(
-  from: number,
-  to: number,
-  duration: number,
-  onUpdate: (val: number) => void,
-): number {
-  if (from === to) {
-    onUpdate(to)
-    return 0
+const TWEEN_FACTOR = 0.25
+const SNAP_EPSILON = 0.5
+
+function stepTween(): void {
+  currentProgress += (targetProgress - currentProgress) * TWEEN_FACTOR
+  const progressSettled = Math.abs(targetProgress - currentProgress) < SNAP_EPSILON
+  if (progressSettled) currentProgress = targetProgress
+  displayedProgress.value = Math.round(currentProgress)
+
+  currentCount += (targetCount - currentCount) * TWEEN_FACTOR
+  const countSettled = Math.abs(targetCount - currentCount) < SNAP_EPSILON
+  if (countSettled) currentCount = targetCount
+  displayedCount.value = Math.round(currentCount)
+
+  if (progressSettled && countSettled) {
+    rafId = null
+    return
   }
-  const start = performance.now()
-  function tick(now: number) {
-    const elapsed = now - start
-    const progress = Math.min(1, elapsed / duration)
-    // Ease out cubic
-    const ease = 1 - Math.pow(1 - progress, 3)
-    const current = from + (to - from) * ease
-    onUpdate(Math.round(current))
-    if (progress < 1) {
-      return requestAnimationFrame(tick)
-    }
-    return 0
-  }
-  return requestAnimationFrame(tick)
+  rafId = requestAnimationFrame(stepTween)
 }
 
-watch(
-  activeCount,
-  (newVal, oldVal) => {
-    if (countRaf) cancelAnimationFrame(countRaf)
-    countRaf = tweenValue(oldVal ?? newVal, newVal, 300, (val) => {
-      displayedCount.value = val
-    })
-  },
-  { immediate: true },
-)
+function ensureLoop(): void {
+  if (rafId === null) rafId = requestAnimationFrame(stepTween)
+}
 
-watch(
-  progressPercent,
-  (newVal, oldVal) => {
-    if (progressRaf) cancelAnimationFrame(progressRaf)
-    progressRaf = tweenValue(oldVal ?? newVal, newVal, 300, (val) => {
-      displayedProgress.value = val
-    })
-  },
-  { immediate: true },
-)
+watch(activeCount, (newVal) => {
+  targetCount = newVal
+  ensureLoop()
+})
+
+watch(progressPercent, (newVal) => {
+  targetProgress = newVal
+  ensureLoop()
+})
 
 onUnmounted(() => {
-  if (countRaf) cancelAnimationFrame(countRaf)
-  if (progressRaf) cancelAnimationFrame(progressRaf)
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId)
+    rafId = null
+  }
 })
 
 function navigateToTasks() {

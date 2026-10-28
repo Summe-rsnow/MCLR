@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLogsStore } from '../store'
 import type { LogLevel } from '../../../ipc/client'
@@ -55,24 +55,33 @@ function onScroll(e: Event) {
   isAtBottom.value = target.scrollHeight - target.scrollTop - target.clientHeight < 40
 }
 
+let scrollRaf: number | null = null
+
 function scrollToBottom() {
   if (!logsStore.autoScroll || !isAtBottom.value || !logContainer.value) return
-  nextTick(() => {
-    if (logContainer.value && isAtBottom.value) {
-      logContainer.value.scrollTop = logContainer.value.scrollHeight
-    }
+  if (typeof requestAnimationFrame === 'undefined') {
+    logContainer.value.scrollTop = logContainer.value.scrollHeight
+    return
+  }
+  if (scrollRaf !== null) return
+  // One rAF, one scrollHeight read, one write: no second forced layout after nextTick
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = null
+    const el = logContainer.value
+    if (!el || !isAtBottom.value) return
+    el.scrollTop = el.scrollHeight
   })
 }
 
-watch(
-  () => logsStore.logs.length,
-  () => {
-    scrollToBottom()
-  },
-)
+watch(() => logsStore.flushTick, scrollToBottom)
 
-onMounted(() => {
-  scrollToBottom()
+onMounted(scrollToBottom)
+
+onUnmounted(() => {
+  if (scrollRaf !== null && typeof cancelAnimationFrame !== 'undefined') {
+    cancelAnimationFrame(scrollRaf)
+    scrollRaf = null
+  }
 })
 
 function getLevelBadgeVariant(

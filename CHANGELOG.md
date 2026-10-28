@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.27] - 2026-10-28
+
+Performance + resource iteration. No feature was added to the game pipeline; the
+work removed per-frame and per-call work while keeping the UI pixel-identical.
+
+### Added
+- **Settings → 赞助支持**: WeChat / Alipay QR codes served from `public/sponsor/`
+  (static files, so `img-src 'self'` already covers them), placed last in the
+  settings sub-navigation.
+- **Explicit placeholders instead of failures**: 检查更新 and the About page's
+  repository / feedback actions render a disabled control with a 「敬请期待」
+  badge when the build has no signed update feed, and never call the command.
+
+### Changed
+- **Logs panel is O(new lines) instead of O(10 000)**: `shallowRef` array with a
+  monotonic `seq`, incremental filtering while the filter key is unchanged, a
+  binary search trim at the cap, and one `scrollHeight` read per flush. Measured
+  per-flush cost of the append path: 8.67 ms → 0.034 ms (254×).
+- **Skeleton shimmer runs on the compositor**: the `background-position`
+  keyframes became a `translateX` layer whose geometry is exactly equivalent
+  (verified across 13 phases × light/dark; worst phase mean 0.256/255).
+- **Fewer forced layouts and repaints**: sidebar pill geometry updates at most
+  once per animation frame, the ambient drift pauses while scrolling, theme
+  writes coalesce into a single frame with a memoized palette, the task progress
+  tween follows a target instead of restarting per event, and favourite lookups
+  plus version classification are memoized.
+- **`transition-all` narrowed** to the properties that actually change (progress
+  fill, card, sidebar pill).
+- **Startup repair is skipped when nothing changed**: a `.mclr-verified.json`
+  fingerprint (version JSON mtime/length + asset index id) short-circuits
+  `repair_instance` on the launch path (`RepairMode::Fast`); 检查与修复 always
+  runs the full pass.
+- **Download engine**: bounded worker pool instead of one task per file,
+  event-driven progress instead of an O(n) polling sweep, no `Range` probe when
+  the size is known, and hashes computed while streaming instead of re-reading
+  finished files.
+- **Mod metadata**: Modrinth lookups batched per 100 sha1, one metadata cache
+  (`localmods.json` no longer written/read), jars parsed and hashed straight from
+  disk instead of being read into memory.
+- **Cheaper background work**: `java_scan` returns the cache without rescanning,
+  instance sorting precomputes its keys instead of doing IO in the comparator,
+  screenshot pages are cached by directory mtime, the launcher log is read from
+  the tail only, settings reads hand out `Arc` snapshots instead of deep clones,
+  blocking IO moved into `spawn_blocking` (asset index, spec verification, loader
+  installers), and the instance scanner holds its lock only around the cache.
+- Save icons are no longer base64-inlined into `SaveInfo`.
+
+### Fixed
+- Concurrent first-run agent extraction truncated a shared temp file, making
+  `agents_apply_to_instances_that_inherit_their_parent_json` flaky (~1 in 5 runs).
+- `{detail}` placeholders in error copy rendered literally because the frontend
+  never forwarded `AppError.detail` into the interpolation parameters.
+
+### Removed
+- **Project license**: `LICENSE`, every Cargo `license` field, the
+  `package.json` entry and the About badge. No license is granted at this time;
+  third-party components keep their own terms in `THIRD_PARTY_NOTICES.md`.
+- **GitHub-dependent update wiring**: the release-feed fallback, repository /
+  issue-tracker links and the startup auto-check are gone until a repository
+  exists; the signed in-app update path is untouched.
+
 ## [0.0.26] - 2026-10-28
 
 ### Added

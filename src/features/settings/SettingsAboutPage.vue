@@ -1,23 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { openUrl } from '@tauri-apps/plugin-opener'
 import { MCard, MSection, MButton, MBadge, MCollapse } from '../../ui'
 
 const { t } = useI18n()
 
 import pkg from '../../../package.json'
 const appVersion = `v${pkg.version}`
-const repoUrl = 'https://github.com/mclr-dev/mclr'
-const issuesUrl = 'https://github.com/mclr-dev/mclr/issues'
-
-async function openExternal(url: string) {
-  try {
-    await openUrl(url)
-  } catch {
-    window.open(url, '_blank')
-  }
-}
 
 // Collapsible FAQ states (account expanded by default)
 const openFaqs = ref<Record<string, boolean>>({
@@ -47,7 +36,6 @@ function toggleFaq(id: string) {
             <div class="flex items-center gap-2.5 select-text">
               <h2 class="text-xl font-bold text-fg">MCLR</h2>
               <MBadge variant="primary">{{ appVersion }}</MBadge>
-              <MBadge variant="neutral">Apache-2.0</MBadge>
             </div>
             <p class="text-xs text-fg-muted max-w-lg leading-relaxed">
               {{ t('settings.about.description') }}
@@ -56,9 +44,12 @@ function toggleFaq(id: string) {
         </div>
 
         <div class="flex items-center gap-2.5 shrink-0 w-full sm:w-auto">
-          <MButton variant="tonal" size="sm" icon="i-lucide-github" @click="openExternal(repoUrl)">
+          <MButton variant="tonal" size="sm" icon="i-lucide-github" disabled>
             {{ t('settings.about.githubRepo') }}
           </MButton>
+          <MBadge variant="warning" size="sm" data-testid="github-coming-soon">
+            {{ t('settings.about.comingSoon') }}
+          </MBadge>
         </div>
       </div>
     </MCard>
@@ -81,16 +72,13 @@ function toggleFaq(id: string) {
           </ul>
         </div>
 
-        <div>
-          <MButton
-            variant="primary"
-            size="sm"
-            icon="i-lucide-external-link"
-            data-testid="open-github-btn"
-            @click="openExternal(issuesUrl)"
-          >
+        <div class="flex flex-wrap items-center gap-2.5">
+          <MButton variant="primary" size="sm" icon="i-lucide-external-link" disabled>
             {{ t('settings.about.feedback.openGithub') }}
           </MButton>
+          <MBadge variant="warning" size="sm" data-testid="issues-coming-soon">
+            {{ t('settings.about.comingSoon') }}
+          </MBadge>
         </div>
       </div>
     </MSection>

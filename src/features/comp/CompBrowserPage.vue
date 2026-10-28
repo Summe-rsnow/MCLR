@@ -240,7 +240,7 @@ function onPlatformChange(val: string | number): void {
 }
 
 async function handleToggleFavorite(project: CompProject | CompFavoriteEntry) {
-  const isFav = compStore.isFavorite(
+  const isFav = compStore.hasFavorite(
     project.platform,
     'downloads' in project ? project.id : project.projectId,
   )
@@ -490,7 +490,7 @@ watch(
             v-for="project in compStore.hits"
             :key="project.platform + '-' + project.id"
             :project="project"
-            :is-favorite="compStore.isFavorite(project.platform, project.id)"
+            :is-favorite="compStore.hasFavorite(project.platform, project.id)"
             :active-tab="compStore.activeTab"
             @click="onProjectCardClick"
             @toggle-favorite="handleToggleFavorite"

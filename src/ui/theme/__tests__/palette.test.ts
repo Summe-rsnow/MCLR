@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { wcagContrast } from 'culori'
 import { generatePalette, SEED_PRESETS, applyTheme } from '../index'
 
+function nextFrame(): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>()
+  requestAnimationFrame(() => resolve())
+  return promise
+}
+
 function rgbStrToCulori(rgbStr: string) {
   const [r, g, b] = rgbStr
     .trim()
@@ -47,8 +53,9 @@ describe('Tonal Layers Palette & WCAG Contrast', () => {
     }
   }
 
-  it('writes all CSS variables and mode/material dataset attributes via applyTheme', () => {
+  it('writes all CSS variables and mode/material dataset attributes via applyTheme', async () => {
     applyTheme({ seed: '#3b82f6', mode: 'light', material: 'flat' })
+    await nextFrame()
     const root = document.documentElement
     expect(root.dataset.mode).toBe('light')
     expect(root.dataset.material).toBe('flat')
@@ -69,8 +76,24 @@ describe('Tonal Layers Palette & WCAG Contrast', () => {
     expect(root.style.getPropertyValue('--shadow-1')).toContain('rgb(var(--shadow)')
 
     applyTheme({ seed: '#6366f1', mode: 'dark', material: 'glass' })
+    await nextFrame()
     expect(root.dataset.mode).toBe('dark')
     expect(root.dataset.material).toBe('glass')
     expect(root.style.getPropertyValue('--ambient-strength')).toBe('1')
+  })
+
+  it('coalesces applyTheme calls into one frame, last config wins', async () => {
+    applyTheme({ seed: '#f43f5e', mode: 'light', material: 'flat' })
+    applyTheme({ seed: '#14b8a6', mode: 'dark', material: 'glass' })
+    await nextFrame()
+
+    const root = document.documentElement
+    expect(root.dataset.mode).toBe('dark')
+    expect(root.dataset.material).toBe('glass')
+    expect(root.style.getPropertyValue('--ambient-strength')).toBe('1')
+    expect(root.style.getPropertyValue('--shadow')).toBe('0 0 0')
+    expect(root.style.getPropertyValue('--c-primary')).toBe(
+      generatePalette('#14b8a6', 'dark').primary,
+    )
   })
 })

@@ -1,6 +1,7 @@
 //! Community platform (Modrinth / CurseForge) IPC commands.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use mclr_comp::{
@@ -226,42 +227,40 @@ pub async fn comp_pick_target(
             }
         }
 
-        let mut compatible: Vec<&mclr_game::instance::InstanceInfo> =
-            instances.iter().filter(|i| is_compatible(i)).collect();
+        // One IO pass per instance (resolve dir + metadata + mod count), then the
+        // ordering itself is pure in-memory comparison.
+        let mut candidates: Vec<(
+            &mclr_game::instance::InstanceInfo,
+            PathBuf,
+            Option<std::time::SystemTime>,
+            usize,
+        )> = instances
+            .iter()
+            .filter(|i| is_compatible(i))
+            .map(|inst| {
+                let dir =
+                    mclr_game::gamedir::resolve_game_dir(&mc_folder, &inst.id, &settings.game);
+                let mtime = std::fs::metadata(&dir).and_then(|m| m.modified()).ok();
+                let mod_count = std::fs::read_dir(dir.join("mods"))
+                    .map(|r| r.count())
+                    .unwrap_or(0);
+                (inst, dir, mtime, mod_count)
+            })
+            .collect();
 
-        if compatible.is_empty() {
+        if candidates.is_empty() {
             return Ok(CompPickTargetResult {
                 instance_id: None,
                 dir: None,
             });
         }
 
-        compatible.sort_by(|a, b| {
-            let dir_a = mclr_game::gamedir::resolve_game_dir(&mc_folder, &a.id, &settings.game);
-            let dir_b = mclr_game::gamedir::resolve_game_dir(&mc_folder, &b.id, &settings.game);
+        candidates.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| b.3.cmp(&a.3)));
 
-            let mtime_a = std::fs::metadata(&dir_a).and_then(|m| m.modified()).ok();
-            let mtime_b = std::fs::metadata(&dir_b).and_then(|m| m.modified()).ok();
-
-            match mtime_b.cmp(&mtime_a) {
-                std::cmp::Ordering::Equal => {
-                    let count_a = std::fs::read_dir(dir_a.join("mods"))
-                        .map(|r| r.count())
-                        .unwrap_or(0);
-                    let count_b = std::fs::read_dir(dir_b.join("mods"))
-                        .map(|r| r.count())
-                        .unwrap_or(0);
-                    count_b.cmp(&count_a)
-                }
-                ord => ord,
-            }
-        });
-
-        let chosen = compatible[0];
-        let dir = mclr_game::gamedir::resolve_game_dir(&mc_folder, &chosen.id, &settings.game);
+        let (chosen, chosen_dir, _, _) = candidates.swap_remove(0);
         Ok::<_, AppError>(CompPickTargetResult {
             instance_id: Some(chosen.id.clone()),
-            dir: Some(dir.to_string_lossy().to_string()),
+            dir: Some(chosen_dir.to_string_lossy().to_string()),
         })
     })
     .await

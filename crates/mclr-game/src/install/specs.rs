@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::SystemTime;
 
 use mclr_core::paths;
@@ -9,6 +10,7 @@ use mclr_core::settings::SourcePriority;
 use mclr_net::{DownloadSpec, SourceKind, race_get_bytes, rewrite_url};
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
+use tracing::error;
 use url::Url;
 
 use crate::error::GameError;
@@ -25,6 +27,70 @@ struct AssetIndexObject {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AssetIndexFile {
     pub objects: HashMap<String, AssetIndexObject>,
+}
+
+/// Memo table type: `index path -> (mtime_ms, parsed index)`.
+type AssetIndexMemo = Mutex<HashMap<String, (u64, Arc<AssetIndexFile>)>>;
+
+/// Parsed asset indexes keyed by absolute index path, tagged with the file mtime used
+/// to validate the entry. A 1.20 asset index is several megabytes of JSON and is parsed
+/// on every repair/verify pass; keeping the parsed map warm removes both the re-read and
+/// the re-parse for the whole process lifetime.
+static ASSET_INDEX_MEMO: LazyLock<AssetIndexMemo> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Upper bound on memo entries; reaching it clears the whole map (cheap, and the next
+/// call simply reparses once).
+const ASSET_INDEX_MEMO_MAX_ENTRIES: usize = 4;
+
+fn file_mtime_ms(path: &Path) -> Option<u64> {
+    std::fs::metadata(path)
+        .ok()?
+        .modified()
+        .ok()?
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_millis() as u64)
+}
+
+fn remember_asset_index(path: &Path, index: &Arc<AssetIndexFile>) {
+    let Some(mtime_ms) = file_mtime_ms(path) else {
+        return;
+    };
+    let Ok(mut memo) = ASSET_INDEX_MEMO.lock() else {
+        return;
+    };
+    if memo.len() > ASSET_INDEX_MEMO_MAX_ENTRIES {
+        memo.clear();
+    }
+    memo.insert(
+        path.to_string_lossy().to_string(),
+        (mtime_ms, Arc::clone(index)),
+    );
+}
+
+fn load_asset_index_memoized(path: &Path) -> Option<Arc<AssetIndexFile>> {
+    let mtime_ms = file_mtime_ms(path)?;
+    let key = path.to_string_lossy().to_string();
+
+    if let Ok(memo) = ASSET_INDEX_MEMO.lock() {
+        if let Some((cached_mtime_ms, index)) = memo.get(&key) {
+            if *cached_mtime_ms == mtime_ms {
+                return Some(Arc::clone(index));
+            }
+        }
+    }
+
+    let bytes = std::fs::read(path).ok()?;
+    let index = Arc::new(serde_json::from_slice::<AssetIndexFile>(&bytes).ok()?);
+
+    if let Ok(mut memo) = ASSET_INDEX_MEMO.lock() {
+        if memo.len() > ASSET_INDEX_MEMO_MAX_ENTRIES {
+            memo.clear();
+        }
+        memo.insert(key, (mtime_ms, Arc::clone(&index)));
+    }
+
+    Some(index)
 }
 
 /// Convert Maven coordinate `group:artifact:version[:classifier][@ext]` into relative path.
@@ -230,45 +296,65 @@ pub async fn collect_version_download_specs(
             .join("indexes")
             .join(format!("{}.json", asset_index_info.id));
 
-        // If index doesn't exist or is invalid, download it first or read existing
-        let index_bytes = if !file_is_verified(
-            &index_dest,
-            asset_index_info.size,
-            asset_index_info.sha1.as_deref(),
-        ) {
-            if let Some(url_str) = &asset_index_info.url {
-                if let Ok(parsed_url) = Url::parse(url_str) {
-                    let bytes =
-                        race_get_bytes(client, &parsed_url, SourceKind::VersionMeta, priority)
-                            .await?;
-                    if let Some(parent) = index_dest.parent() {
-                        let _ = std::fs::create_dir_all(parent);
-                    }
-                    let _ = std::fs::write(&index_dest, &bytes);
-                    Some(bytes)
-                } else {
-                    None
-                }
+        // Everything below touches a 3-4 MB JSON file, hashes it, or expands ~4000
+        // object entries: none of that belongs on an async worker.
+        let probe_dest = index_dest.clone();
+        let expected_size = asset_index_info.size;
+        let expected_sha1 = asset_index_info.sha1.clone();
+        let cached_index = tokio::task::spawn_blocking(move || {
+            if file_is_verified(&probe_dest, expected_size, expected_sha1.as_deref()) {
+                load_asset_index_memoized(&probe_dest)
             } else {
                 None
             }
-        } else {
-            std::fs::read(&index_dest).ok()
+        })
+        .await
+        .map_err(|e| GameError::Io(std::io::Error::other(e.to_string())))?;
+
+        // If the index doesn't exist or is invalid, download it first; otherwise the
+        // memoized parse above is authoritative.
+        let asset_index = match cached_index {
+            Some(index) => Some(index),
+            None => match asset_index_info.url.clone() {
+                Some(url_str) => match Url::parse(&url_str) {
+                    Ok(parsed_url) => {
+                        let bytes =
+                            race_get_bytes(client, &parsed_url, SourceKind::VersionMeta, priority)
+                                .await?;
+                        if let Some(parent) = index_dest.parent() {
+                            let _ = std::fs::create_dir_all(parent);
+                        }
+                        let _ = std::fs::write(&index_dest, &bytes);
+                        let parse_dest = index_dest.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let parsed = serde_json::from_slice::<AssetIndexFile>(&bytes)
+                                .ok()
+                                .map(Arc::new);
+                            if let Some(index) = &parsed {
+                                remember_asset_index(&parse_dest, index);
+                            }
+                            parsed
+                        })
+                        .await
+                        .map_err(|e| GameError::Io(std::io::Error::other(e.to_string())))?
+                    }
+                    Err(_) => None,
+                },
+                None => None,
+            },
         };
 
-        if let Some(bytes) = index_bytes {
-            if let Ok(asset_index) = serde_json::from_slice::<AssetIndexFile>(&bytes) {
+        if let Some(asset_index) = asset_index {
+            let folder = mc_folder.to_path_buf();
+            specs = tokio::task::spawn_blocking(move || {
+                let mut specs = specs;
                 for object in asset_index.objects.values() {
                     let hash = &object.hash;
                     if hash.len() < 2 {
                         continue;
                     }
                     let sub = &hash[0..2];
-                    let object_dest = mc_folder
-                        .join("assets")
-                        .join("objects")
-                        .join(sub)
-                        .join(hash);
+                    let object_dest = folder.join("assets").join("objects").join(sub).join(hash);
 
                     let obj_url = format!("https://resources.download.minecraft.net/{sub}/{hash}");
                     let urls = build_urls(&obj_url, SourceKind::Assets, priority);
@@ -284,7 +370,10 @@ pub async fn collect_version_download_specs(
                         });
                     }
                 }
-            }
+                specs
+            })
+            .await
+            .map_err(|e| GameError::Io(std::io::Error::other(e.to_string())))?;
         }
     }
 
@@ -470,8 +559,17 @@ pub(crate) fn calculate_file_sha1(path: &Path) -> Option<String> {
     Some(hex::encode(hasher.finalize()))
 }
 
-pub(crate) async fn verify_specs_cached(specs: Vec<DownloadSpec>) -> Vec<DownloadSpec> {
-    let mut cache = load_verified_cache();
+/// One entry awaiting a SHA1 hash: `(spec, cache key, size, mtime_ms, expected sha1)`.
+type PendingHash = (DownloadSpec, String, u64, u64, String);
+
+/// Blocking half of [`verify_specs_cached`]: loads the cache and stats every spec.
+///
+/// Kept separate so the whole thing can run on the blocking pool — a real instance has
+/// ~4000 paths to stat plus a JSON cache read, which must not stall an async worker.
+fn scan_specs_blocking(
+    specs: Vec<DownloadSpec>,
+) -> (Vec<DownloadSpec>, Vec<PendingHash>, VerifiedCache) {
+    let cache = load_verified_cache();
     let mut unverified = Vec::new();
     let mut candidates_to_hash = Vec::new();
 
@@ -514,6 +612,21 @@ pub(crate) async fn verify_specs_cached(specs: Vec<DownloadSpec>) -> Vec<Downloa
         }
     }
 
+    (unverified, candidates_to_hash, cache)
+}
+
+pub(crate) async fn verify_specs_cached(specs: Vec<DownloadSpec>) -> Vec<DownloadSpec> {
+    let scanned = tokio::task::spawn_blocking(move || scan_specs_blocking(specs)).await;
+    let (mut unverified, candidates_to_hash, mut cache) = match scanned {
+        Ok(scanned) => scanned,
+        Err(e) => {
+            // The scan panicked, so the specs are gone; reporting "nothing to download"
+            // is the only non-destructive option left and the panic is logged above.
+            error!("Repair: file verification scan failed: {e}");
+            return Vec::new();
+        }
+    };
+
     if !candidates_to_hash.is_empty() {
         for batch in candidates_to_hash.chunks(64) {
             let tasks: Vec<_> = batch
@@ -550,7 +663,7 @@ pub(crate) async fn verify_specs_cached(specs: Vec<DownloadSpec>) -> Vec<Downloa
                 }
             }
         }
-        save_verified_cache(&cache);
+        let _ = tokio::task::spawn_blocking(move || save_verified_cache(&cache)).await;
     }
 
     unverified

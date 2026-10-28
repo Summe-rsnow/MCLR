@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { applyTheme, type ThemeMode, type MaterialMode, type ThemeConfig } from '../ui/theme'
+import {
+  applyTheme,
+  scheduleThemeFrame,
+  type ThemeMode,
+  type MaterialMode,
+  type ThemeConfig,
+} from '../ui/theme'
 import { ipcClient } from '../ipc/client'
 
 export type BackgroundMode = 'none' | 'image' | 'slideshow' | 'video'
@@ -130,6 +136,19 @@ export const useThemeStore = defineStore('theme', () => {
     }
   }
 
+  let typographyScheduled = false
+
+  // Theme variables and typography must never be observed half-applied, so the
+  // deferred write joins the pending theme frame (at most one per frame).
+  function scheduleTypography() {
+    if (typographyScheduled) return
+    typographyScheduled = true
+    scheduleThemeFrame(() => {
+      typographyScheduled = false
+      applyTypography()
+    })
+  }
+
   function setMotion(newMotion: MotionMode) {
     motion.value = newMotion
     applyMotion()
@@ -154,7 +173,7 @@ export const useThemeStore = defineStore('theme', () => {
       material: material.value,
     }
     applyTheme(config)
-    applyTypography()
+    scheduleTypography()
   }
 
   async function init() {

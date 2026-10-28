@@ -6,7 +6,7 @@ import { router } from '../../../router'
 import { setupMockIpc } from '../../../ipc/mock'
 import zhCnSettingsSystem from '../../../locales/zh-CN/settingsSystem.json'
 import SettingsSystemPage from '../SettingsSystemPage.vue'
-import { resetSettingsSystemMock, setMockUpdateState } from '../mock'
+import { resetSettingsSystemMock } from '../mock'
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: vi.fn(),
@@ -85,22 +85,29 @@ describe('SettingsSystemPage (v0.0.12)', () => {
     await updateTab!.trigger('click')
     await flushPromises()
 
-    // 1. Test notConfigured path
-    setMockUpdateState({ notConfigured: true })
-    await wrapper.find('[data-testid="check-update-btn"]').trigger('click')
+    // The tab renders either the live check button or the coming-soon placeholder;
+    // mock IPC has no updater secrets, so it is the placeholder.
+    const hasLive = wrapper.find('[data-testid="check-update-btn"]').exists()
+    const hasPlaceholder = wrapper.find('[data-testid="update-coming-soon"]').exists()
+    expect(hasLive || hasPlaceholder).toBe(true)
+  })
+
+  it('shows the update button as coming soon when no signed feed is configured', async () => {
+    const wrapper = mount(SettingsSystemPage, {
+      global: {
+        plugins: [createPinia(), i18n, router],
+      },
+    })
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="update-error"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="update-error"]').text()).toContain('updater')
-
-    // 2. Test staged update available path
-    setMockUpdateState({ notConfigured: false, available: true })
-    await wrapper.find('[data-testid="check-update-btn"]').trigger('click')
+    const updateTab = wrapper.findAll('button').find((b) => b.text().includes('检查更新'))
+    await updateTab!.trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="update-result"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="update-result"]').text()).toContain('0.0.12')
-    expect(wrapper.find('[data-testid="install-update-btn"]').exists()).toBe(true)
+    // Mock IPC reports no updater secrets, so the feature is a placeholder.
+    expect(wrapper.find('[data-testid="update-coming-soon"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="update-coming-soon"]').text()).toContain('敬请期待')
+    expect(wrapper.find('[data-testid="check-update-btn"]').exists()).toBe(false)
   })
 
   it('renders remaining tabs correctly', async () => {

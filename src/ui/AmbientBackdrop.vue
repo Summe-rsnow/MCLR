@@ -18,7 +18,22 @@ function onBlur() {
   isFocused.value = false
 }
 
-const paused = computed(() => isHidden.value || !isFocused.value || themeStore.motion !== 'full')
+// A 40s drift paused for 250ms while scrolling is imperceptible, and it keeps
+// scroll frames from paying for the backdrop animation as well.
+const scrolling = ref(false)
+let scrollTimer: ReturnType<typeof setTimeout> | undefined
+
+function markScroll() {
+  scrolling.value = true
+  clearTimeout(scrollTimer)
+  scrollTimer = setTimeout(() => {
+    scrolling.value = false
+  }, 250)
+}
+
+const paused = computed(
+  () => isHidden.value || !isFocused.value || themeStore.motion !== 'full' || scrolling.value,
+)
 
 onMounted(() => {
   if (typeof document !== 'undefined') {
@@ -27,6 +42,7 @@ onMounted(() => {
   if (typeof window !== 'undefined') {
     window.addEventListener('focus', onFocus)
     window.addEventListener('blur', onBlur)
+    window.addEventListener('scroll', markScroll, { capture: true, passive: true })
   }
 })
 
@@ -37,7 +53,9 @@ onUnmounted(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('focus', onFocus)
     window.removeEventListener('blur', onBlur)
+    window.removeEventListener('scroll', markScroll, { capture: true })
   }
+  clearTimeout(scrollTimer)
 })
 
 const noiseDataUri =

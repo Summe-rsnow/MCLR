@@ -13,6 +13,8 @@ const { t } = useI18n()
 const { formatError } = useErrorText()
 const toast = useToast()
 const route = useRoute()
+// Self-update stays a placeholder until the build ships signed-updater secrets.
+const updaterConfigured = ref(false)
 
 const validTabs = ['gameManage', 'misc', 'language', 'update'] as const
 type SystemTab = (typeof validTabs)[number]
@@ -107,6 +109,8 @@ async function loadSettings() {
       autoCheck.value = s.update.autoCheck
       announcementUrl.value = s.update.announcementUrl
     }
+    const secrets = await ipcClient.secretsStatus()
+    updaterConfigured.value = Boolean(secrets.updateEndpoint && secrets.updatePubkey)
   } catch {
     // Ignore in isolated test mounts
   }
@@ -382,6 +386,7 @@ onMounted(async () => {
         :installing-update="installingUpdate"
         :update-result="updateResult"
         :update-error="updateError"
+        :updater-configured="updaterConfigured"
         @check="checkForUpdate"
         @install="installUpdate"
         @change="saveUpdateSettings"

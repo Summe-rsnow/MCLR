@@ -390,3 +390,101 @@ async fn test_slow_chunk_splitting() {
     assert_eq!(downloaded_bytes.len(), total_size);
     assert_eq!(downloaded_bytes, full_data);
 }
+
+#[tokio::test]
+async fn test_concurrency_bounded() {
+    use std::sync::{Arc, Mutex};
+    use std::time::Instant;
+
+    const TOTAL: usize = 200;
+    const MAX_FILES: u32 = 4;
+    const HOLD: Duration = Duration::from_millis(25);
+
+    let server = MockServer::start().await;
+
+    // Every request is answered after `HOLD`, so a request stays in flight for at
+    // least that long. Recording arrival instants lets us derive the peak number of
+    // overlapping requests without racing against timer wake-ups.
+    let arrivals: Arc<Mutex<Vec<Instant>>> = Arc::new(Mutex::new(Vec::new()));
+    let recorder = Arc::clone(&arrivals);
+    Mock::given(method("GET"))
+        .respond_with(move |req: &wiremock::Request| {
+            recorder.lock().unwrap().push(Instant::now());
+
+            let index = req
+                .url
+                .path()
+                .trim_start_matches("/files/")
+                .trim_end_matches(".txt");
+            ResponseTemplate::new(200)
+                .set_delay(HOLD)
+                .set_body_string(format!("payload-{index}"))
+        })
+        .mount(&server)
+        .await;
+
+    let dir = tempdir().unwrap();
+    let settings = NetSettings {
+        max_concurrent_files: MAX_FILES,
+        ..NetSettings::default()
+    };
+    let downloader = Downloader::new(reqwest::Client::new(), settings);
+
+    let mut specs = Vec::new();
+    let mut expected = Vec::new();
+    for i in 0..TOTAL {
+        let payload = format!("payload-{i}");
+        let mut hasher = Sha1::new();
+        hasher.update(payload.as_bytes());
+        let expected_sha1 = hex::encode(hasher.finalize());
+
+        let dest = dir.path().join(format!("file-{i}.txt"));
+        let url = Url::parse(&format!("{}/files/{i}.txt", server.uri())).unwrap();
+        let size = payload.len() as u64;
+        expected.push((dest.clone(), payload));
+        specs.push(DownloadSpec {
+            urls: vec![url],
+            dest,
+            size: Some(size),
+            sha1: Some(expected_sha1),
+            sha256: None,
+            md5: None,
+        });
+    }
+
+    downloader
+        .download_many(specs, None)
+        .await
+        .expect("batch download 200 files");
+
+    let mut starts = arrivals.lock().unwrap().clone();
+    starts.sort();
+    assert_eq!(starts.len(), TOTAL, "every spec must reach the server");
+
+    // Peak overlap of the in-flight windows [arrival, arrival + HOLD).
+    let peak = starts
+        .iter()
+        .enumerate()
+        .map(|(i, start)| {
+            starts[i..]
+                .iter()
+                .filter(|other| **other - *start < HOLD)
+                .count()
+        })
+        .max()
+        .unwrap_or(0);
+
+    assert!(
+        peak <= MAX_FILES as usize,
+        "peak concurrent requests {peak} exceeded limit {MAX_FILES}"
+    );
+    assert!(
+        peak >= 2,
+        "requests never overlapped, the concurrency harness is not measuring anything"
+    );
+
+    for (dest, payload) in expected {
+        let bytes = tokio::fs::read(&dest).await.expect("file landed on disk");
+        assert_eq!(String::from_utf8(bytes).unwrap(), payload);
+    }
+}

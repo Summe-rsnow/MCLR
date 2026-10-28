@@ -55,9 +55,9 @@ pub fn scan_instances(mc_folder: &Path) -> Result<Vec<InstanceInfo>, GameError> 
     let entries = fs::read_dir(&versions_dir).map_err(GameError::Io)?;
     let mut active_ids = HashSet::new();
     let mut instances = Vec::new();
-
-    let mut cache_guard = INSTANCE_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    let folder_cache = cache_guard.entry(mc_folder.to_path_buf()).or_default();
+    // Freshly computed cache entries for this pass; published in one short lock
+    // at the end so no filesystem work happens while holding the cache lock.
+    let mut pending: Vec<(String, CachedInstance)> = Vec::new();
 
     for entry in entries.flatten() {
         let file_type = match entry.file_type() {
@@ -100,12 +100,18 @@ pub fn scan_instances(mc_folder: &Path) -> Result<Vec<InstanceInfo>, GameError> 
             .ok()
             .and_then(|m| m.modified().ok());
 
-        // Check cache hit
-        if let Some(cached) = folder_cache.instances.get(&dir_name) {
-            if cached.json_mtime == json_mtime && cached.config_mtime == config_mtime {
-                instances.push(cached.info.clone());
-                continue;
-            }
+        // Check cache hit (short critical section: cache lookup only)
+        let cached_info = {
+            let cache_guard = INSTANCE_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+            cache_guard
+                .get(mc_folder)
+                .and_then(|c| c.instances.get(&dir_name))
+                .filter(|c| c.json_mtime == json_mtime && c.config_mtime == config_mtime)
+                .map(|c| c.info.clone())
+        };
+        if let Some(info) = cached_info {
+            instances.push(info);
+            continue;
         }
 
         // Read config or default
@@ -139,14 +145,14 @@ pub fn scan_instances(mc_folder: &Path) -> Result<Vec<InstanceInfo>, GameError> 
                 release_time: None,
                 loader_versions: BTreeMap::new(),
             };
-            folder_cache.instances.insert(
+            pending.push((
                 dir_name,
                 CachedInstance {
                     json_mtime,
                     config_mtime,
                     info: info.clone(),
                 },
-            );
+            ));
             instances.push(info);
             continue;
         }
@@ -169,14 +175,14 @@ pub fn scan_instances(mc_folder: &Path) -> Result<Vec<InstanceInfo>, GameError> 
                     release_time: None,
                     loader_versions: BTreeMap::new(),
                 };
-                folder_cache.instances.insert(
+                pending.push((
                     dir_name,
                     CachedInstance {
                         json_mtime,
                         config_mtime,
                         info: info.clone(),
                     },
-                );
+                ));
                 instances.push(info);
                 continue;
             }
@@ -200,14 +206,14 @@ pub fn scan_instances(mc_folder: &Path) -> Result<Vec<InstanceInfo>, GameError> 
                     release_time: None,
                     loader_versions: BTreeMap::new(),
                 };
-                folder_cache.instances.insert(
+                pending.push((
                     dir_name,
                     CachedInstance {
                         json_mtime,
                         config_mtime,
                         info: info.clone(),
                     },
-                );
+                ));
                 instances.push(info);
                 continue;
             }
@@ -259,26 +265,36 @@ pub fn scan_instances(mc_folder: &Path) -> Result<Vec<InstanceInfo>, GameError> 
             loader_versions,
         };
 
-        folder_cache.instances.insert(
+        pending.push((
             dir_name,
             CachedInstance {
                 json_mtime,
                 config_mtime,
                 info: info.clone(),
             },
-        );
+        ));
         instances.push(info);
     }
 
-    folder_cache
-        .instances
-        .retain(|id, _| active_ids.contains(id));
-
     classify_cards(&mut instances);
 
-    for inst in &instances {
-        if let Some(cached) = folder_cache.instances.get_mut(&inst.id) {
-            cached.info = inst.clone();
+    // Single short critical section publishing the results; no IO above happens
+    // while the cache lock is held.
+    {
+        let mut cache_guard = INSTANCE_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        let folder_cache = cache_guard.entry(mc_folder.to_path_buf()).or_default();
+
+        folder_cache
+            .instances
+            .retain(|id, _| active_ids.contains(id));
+        for (id, entry) in pending {
+            folder_cache.instances.insert(id, entry);
+        }
+
+        for inst in &instances {
+            if let Some(cached) = folder_cache.instances.get_mut(&inst.id) {
+                cached.info = inst.clone();
+            }
         }
     }
 

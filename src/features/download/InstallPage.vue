@@ -8,7 +8,7 @@ import { MButton, MCard, MEmpty, MInput, MPageHeader, MSkeleton, useToast } from
 const toast = useToast()
 import InstallConfigurator from './InstallConfigurator.vue'
 import VersionCategoryTabs, { type LatestVersionItem } from './components/VersionCategoryTabs.vue'
-import { classifyVersion } from './compat'
+import { classifyVersion, type McVersionCategory } from './compat'
 import { useInstancesStore } from '../instances/store'
 
 const instancesStore = useInstancesStore()
@@ -37,8 +37,25 @@ const openSnapshot = ref(false)
 const openOld = ref(false)
 const openAprilFools = ref(false)
 
+// Memoized classification: each of the four group filters calls classifyVersion for
+// every manifest entry, and they all re-run per search keystroke. Keyed by version id
+// (the manifest id uniquely determines its category) and cleared at the allVersions
+// assignment below.
+const versionKindCache = new Map<string, McVersionCategory>()
+
+function classifyVersionCached(v: VersionManifestEntry): McVersionCategory {
+  const cached = versionKindCache.get(v.id)
+  if (cached !== undefined) return cached
+  const kind = classifyVersion(v)
+  versionKindCache.set(v.id, kind)
+  return kind
+}
+
 const allVersions = computed<VersionManifestEntry[]>(() => {
-  return manifestResource.data.value?.versions ?? []
+  const versions = manifestResource.data.value?.versions ?? []
+  // New version list ⇒ drop memoized classifications so nothing stale survives.
+  versionKindCache.clear()
+  return versions
 })
 
 // Filtered by search query
@@ -64,22 +81,22 @@ const latestVersions = computed<LatestVersionItem[]>(() => {
 
 // Group 2: Release
 const releaseVersions = computed(() => {
-  return filteredVersions.value.filter((v) => classifyVersion(v) === 'release')
+  return filteredVersions.value.filter((v) => classifyVersionCached(v) === 'release')
 })
 
 // Group 3: Snapshot
 const snapshotVersions = computed(() => {
-  return filteredVersions.value.filter((v) => classifyVersion(v) === 'snapshot')
+  return filteredVersions.value.filter((v) => classifyVersionCached(v) === 'snapshot')
 })
 
 // Group 4: Old
 const oldVersions = computed(() => {
-  return filteredVersions.value.filter((v) => classifyVersion(v) === 'old')
+  return filteredVersions.value.filter((v) => classifyVersionCached(v) === 'old')
 })
 
 // Group 5: April Fools
 const aprilFoolsVersions = computed(() => {
-  return filteredVersions.value.filter((v) => classifyVersion(v) === 'aprilFools')
+  return filteredVersions.value.filter((v) => classifyVersionCached(v) === 'aprilFools')
 })
 
 async function onPickAndSetGameFolder() {

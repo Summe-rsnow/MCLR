@@ -22,7 +22,6 @@ export const mockSaves: Record<string, SaveInfo[]> = {
       playTime: 3600000,
       lastPlayed: 1718000000000,
       dataVersion: 3465,
-      iconDataUrl: null,
     },
     {
       folderName: 'SurvivalTest',
@@ -35,7 +34,6 @@ export const mockSaves: Record<string, SaveInfo[]> = {
       playTime: 7200000,
       lastPlayed: 1717000000000,
       dataVersion: 3465,
-      iconDataUrl: null,
     },
   ],
 }
@@ -211,7 +209,6 @@ const handlers = {
       playTime: 0,
       lastPlayed: Date.now(),
       dataVersion: 3465,
-      iconDataUrl: null,
     }
     if (!savesState[instId]) {
       savesState[instId] = []

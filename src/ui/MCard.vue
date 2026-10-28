@@ -50,7 +50,7 @@ const variantClass = computed(() => {
 
 <template>
   <div
-    class="rounded-xl transition-all duration-200"
+    class="rounded-xl transition-[transform,box-shadow,background-color,border-color,backdrop-filter] duration-200"
     :class="[
       variantClass,
       paddingClass,

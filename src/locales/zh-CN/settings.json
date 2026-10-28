@@ -14,14 +14,14 @@
     "gameManage": "游戏文件夹",
     "network": "网络与下载",
     "update": "更新",
-    "aboutHelp": "关于与帮助"
+    "aboutHelp": "关于与帮助",
+    "sponsor": "赞助支持"
   },
   "about": {
     "title": "关于与帮助",
     "appName": "MCLR (Minecraft Launcher Rewrite)",
     "description": "轻量、现代、高效的跨平台 Minecraft 启动器，基于 Tauri v2 与 Vue 3 构建。",
     "version": "版本 {version}",
-    "license": "开源协议：Apache-2.0",
     "githubRepo": "GitHub 仓库",
     "feedbackIssues": "问题反馈与建议",
     "feedback": {
@@ -83,6 +83,15 @@
         "bisectTitle": "模组排查（二分法）：",
         "bisectDesc": "若崩溃由模组引起，可先将 mods 文件夹中的一半模组移出测试，逐步缩小范围定位冲突模组。"
       }
-    }
+    },
+    "comingSoon": "敬请期待"
+  },
+  "sponsor": {
+    "title": "赞助 MCLR",
+    "wechat": "微信赞赏",
+    "alipay": "支付宝赞赏",
+    "scanHint": "用对应的 App 扫码即可",
+    "noteTitle": "关于赞助",
+    "noteBody": "赞助完全自愿，金额随意，心意最重要 —— 谢谢你的支持！"
   }
 }

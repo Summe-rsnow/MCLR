@@ -15,7 +15,9 @@ export function useErrorText() {
 
     if (error instanceof AppErrorEx) {
       code = error.code
-      params = error.params
+      params = { ...error.params }
+      // `{detail}` in locale strings reads the server-side detail, when present.
+      if (error.detail && !params.detail) params.detail = error.detail
     } else if (typeof error === 'object' && error !== null && 'code' in error) {
       const err = error as AppError
       code = err.code
@@ -24,6 +26,7 @@ export function useErrorText() {
           if (typeof v === 'string') params[k] = v
         }
       }
+      if (err.detail && !params.detail) params.detail = err.detail
     } else if (error instanceof Error) {
       return error.message
     } else if (typeof error === 'string') {

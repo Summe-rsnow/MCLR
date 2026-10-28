@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.26`
-- **Next Milestone**: `v0.0.27` (towards `v0.1.0`)
+- **Current Version**: `0.0.27`
+- **Next Milestone**: `v0.0.28` (towards `v0.1.0`)
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -31,3 +31,4 @@
 | v0.0.24 | Sidebar scale tracking, overflow fixes, drawer frosting & concurrent mod update checks | done | v0.0.24 | v0.0.24 | 2026-10-26 |
 | v0.0.25 | Advanced launch options, loader artwork & PCL version rules, floating collision, responsive layout | done | v0.0.25 | v0.0.25 | 2026-10-28 |
 | v0.0.26 | Launch agents, security hardening, Java resolution rework & material-aware selection | done | v0.0.26 | v0.0.26 | 2026-10-28 |
+| v0.0.27 | Smoothness, CPU & memory: incremental logs, compositor shimmer, verified-manifest fast path, download pool | done | v0.0.27 | v0.0.27 | 2026-10-28 |

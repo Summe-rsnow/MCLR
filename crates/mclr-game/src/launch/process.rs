@@ -22,7 +22,7 @@ use super::{
     sanitize_log_line, version_java_component, version_java_constraint,
 };
 use crate::error::GameError;
-use crate::install::{load_resolved_version_json, repair_instance};
+use crate::install::{RepairMode, load_resolved_version_json, repair_instance};
 use crate::instance::{InstanceConfig, extract_mc_version};
 use crate::java::scan_java;
 
@@ -202,6 +202,7 @@ pub async fn launch(params: LaunchPipelineParams<'_>) -> Result<LaunchStartResul
         mc_folder,
         instance_id,
         task_center.map(|(tc, tid)| (tc.as_ref(), tid)),
+        RepairMode::Fast,
     )
     .await?;
 

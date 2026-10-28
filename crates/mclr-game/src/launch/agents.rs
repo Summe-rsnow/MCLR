@@ -14,9 +14,13 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use mclr_core::paths;
 use tracing::warn;
+
+/// Disambiguates concurrent temp files inside `ensure_agent`.
+static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Version of LWJGL that benefits from the unsafe agent.
 pub const LWJGL_UNSAFE_TARGET_VERSION: &str = "3.4.1";
@@ -69,14 +73,27 @@ pub fn ensure_agent(agent: LaunchAgent) -> Option<PathBuf> {
     }
 
     // Write-then-rename so a crashed write can never leave a half jar behind.
-    let tmp = path.with_extension("jar.tmp");
+    // The temp name is unique per call: two concurrent launches (or parallel
+    // tests) must never write into the same temp file.
+    let tmp = dir.join(format!(
+        "{}.{}-{}.tmp",
+        agent.file_name(),
+        std::process::id(),
+        TMP_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
     if let Err(e) = fs::write(&tmp, bytes) {
         warn!("Failed to write agent {:?}: {e}", tmp);
         return None;
     }
     if let Err(e) = fs::rename(&tmp, &path) {
-        warn!("Failed to move agent into place {:?}: {e}", path);
         let _ = fs::remove_file(&tmp);
+        // A concurrent writer may have moved an identical jar into place first.
+        if let Ok(meta) = fs::metadata(&path)
+            && meta.len() as usize == bytes.len()
+        {
+            return Some(path);
+        }
+        warn!("Failed to move agent into place {:?}: {e}", path);
         return None;
     }
     Some(path)

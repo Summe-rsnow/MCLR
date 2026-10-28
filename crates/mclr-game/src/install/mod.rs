@@ -3,12 +3,24 @@
 pub mod manifest;
 pub mod pipeline;
 pub mod specs;
+pub mod verified_manifest;
 
 pub use manifest::{
     VersionManifestEntry, VersionManifestList, fetch_version_manifest, load_resolved_version_json,
 };
 pub use pipeline::{cleanup_stale, install_vanilla, repair_instance};
 pub use specs::{collect_version_download_specs, maven_coordinate_to_path};
+pub use verified_manifest::VerifiedManifest;
+
+/// How much work a repair run is allowed to skip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RepairMode {
+    /// Startup path: trust a matching `.mclr-verified.json` and skip the asset index
+    /// read plus the per-file stat pass. Falls back to a full run when it does not match.
+    Fast,
+    /// Explicit install / "check and repair" path: verify every file on disk.
+    Full,
+}
 
 #[cfg(test)]
 mod tests {
@@ -18,6 +30,7 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    use super::RepairMode;
     use super::manifest::VersionManifestEntry;
     use super::pipeline::{cleanup_stale, install_vanilla, repair_instance};
     use super::specs::maven_coordinate_to_path;
@@ -187,11 +200,38 @@ mod tests {
         assert!(asset_index.exists());
 
         // A second run (repair) should download 0 files because everything is already verified!
-        let repaired = repair_instance(&client, &net_settings, mc_folder, instance_name, None)
-            .await
-            .unwrap();
+        let repaired = repair_instance(
+            &client,
+            &net_settings,
+            mc_folder,
+            instance_name,
+            None,
+            RepairMode::Full,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(repaired, 0);
+
+        // A completed full repair leaves the fast-path fingerprint behind; the
+        // startup path then skips without touching the asset index.
+        let manifest_file = mc_folder
+            .join("versions")
+            .join(instance_name)
+            .join(".mclr-verified.json");
+        assert!(manifest_file.exists(), "full repair must write fingerprint");
+        std::fs::remove_file(mc_folder.join("assets/indexes/1.20.json")).unwrap();
+        let skipped = repair_instance(
+            &client,
+            &net_settings,
+            mc_folder,
+            instance_name,
+            None,
+            RepairMode::Fast,
+        )
+        .await
+        .unwrap();
+        assert_eq!(skipped, 0);
 
         unsafe {
             std::env::remove_var("MCLR_DATA_DIR");

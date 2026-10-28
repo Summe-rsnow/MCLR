@@ -33,7 +33,7 @@ const percentage = computed(() => {
     >
       <div
         v-if="!indeterminate"
-        class="m-progress-fill h-full rounded-full transition-all duration-200 ease-out"
+        class="m-progress-fill h-full rounded-full transition-[width] duration-200 ease-out"
         :style="{ width: `${percentage}%` }"
       />
       <div

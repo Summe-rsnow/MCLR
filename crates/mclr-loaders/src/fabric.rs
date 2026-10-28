@@ -554,12 +554,17 @@ impl OptiFineInstaller {
                         .arg("cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED");
                 }
                 cmd.arg("-cp").arg(&installer_jar).arg("optifine.Installer");
-                // Blocking on purpose: the caller already runs this staging step in
-                // spawn_blocking. A failed installer must not silently produce an
-                // instance whose version JSON is the default (no mainClass/libs).
-                let status = cmd.status().map_err(|e| {
-                    LoaderError::Metadata(format!("OptiFine installer failed to start: {e}"))
-                })?;
+                // Run the installer on the blocking pool: a failing installer must not
+                // silently produce an instance whose version JSON is the default (no
+                // mainClass/libs), and a child process must not pin an async worker.
+                let status = tokio::task::spawn_blocking(move || cmd.status())
+                    .await
+                    .map_err(|e| {
+                        LoaderError::Metadata(format!("OptiFine installer task failed: {e}"))
+                    })?
+                    .map_err(|e| {
+                        LoaderError::Metadata(format!("OptiFine installer failed to start: {e}"))
+                    })?;
                 if !status.success() {
                     return Err(LoaderError::Metadata(format!(
                         "OptiFine installer exited with {status}"

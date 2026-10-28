@@ -36,6 +36,11 @@ const routes: RouteRecordRaw[] = [
         name: 'settings-about',
         component: () => import('./SettingsAboutPage.vue'),
       },
+      {
+        path: 'sponsor',
+        name: 'settings-sponsor',
+        component: () => import('./SettingsSponsorPage.vue'),
+      },
     ],
   },
 ]

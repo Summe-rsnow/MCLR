@@ -294,11 +294,24 @@ async fn predownload_installer_libraries(
     Ok(())
 }
 
+/// Runs a prepared `Command` on the blocking pool.
+///
+/// Installer jars can run for many seconds; a child process must never occupy an
+/// async worker thread.
+async fn run_command_output(
+    mut cmd: std::process::Command,
+) -> Result<std::process::Output, LoaderError> {
+    tokio::task::spawn_blocking(move || cmd.output())
+        .await
+        .map_err(|e| LoaderError::Io(std::io::Error::other(e)))?
+        .map_err(LoaderError::Io)
+}
+
 /// Runs the official headless Forge/NeoForge/Cleanroom installer jar with `--installClient <mc_folder>`.
 ///
 /// Executes with `CREATE_NO_WINDOW` on Windows.
 /// If execution fails with `IllegalAccess`, retries with `--add-exports cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED`.
-pub fn run_headless_installer_jar(
+pub async fn run_headless_installer_jar(
     java_exe: &Path,
     installer_jar: &Path,
     mc_folder: &Path,
@@ -316,7 +329,7 @@ pub fn run_headless_installer_jar(
         .arg("--installClient")
         .arg(mc_folder);
 
-    let output = cmd.output().map_err(LoaderError::Io)?;
+    let output = run_command_output(cmd).await?;
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
@@ -339,7 +352,7 @@ pub fn run_headless_installer_jar(
             .arg("--installClient")
             .arg(mc_folder);
 
-        let retry_output = retry_cmd.output().map_err(LoaderError::Io)?;
+        let retry_output = run_command_output(retry_cmd).await?;
         let retry_stdout = String::from_utf8_lossy(&retry_output.stdout).to_string();
         let retry_stderr = String::from_utf8_lossy(&retry_output.stderr).to_string();
 
@@ -559,7 +572,7 @@ impl ForgeInstaller {
                 }
             }
 
-            run_headless_installer_jar(&java_exe, &installer_path, ctx.staging_dir)?;
+            run_headless_installer_jar(&java_exe, &installer_path, ctx.staging_dir).await?;
 
             find_and_load_generated_forge_json(ctx.staging_dir, &installer_path, &known_versions)?
         };
@@ -714,7 +727,7 @@ impl NeoForgeInstaller {
             }
         }
 
-        run_headless_installer_jar(&java_exe, &installer_path, ctx.staging_dir)?;
+        run_headless_installer_jar(&java_exe, &installer_path, ctx.staging_dir).await?;
 
         let neoforge_json =
             find_and_load_generated_forge_json(ctx.staging_dir, &installer_path, &known_versions)?;
@@ -884,7 +897,7 @@ impl CleanroomInstaller {
             }
         }
 
-        run_headless_installer_jar(&java_exe, &installer_path, ctx.staging_dir)?;
+        run_headless_installer_jar(&java_exe, &installer_path, ctx.staging_dir).await?;
 
         let cleanroom_json =
             find_and_load_generated_forge_json(ctx.staging_dir, &installer_path, &known_versions)?;
@@ -1129,8 +1142,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_run_headless_installer_jar() {
+    #[tokio::test]
+    async fn test_run_headless_installer_jar() {
         // If java is found on system, run a mock installer jar that exits 0
         let javas = scan_java(&[]);
         if let Some(java) = javas.first() {
@@ -1157,8 +1170,8 @@ mod tests {
 
                 let mut javac_cmd = std::process::Command::new(&javac_exe);
                 javac_cmd.arg(&java_src);
-                let javac_res = javac_cmd.output();
-                if let Ok(out) = javac_res {
+                let javac_res = tokio::task::spawn_blocking(move || javac_cmd.output()).await;
+                if let Ok(Ok(out)) = javac_res {
                     if out.status.success() {
                         let class_bytes =
                             std::fs::read(temp.path().join("MockInstaller.class")).unwrap();
@@ -1179,7 +1192,8 @@ mod tests {
                         zip.finish().unwrap();
 
                         let result =
-                            run_headless_installer_jar(&java_exe, &installer_jar, temp.path());
+                            run_headless_installer_jar(&java_exe, &installer_jar, temp.path())
+                                .await;
                         assert!(result.is_ok(), "Installer execution failed: {:?}", result);
                         let stdout = result.unwrap();
                         assert!(

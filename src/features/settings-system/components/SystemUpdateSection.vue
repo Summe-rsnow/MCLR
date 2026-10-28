@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { UpdateCheckResult } from '../../../ipc/client'
-import { MButton, MInput, MSelect, MSwitch, MSection, MSettingRow, MMarkdown } from '../../../ui'
+import {
+  MBadge,
+  MButton,
+  MInput,
+  MSection,
+  MMarkdown,
+  MSelect,
+  MSettingRow,
+  MSwitch,
+} from '../../../ui'
 
 const { t } = useI18n()
 
@@ -13,6 +22,8 @@ defineProps<{
   installingUpdate: boolean
   updateResult: UpdateCheckResult | null
   updateError: string | null
+  /** False when the build was shipped without signed-updater secrets. */
+  updaterConfigured: boolean
 }>()
 
 const emit = defineEmits<{
@@ -47,7 +58,18 @@ function onUpdateAnnouncementUrl(val: string) {
     icon="i-lucide-refresh-cw"
   >
     <template #actions>
+      <div
+        v-if="!updaterConfigured"
+        class="flex items-center gap-2"
+        data-testid="update-coming-soon"
+      >
+        <MButton variant="tonal" size="sm" icon="i-lucide-search" disabled>
+          {{ t('settingsSystem.update.checkButton') }}
+        </MButton>
+        <MBadge variant="warning" size="sm">{{ t('settingsSystem.update.comingSoon') }}</MBadge>
+      </div>
       <MButton
+        v-else
         variant="primary"
         size="sm"
         icon="i-lucide-search"
@@ -69,12 +91,17 @@ function onUpdateAnnouncementUrl(val: string) {
           ]"
           size="sm"
           class="w-48"
+          :disabled="!updaterConfigured"
           @update:model-value="onUpdateChannel"
         />
       </MSettingRow>
 
       <MSettingRow :label="t('settingsSystem.update.autoCheck')">
-        <MSwitch :model-value="autoCheck" @update:model-value="onUpdateAutoCheck" />
+        <MSwitch
+          :model-value="autoCheck"
+          :disabled="!updaterConfigured"
+          @update:model-value="onUpdateAutoCheck"
+        />
       </MSettingRow>
 
       <MSettingRow :label="t('settingsSystem.update.announcementUrl')">
