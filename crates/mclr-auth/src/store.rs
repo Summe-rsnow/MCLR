@@ -14,7 +14,6 @@ use aes_gcm::{Aes256Gcm, Nonce};
 use async_trait::async_trait;
 use mclr_core::account_session::{AccountKind, AccountSessionProvider, ResolvedAccountSession};
 use mclr_core::{AppError, paths};
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;
@@ -269,8 +268,7 @@ impl AccountStore {
             key.copy_from_slice(&raw_bytes);
             Ok(key)
         } else {
-            let mut key = [0u8; 32];
-            rand::thread_rng().fill(&mut key);
+            let key: [u8; 32] = rand::random();
             let enc_bytes = protect_bytes(&key)?;
             if let Some(parent) = path.parent() {
                 let _ = fs::create_dir_all(parent);
@@ -300,13 +298,14 @@ impl AccountStore {
             )));
         }
 
-        let nonce = Nonce::from_slice(&file_bytes[5..17]);
+        let nonce = Nonce::try_from(&file_bytes[5..17])
+            .map_err(|e| AuthError::Crypto(format!("invalid nonce: {e}")))?;
         let ciphertext = &file_bytes[17..];
 
         let cipher =
             Aes256Gcm::new_from_slice(master_key).map_err(|e| AuthError::Crypto(e.to_string()))?;
         let decrypted = cipher
-            .decrypt(nonce, ciphertext)
+            .decrypt(&nonce, ciphertext)
             .map_err(|e| AuthError::StoreCorrupted(format!("decryption failed: {e}")))?;
 
         let data: StoredData = serde_json::from_slice(&decrypted)
@@ -321,14 +320,13 @@ impl AccountStore {
     ) -> Result<(), AuthError> {
         let json_bytes = serde_json::to_vec(data)?;
 
-        let mut nonce_bytes = [0u8; 12];
-        rand::thread_rng().fill(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce_bytes: [u8; 12] = rand::random();
+        let nonce = Nonce::from(nonce_bytes);
 
         let cipher =
             Aes256Gcm::new_from_slice(master_key).map_err(|e| AuthError::Crypto(e.to_string()))?;
         let ciphertext = cipher
-            .encrypt(nonce, json_bytes.as_ref())
+            .encrypt(&nonce, json_bytes.as_ref())
             .map_err(|e| AuthError::Crypto(e.to_string()))?;
 
         let mut output = Vec::with_capacity(4 + 1 + 12 + ciphertext.len());

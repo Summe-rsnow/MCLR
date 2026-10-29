@@ -160,7 +160,7 @@ fn extract_maven_entries_from_zip(
 ) -> Result<(), LoaderError> {
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
-        let name = file.name().to_string();
+        let name = file.name()?.to_string();
         if name.starts_with("maven/") && !file.is_dir() {
             let rel_path = &name["maven/".len()..];
             // Installer jars come from remote mirrors: never let a crafted entry

@@ -30,6 +30,7 @@ pub struct ResourcePatch {
     pub update_available: Option<bool>,
     pub dependents: Option<Vec<String>>,
     pub state: Option<ResourceState>,
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +39,18 @@ pub struct ResourcesPatchEvent {
     pub request_id: String,
     pub instance_id: String,
     pub patches: Vec<ResourcePatch>,
+}
+
+/// Cover shown for an installed mod.
+///
+/// PCL resolves a local mod to its community project and draws `Comp.LogoUrl` first, falling
+/// back to the artwork inside the jar — that is why its rows look uniform: every mod that
+/// exists online gets the same high-resolution square icon. We mirror that order, and use
+/// the API's own `icon_url` (the CDN serves content-hashed `.webp`, so a built path 404s).
+fn mod_icon(remote: Option<&str>, local: Option<&str>) -> Option<String> {
+    remote
+        .map(str::to_string)
+        .or_else(|| local.map(str::to_string))
 }
 
 #[tauri::command]
@@ -87,6 +100,8 @@ pub async fn resources_list(
             };
             entry.mod_id = Some(m.mod_id.clone());
             entry.project_id = m.project_id.clone();
+            // Jar artwork is instant; project artwork arrives with the background patches.
+            entry.icon = m.icon.clone();
         }
     }
 
@@ -141,23 +156,67 @@ pub async fn resources_list(
                 .await;
             }
 
+            // Project metadata (cover art + categories) in one batched request per lookup
+            // batch. A failure just leaves those rows on the placeholder glyph and their
+            // jar-derived tags.
+            let mut icon_urls: HashMap<String, String> = HashMap::new();
+            let mut project_categories: HashMap<String, Vec<String>> = HashMap::new();
+            let mut metadata_request: Vec<String> = local_mods
+                .iter()
+                .filter_map(|m| project_ids.get(&m.sha1).cloned())
+                .collect();
+            metadata_request.sort_unstable();
+            metadata_request.dedup();
+            for chunk in metadata_request.chunks(mclr_comp::local::MODRINTH_LOOKUP_BATCH) {
+                let Ok(projects) = modrinth.get_projects_batch(chunk).await else {
+                    break;
+                };
+                for project in projects {
+                    if let Some(url) = project.icon_url {
+                        icon_urls.insert(project.id.clone(), url);
+                    }
+                    if !project.categories.is_empty() {
+                        project_categories.insert(project.id, project.categories);
+                    }
+                }
+            }
+
             for m in &local_mods {
+                let project_id = project_ids.get(&m.sha1).cloned();
+                let remote_icon = project_id
+                    .as_ref()
+                    .and_then(|id| icon_urls.get(id))
+                    .map(String::as_str);
+                let mut tags: Vec<String> = Vec::new();
+                if !m.loader.is_empty() && m.loader != "Unknown" {
+                    tags.push(m.loader.clone());
+                }
+                if let Some(categories) = project_id
+                    .as_ref()
+                    .and_then(|id| project_categories.get(id))
+                {
+                    for category in categories {
+                        if tags.len() >= 4 {
+                            break;
+                        }
+                        if !tags.contains(category) {
+                            tags.push(category.clone());
+                        }
+                    }
+                }
                 batcher.push(ResourcePatch {
                     file_name: m.file_name.clone(),
                     title: Some(m.name.clone()),
                     description: m.description.clone(),
                     version: Some(m.version.clone()).filter(|v| !v.is_empty()),
-                    tags: Some(if m.loader.is_empty() || m.loader == "Unknown" {
-                        Vec::new()
-                    } else {
-                        vec![m.loader.clone()]
-                    }),
+                    tags: Some(tags),
                     mod_id: Some(m.mod_id.clone()),
-                    project_id: project_ids.get(&m.sha1).cloned(),
+                    project_id: project_id.clone(),
                     latest_file: None,
                     update_available: Some(false),
                     dependents: None,
                     state: Some(ResourceState::Ok),
+                    icon: mod_icon(remote_icon, m.icon.as_deref()),
                 });
             }
 

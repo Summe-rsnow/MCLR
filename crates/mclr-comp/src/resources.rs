@@ -147,12 +147,34 @@ fn extract_pack_mcmeta_description(bytes: &[u8]) -> Option<String> {
     }
 }
 
-fn cache_pack_png(raw_png: &[u8], key: &str) -> Option<String> {
+/// Side of the square canvas every cached icon is normalised to.
+///
+/// The mod row renders a 40 px tile, so 80 px keeps the artwork crisp on 200 % displays and
+/// guarantees the browser only ever scales *down* — upscaling a 16–32 px pixel-art icon in
+/// the compositor is what made those covers look mushy.
+pub const ICON_SIZE: u32 = 80;
+
+/// Normalises artwork into the shared icon cache and returns its path.
+///
+/// Shared by resource packs (keyed by path/size/mtime) and mods (keyed by SHA1) so both
+/// surfaces render the same way through `convertFileSrc`. Every image comes out as an
+/// `ICON_SIZE` square **filled edge to edge**: the short side is scaled to `ICON_SIZE` and
+/// the overflow of the long side is cropped symmetrically, so no icon is ever letterboxed
+/// into a small island in the middle of the tile.
+pub(crate) fn cache_icon_png(raw_png: &[u8], key: &str) -> Option<String> {
+    // Size and rule revision are part of the cache identity: changing either must
+    // regenerate instead of reusing files rendered by an older pipeline.
+    const RENDER_REV: u32 = 2;
+
     let mut hasher = Sha1::new();
     sha1::Digest::update(&mut hasher, key.as_bytes());
+    sha1::Digest::update(
+        &mut hasher,
+        format!(":{ICON_SIZE}:r{RENDER_REV}").as_bytes(),
+    );
     let hash = hex::encode(sha1::Digest::finalize(hasher));
 
-    let icons_dir = paths::cache_dir().join("packicons");
+    let icons_dir = paths::cache_dir().join("icons");
     let _ = fs::create_dir_all(&icons_dir);
     let dest_path = icons_dir.join(format!("{hash}.png"));
 
@@ -160,20 +182,53 @@ fn cache_pack_png(raw_png: &[u8], key: &str) -> Option<String> {
         return Some(dest_path.to_string_lossy().to_string());
     }
 
-    if let Ok(img) = image::load_from_memory(raw_png) {
-        let resized = if img.width() > 128 || img.height() > 128 {
-            img.resize(128, 128, FilterType::Triangle)
-        } else {
-            img
-        };
-        if resized
-            .save_with_format(&dest_path, image::ImageFormat::Png)
-            .is_ok()
-        {
-            return Some(dest_path.to_string_lossy().to_string());
-        }
+    let img = image::load_from_memory(raw_png).ok()?;
+    let cropped = normalize_icon(img)?;
+
+    if cropped
+        .save_with_format(&dest_path, image::ImageFormat::Png)
+        .is_ok()
+    {
+        return Some(dest_path.to_string_lossy().to_string());
     }
     None
+}
+
+/// Fills an `ICON_SIZE` square from arbitrary artwork.
+///
+/// The **short** side is scaled to `ICON_SIZE`; the long side then overflows and the
+/// centre is cropped, so the tile is always filled edge to edge. Filter follows the scale
+/// direction: nearest-neighbour for small pixel art, a good resample otherwise.
+fn normalize_icon(img: image::DynamicImage) -> Option<image::RgbaImage> {
+    let (width, height) = (img.width(), img.height());
+    if width == 0 || height == 0 {
+        return None;
+    }
+
+    let short_side = width.min(height);
+    let filter = if short_side <= 64 {
+        FilterType::Nearest
+    } else if short_side > ICON_SIZE {
+        FilterType::Triangle
+    } else {
+        FilterType::CatmullRom
+    };
+
+    let scale = ICON_SIZE as f32 / short_side as f32;
+    let scaled_width = ((width as f32 * scale).round() as u32).max(ICON_SIZE);
+    let scaled_height = ((height as f32 * scale).round() as u32).max(ICON_SIZE);
+    let resized = img.resize_exact(scaled_width, scaled_height, filter);
+
+    Some(
+        resized
+            .crop_imm(
+                (scaled_width - ICON_SIZE) / 2,
+                (scaled_height - ICON_SIZE) / 2,
+                ICON_SIZE,
+                ICON_SIZE,
+            )
+            .to_rgba8(),
+    )
 }
 
 /// Scans the specified resource folder for entries of the given kind.
@@ -350,7 +405,7 @@ fn scan_dir_entries(
                                         size,
                                         modified_ms.unwrap_or(0)
                                     );
-                                    icon_path = cache_pack_png(&bytes, &key);
+                                    icon_path = cache_icon_png(&bytes, &key);
                                 }
                             }
                         }
@@ -371,7 +426,7 @@ fn scan_dir_entries(
                         fs::read(&png_path).ok().and_then(|b| {
                             let key =
                                 format!("{}:{}:{}", path.display(), size, modified_ms.unwrap_or(0));
-                            cache_pack_png(&b, &key)
+                            cache_icon_png(&b, &key)
                         })
                     } else {
                         None
@@ -939,6 +994,28 @@ pub fn export_resource_list(entries: &[ResourceEntry], format: &str) -> String {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn test_icon_is_cropped_to_fill_not_letterboxed() {
+        // 160x40 solid artwork: scaling by the short side fills the tile, so no transparent
+        // band may survive at the edges (the old fit-inside rule letterboxed it).
+        let wide = image::RgbaImage::from_pixel(160, 40, image::Rgba([200, 30, 30, 255]));
+        let filled = normalize_icon(image::DynamicImage::ImageRgba8(wide)).unwrap();
+        assert_eq!((filled.width(), filled.height()), (ICON_SIZE, ICON_SIZE));
+        for (x, y) in [(0, 0), (ICON_SIZE - 1, 0), (0, ICON_SIZE - 1), (39, 39)] {
+            assert_eq!(
+                filled.get_pixel(x, y)[3],
+                255,
+                "corner ({x},{y}) must be painted, not letterboxed"
+            );
+        }
+
+        // A square source is untouched apart from the size.
+        let square = image::RgbaImage::from_pixel(256, 256, image::Rgba([10, 200, 10, 255]));
+        let exact = normalize_icon(image::DynamicImage::ImageRgba8(square)).unwrap();
+        assert_eq!((exact.width(), exact.height()), (ICON_SIZE, ICON_SIZE));
+        assert_eq!(exact.get_pixel(ICON_SIZE - 1, ICON_SIZE - 1)[3], 255);
+    }
 
     #[test]
     fn test_toggle_and_delete_resource() {

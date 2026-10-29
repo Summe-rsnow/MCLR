@@ -75,7 +75,13 @@ pub fn inspect_modpack(archive_path: &Path) -> Result<ModpackInstallPlan, CompEr
     let mut zip = zip::ZipArchive::new(file).map_err(CompError::Zip)?;
 
     let entry_names: Vec<String> = (0..zip.len())
-        .filter_map(|i| zip.by_index(i).ok().map(|e| e.name().replace('\\', "/")))
+        .filter_map(|i| {
+            zip.by_index(i)
+                .ok()?
+                .name()
+                .ok()
+                .map(|name| name.replace('\\', "/"))
+        })
         .collect();
 
     // 1. MCBBS (mcbbs.packmeta)

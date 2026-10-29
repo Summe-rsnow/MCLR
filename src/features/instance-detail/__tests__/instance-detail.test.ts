@@ -74,9 +74,9 @@ describe('Instance Detail feature', () => {
       'install',
       'settings',
       'export',
+      'mods',
       'saves',
       'screenshots',
-      'mods',
       'resourcepacks',
       'shaders',
       'schematics',
@@ -128,7 +128,19 @@ describe('Instance Detail feature', () => {
     expect(wrapper.text()).toContain('Vanilla 1.20.1')
     expect(wrapper.text()).toContain('1.20.1')
 
-    // Find tabs and click on Settings tab
+    // The resources group comes first and the page opens on the mods tab.
+    const buttons = wrapper.findAll('button')
+    expect(buttons.findIndex((b) => b.text().includes('资源管理'))).toBeLessThan(
+      buttons.findIndex((b) => b.text().includes('游戏管理')),
+    )
+    expect(wrapper.text()).toContain('该实例不可使用模组')
+
+    // Find tabs and click on Settings tab (game group)
+    const gameGroup = buttons.find((b) => b.text().includes('游戏管理'))
+    expect(gameGroup).toBeDefined()
+    await gameGroup!.trigger('click')
+    await flushPromises()
+
     const tabs = wrapper.findAll('button')
     const settingsButton = tabs.find((b) => b.text().includes('配置'))
     expect(settingsButton).toBeDefined()

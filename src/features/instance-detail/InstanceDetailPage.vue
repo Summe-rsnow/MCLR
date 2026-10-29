@@ -35,7 +35,10 @@ const instance = computed(() => {
   return instancesStore.instances.find((i) => i.id === currentInstanceId.value)
 })
 
-const activeTab = ref(instanceDetailTabs[0]?.key || 'overview')
+/** Resources first: mods are the daily surface, the game group is configuration. */
+const DEFAULT_TAB_KEY = 'mods'
+
+const activeTab = ref(DEFAULT_TAB_KEY)
 const direction = ref<'forward' | 'back'>('forward')
 
 const tabGroupMap = computed(() => {
@@ -50,14 +53,14 @@ const activeGroup = ref<TabGroupKey>(tabGroupMap.value.get(activeTab.value) || '
 
 const groupOptions = computed(() => [
   {
-    label: t('instanceDetail.groups.game'),
-    value: 'game',
-    icon: 'i-lucide-gamepad-2',
-  },
-  {
     label: t('instanceDetail.groups.resources'),
     value: 'resources',
     icon: 'i-lucide-folder-archive',
+  },
+  {
+    label: t('instanceDetail.groups.game'),
+    value: 'game',
+    icon: 'i-lucide-gamepad-2',
   },
 ])
 

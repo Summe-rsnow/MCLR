@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ipcClient, type ModpackInspectResult } from '../../ipc/client'
 import { MDialog, MButton, MInput, MPathPicker, MSkeleton, MBadge, useToast } from '../../ui'
+import { awaitTask } from '../tasks/awaitTask'
+import { useErrorText } from '../../composables/useErrorText'
 
 defineProps<{
   open: boolean
@@ -14,6 +16,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { formatError } = useErrorText()
 const toast = useToast()
 
 const archivePath = ref('')
@@ -56,17 +59,28 @@ async function onInspect(): Promise<void> {
 async function onImport(): Promise<void> {
   if (!archivePath.value.trim() || !targetInstanceName.value.trim()) return
   importing.value = true
+  const instanceName = targetInstanceName.value.trim()
   try {
-    await ipcClient.modpackImportFile(archivePath.value.trim(), targetInstanceName.value.trim())
+    const taskId = await ipcClient.modpackImportFile(archivePath.value.trim(), instanceName)
+    archivePath.value = ''
+    inspectResult.value = null
+    targetInstanceName.value = ''
+    emit('update:open', false)
+    // Queued, not finished: unpack + loader + base game still run inside the task, and the
+    // task manager shows the progress until it settles.
+    const outcome = await awaitTask(taskId)
+    if (outcome.state === 'failed' || outcome.state === 'canceled') {
+      toast.show({
+        message: formatError(outcome.error) || t('comp.modpackImport.failed'),
+        type: 'danger',
+      })
+      return
+    }
     toast.show({
       message: t('comp.modpackImport.success'),
       type: 'success',
     })
-    emit('imported', targetInstanceName.value.trim())
-    emit('update:open', false)
-    archivePath.value = ''
-    inspectResult.value = null
-    targetInstanceName.value = ''
+    emit('imported', instanceName)
   } catch (err: unknown) {
     toast.show({
       message:

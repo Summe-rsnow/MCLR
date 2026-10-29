@@ -46,7 +46,7 @@ pub fn extract_modpack_overrides(
             continue;
         }
 
-        let name = entry.name().replace('\\', "/");
+        let name = entry.name().map_err(CompError::Zip)?.replace('\\', "/");
 
         for prefix in override_prefixes {
             let normalized_prefix = prefix.replace('\\', "/");

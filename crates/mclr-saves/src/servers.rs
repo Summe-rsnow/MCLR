@@ -214,17 +214,21 @@ pub(crate) trait SrvLookup: Send + Sync {
 }
 
 pub struct DefaultSrvLookup {
-    resolver: hickory_resolver::TokioAsyncResolver,
+    resolver: hickory_resolver::TokioResolver,
 }
 
 impl DefaultSrvLookup {
     pub fn new() -> Self {
-        let resolver = hickory_resolver::TokioAsyncResolver::tokio_from_system_conf()
+        // System DNS first (better for private servers), then the built-in defaults.
+        let resolver = hickory_resolver::Resolver::builder_tokio()
+            .and_then(|builder| builder.build())
             .unwrap_or_else(|_| {
-                hickory_resolver::TokioAsyncResolver::tokio(
+                hickory_resolver::Resolver::builder_with_config(
                     hickory_resolver::config::ResolverConfig::default(),
-                    hickory_resolver::config::ResolverOpts::default(),
+                    hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
                 )
+                .build()
+                .expect("default resolver configuration is valid")
             });
         Self { resolver }
     }
@@ -240,18 +244,25 @@ impl SrvLookup for DefaultSrvLookup {
     async fn lookup_srv(&self, host: &str) -> Option<(String, u16)> {
         let query = format!("_minecraft._tcp.{}.", host.trim_end_matches('.'));
         let res = self.resolver.srv_lookup(query).await.ok()?;
-        let mut records: Vec<_> = res.into_iter().collect();
+        // Hickory 0.26 hands back the raw answer records; keep only SRV ones.
+        let mut records: Vec<_> = res
+            .answers()
+            .iter()
+            .filter_map(|record| match &record.data {
+                hickory_resolver::proto::rr::RData::SRV(srv) => Some(srv),
+                _ => None,
+            })
+            .collect();
         if records.is_empty() {
             return None;
         }
-        records.sort_by_key(|r| r.priority());
+        records.sort_by_key(|r| r.priority);
         let first = records.into_iter().next()?;
-        let target = first.target().to_utf8();
-        let clean_target = target.trim_end_matches('.').to_string();
+        let clean_target = first.target.to_utf8().trim_end_matches('.').to_string();
         if clean_target.is_empty() || clean_target == "." {
             return None;
         }
-        Some((clean_target, first.port()))
+        Some((clean_target, first.port))
     }
 }
 

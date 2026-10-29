@@ -1,6 +1,7 @@
 use crate::error::NetError;
-use hickory_resolver::TokioAsyncResolver;
-use hickory_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
+use hickory_resolver::Resolver;
+use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
+use hickory_resolver::net::runtime::TokioRuntimeProvider;
 use mclr_core::{NetSettings, ProxyMode};
 use reqwest::dns::Resolve;
 use std::net::SocketAddr;
@@ -9,44 +10,31 @@ use std::time::Duration;
 
 /// Custom DNS resolver wrapping Hickory DNS-over-HTTPS.
 pub struct DohResolver {
-    resolver: TokioAsyncResolver,
+    resolver: hickory_resolver::TokioResolver,
 }
 
 impl DohResolver {
     pub fn new() -> Result<Self, NetError> {
-        let mut config = ResolverConfig::new();
+        let ip = |addr: &str| {
+            addr.parse::<std::net::IpAddr>()
+                .map_err(|e| NetError::Proxy(format!("Invalid DNS server IP {addr}: {e}")))
+        };
 
-        // AliDNS DoH: 223.5.5.5:443 / dns.alidns.com
-        let alidns_addr: SocketAddr = "223.5.5.5:443"
-            .parse()
-            .map_err(|e| NetError::Proxy(format!("Invalid AliDNS IP: {e}")))?;
-        config.add_name_server(NameServerConfig {
-            socket_addr: alidns_addr,
-            protocol: Protocol::Https,
-            tls_dns_name: Some("dns.alidns.com".to_string()),
-            trust_negative_responses: true,
-            tls_config: None,
-            bind_addr: None,
-        });
-
-        // Cloudflare DoH: 1.1.1.1:443 / cloudflare-dns.com
-        let cf_addr: SocketAddr = "1.1.1.1:443"
-            .parse()
-            .map_err(|e| NetError::Proxy(format!("Invalid Cloudflare IP: {e}")))?;
-        config.add_name_server(NameServerConfig {
-            socket_addr: cf_addr,
-            protocol: Protocol::Https,
-            tls_dns_name: Some("cloudflare-dns.com".to_string()),
-            trust_negative_responses: true,
-            tls_config: None,
-            bind_addr: None,
-        });
+        // AliDNS DoH (223.5.5.5 / dns.alidns.com) and Cloudflare DoH (1.1.1.1).
+        let mut config = ResolverConfig::from_name_servers(vec![
+            NameServerConfig::https(ip("223.5.5.5")?, Arc::from("dns.alidns.com"), None),
+            NameServerConfig::https(ip("1.1.1.1")?, Arc::from("cloudflare-dns.com"), None),
+        ]);
+        config.add_search(hickory_resolver::proto::rr::Name::root());
 
         let mut opts = ResolverOpts::default();
         opts.timeout = Duration::from_secs(5);
         opts.attempts = 2;
 
-        let resolver = TokioAsyncResolver::tokio(config, opts);
+        let resolver = Resolver::builder_with_config(config, TokioRuntimeProvider::default())
+            .with_options(opts)
+            .build()
+            .map_err(|e| NetError::Proxy(format!("DNS resolver init failed: {e}")))?;
         Ok(Self { resolver })
     }
 }

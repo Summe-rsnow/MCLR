@@ -131,7 +131,7 @@ pub fn extract_natives(
                 Err(_) => continue,
             };
 
-            let entry_name = entry.name().to_string();
+            let entry_name = entry.name()?.to_string();
             if !entry_name.to_lowercase().ends_with(".dll") || entry_name.contains("META-INF/") {
                 continue;
             }

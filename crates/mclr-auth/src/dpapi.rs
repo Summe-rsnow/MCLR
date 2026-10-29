@@ -33,7 +33,7 @@ pub fn protect_bytes(data: &[u8]) -> Result<Vec<u8>, AuthError> {
         .map_err(|e| AuthError::Crypto(format!("CryptProtectData failed: {e}")))?;
 
         let result = std::slice::from_raw_parts(data_out.pbData, data_out.cbData as usize).to_vec();
-        let _ = LocalFree(HLOCAL(data_out.pbData as _));
+        let _ = LocalFree(Some(HLOCAL(data_out.pbData as _)));
         Ok(result)
     }
 }
@@ -62,7 +62,7 @@ pub fn unprotect_bytes(encrypted: &[u8]) -> Result<Vec<u8>, AuthError> {
         .map_err(|e| AuthError::Crypto(format!("CryptUnprotectData failed: {e}")))?;
 
         let result = std::slice::from_raw_parts(data_out.pbData, data_out.cbData as usize).to_vec();
-        let _ = LocalFree(HLOCAL(data_out.pbData as _));
+        let _ = LocalFree(Some(HLOCAL(data_out.pbData as _)));
         Ok(result)
     }
 }

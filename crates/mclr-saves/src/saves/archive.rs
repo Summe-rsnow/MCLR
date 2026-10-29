@@ -146,7 +146,7 @@ pub fn import_save_zip(saves_dir: &Path, zip_path: &Path) -> Result<SaveInfo, Sa
     let mut level_dat_entry = None;
     for i in 0..zip.len() {
         let entry = zip.by_index(i)?;
-        let name = entry.name().replace('\\', "/");
+        let name = entry.name()?.replace('\\', "/");
         if name == "level.dat" || name.ends_with("/level.dat") {
             level_dat_entry = Some(name);
             break;
@@ -185,7 +185,7 @@ pub fn import_save_zip(saves_dir: &Path, zip_path: &Path) -> Result<SaveInfo, Sa
 
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
-        let raw_name = entry.name().replace('\\', "/");
+        let raw_name = entry.name()?.replace('\\', "/");
 
         let rel_name = if strip_prefix.is_empty() {
             raw_name

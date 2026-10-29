@@ -1,5 +1,5 @@
 import { invoke as TAURI_INVOKE } from '@tauri-apps/api/core'
-import { commands, type AppError, type AppInfo, type Result } from './bindings'
+import { commands, type AppError, type AppInfo } from './bindings'
 import { accountsIpc } from './domains/accounts'
 import { compIpc } from './domains/comp'
 import { crashIpc } from './domains/crash'
@@ -52,7 +52,10 @@ export class AppErrorEx extends Error {
   }
 }
 
-export async function unwrapResult<T>(promise: Promise<Result<T, AppError>>): Promise<T> {
+/** Shape `tauri-specta` emits for a command returning `Result<T, AppError>`. */
+export type CommandResult<T> = { status: 'ok'; data: T } | { status: 'error'; error: AppError }
+
+export async function unwrapResult<T>(promise: Promise<CommandResult<T>>): Promise<T> {
   const res = await promise
   if (res.status === 'ok') {
     return res.data

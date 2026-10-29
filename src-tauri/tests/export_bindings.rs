@@ -1,5 +1,5 @@
 use mclr_app_lib::commands;
-use specta_typescript::{BigIntExportBehavior, Typescript};
+use specta_typescript::Typescript;
 use std::path::PathBuf;
 
 #[test]
@@ -10,11 +10,6 @@ fn export_bindings() {
         std::fs::create_dir_all(parent).expect("create src/ipc dir");
     }
     builder
-        .export(
-            Typescript::default()
-                .bigint(BigIntExportBehavior::Number)
-                .header("// @ts-nocheck\n"),
-            &out_path,
-        )
+        .export(Typescript::default().header("// @ts-nocheck\n"), &out_path)
         .expect("Failed to export TypeScript bindings");
 }

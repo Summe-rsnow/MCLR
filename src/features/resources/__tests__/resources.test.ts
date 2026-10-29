@@ -9,6 +9,11 @@ import { ipcClient } from '../../../ipc/client'
 import zhCnResources from '../../../locales/zh-CN/resources.json'
 import type { ResourceEntry } from '../../../ipc/client'
 
+// Local artwork is served through the asset protocol in the packaged app.
+vi.mock('@tauri-apps/api/core', () => ({
+  convertFileSrc: (path: string) => `asset://localhost/${encodeURIComponent(path)}`,
+}))
+
 describe('Resources feature unit tests', () => {
   const dummyEntries: ResourceEntry[] = [
     {
@@ -308,6 +313,40 @@ describe('Resources feature unit tests', () => {
 
     await row.trigger('click')
     expect(row.emitted('select')?.[0]).toEqual([entry.path])
+  })
+
+  it('renders the mod artwork as the row cover', () => {
+    const i18n = createI18n({
+      legacy: false,
+      locale: 'zh-CN',
+      messages: { 'zh-CN': { resources: zhCnResources } },
+    })
+    const entry = { ...dummyEntries[0]!, icon: 'C:/mclr/cache/icons/abc123.png' }
+
+    const row = mount(ResourceItemRow, {
+      props: { entry, kind: 'mod', selected: false },
+      global: { plugins: [i18n] },
+    })
+
+    const img = row.find('img')
+    expect(img.exists()).toBe(true)
+    expect(img.attributes('src')).toBe(
+      `asset://localhost/${encodeURIComponent('C:/mclr/cache/icons/abc123.png')}`,
+    )
+
+    // Mods whose jar ships no artwork fall back to their Modrinth project icon, which is a
+    // remote URL and must not be run through the asset protocol.
+    const remote = mount(ResourceItemRow, {
+      props: {
+        entry: { ...dummyEntries[0]!, icon: 'https://cdn.modrinth.com/data/AANobbMI/icon.png' },
+        kind: 'mod',
+        selected: false,
+      },
+      global: { plugins: [i18n] },
+    })
+    expect(remote.find('img').attributes('src')).toBe(
+      'https://cdn.modrinth.com/data/AANobbMI/icon.png',
+    )
   })
 
   it('reveals batch operations after select-all in ResourceList', async () => {

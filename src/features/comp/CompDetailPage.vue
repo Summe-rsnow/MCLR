@@ -6,6 +6,8 @@ import { useCompStore } from './store'
 import { useInstancesStore } from '../instances/store'
 import { ipcClient, type CompFile, type CompProject, type CompPlatform } from '../../ipc/client'
 import { MCard, MIconButton, MSkeleton, MMarkdown, useToast } from '../../ui'
+import { awaitTask } from '../tasks/awaitTask'
+import { useErrorText } from '../../composables/useErrorText'
 import CompProjectHeader from './components/CompProjectHeader.vue'
 import CompVersionsTab, { type FileGroup } from './components/CompVersionsTab.vue'
 import CompDependencyDialogs, { type ResolvedDep } from './components/CompDependencyDialogs.vue'
@@ -13,6 +15,7 @@ import CompDependencyDialogs, { type ResolvedDep } from './components/CompDepend
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const { formatError } = useErrorText()
 const toast = useToast()
 const compStore = useCompStore()
 const instancesStore = useInstancesStore()
@@ -367,12 +370,23 @@ async function startModpackInstall() {
 
   installingModpack.value = true
   try {
-    await ipcClient.modpackInstallRemote(modpackTargetFile.value, modpackInstanceName.value.trim())
+    const taskId = await ipcClient.modpackInstallRemote(
+      modpackTargetFile.value,
+      modpackInstanceName.value.trim(),
+    )
+    modpackInstallDialogOpen.value = false
+    // Queued, not finished: unpack + loader + base game still run in the task.
+    const outcome = await awaitTask(taskId)
+    if (outcome.state === 'failed' || outcome.state === 'canceled') {
+      toast.danger(formatError(outcome.error) || t('comp.modpackInstallDialog.failed'))
+      return
+    }
+    if (outcome.state === 'success') {
+      await instancesStore.fetchInstances(true)
+    }
     toast.success(
       t('comp.modpackInstallDialog.success', { name: modpackInstanceName.value.trim() }),
     )
-    modpackInstallDialogOpen.value = false
-    await instancesStore.fetchInstances()
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : t('comp.modpackInstallDialog.failed')
     toast.danger(msg)

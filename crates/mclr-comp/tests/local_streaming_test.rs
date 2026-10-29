@@ -13,9 +13,9 @@ use tempfile::tempdir;
 use zip::write::SimpleFileOptions;
 
 const JAR_NAME: &str = "probe-mod-1.2.3.jar";
-const JAR_SHA1: &str = "d5d3b2729a6a04f3a848e7139252ca895f47654f";
-const JAR_MURMUR2: u32 = 561_422_349;
-const JAR_SIZE: u64 = 351;
+const JAR_SHA1: &str = "1c61a43751d5beda8418c64475f7b9cf3444fc41";
+const JAR_MURMUR2: u32 = 3_519_676_804;
+const JAR_SIZE: u64 = 352;
 const FABRIC_JSON: &str = r#"{"id":"probe_mod","name":"Probe Mod","version":"1.2.3","description":"Probe description","authors":["Alice",{"name":"Bob"}]}"#;
 
 /// Fixed entry timestamps keep the fixture jar byte-identical between runs.

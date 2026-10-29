@@ -36,6 +36,8 @@ pub struct LocalModInfo {
     pub size: u64,
     pub project_id: Option<String>,
     pub update_file: Option<CompFile>,
+    /// Path to the mod's own artwork, extracted from the jar and cached on disk.
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,6 +55,13 @@ struct LocalModCacheItem {
     pub mtime_secs: u64,
     pub project_id: Option<String>,
     pub update_file: Option<CompFile>,
+    /// Cached icon path inside the launcher cache dir.
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// Artwork-selection revision the cached icon was produced with; older entries are
+    /// re-parsed so a rule change reaches jars that were never modified.
+    #[serde(default)]
+    pub icon_rev: u32,
     /// Unix seconds of the last Modrinth project-id lookup for this file (`0` = never).
     #[serde(default)]
     pub cached_at_secs: u64,
@@ -191,6 +200,8 @@ pub struct ModMetadata {
     pub description: Option<String>,
     pub authors: Vec<String>,
     pub loader: String,
+    /// Raw PNG bytes of the mod's own artwork, when the jar ships one.
+    pub icon: Option<Vec<u8>>,
 }
 
 fn read_entry_text<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> Option<String> {
@@ -198,6 +209,98 @@ fn read_entry_text<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> O
     let mut text = String::new();
     entry.read_to_string(&mut text).ok()?;
     Some(text)
+}
+
+/// Reads a small archive entry fully. Icons are capped at 2 MiB so a crafted jar cannot
+/// force a large allocation.
+fn read_entry_bytes<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> Option<Vec<u8>> {
+    const MAX_ICON_BYTES: u64 = 2 * 1024 * 1024;
+    let mut entry = archive.by_name(name).ok()?;
+    if entry.size() > MAX_ICON_BYTES {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(entry.size() as usize);
+    entry.read_to_end(&mut bytes).ok()?;
+    Some(bytes)
+}
+
+/// Bumped whenever the artwork selection changes, so caches written by an older rule (for
+/// example a wide `logo.png` banner, or art scaled by the old resizer) are not reused.
+const ICON_CACHE_REV: u32 = 4;
+
+/// Largest square artwork kept as-is; bigger squares are still accepted (the cache scales
+/// them), just ranked below anything that fits.
+const MAX_ICON_SIDE: u32 = 512;
+
+/// PNG dimensions straight from the IHDR chunk: 8-byte signature, 4-byte length, `IHDR`,
+/// then width and height as big-endian u32 — no decoding needed.
+fn png_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.len() < 24 || &bytes[0..8] != b"\x89PNG\r\n\x1a\n" || &bytes[12..16] != b"IHDR" {
+        return None;
+    }
+    let width = u32::from_be_bytes(bytes[16..20].try_into().ok()?);
+    let height = u32::from_be_bytes(bytes[20..24].try_into().ok()?);
+    Some((width, height))
+}
+
+/// Finds the mod's artwork inside the jar.
+///
+/// Fabric and Quilt store it under `assets/<modid>/icon.png`; Forge and NeoForge point at it
+/// from `logoFile`; many jars ship `catalogue_icon.png` / `icon.png` / `logo.png` / `pack.png`
+/// at the root. Jars often ship a wide marketing banner as `logo.png` (YUNG's mods:
+/// 1200×240), so a square image always wins over whatever the priority order found first —
+/// the row renders a square tile and would otherwise crop the banner.
+fn find_mod_icon<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    mod_id: &str,
+    logo_file: Option<&str>,
+) -> Option<Vec<u8>> {
+    let mut candidates: Vec<String> = Vec::new();
+    if let Some(logo) = logo_file.map(str::trim).filter(|l| !l.is_empty()) {
+        candidates.push(logo.trim_start_matches('/').to_string());
+    }
+    if !mod_id.is_empty() {
+        candidates.push(format!("assets/{mod_id}/icon.png"));
+        candidates.push(format!("assets/{mod_id}/logo.png"));
+    }
+    candidates.push("catalogue_icon.png".to_string());
+    candidates.push("icon.png".to_string());
+    candidates.push("logo.png".to_string());
+    candidates.push("pack.png".to_string());
+
+    let mut best_square: Option<(u32, Vec<u8>)> = None;
+    let mut smallest_square: Option<(u32, Vec<u8>)> = None;
+    let mut first_present: Option<Vec<u8>> = None;
+
+    for candidate in candidates {
+        let Some(bytes) = read_entry_bytes(archive, &candidate) else {
+            continue;
+        };
+        if let Some((width, height)) = png_dimensions(&bytes)
+            && width == height
+            && width > 0
+        {
+            if width <= MAX_ICON_SIDE {
+                if best_square.as_ref().is_none_or(|(side, _)| width > *side) {
+                    best_square = Some((width, bytes));
+                }
+            } else if smallest_square
+                .as_ref()
+                .is_none_or(|(side, _)| width < *side)
+            {
+                smallest_square = Some((width, bytes));
+            }
+            continue;
+        }
+        if first_present.is_none() {
+            first_present = Some(bytes);
+        }
+    }
+
+    best_square
+        .or(smallest_square)
+        .map(|(_, bytes)| bytes)
+        .or(first_present)
 }
 
 /// Parses mod metadata from zip archive bytes of a jar file.
@@ -225,6 +328,7 @@ fn fallback_metadata(fallback_name: &str) -> ModMetadata {
         description: None,
         authors: Vec::new(),
         loader: "Unknown".to_string(),
+        icon: None,
     }
 }
 
@@ -269,6 +373,8 @@ fn parse_archive_metadata<R: Read + Seek>(
             }
         }
 
+        let icon_file = val.get("icon").and_then(|v| v.as_str());
+        let icon = find_mod_icon(archive, &id, icon_file);
         return ModMetadata {
             mod_id: id,
             name,
@@ -276,6 +382,7 @@ fn parse_archive_metadata<R: Read + Seek>(
             description,
             authors,
             loader: "Fabric".to_string(),
+            icon,
         };
     }
 
@@ -320,6 +427,8 @@ fn parse_archive_metadata<R: Read + Seek>(
             }
         }
 
+        let icon_file = ql.and_then(|q| q.get("icon")).and_then(|v| v.as_str());
+        let icon = find_mod_icon(archive, &id, icon_file);
         return ModMetadata {
             mod_id: id,
             name,
@@ -327,6 +436,7 @@ fn parse_archive_metadata<R: Read + Seek>(
             description,
             authors,
             loader: "Quilt".to_string(),
+            icon,
         };
     }
 
@@ -400,6 +510,11 @@ fn parse_archive_metadata<R: Read + Seek>(
             })
             .unwrap_or_default();
 
+        let icon = find_mod_icon(
+            archive,
+            &mod_id,
+            first_mod.get("logoFile").and_then(|v| v.as_str()),
+        );
         return ModMetadata {
             mod_id,
             name,
@@ -407,6 +522,7 @@ fn parse_archive_metadata<R: Read + Seek>(
             description,
             authors,
             loader: loader.to_string(),
+            icon,
         };
     }
 
@@ -456,6 +572,7 @@ fn parse_archive_metadata<R: Read + Seek>(
                 }
             }
 
+            let icon = find_mod_icon(archive, &mod_id, m.get("logoFile").and_then(|v| v.as_str()));
             return ModMetadata {
                 mod_id,
                 name,
@@ -463,12 +580,15 @@ fn parse_archive_metadata<R: Read + Seek>(
                 description,
                 authors,
                 loader: "Forge".to_string(),
+                icon,
             };
         }
     }
 
-    // 5. Fallback
-    fallback_metadata(fallback_name)
+    // 5. Fallback: unrecognised format, but the jar may still ship artwork.
+    let mut meta = fallback_metadata(fallback_name);
+    meta.icon = find_mod_icon(archive, "", None);
+    meta
 }
 
 /// Number of hashes sent per Modrinth `version_files` request.
@@ -615,6 +735,7 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
         if let Some(cached) = cache.get(&path_key)
             && cached.size == size
             && cached.mtime_secs == mtime_secs
+            && cached.icon_rev == ICON_CACHE_REV
         {
             results.push(LocalModInfo {
                 file_name,
@@ -631,6 +752,7 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
                 size,
                 project_id: cached.project_id.clone(),
                 update_file: cached.update_file.clone(),
+                icon: cached.icon.clone(),
             });
             continue;
         }
@@ -651,6 +773,12 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
         let mod_meta = parse_mod_metadata_path(&path, fallback_name)
             .unwrap_or_else(|| fallback_metadata(fallback_name));
 
+        // Artwork is only decoded on a cache miss, and is keyed by content hash so an
+        // updated jar always gets a fresh image.
+        let icon = mod_meta.icon.as_deref().and_then(|bytes| {
+            crate::resources::cache_icon_png(bytes, &format!("{sha1}:icon-v{ICON_CACHE_REV}"))
+        });
+
         let cache_item = LocalModCacheItem {
             mod_id: mod_meta.mod_id.clone(),
             name: mod_meta.name.clone(),
@@ -664,6 +792,8 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
             mtime_secs,
             project_id: None,
             update_file: None,
+            icon: icon.clone(),
+            icon_rev: ICON_CACHE_REV,
             cached_at_secs: 0,
         };
 
@@ -685,6 +815,7 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
             size,
             project_id: None,
             update_file: None,
+            icon,
         });
     }
 
@@ -1021,6 +1152,101 @@ mod tests {
         assert_eq!(meta.description.as_deref(), Some("Legacy Forge mod"));
         assert_eq!(meta.authors, vec!["Eve"]);
         assert_eq!(meta.loader, "Forge");
+    }
+
+    #[test]
+    fn test_mod_icon_found_in_assets_and_logo_file() {
+        let dir = tempdir().unwrap();
+
+        // Fabric layout: assets/<modid>/icon.png
+        let fabric_jar = dir.path().join("icon-fabric.jar");
+        let file = fs::File::create(&fabric_jar).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file("fabric.mod.json", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(br#"{"id": "icon_mod", "name": "Icon Mod", "version": "1.0"}"#)
+            .unwrap();
+        zip.start_file("assets/icon_mod/icon.png", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"fabric-artwork").unwrap();
+        zip.finish().unwrap();
+
+        let meta = parse_mod_metadata_path(&fabric_jar, "icon-fabric").unwrap();
+        assert_eq!(meta.icon.as_deref(), Some(&b"fabric-artwork"[..]));
+
+        // Forge layout: logoFile points at the artwork path.
+        let forge_jar = dir.path().join("icon-forge.jar");
+        let file = fs::File::create(&forge_jar).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let toml = "[[mods]]\nmodId = \"logo_mod\"\ndisplayName = \"Logo Mod\"\nversion = \"2.0\"\nlogoFile = \"art/logo.png\"\n";
+        zip.start_file("META-INF/mods.toml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(toml.as_bytes()).unwrap();
+        zip.start_file("art/logo.png", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"forge-artwork").unwrap();
+        zip.finish().unwrap();
+
+        let meta = parse_mod_metadata_path(&forge_jar, "icon-forge").unwrap();
+        assert_eq!(meta.icon.as_deref(), Some(&b"forge-artwork"[..]));
+    }
+
+    #[test]
+    fn test_square_artwork_beats_wide_banner() {
+        // YUNG's mods ship a 1200x240 `logo.png` next to a 256x256 `icon.png`; cropping the
+        // banner into the square row tile is what made those covers unreadable.
+        fn png_header(width: u32, height: u32, marker: &[u8]) -> Vec<u8> {
+            let mut bytes = Vec::new();
+            bytes.extend_from_slice(b"\x89PNG\r\n\x1a\n");
+            bytes.extend_from_slice(&13u32.to_be_bytes());
+            bytes.extend_from_slice(b"IHDR");
+            bytes.extend_from_slice(&width.to_be_bytes());
+            bytes.extend_from_slice(&height.to_be_bytes());
+            bytes.extend_from_slice(&[8, 6, 0, 0, 0]);
+            bytes.extend_from_slice(marker);
+            bytes
+        }
+
+        let dir = tempdir().unwrap();
+        let jar_path = dir.path().join("banner.jar");
+        let file = fs::File::create(&jar_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file("META-INF/mods.toml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(
+            b"[[mods]]\nmodId = \"banner_mod\"\ndisplayName = \"Banner\"\nversion = \"1.0\"\n",
+        )
+        .unwrap();
+        zip.start_file("logo.png", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(&png_header(1200, 240, b"BANNER")).unwrap();
+        zip.start_file("icon.png", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(&png_header(256, 256, b"SQUARE")).unwrap();
+        zip.finish().unwrap();
+
+        let meta = parse_mod_metadata_path(&jar_path, "banner").unwrap();
+        let icon = meta.icon.expect("icon selected");
+        assert!(
+            icon.ends_with(b"SQUARE"),
+            "square icon.png must win over the wide logo.png"
+        );
+    }
+
+    #[test]
+    fn test_parsed_metadata_without_artwork_has_no_icon() {
+        let dir = tempdir().unwrap();
+        let jar_path = dir.path().join("no-art.jar");
+        let file = fs::File::create(&jar_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file("fabric.mod.json", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(br#"{"id": "no_art", "name": "No Art", "version": "1.0"}"#)
+            .unwrap();
+        zip.finish().unwrap();
+
+        let meta = parse_mod_metadata_path(&jar_path, "no-art").unwrap();
+        assert!(meta.icon.is_none());
     }
 
     #[test]

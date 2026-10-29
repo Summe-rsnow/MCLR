@@ -5,6 +5,8 @@ import { ipcClient, type CompProject, type CompFile } from '../../../ipc/client'
 import MInput from '../../../ui/MInput.vue'
 import { useCompStore } from '../store'
 import { useInstancesStore } from '../../instances/store'
+import { awaitTask } from '../../tasks/awaitTask'
+import { useErrorText } from '../../../composables/useErrorText'
 import {
   MDialog,
   MButton,
@@ -29,9 +31,13 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { formatError } = useErrorText()
 const toast = useToast()
 const compStore = useCompStore()
 const instancesStore = useInstancesStore()
+
+/** A modpack is unpacked into a new instance, so it never targets an existing one. */
+const isModpack = computed(() => props.project?.compType === 'modpack')
 
 const files = ref<CompFile[]>([])
 const loadingFiles = ref(false)
@@ -39,19 +45,21 @@ const downloadingFileId = ref<string | null>(null)
 const targetInstanceId = ref<string>('')
 const autoMatchInstance = ref(true)
 const modpackInstanceName = ref('')
+const selectedMcVersion = ref('')
+const selectedLoader = ref('')
 
 watch(
   () => props.project,
   (proj) => {
     if (proj?.compType === 'modpack') {
       modpackInstanceName.value = (proj.title || 'Modpack').replace(/[/\\?%*:|"<>]/g, '_').trim()
+      // No instance to match: the modpack's own version decides what it needs.
+      selectedMcVersion.value = ''
+      selectedLoader.value = ''
     }
   },
   { immediate: true },
 )
-
-const selectedMcVersion = ref('')
-const selectedLoader = ref('')
 
 const canonicalMcVersions = [
   '26.3',
@@ -155,18 +163,25 @@ watch(
   async (isOpen) => {
     if (!isOpen || !props.project) return
 
-    // Initialize target instance
-    if (
-      props.initialTargetInstanceId &&
-      instancesStore.instances.some((i) => i.id === props.initialTargetInstanceId)
-    ) {
-      targetInstanceId.value = props.initialTargetInstanceId
-    } else if (instancesStore.instances.length > 0 && instancesStore.instances[0]?.id) {
-      targetInstanceId.value = instancesStore.instances[0].id
-    }
+    if (isModpack.value) {
+      // Nothing to target: the archive is unpacked into a fresh instance of its own.
+      targetInstanceId.value = ''
+      selectedMcVersion.value = ''
+      selectedLoader.value = ''
+    } else {
+      // Initialize target instance
+      if (
+        props.initialTargetInstanceId &&
+        instancesStore.instances.some((i) => i.id === props.initialTargetInstanceId)
+      ) {
+        targetInstanceId.value = props.initialTargetInstanceId
+      } else if (instancesStore.instances.length > 0 && instancesStore.instances[0]?.id) {
+        targetInstanceId.value = instancesStore.instances[0].id
+      }
 
-    if (autoMatchInstance.value && selectedInstance.value) {
-      applyInstanceFilter(selectedInstance.value)
+      if (autoMatchInstance.value && selectedInstance.value) {
+        applyInstanceFilter(selectedInstance.value)
+      }
     }
 
     loadingFiles.value = true
@@ -183,6 +198,7 @@ watch(
 // PCL compatibility check algorithm
 const filteredFiles = computed(() => {
   const isNonModType =
+    props.project?.compType === 'modpack' ||
     props.project?.compType === 'resourcepack' ||
     props.project?.compType === 'shader' ||
     props.project?.compType === 'datapack' ||
@@ -236,6 +252,10 @@ function getChannelVariant(channel: string): 'primary' | 'warning' | 'neutral' {
 }
 
 async function handleDownload(file: CompFile) {
+  if (isModpack.value) {
+    await handleInstallModpack(file)
+    return
+  }
   if (!targetInstanceId.value) {
     toast.warning(t('comp.quickDownload.selectInstanceFirst'))
     return
@@ -273,9 +293,19 @@ async function handleInstallModpack(file: CompFile) {
   }
   downloadingFileId.value = file.id
   try {
-    await ipcClient.modpackInstallRemote(file, name)
-    toast.success(t('comp.modpackInstallDialog.success'))
+    const taskId = await ipcClient.modpackInstallRemote(file, name)
     emit('update:open', false)
+    // The command only queues the work: unpack + loader + base game run in the task.
+    const outcome = await awaitTask(taskId)
+    if (outcome.state === 'failed' || outcome.state === 'canceled') {
+      toast.danger(formatError(outcome.error) || t('comp.modpackInstallDialog.failed'))
+      return
+    }
+    if (outcome.state === 'success') {
+      // Make the freshly completed instance visible everywhere.
+      await instancesStore.fetchInstances(true)
+    }
+    toast.success(t('comp.modpackInstallDialog.success'))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : t('comp.modpackInstallDialog.failed')
     toast.danger(msg)

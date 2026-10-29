@@ -39,6 +39,7 @@ export interface ResourcePatch {
   updateAvailable?: boolean | null
   dependents?: string[] | null
   state?: ResourceState | null
+  icon?: string | null
 }
 
 export interface ResourcesPatchEvent {

@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.28] - 2026-10-29
+
+Community modpacks are treated as standalone instances, the instance detail page leads with
+resources, and installed mods finally show their real cover art.
+
+### Added
+- **Mod covers in the resource list**: artwork is read from the jar (`fabric.mod.json` /
+  `quilt.mod.json` `icon`, Forge/NeoForge `logoFile`, `catalogue_icon.png` / `icon.png` /
+  `logo.png` / `pack.png`), normalised into an 80×80 cache file sized for the 40 px tile, and
+  replaced by the project's own Modrinth `icon_url` once the background metadata pass
+  resolves it — the same order PCL uses (`Comp.LogoUrl` → jar `Logo` → placeholder).
+- **Category chips from project metadata** on each mod row, translated when the locale has a
+  label, followed by file name · size · description (PCL layout).
+- **Mods is the first tab** of the instance resource group, and the resource group comes
+  first on the instance page, which now opens on the mods tab.
+
+### Changed
+- **A modpack no longer requires a target instance**: the modpack tab drops the
+  instance/version selectors and clears any filters inherited from the mods tab, and the
+  quick-download dialog starts from "all versions" so its file list can no longer be
+  filtered into an empty state by whichever instance happened to be selected.
+- **Modpack installs report completion when the task completes**: the install commands only
+  queue work (download → unpack → loader → base game), so the success toast and the instance
+  list refresh now wait for the task's terminal state instead of firing immediately.
+- Icon loading never blocks the list: the placeholder glyph paints first and the artwork
+  fades in over it.
+
+### Fixed
+- Mod artwork rendered at its natural size and got clipped to the tile's top-left corner —
+  `MImage`'s own `relative` class won over the `absolute inset-0` passed into it, so the
+  `inset` never applied.
+- Wide `logo.png` banners (e.g. YUNG's 1200×240) were picked over the square `icon.png` and
+  cropped into an unreadable sliver; square artwork now wins, and stale cache entries are
+  re-parsed through an artwork-revision counter.
+- `resources://patch` could not update artwork after the first paint; the patch event now
+  carries the icon.
+
+### Dependencies
+- Frontend majors: `pinia` 4, `vue-router` 5, `markdown-it` 15, `vitest` 5, `happy-dom` 21,
+  `vue-tsc` 3, `unocss` 66.12, `oxlint` 1.90 / `oxfmt` 0.75, `@types/node` 26. TypeScript
+  stays on `^5.9.3` because `vue-tsc` cannot consume the TypeScript 7 package layout yet.
+- Rust majors: `reqwest` 0.13, `hickory-resolver` 0.26 (new `Resolver`/`TokioRuntimeProvider`
+  API), `zip` 9, `rand` 0.10, `aes-gcm` 0.11, `windows` 0.62, `window-vibrancy` 0.8,
+  `toml` 1.1, `dirs` 7, `winreg` 0.56, `base64` 0.23, `sha1`/`sha2`/`md-5` 0.11, and the
+  `tauri-specta` / `specta` / `specta-typescript` stack (rc.26 / rc.26 / 0.0.13).
+
 ## [0.0.27] - 2026-10-28
 
 Performance + resource iteration. No feature was added to the game pipeline; the

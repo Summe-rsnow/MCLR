@@ -5,7 +5,7 @@ const tab: InstanceDetailTab = {
   key: 'mods',
   titleKey: 'instanceDetail.tabs.mods',
   icon: 'i-lucide-puzzle',
-  order: 70,
+  order: 45,
   group: 'resources',
   component: defineAsyncComponent(() => import('./ModsTab.vue')),
 }

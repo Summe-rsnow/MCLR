@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.27`
-- **Next Milestone**: `v0.0.28` (towards `v0.1.0`)
+- **Current Version**: `0.0.28`
+- **Next Milestone**: `v0.0.29` (towards `v0.1.0`)
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -32,3 +32,4 @@
 | v0.0.25 | Advanced launch options, loader artwork & PCL version rules, floating collision, responsive layout | done | v0.0.25 | v0.0.25 | 2026-10-28 |
 | v0.0.26 | Launch agents, security hardening, Java resolution rework & material-aware selection | done | v0.0.26 | v0.0.26 | 2026-10-28 |
 | v0.0.27 | Smoothness, CPU & memory: incremental logs, compositor shimmer, verified-manifest fast path, download pool | done | v0.0.27 | v0.0.27 | 2026-10-28 |
+| v0.0.28 | Standalone modpack instances, mods-first resource tabs, mod artwork pipeline & full dependency refresh | done | v0.0.28 | v0.0.28 | 2026-10-29 |

@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use windows::Win32::Foundation::{BOOL, CloseHandle, HWND, LPARAM};
+use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM};
 use windows::Win32::System::Threading::{
     ABOVE_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS, OpenProcess, PROCESS_SET_INFORMATION,
     SetPriorityClass,
@@ -13,7 +13,7 @@ use windows::Win32::System::Threading::{
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, SetWindowTextW,
 };
-use windows::core::PCWSTR;
+use windows::core::{BOOL, PCWSTR};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 

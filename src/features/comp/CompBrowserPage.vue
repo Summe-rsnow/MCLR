@@ -43,10 +43,18 @@ function isForgeUnder114(mcVer: string): boolean {
   return false
 }
 
+/**
+ * Modpacks become instances of their own, so their search must never be bound to an
+ * existing instance's version/loader — that would filter out every modpack that does not
+ * match one already-installed game.
+ */
+const isInstanceScopedTab = computed(() => compStore.activeTab !== 'modpack')
+
 function applyTargetInstance(
   inst: { kind?: string; mcVersion?: string; loaders?: string[] } | null,
   triggerSearch = true,
 ) {
+  if (!isInstanceScopedTab.value) return
   if (inst) {
     compStore.mcVersion = inst.mcVersion || null
     let primaryLoader: string | null = null
@@ -216,13 +224,22 @@ const loaderOptions = computed(() => [
 
 function onTabChange(tabValue: string): void {
   compStore.activeTab = tabValue as CompType | 'favorites'
+  const query = route?.query ? { ...route.query } : {}
   if (tabValue === 'mod') {
     const curInst = instancesStore.instances.find((i) => i.id === targetInstanceId.value)
     if (curInst && !curInst.modable) {
       clearTargetInstance()
+      delete query.instance
     }
   }
-  const query = route?.query ? { ...route.query } : {}
+  // A modpack unpacks into a brand-new instance, so nothing about it may be inherited
+  // from an installed instance: start from an unconstrained search.
+  if (tabValue === 'modpack') {
+    clearTargetInstance()
+    delete query.instance
+    compStore.mcVersion = null
+    compStore.loader = null
+  }
   if (tabValue === 'favorites') {
     if (router) router.replace({ path: '/comp/favorites', query }).catch(() => {})
   } else {
@@ -319,40 +336,46 @@ onMounted(async () => {
     await instancesStore.fetchInstances()
   }
 
-  let defaultInstId = ''
-  if (route?.query?.instance) {
-    defaultInstId = String(route.query.instance)
-  } else if (launchStore.selectedInstance?.id) {
-    defaultInstId = launchStore.selectedInstance.id
-  } else if (instancesStore.instances.length > 0 && instancesStore.instances[0]?.id) {
-    defaultInstId = instancesStore.instances[0].id
-  }
-
-  if (defaultInstId) {
-    targetInstanceId.value = defaultInstId
-    const inst =
-      instancesStore.instances.find((i) => i.id === defaultInstId || i.name === defaultInstId) ||
-      null
-    applyTargetInstance(inst, false)
-  }
-
-  if (route?.query?.q) {
-    compStore.query = String(route.query.q)
-  }
   await compStore.loadFavorites()
   const path = route?.path || ''
   const routeType =
     (route?.params?.type as string) ||
     path.match(/^\/comp\/(mod|modpack|resourcepack|shader|datapack|world)/)?.[1]
-  if (path === '/comp/favorites' || routeType === 'favorites') {
+  const isFavorites = path === '/comp/favorites' || routeType === 'favorites'
+  if (isFavorites) {
     compStore.activeTab = 'favorites'
   } else if (routeType) {
     compStore.activeTab = routeType as CompType
     compStore.compType = routeType as CompType
-    await compStore.search(true)
   } else {
     compStore.activeTab = 'mod'
     compStore.compType = 'mod'
+  }
+
+  // Only instance-scoped tabs adopt a target instance; a modpack never does.
+  if (isInstanceScopedTab.value) {
+    let defaultInstId = ''
+    if (route?.query?.instance) {
+      defaultInstId = String(route.query.instance)
+    } else if (launchStore.selectedInstance?.id) {
+      defaultInstId = launchStore.selectedInstance.id
+    } else if (instancesStore.instances.length > 0 && instancesStore.instances[0]?.id) {
+      defaultInstId = instancesStore.instances[0].id
+    }
+
+    if (defaultInstId) {
+      targetInstanceId.value = defaultInstId
+      const inst =
+        instancesStore.instances.find((i) => i.id === defaultInstId || i.name === defaultInstId) ||
+        null
+      applyTargetInstance(inst, false)
+    }
+  }
+
+  if (route?.query?.q) {
+    compStore.query = String(route.query.q)
+  }
+  if (!isFavorites) {
     await compStore.search(true)
   }
 })

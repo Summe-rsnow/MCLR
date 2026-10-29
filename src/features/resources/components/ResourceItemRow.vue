@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import type { ResourceEntry, ResourceKind } from '../../../ipc/client'
@@ -22,8 +22,38 @@ const emit = defineEmits<{
   (e: 'toggle', entry: ResourceEntry): void
 }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const menuOpen = ref(false)
+
+/**
+ * Cached jar artwork is a local file served through the asset protocol; a mod whose jar
+ * ships no artwork falls back to its Modrinth project icon, which is a plain URL.
+ */
+const iconSrc = computed(() => {
+  const icon = props.entry.icon
+  if (!icon) return null
+  return /^https?:\/\//i.test(icon) ? icon : convertFileSrc(icon)
+})
+
+const fallbackIcon = computed(() => {
+  if (props.entry.isDir) return 'i-lucide-folder'
+  switch (props.kind) {
+    case 'mod':
+      return 'i-lucide-puzzle'
+    case 'resourcePack':
+      return 'i-lucide-box'
+    case 'shader':
+      return 'i-lucide-sparkles'
+    default:
+      return 'i-lucide-file-code'
+  }
+})
+
+/** PCL parity: category slugs from the project metadata are shown in the UI language. */
+function tagLabel(tag: string): string {
+  const key = `comp.search.categories.${tag}`
+  return te(key) ? t(key) : tag
+}
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return '0 B'
@@ -66,32 +96,24 @@ function onMenuDelete() {
 
     <!-- Left: Icon, Title, Tags, Description -->
     <div class="flex items-center space-x-3 min-w-0 flex-1 mr-3 overflow-hidden">
-      <!-- Resource Icon / Thumbnail -->
+      <!--
+        Icon tile: the fallback glyph paints immediately and the artwork fades in over it
+        once decoded, so a slow jar read or CDN request never blocks or blanks the list.
+        The image gets an explicit box — MImage's root is `position: relative`, so an
+        `absolute inset-0` class would lose to it and leave the art at its natural size.
+      -->
       <div
-        class="w-10 h-10 rounded-lg overflow-hidden bg-sunken shrink-0 flex items-center justify-center border border-line"
+        class="relative w-10 h-10 rounded-lg overflow-hidden bg-sunken shrink-0 border border-line"
       >
+        <span :class="[fallbackIcon, 'absolute inset-0 m-auto w-5 h-5 text-primary']" />
         <MImage
-          v-if="entry.icon"
-          :src="convertFileSrc(entry.icon)"
-          alt="pack-icon"
-          :fallback-icon="
-            entry.isDir
-              ? 'i-lucide-folder'
-              : kind === 'mod'
-                ? 'i-lucide-puzzle'
-                : kind === 'resourcePack'
-                  ? 'i-lucide-box'
-                  : kind === 'shader'
-                    ? 'i-lucide-sparkles'
-                    : 'i-lucide-file-code'
-          "
-          class="w-full h-full"
+          v-if="iconSrc"
+          :src="iconSrc"
+          alt=""
+          fit="cover"
+          :fallback-icon="fallbackIcon"
+          class="w-10 h-10"
         />
-        <span v-else-if="entry.isDir" class="i-lucide-folder text-primary w-5 h-5" />
-        <span v-else-if="kind === 'mod'" class="i-lucide-puzzle text-primary w-5 h-5" />
-        <span v-else-if="kind === 'resourcePack'" class="i-lucide-box text-primary w-5 h-5" />
-        <span v-else-if="kind === 'shader'" class="i-lucide-sparkles text-primary w-5 h-5" />
-        <span v-else class="i-lucide-file-code text-primary w-5 h-5" />
       </div>
 
       <div
@@ -121,15 +143,19 @@ function onMenuDelete() {
               })
             }}
           </MBadge>
-
-          <MBadge v-for="tag in entry.tags" :key="tag" variant="neutral" size="sm">
-            {{ tag }}
-          </MBadge>
         </div>
 
+        <!--
+          PCL parity: categories first (project metadata), then file name · size ·
+          description on the same dim line.
+        -->
         <div
           class="flex items-center space-x-2 text-xs text-fg-muted min-w-0 overflow-hidden mt-0.5"
         >
+          <MBadge v-for="tag in entry.tags" :key="tag" variant="neutral" size="sm">
+            {{ tagLabel(tag) }}
+          </MBadge>
+          <span v-if="entry.tags.length > 0" class="shrink-0">•</span>
           <span class="truncate shrink max-w-[240px]">{{ entry.fileName }}</span>
           <span class="shrink-0">•</span>
           <span class="shrink-0">{{ formatBytes(entry.size) }}</span>
