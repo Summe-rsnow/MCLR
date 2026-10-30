@@ -140,4 +140,16 @@ describe('Settings Game feature', () => {
     expect(gpuRow).toBeTruthy()
     expect(gpuRow!.findComponent({ name: 'MSwitch' }).props('modelValue')).toBe(true)
   })
+
+  it('disables the renderer selector when the mesa bridge is missing', async () => {
+    const wrapper = mount(SettingsGamePage, {
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('未安装软件渲染桥')
+    expect(wrapper.find('[data-testid="select-renderer"]').exists()).toBe(true)
+    // Only the game default is offered, so a dead choice cannot be picked.
+    expect(wrapper.text()).not.toContain('软件渲染 (llvmpipe)')
+  })
 })

@@ -26,7 +26,8 @@ const emit = defineEmits<{
   (e: 'update:cascadeOpen', val: boolean): void
   (e: 'update:updateOpen', val: boolean): void
   (e: 'update:batchUpdateRiskOpen', val: boolean): void
-  (e: 'cascadeConfirm'): void
+  (e: 'cascadeConfirmOnly'): void
+  (e: 'cascadeConfirmAll'): void
   (e: 'singleUpdate', entry: ResourceEntry): void
   (e: 'batchUpdate', list: ResourceEntry[]): void
 }>()
@@ -125,10 +126,10 @@ const { t } = useI18n()
           <MButton variant="tonal" @click="emit('update:cascadeOpen', false)">
             {{ t('resources.actions.cancel') }}
           </MButton>
-          <MButton variant="tonal" @click="emit('cascadeConfirm')">
+          <MButton variant="tonal" @click="emit('cascadeConfirmOnly')">
             {{ t('resources.cascade.onlyThis') }}
           </MButton>
-          <MButton variant="danger" @click="emit('cascadeConfirm')">
+          <MButton variant="danger" @click="emit('cascadeConfirmAll')">
             {{
               cascadeAction === 'disable'
                 ? t('resources.cascade.cascadeDisable')

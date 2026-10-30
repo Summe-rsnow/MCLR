@@ -1,4 +1,4 @@
-import type { CacheSizeInfo, DailyLuckResult, SkinFetchResult } from '../../ipc/client'
+import type { CacheSizeInfo, SkinFetchResult } from '../../ipc/client'
 
 export const mockSkinResult: SkinFetchResult = {
   username: 'Notch',
@@ -18,13 +18,6 @@ export const mockCacheInfo: CacheSizeInfo = {
 }
 
 let currentCacheState: CacheSizeInfo = { ...mockCacheInfo }
-
-export const mockDailyLuckResult: DailyLuckResult = {
-  date: '2026-10-24',
-  username: 'Steve',
-  score: 88,
-  levelKey: 'blessing',
-}
 
 export let lastCreatedShortcut: { instanceId: string; shortcutName?: string | null } | null = null
 export let lastCustomDownload: { url: string; destPath: string } | null = null
@@ -81,16 +74,6 @@ const handlers = {
       shortcutName: args.shortcutName ? String(args.shortcutName) : null,
     }
     return 'C:/Users/User/Desktop/Minecraft.lnk'
-  },
-  tools_daily_luck: (args: Record<string, unknown>): DailyLuckResult => {
-    const username = String(args.username ?? 'Steve')
-    return {
-      ...mockDailyLuckResult,
-      username,
-    }
-  },
-  tools_list_media_files: (_args: Record<string, unknown>): string[] => {
-    return ['/path/to/media1.mp3', '/path/to/media2.mp3']
   },
 }
 

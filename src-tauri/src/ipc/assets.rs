@@ -25,7 +25,7 @@ fn allow_dir<R: Runtime>(app: &AppHandle<R>, dir: &Path) {
     }
 }
 
-/// Allow a user-picked directory (background image / music folder) recursively.
+/// Allow a user-picked directory (background image folder) recursively.
 ///
 /// The directory comes from a native dialog, but the command is still callable
 /// from the webview, so obviously system-critical locations are rejected: the

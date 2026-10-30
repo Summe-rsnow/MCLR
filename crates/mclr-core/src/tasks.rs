@@ -38,9 +38,70 @@ pub struct TaskNode {
     pub error: Option<AppError>,
 }
 
+/// Shared handle a worker polls to honour pause/cancel requests.
+///
+/// Cloned per task at creation time; workers call [`TaskControl::checkpoint`] between
+/// files/chunks, which is what actually stops progress and bandwidth.
+#[derive(Clone)]
+pub struct TaskControl {
+    token: CancellationToken,
+    paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl TaskControl {
+    fn new() -> Self {
+        Self {
+            token: CancellationToken::new(),
+            paused: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+
+    /// True once the user cancelled the task.
+    pub fn is_cancelled(&self) -> bool {
+        self.token.is_cancelled()
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn set_paused(&self, paused: bool) {
+        self.paused
+            .store(paused, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Cancels the task; workers observe it through [`TaskControl::is_cancelled`].
+    pub fn cancel(&self) {
+        self.token.cancel();
+    }
+
+    /// Raw token, for `select!`-style racing against the work.
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.token.clone()
+    }
+
+    /// Blocks while the task is paused and fails once it is cancelled.
+    pub async fn checkpoint(&self) -> Result<(), TaskAborted> {
+        if self.token.is_cancelled() {
+            return Err(TaskAborted);
+        }
+        while self.is_paused() {
+            tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+            if self.token.is_cancelled() {
+                return Err(TaskAborted);
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Returned by [`TaskControl::checkpoint`] once the task was cancelled.
+#[derive(Debug, Clone, Copy)]
+pub struct TaskAborted;
+
 struct InternalTask {
     node: TaskNode,
-    token: CancellationToken,
+    control: TaskControl,
 }
 
 /// Thread-safe registry and coordinator for all long-running tasks.
@@ -69,9 +130,9 @@ impl TaskCenter {
         parent_id: Option<String>,
         title_key: impl Into<String>,
         title_params: HashMap<String, String>,
-    ) -> (String, CancellationToken) {
+    ) -> (String, TaskControl) {
         let id = Uuid::new_v4().to_string();
-        let token = CancellationToken::new();
+        let control = TaskControl::new();
 
         let node = TaskNode {
             id: id.clone(),
@@ -90,13 +151,19 @@ impl TaskCenter {
                 id.clone(),
                 InternalTask {
                     node: node.clone(),
-                    token: token.clone(),
+                    control: control.clone(),
                 },
             );
         }
 
         let _ = self.update_tx.send(vec![node]);
-        (id, token)
+        (id, control)
+    }
+
+    /// Handle a worker uses to honour pause/cancel requests for `id`.
+    pub async fn control(&self, id: &str) -> Option<TaskControl> {
+        let lock = self.tasks.read().await;
+        lock.get(id).map(|task| task.control.clone())
     }
 
     /// Marks a task as `Running`.
@@ -107,6 +174,11 @@ impl TaskCenter {
             let task = lock
                 .get_mut(id)
                 .ok_or_else(|| CoreError::TaskNotFound(id.to_string()))?;
+            // A cancelled task must not start: the worker would otherwise begin work
+            // the user already aborted.
+            if task.node.state == TaskState::Canceled {
+                return Ok(());
+            }
             task.node.state = TaskState::Running;
             diff.push(task.node.clone());
         }
@@ -162,6 +234,10 @@ impl TaskCenter {
             let task = lock
                 .get_mut(id)
                 .ok_or_else(|| CoreError::TaskNotFound(id.to_string()))?;
+            // A cancelled task stays cancelled: the worker may still be winding down.
+            if task.node.state == TaskState::Canceled {
+                return Ok(());
+            }
             task.node.state = TaskState::Success;
             task.node.progress = 1.0;
             task.node.speed_bps = 0;
@@ -179,6 +255,9 @@ impl TaskCenter {
             let task = lock
                 .get_mut(id)
                 .ok_or_else(|| CoreError::TaskNotFound(id.to_string()))?;
+            if task.node.state == TaskState::Canceled {
+                return Ok(());
+            }
             task.node.state = TaskState::Failed;
             task.node.error = Some(error);
             task.node.speed_bps = 0;
@@ -198,6 +277,7 @@ impl TaskCenter {
                 .ok_or_else(|| CoreError::TaskNotFound(id.to_string()))?;
             if task.node.state == TaskState::Running {
                 task.node.state = TaskState::Paused;
+                task.control.set_paused(true);
                 diff.push(task.node.clone());
             }
         }
@@ -217,6 +297,7 @@ impl TaskCenter {
                 .ok_or_else(|| CoreError::TaskNotFound(id.to_string()))?;
             if task.node.state == TaskState::Paused {
                 task.node.state = TaskState::Running;
+                task.control.set_paused(false);
                 diff.push(task.node.clone());
             }
         }
@@ -259,7 +340,7 @@ impl TaskCenter {
                 {
                     task.node.state = TaskState::Canceled;
                     task.node.speed_bps = 0;
-                    task.token.cancel();
+                    task.control.cancel();
                     diff.push(task.node.clone());
                 }
             }
@@ -332,6 +413,32 @@ mod tests {
         let update = rx.recv().await.unwrap();
         assert_eq!(update[0].state, TaskState::Success);
         assert_eq!(update[0].progress, 1.0);
+    }
+
+    #[tokio::test]
+    async fn pause_and_cancel_are_visible_to_workers() {
+        let center = TaskCenter::new();
+        let (id, control) = center
+            .create_task(None, "task.download", HashMap::new())
+            .await;
+        center.start_task(&id).await.unwrap();
+
+        // Pause: the control a worker holds must report it, and resume must clear it.
+        center.pause_task(&id).await.unwrap();
+        assert!(control.is_paused());
+        center.resume_task(&id).await.unwrap();
+        assert!(!control.is_paused());
+        assert!(!control.is_cancelled());
+        assert!(control.checkpoint().await.is_ok());
+
+        // Cancel: checkpoint fails, and a late complete must not resurrect the task.
+        center.cancel_task(&id).await.unwrap();
+        assert!(control.is_cancelled());
+        assert!(control.checkpoint().await.is_err());
+        center.complete_task(&id).await.unwrap();
+
+        let tasks = center.list_tasks().await;
+        assert_eq!(tasks[0].state, TaskState::Canceled);
     }
 
     #[tokio::test]

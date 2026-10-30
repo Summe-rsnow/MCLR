@@ -41,6 +41,8 @@
     "advancedSection": "高级启动选项",
     "renderer": "渲染器",
     "rendererDefault": "游戏默认",
+    "rendererUnavailable": "未安装软件渲染桥（mesa-loader），仅可使用游戏默认渲染器",
+    "rendererSaved": "已保存：{value}（当前不可用）",
     "rendererSoftware": "软件渲染 (llvmpipe)",
     "rendererD3d12": "DirectX 12",
     "rendererVulkan": "Vulkan (zink)",

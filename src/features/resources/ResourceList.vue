@@ -373,15 +373,58 @@ function openJarInJar(entry: ResourceEntry) {
   jijDrawerOpen.value = true
 }
 
-function handleCascadeConfirm() {
-  if (cascadeTargetEntry.value) {
-    if (cascadeAction.value === 'disable') {
-      doToggle(cascadeTargetEntry.value)
-    } else {
-      handleDelete(cascadeTargetEntry.value)
+/** Finds the listed entry for a dependency name (deps are reported by file name). */
+function findEntryByName(name: string): ResourceEntry | undefined {
+  return entries.value.find((e) => e.fileName === name || e.fileName === `${name}.disabled`)
+}
+
+async function applyCascade(action: 'disable' | 'delete', includeDependents: boolean) {
+  const target = cascadeTargetEntry.value
+  const dependents = [...cascadeDependents.value]
+  cascadeDialogOpen.value = false
+  if (!target) return
+
+  const entriesToApply = [target]
+  if (includeDependents) {
+    for (const name of dependents) {
+      const dep = findEntryByName(name)
+      if (dep) entriesToApply.push(dep)
     }
   }
-  cascadeDialogOpen.value = false
+
+  if (action === 'disable') {
+    for (const entry of entriesToApply) {
+      if (entry.enabled) await doToggle(entry)
+    }
+    return
+  }
+
+  // Deleting: one confirmation for the whole set, then a single delete call.
+  const ok = await confirmDanger({
+    title: t('resources.delete.confirmTitle'),
+    content: t('resources.cascade.deleteBatchMessage', {
+      count: entriesToApply.length,
+    }),
+  })
+  if (!ok) return
+
+  try {
+    const paths = entriesToApply.map((e) => e.path)
+    await ipcClient.resourcesDelete(paths, false)
+    entries.value = entries.value.filter((e) => !paths.includes(e.path))
+    for (const path of paths) selectedPaths.value.delete(path)
+    toast.success(t('resources.cascade.deletedBatch', { count: paths.length }))
+  } catch (err: unknown) {
+    toast.danger(String(err))
+  }
+}
+
+function handleCascadeConfirmOnly() {
+  void applyCascade(cascadeAction.value, false)
+}
+
+function handleCascadeConfirmAll() {
+  void applyCascade(cascadeAction.value, true)
 }
 
 // Multi-select & Batch Actions
@@ -793,7 +836,6 @@ watch(
       :cascade-open="cascadeDialogOpen"
       :cascade-action="cascadeAction"
       :cascade-dependents="cascadeDependents"
-      :cascade-target="cascadeTargetEntry"
       :update-open="updateDialogOpen"
       :update-target="updateTargetEntry"
       :batch-update-risk-open="batchUpdateRiskDialogOpen"
@@ -803,7 +845,8 @@ watch(
       @update:cascade-open="cascadeDialogOpen = $event"
       @update:update-open="updateDialogOpen = $event"
       @update:batch-update-risk-open="batchUpdateRiskDialogOpen = $event"
-      @cascade-confirm="handleCascadeConfirm"
+      @cascade-confirm-only="handleCascadeConfirmOnly"
+      @cascade-confirm-all="handleCascadeConfirmAll"
       @single-update="doSingleUpdate"
       @batch-update="doBatchUpdate"
     />

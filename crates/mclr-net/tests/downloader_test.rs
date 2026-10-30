@@ -488,3 +488,76 @@ async fn test_concurrency_bounded() {
         assert_eq!(String::from_utf8(bytes).unwrap(), payload);
     }
 }
+
+/// A paused task must stop the transfer instead of streaming the file to completion.
+#[tokio::test]
+async fn paused_task_blocks_before_any_request_and_resumes() {
+    use mclr_core::{TaskCenter, TaskState};
+    use std::sync::Arc;
+
+    let server = MockServer::start().await;
+    let payload = vec![7u8; 1024];
+    let mut hasher = Sha1::new();
+    hasher.update(&payload);
+    let expected_sha1 = hex::encode(hasher.finalize());
+
+    Mock::given(method("GET"))
+        .and(path("/paused.bin"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(payload.clone()))
+        .mount(&server)
+        .await;
+
+    let dir = tempdir().unwrap();
+    let dest = dir.path().join("paused.bin");
+    let url = Url::parse(&format!("{}/paused.bin", server.uri())).unwrap();
+
+    let center = Arc::new(TaskCenter::new());
+    let (task_id, _control) = center
+        .create_task(None, "task.test", Default::default())
+        .await;
+    center.start_task(&task_id).await.unwrap();
+    center.pause_task(&task_id).await.unwrap();
+
+    let downloader = Downloader::new(reqwest::Client::new(), NetSettings::default());
+    let spec = DownloadSpec {
+        urls: vec![url],
+        dest: dest.clone(),
+        size: Some(payload.len() as u64),
+        sha1: Some(expected_sha1.clone()),
+        sha256: None,
+        md5: None,
+    };
+
+    // Paused: the download future must stay pending (no request, no file).
+    let paused = tokio::time::timeout(
+        Duration::from_millis(400),
+        downloader.download_many(vec![spec], Some((&center, &task_id))),
+    )
+    .await;
+    assert!(paused.is_err(), "paused download must not finish");
+    assert!(
+        !dest.exists(),
+        "paused download must not write the file yet"
+    );
+    assert_eq!(
+        center.list_tasks().await[0].state,
+        TaskState::Paused,
+        "pause must survive the wait"
+    );
+
+    // Resume: the same task must complete and produce the exact bytes.
+    center.resume_task(&task_id).await.unwrap();
+    let spec = DownloadSpec {
+        urls: vec![Url::parse(&format!("{}/paused.bin", server.uri())).unwrap()],
+        dest: dest.clone(),
+        size: Some(payload.len() as u64),
+        sha1: Some(expected_sha1),
+        sha256: None,
+        md5: None,
+    };
+    downloader
+        .download_many(vec![spec], Some((&center, &task_id)))
+        .await
+        .expect("resumed download completes");
+    assert_eq!(tokio::fs::read(&dest).await.unwrap(), payload);
+}

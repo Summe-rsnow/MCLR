@@ -56,6 +56,10 @@ const sortOptions = computed(() => [
     label: `${t('instances.toolbar.sort')}: ${t('instances.toolbar.sortCategory')}`,
     value: 'category',
   },
+  {
+    label: `${t('instances.toolbar.sort')}: ${t('instances.toolbar.sortLastPlayed')}`,
+    value: 'lastPlayed',
+  },
 ])
 
 // Collapse state for card groups (default collapsed: rubbish, error, fool)
@@ -237,7 +241,7 @@ function navigateToDetail(id: string, tab?: string) {
       :show-hidden="instancesStore.showHidden"
       @update:current-folder="instancesStore.switchFolder"
       @update:search-query="instancesStore.searchQuery = $event"
-      @update:sort-by="instancesStore.sortBy = $event"
+      @update:sort-by="instancesStore.setSort($event)"
       @update:show-hidden="instancesStore.showHidden = $event"
       @manage-folders="showFolders = true"
     />

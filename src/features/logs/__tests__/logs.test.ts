@@ -6,6 +6,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useLogsStore } from '../store'
 import LogsPage from '../LogsPage.vue'
 import { useDialog } from '../../../ui/useDialog'
+import { useToast } from '../../../ui/useToast'
 import { setupMockIpc } from '../../../ipc/mock'
 import { ipcClient } from '../../../ipc/client'
 import { resetMockLaunchData, mockRunningProcesses } from '../../launch/mock'
@@ -175,6 +176,60 @@ describe('Logs feature', () => {
       'MCLR initialized',
     )
     expect(wrapper.text()).not.toContain('Loading Minecraft 1.20.1')
+  })
+
+  it('prunes and clears launcher logs from the launcher tab', async () => {
+    await router.push('/logs?tab=launcher')
+    const { activeDialog, handleConfirm } = useDialog()
+    const toasts = useToast().toasts
+    toasts.value.splice(0)
+    const wrapper = mount(LogsPage, {
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    const pruneSpy = vi
+      .spyOn(ipcClient, 'launcherLogsPrune')
+      .mockResolvedValue({ removed: 3, skipped: 0 })
+    const clearSpy = vi
+      .spyOn(ipcClient, 'launcherLogsClear')
+      .mockResolvedValue({ removed: 2, skipped: 1 })
+
+    await wrapper.find('[data-testid="launcher-logs-prune"]').trigger('click')
+    await flushPromises()
+    expect(pruneSpy).toHaveBeenCalled()
+    expect(toasts.value.at(-1)?.message).toBe('已清理 3 个过期日志')
+
+    await wrapper.find('[data-testid="launcher-logs-clear"]').trigger('click')
+    await flushPromises()
+    // Destructive: it must ask first, then delete on confirm.
+    expect(activeDialog.value?.severity).toBe('danger')
+    expect(clearSpy).not.toHaveBeenCalled()
+
+    handleConfirm()
+    await flushPromises()
+    expect(clearSpy).toHaveBeenCalled()
+    expect(toasts.value.at(-1)?.message).toBe('已删除 2 个日志文件')
+  })
+
+  it('opens the log folder through path_open', async () => {
+    await router.push('/logs?tab=launcher')
+    const openSpy = vi.spyOn(ipcClient, 'pathOpen').mockResolvedValue()
+    const dirSpy = vi.spyOn(ipcClient, 'launcherLogsDir')
+    const wrapper = mount(LogsPage, {
+      global: {
+        plugins: [i18n, router],
+      },
+    })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="launcher-logs-open-folder"]').trigger('click')
+    await flushPromises()
+
+    expect(dirSpy).toHaveBeenCalled()
+    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('logs'))
   })
 
   it('renders tasks tab when route has tab=tasks query', async () => {

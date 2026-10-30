@@ -73,7 +73,9 @@
     "deleteMessage": "删除此模组会影响 {count} 个依赖它的模组：\n{names}",
     "onlyThis": "仅此模组",
     "cascadeDisable": "连带禁用",
-    "cascadeDelete": "连带删除"
+    "cascadeDelete": "连带删除",
+    "deleteBatchMessage": "将删除所选模组及其依赖模组，共 {count} 个文件（移入回收站）",
+    "deletedBatch": "已删除 {count} 个模组"
   },
   "update": {
     "warningTitle": "批量更新风险提示",

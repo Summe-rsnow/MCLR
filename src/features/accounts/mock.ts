@@ -101,7 +101,7 @@ const handlers = {
       serverName: null,
       skinHeadDataUrl: null,
       capes: [],
-      defaultSkinModel: 'classic',
+      defaultSkinModel: args.skinModel ? String(args.skinModel) : 'classic',
     }
     accountsData.push(newAcc)
     return { ...newAcc }

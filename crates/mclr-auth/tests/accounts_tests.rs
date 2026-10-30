@@ -25,7 +25,7 @@ async fn test_store_dpapi_aes_gcm_roundtrip() {
 
     let store = AccountStore::open().expect("failed to open store");
     let acc1 = store
-        .add_offline("Alex", OfflineUuidMode::Standard, None)
+        .add_offline("Alex", OfflineUuidMode::Standard, None, None)
         .await
         .expect("failed to add offline account");
 

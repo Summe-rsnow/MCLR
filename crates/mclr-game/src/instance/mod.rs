@@ -14,7 +14,7 @@ pub use classifier::{
 };
 pub use ops::{
     delete_instance, delete_instance_ext, duplicate_instance, rename_instance,
-    save_instance_config, validate_instance_name,
+    save_instance_config, touch_instance_last_played, validate_instance_name,
 };
 pub use scanner::{ensure_game_folder, scan_instances};
 
@@ -85,6 +85,9 @@ pub struct InstanceConfig {
     pub pre_launch_command: Option<String>,
     pub login_requirement: String, // "any" | "microsoft" | "thirdParty" | "microsoftOrThirdParty"
     pub server_quick_play: Option<String>,
+    /// RFC 3339 timestamp of the last successful launch, set by the launcher.
+    #[serde(default)]
+    pub last_played_at: Option<String>,
 }
 
 impl Default for InstanceConfig {
@@ -104,6 +107,7 @@ impl Default for InstanceConfig {
             pre_launch_command: None,
             login_requirement: "any".to_string(),
             server_quick_play: None,
+            last_played_at: None,
         }
     }
 }

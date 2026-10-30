@@ -2,13 +2,15 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useThemeStore, type MotionMode } from '../../../stores/theme'
+import { useThemeStore, PERFORMANCE_TIERS, type PerformanceTier } from '../../../stores/theme'
+import type { MotionMode } from '../../../stores/theme'
 import { type ThemeMode, type MaterialMode } from '../../../ui/theme'
 import {
   MCard,
   MButton,
-  MSwitch,
   MSegmented,
+  MSlider,
+  MSwitch,
   MColorPicker,
   MSection,
   MSettingRow,
@@ -33,10 +35,31 @@ const materialOptions = computed(() => [
 ])
 
 const motionOptions = computed(() => [
-  { label: t('settingsAppearance.motion.full'), value: 'full' },
-  { label: t('settingsAppearance.motion.reduced'), value: 'reduced' },
+  // Cheapest first, matching the tier slider's left-to-right cost order.
   { label: t('settingsAppearance.motion.off'), value: 'off' },
+  { label: t('settingsAppearance.motion.reduced'), value: 'reduced' },
+  { label: t('settingsAppearance.motion.full'), value: 'full' },
 ])
+
+const tierIndex = computed(() => PERFORMANCE_TIERS.indexOf(themeStore.performanceTier))
+
+const tierLabels = computed(() => [
+  t('settingsAppearance.performance.performance'),
+  t('settingsAppearance.performance.balanced'),
+  t('settingsAppearance.performance.quality'),
+])
+
+/** What the active tier actually turns on, shown as the row hint. */
+const tierSummaries = computed<Record<PerformanceTier, string>>(() => ({
+  performance: t('settingsAppearance.performance.performanceSummary'),
+  balanced: t('settingsAppearance.performance.balancedSummary'),
+  quality: t('settingsAppearance.performance.qualitySummary'),
+}))
+
+function onTierSelect(index: number) {
+  const tier = PERFORMANCE_TIERS[index]
+  if (tier) themeStore.setPerformanceTier(tier)
+}
 
 function navigateToDevUi() {
   if (!isDevBuild) return
@@ -65,6 +88,26 @@ function navigateToDevUi() {
           :options="modeOptions"
           @update:model-value="themeStore.setMode($event as ThemeMode)"
         />
+      </MSettingRow>
+
+      <!-- Performance tier: one slider drives material, motion and splash -->
+      <MSettingRow :label="t('settingsAppearance.performance.label')" stretch>
+        <template #label>
+          <span>{{ t('settingsAppearance.performance.label') }}</span>
+          <MHelpTooltip :text="t('settingsAppearance.performance.desc')" />
+        </template>
+        <template #hint>{{ tierSummaries[themeStore.performanceTier] }}</template>
+        <div class="w-full max-w-sm">
+          <MSlider
+            data-testid="perf-tier-slider"
+            :model-value="tierIndex"
+            :min="0"
+            :max="PERFORMANCE_TIERS.length - 1"
+            :step="1"
+            :labels="tierLabels"
+            @update:model-value="onTierSelect"
+          />
+        </div>
       </MSettingRow>
 
       <!-- Material -->

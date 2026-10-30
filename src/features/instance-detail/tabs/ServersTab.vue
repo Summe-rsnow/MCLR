@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import type { ServerEntry, ServerPingResult, InstanceInfo } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
 import { useInstancesStore } from '../../instances/store'
+import { useLaunchStore } from '../../launch/store'
 import {
   MCard,
   MButton,
@@ -27,6 +28,7 @@ const router = useRouter()
 const toast = useToast()
 const { confirmDanger } = useDialog()
 const instancesStore = useInstancesStore()
+const launchStore = useLaunchStore()
 
 const servers = ref<ServerEntry[]>([])
 const loading = ref(false)
@@ -178,30 +180,55 @@ async function handleDelete(server: ServerEntry) {
 }
 
 async function launchIntoServer(server: ServerEntry) {
-  try {
-    // 1. Get existing instance config or fallback
-    const targetInst =
-      props.instance || instancesStore.instances.find((i) => i.id === props.instanceId)
-    const currentConfig = targetInst?.config || {
-      icon: 'grass_block',
-      category: 'Default',
-      pinned: false,
-      isolation: 'global',
-      loginRequirement: 'any',
-    }
+  const targetInst =
+    props.instance || instancesStore.instances.find((i) => i.id === props.instanceId)
+  const currentConfig = targetInst?.config || {
+    icon: 'grass_block',
+    category: 'Default',
+    pinned: false,
+    isolation: 'global',
+    loginRequirement: 'any',
+  }
+  const previousQuickPlay = currentConfig.serverQuickPlay ?? null
 
-    // 2. Set serverQuickPlay
+  try {
+    // 1. Point the instance at this server for the launch we are about to start.
     await ipcClient.instanceUpdateConfig(props.instanceId, {
       ...currentConfig,
       serverQuickPlay: server.ip,
     })
     await instancesStore.fetchInstances()
 
-    // 3. Navigate to launch page
-    toast.success(t('instanceDetail.servers.launchDirectHint'))
-    router.push('/launch')
+    // 2. The launch page must use THIS instance, not whatever it used last time.
+    launchStore.selectedInstanceId = props.instanceId
+
+    // 3. Start the game for real.
+    await launchStore.startLaunch()
+    toast.success(t('instanceDetail.servers.launchStarted', { name: server.name || server.ip }))
+    await router.push('/launch')
   } catch (e: unknown) {
-    toast.danger(String(e))
+    // startLaunch reports the missing prerequisites the same way the launch page does.
+    const reason = e instanceof Error ? e.message : String(e)
+    if (reason.includes('launch.noAccount')) {
+      toast.danger(t('instanceDetail.servers.launchNoAccount'))
+    } else if (launchStore.javaMissingMajor) {
+      toast.danger(t('launch.javaMissing.title'))
+    } else {
+      toast.danger(reason)
+    }
+    await router.push('/launch')
+  } finally {
+    // The quick-play address is a one-shot here: restore the user's own setting so
+    // later launches are not silently hijacked into this server.
+    try {
+      await ipcClient.instanceUpdateConfig(props.instanceId, {
+        ...currentConfig,
+        serverQuickPlay: previousQuickPlay,
+      })
+      await instancesStore.fetchInstances()
+    } catch {
+      // Restoring is best effort; the launch itself already happened
+    }
   }
 }
 

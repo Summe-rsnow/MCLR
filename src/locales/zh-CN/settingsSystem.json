@@ -1,10 +1,11 @@
 {
   "nav": "全局设置",
   "title": "启动器与系统设置",
-  "subtitle": "管理游戏目录、网络传输、语言偏好、系统更新及日志诊断",
+  "subtitle": "管理游戏目录、网络传输、日志诊断、语言偏好与系统更新",
   "tabs": {
     "gameManage": "游戏管理",
-    "misc": "综合设置",
+    "network": "网络与下载",
+    "system": "系统与诊断",
     "language": "语言偏好",
     "update": "检查更新"
   },
@@ -53,10 +54,20 @@
     "logLevelInfo": "常规信息 (Info - 推荐)",
     "logLevelWarn": "仅警告与错误 (Warn)",
     "logLevelError": "仅严重错误 (Error)",
+    "logLevelHint": "日志级别在下次启动启动器时生效",
     "logRetentionDays": "日志保留天数: {n} 天",
+    "logRetentionHint": "超出保留天数的旧日志会在修改后立即清理，最近一份日志始终保留",
+    "logPruneNow": "立即清理",
+    "logPruneDone": "已清理 {n} 个过期日志",
+    "logPruneNothing": "没有超出保留天数的日志",
     "disableGpu": "硬件加速渲染",
     "disableGpuDesc": "关闭硬件加速将在启动器核心启用软件渲染，可解决部分老旧核显或显卡驱动异常导致的黑屏闪烁问题（修改后将在下次启动时生效）",
-    "restartNotice": "硬件加速设置已修改，将在重启启动器后完全生效"
+    "restartNotice": "硬件加速设置已修改，将在重启启动器后完全生效",
+    "windowSection": "窗口与后台",
+    "keepInBackground": "关闭窗口时保持后台运行（系统托盘）",
+    "keepInBackgroundHint": "开启后点击关闭按钮只会把主窗口隐藏到系统托盘，下载、安装与游戏进程继续运行；从托盘菜单可重新显示窗口或彻底退出",
+    "closePromptDismissed": "关闭窗口时不再询问",
+    "closePromptDismissedHint": "关闭时不再弹出「隐藏到托盘 / 退出启动器」的选择框，直接按上一项设置执行；关掉它会重新询问"
   },
   "language": {
     "localeTitle": "界面语言与区域偏好",
@@ -77,7 +88,7 @@
     "autoCheck": "启动时自动检测新版本",
     "autoCheckDesc": "每次打开启动器时在后台悄悄检查更新",
     "announcementUrl": "自定义通知公告地址",
-    "announcementUrlPlaceholder": "留空使用官方内置公告，支持自定义 JSON 地址",
+    "announcementUrlPlaceholder": "留空则不拉取公告；填写后按 JSON 地址拉取",
     "checkButton": "立即检查更新",
     "checking": "正在连接更新服务器...",
     "upToDate": "当前已是最新版本 ({version})",

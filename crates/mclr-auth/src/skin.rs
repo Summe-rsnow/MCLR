@@ -264,6 +264,66 @@ pub async fn upload_skin(
     Ok(())
 }
 
+/// Uploads a skin to an authlib-injector server (`PUT /api/user/profile/<uuid>/skin`).
+///
+/// Authlib servers authenticate with the Yggdrasil access token and take the model as a
+/// multipart text field (`""` = classic, `slim` = slim), not Mojang's variant enum.
+pub async fn upload_authlib_skin(
+    client: &reqwest::Client,
+    api_root: &str,
+    access_token: &str,
+    uuid: &str,
+    model: &str,
+    png_path: &Path,
+) -> Result<(), AuthError> {
+    let bytes = fs::read(png_path)?;
+    if bytes.len() > 24 * 1024 {
+        return Err(AuthError::SkinInvalidImage(format!(
+            "skin file too large: {} bytes, max is 24 KB",
+            bytes.len()
+        )));
+    }
+
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| AuthError::SkinInvalidImage(format!("invalid skin image: {e}")))?;
+    let (w, h) = img.dimensions();
+    if w != 64 || (h != 64 && h != 32) {
+        return Err(AuthError::SkinInvalidImage(format!(
+            "invalid skin dimensions: {w}x{h}, expected 64x64 or 64x32"
+        )));
+    }
+
+    let part = Part::bytes(bytes)
+        .file_name("skin.png")
+        .mime_str("image/png")
+        .map_err(|e| AuthError::SkinInvalidImage(e.to_string()))?;
+    let form = Form::new()
+        .text("model", if model == "slim" { "slim" } else { "" })
+        .part("file", part);
+
+    let url = format!(
+        "{}/api/user/profile/{uuid}/skin",
+        api_root.trim_end_matches('/')
+    );
+    let res = client
+        .put(url)
+        .bearer_auth(access_token)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| AuthError::Http(format!("skin upload request failed: {e}")))?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        return Err(AuthError::Http(format!(
+            "skin upload failed with status {status}: {body}"
+        )));
+    }
+
+    Ok(())
+}
+
 /// Activates or clears a cape on Minecraft services.
 pub async fn set_active_cape(
     client: &reqwest::Client,

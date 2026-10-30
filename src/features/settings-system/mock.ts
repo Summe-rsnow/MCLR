@@ -1,4 +1,4 @@
-import type { LauncherLogFile, UpdateCheckResult } from '../../ipc/client'
+import type { LauncherLogCleanup, LauncherLogFile, UpdateCheckResult } from '../../ipc/client'
 
 export const mockUpdateResult: UpdateCheckResult = {
   available: true,
@@ -86,6 +86,15 @@ const handlers = {
     }
     return `[INFO] Mock log content for ${fileName}`
   },
+  launcher_logs_dir: (): string => 'C:/Users/User/AppData/Roaming/MCLR/logs',
+  launcher_logs_prune: (args: Record<string, unknown>): LauncherLogCleanup => {
+    const days = Number(args.retentionDays ?? 7)
+    return { removed: Math.max(0, mockLauncherLogs.length - days), skipped: 0 }
+  },
+  launcher_logs_clear: (): LauncherLogCleanup => ({
+    removed: Math.max(0, mockLauncherLogs.length - 1),
+    skipped: 0,
+  }),
 }
 
 export default handlers

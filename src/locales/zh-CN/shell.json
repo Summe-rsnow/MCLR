@@ -17,6 +17,7 @@
     "collapse": "收起侧边栏",
     "expand": "展开侧边栏"
   },
+  "updateAvailable": "发现新版本 {version}，可前往 设置 → 更新 安装",
   "quick": {
     "title": "快捷外观",
     "mode": "色彩模式",

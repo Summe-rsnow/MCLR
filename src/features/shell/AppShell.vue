@@ -1,13 +1,26 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useThemeStore } from '../../stores/theme'
-import { MToast, MDialog, MCheckbox, useDialog, GlassDefs, AmbientBackdrop, MImage } from '../../ui'
+import {
+  MToast,
+  MDialog,
+  MCheckbox,
+  useDialog,
+  useToast,
+  GlassDefs,
+  AmbientBackdrop,
+  MImage,
+} from '../../ui'
+import { useI18n } from 'vue-i18n'
+import { ipcClient } from '../../ipc/client'
 import { useCrashStore } from '../crash/store'
 import CrashDialog from '../crash/CrashDialog.vue'
 import TitleBar from './TitleBar.vue'
 import SidebarNav from './SidebarNav.vue'
 import { useBackgroundMedia } from './useBackgroundMedia'
 
+const { t } = useI18n()
+const toast = useToast()
 const themeStore = useThemeStore()
 const { activeDialog, handleConfirm, handleCancel } = useDialog()
 const checkboxAgreed = ref(false)
@@ -44,8 +57,32 @@ function onMainScroll(e: Event) {
   isScrolled.value = (target?.scrollTop ?? 0) > 6
 }
 
+/**
+ * Settings -> Update -> "check for updates on startup". Only runs when the build has a signed
+ * feed; failures never block startup.
+ */
+async function checkUpdatesOnStartup() {
+  try {
+    const settings = await ipcClient.settingsGet()
+    if (settings.update?.autoCheck === false) return
+    const secrets = await ipcClient.secretsStatus()
+    if (!secrets.updateEndpoint || !secrets.updatePubkey) return
+    const result = await ipcClient.updateCheck(settings.update?.channel)
+    if (result.available && result.version) {
+      toast.show({
+        message: t('shell.updateAvailable', { version: result.version }),
+        type: 'info',
+        duration: 8000,
+      })
+    }
+  } catch {
+    // Offline / unconfigured: stay quiet
+  }
+}
+
 onMounted(() => {
   crashStore.startListening()
+  void checkUpdatesOnStartup()
 })
 
 onUnmounted(() => {
@@ -70,24 +107,7 @@ onUnmounted(() => {
       data-testid="bg-layer"
       class="pointer-events-none fixed inset-0 z-0 overflow-hidden"
     >
-      <video
-        v-if="themeStore.backgroundMode === 'video'"
-        data-testid="bg-video"
-        autoplay
-        muted
-        loop
-        playsinline
-        class="w-full h-full object-cover transition-opacity duration-500"
-        :src="backgroundMediaSrc"
-        :style="{
-          filter: `blur(${themeStore.backgroundBlur}px)`,
-          opacity: themeStore.backgroundOpacity,
-        }"
-      />
       <MImage
-        v-else-if="
-          themeStore.backgroundMode === 'image' || themeStore.backgroundMode === 'slideshow'
-        "
         data-testid="bg-img"
         class="w-full h-full pointer-events-none"
         :src="backgroundMediaSrc"

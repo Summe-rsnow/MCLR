@@ -15,6 +15,7 @@ import { setupMockIpc } from '../../../ipc/mock'
 import { resetMockInstances } from '../../instances/mock'
 import { resetMockInstanceDetail } from '../mock'
 import { useInstancesStore } from '../../instances/store'
+import { useLaunchStore } from '../../launch/store'
 import { ipcClient } from '../../../ipc/client'
 
 import zhCnInstanceDetail from '../../../locales/zh-CN/instanceDetail.json'
@@ -219,18 +220,22 @@ describe('Instance Detail feature', () => {
     )
     expect(addedList.some((s) => s.name === 'Mineplex Revival')).toBe(true)
 
-    // Click "Launch into Server" (直连启动)
+    // Click "Launch into Server" (直连启动): it must actually start the game, not
+    // just write the quick-play parameter and navigate away.
+    const launchStore = useLaunchStore()
+    const launchSpy = vi.spyOn(launchStore, 'startLaunch').mockResolvedValue(null)
     const launchDirectBtn = wrapper.findAll('button').find((b) => b.text().includes('直连启动'))
     expect(launchDirectBtn).toBeDefined()
-    if (launchDirectBtn) {
-      await launchDirectBtn.trigger('click')
-      await flushPromises()
+    await launchDirectBtn!.trigger('click')
+    await flushPromises()
 
-      // Should update config with serverQuickPlay
-      const inst = store.instances.find((i) => i.id === '1.20.1-vanilla')
-      expect(inst?.config?.serverQuickPlay).toBe('mc.hypixel.net')
-      expect(pushSpy).toHaveBeenCalledWith('/launch')
-    }
+    expect(launchSpy).toHaveBeenCalledTimes(1)
+    expect(launchStore.selectedInstanceId).toBe('1.20.1-vanilla')
+    expect(pushSpy).toHaveBeenCalledWith('/launch')
+
+    // The address is one-shot: the instance must not keep it for later launches.
+    const inst = store.instances.find((i) => i.id === '1.20.1-vanilla')
+    expect(inst?.config?.serverQuickPlay ?? null).toBeNull()
   })
 
   it('settings tab updates and saves per-instance configuration', async () => {

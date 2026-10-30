@@ -6,12 +6,13 @@ pub mod events;
 pub mod http;
 pub mod ipc;
 pub mod security;
+pub mod tray;
 
 use mclr_auth::AccountStore;
 use mclr_core::{SettingsStore, TaskCenter, TaskNode, init_logging, paths};
 use mclr_game::LaunchWatcher;
 use std::sync::Arc;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -44,6 +45,8 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // A second launch means the user wants the window: it may be sitting in the tray.
+            tray::show_main(app);
             if let Some(pos) = args.iter().position(|a| a == "--launch")
                 && let Some(inst_id) = args.get(pos + 1)
             {
@@ -55,9 +58,33 @@ pub fn run() {
         .manage(task_center)
         .manage(account_store)
         .manage(launch_watcher)
+        .manage({
+            let residency = tray::BackgroundResidency::default();
+            residency.set(initial_settings.system.keep_in_background);
+            residency
+        })
+        .on_window_event(|window, event| {
+            if window.label() != "main" {
+                return;
+            }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let keep = window
+                    .app_handle()
+                    .state::<tray::BackgroundResidency>()
+                    .keep();
+                if keep {
+                    // Hide instead of destroying the window: tasks and game processes
+                    // keep running, and the tray restores the exact same webview.
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
+            // The tray outlives every window, so it is built once at startup.
+            tray::setup(app.handle())?;
             ipc::assets::allow_defaults(app.handle(), &initial_settings);
             let startup_mc = if initial_settings.game.current_folder.is_empty() {
                 paths::default_minecraft_dir()

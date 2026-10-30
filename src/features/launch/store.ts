@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   ipcClient,
   AppErrorEx,
@@ -237,6 +238,7 @@ export const useLaunchStore = defineStore('launch', () => {
       }
 
       await fetchProcesses()
+      await applyCloseAfterLaunch()
       return result
     } catch (err: unknown) {
       currentStage.value = 'idle'
@@ -254,6 +256,27 @@ export const useLaunchStore = defineStore('launch', () => {
       throw err
     } finally {
       isLaunching.value = false
+    }
+  }
+
+  /**
+   * Settings -> Launch -> "launcher action after the game starts": keep / hide / exit.
+   * Applied only after the game process actually spawned.
+   */
+  async function applyCloseAfterLaunch(): Promise<void> {
+    try {
+      const settings = await ipcClient.settingsGet()
+      const action = settings.launch?.closeLauncherOnStart ?? 'keep'
+      if (action === 'keep') return
+      if (action === 'hide') {
+        await getCurrentWindow().hide()
+        return
+      }
+      if (action === 'exit') {
+        await ipcClient.appQuit()
+      }
+    } catch {
+      // Non-tauri / mock environment: nothing to close
     }
   }
 

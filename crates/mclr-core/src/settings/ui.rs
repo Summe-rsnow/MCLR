@@ -27,15 +27,10 @@ pub struct UiSettings {
     pub mode: ThemeMode,
     pub material: MaterialMode,
     pub scale: f32,
-    pub font_family: String,
     pub background_mode: String,
     pub background_path: String,
     pub background_blur: f32,
     pub background_opacity: f32,
-    pub music_enabled: bool,
-    pub music_folder: String,
-    pub music_volume: u8,
-    pub music_play_mode: String, // "loop" | "shuffle"
 }
 
 impl Default for UiSettings {
@@ -45,15 +40,10 @@ impl Default for UiSettings {
             mode: ThemeMode::System,
             material: MaterialMode::Flat,
             scale: 1.0,
-            font_family: String::new(),
             background_mode: "none".to_string(),
             background_path: String::new(),
             background_blur: 0.0,
             background_opacity: 0.3,
-            music_enabled: false,
-            music_folder: String::new(),
-            music_volume: 50,
-            music_play_mode: "loop".to_string(),
         }
     }
 }

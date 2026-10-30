@@ -169,28 +169,7 @@ function clearBackground() {
         <div
           class="relative w-full h-44 rounded-xl border border-line bg-sunken/30 overflow-hidden flex items-center justify-center"
         >
-          <template v-if="themeStore.backgroundMode === 'video' && previewMediaSrc">
-            <video
-              data-testid="bg-preview-video"
-              autoplay
-              muted
-              loop
-              playsinline
-              class="absolute inset-0 w-full h-full object-cover pointer-events-none"
-              :src="previewMediaSrc"
-              :style="{
-                filter: `blur(${themeStore.backgroundBlur}px)`,
-                opacity: themeStore.backgroundOpacity,
-              }"
-            />
-          </template>
-          <template
-            v-else-if="
-              (themeStore.backgroundMode === 'image' ||
-                themeStore.backgroundMode === 'slideshow') &&
-              previewMediaSrc
-            "
-          >
+          <template v-if="themeStore.backgroundMode === 'image' && previewMediaSrc">
             <MImage
               data-testid="bg-preview-img"
               class="absolute inset-0 w-full h-full pointer-events-none"

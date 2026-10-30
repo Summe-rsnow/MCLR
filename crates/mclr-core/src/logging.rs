@@ -43,9 +43,12 @@ fn is_date_yyyy_mm_dd(s: &str) -> bool {
 }
 
 /// Prunes old log files in `logs_dir`, keeping the newest `retention_days` files matching `is_launcher_log_file`.
-pub fn prune_old_logs(logs_dir: &Path, retention_days: u32) -> std::io::Result<()> {
+///
+/// Returns how many files were actually deleted. The newest file is always kept: it is the one the
+/// running appender is still writing to.
+pub fn prune_old_logs(logs_dir: &Path, retention_days: u32) -> std::io::Result<usize> {
     if !logs_dir.exists() {
-        return Ok(());
+        return Ok(0);
     }
 
     let mut log_files: Vec<PathBuf> = Vec::new();
@@ -63,15 +66,19 @@ pub fn prune_old_logs(logs_dir: &Path, retention_days: u32) -> std::io::Result<(
     // Sort ascending by file name (mclr-YYYY-MM-DD.log sorts chronologically)
     log_files.sort();
 
-    let keep = retention_days as usize;
-    if log_files.len() > keep {
-        let to_remove_count = log_files.len() - keep;
-        for path in log_files.iter().take(to_remove_count) {
-            let _ = fs::remove_file(path);
+    let keep = (retention_days as usize).max(1);
+    if log_files.len() <= keep {
+        return Ok(0);
+    }
+
+    let mut removed = 0;
+    for path in log_files.iter().take(log_files.len() - keep) {
+        if fs::remove_file(path).is_ok() {
+            removed += 1;
         }
     }
 
-    Ok(())
+    Ok(removed)
 }
 
 /// Initializes tracing subscriber with daily rolling file appender and stdout formatting.
@@ -123,7 +130,8 @@ mod tests {
         // And an unrelated file
         fs::write(logs_path.join("unrelated.txt"), "keep").unwrap();
 
-        prune_old_logs(logs_path, 7).unwrap();
+        let removed = prune_old_logs(logs_path, 7).unwrap();
+        assert_eq!(removed, 3);
 
         let mut remaining = Vec::new();
         for entry in fs::read_dir(logs_path).unwrap() {

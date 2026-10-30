@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import {
   applyTheme,
   scheduleThemeFrame,
@@ -9,8 +9,14 @@ import {
 } from '../ui/theme'
 import { ipcClient } from '../ipc/client'
 
-export type BackgroundMode = 'none' | 'image' | 'slideshow' | 'video'
+export type BackgroundMode = 'none' | 'image'
 export type MotionMode = 'full' | 'reduced' | 'off'
+/**
+ * One ordinal knob over the three cost knobs (material / motion / splash),
+ * cheapest first. The array order is the slider order.
+ */
+export type PerformanceTier = 'performance' | 'balanced' | 'quality'
+export const PERFORMANCE_TIERS: readonly PerformanceTier[] = ['performance', 'balanced', 'quality']
 const MOTION_KEY = 'mclr.motion'
 
 export const useThemeStore = defineStore('theme', () => {
@@ -165,6 +171,31 @@ export const useThemeStore = defineStore('theme', () => {
     }
   }
 
+  // Glass is the expensive knob, so it wins the tier; without it the motion
+  // budget decides between "performance" (no animation) and "balanced".
+  // Other writers (quick-settings material toggle, restored settings) therefore
+  // still land on a meaningful tier instead of an unrepresentable combination.
+  const performanceTier = computed<PerformanceTier>(() => {
+    if (material.value === 'glass') return 'quality'
+    return motion.value === 'off' ? 'performance' : 'balanced'
+  })
+
+  function setPerformanceTier(tier: PerformanceTier) {
+    if (tier === 'quality') {
+      void setMaterial('glass')
+      setMotion('full')
+      setStartupSplash(true)
+    } else if (tier === 'balanced') {
+      void setMaterial('flat')
+      setMotion('reduced')
+      setStartupSplash(true)
+    } else {
+      void setMaterial('flat')
+      setMotion('off')
+      setStartupSplash(false)
+    }
+  }
+
   function apply() {
     applyMotion()
     const config: ThemeConfig = {
@@ -218,6 +249,8 @@ export const useThemeStore = defineStore('theme', () => {
     setMode,
     setMaterial,
     setMotion,
+    performanceTier,
+    setPerformanceTier,
     startupSplash,
     setStartupSplash,
     setScale,

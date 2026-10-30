@@ -33,3 +33,24 @@ pub fn window_set_material(window: tauri::Window, glass: bool) -> Result<(), App
 
     Ok(())
 }
+
+/// Quits the launcher even when it would otherwise hide to the tray.
+#[tauri::command]
+#[specta::specta]
+pub fn app_quit(app: tauri::AppHandle) -> Result<(), AppError> {
+    app.exit(0);
+    Ok(())
+}
+
+/// Whether the software-renderer bridge (Mesa loader agent) is installed.
+///
+/// The renderer selector is only meaningful when this jar exists; without it every
+/// non-default choice silently falls back to the game default.
+#[tauri::command]
+#[specta::specta]
+pub fn renderer_agent_available() -> Result<bool, AppError> {
+    Ok(mclr_core::paths::tools_dir()
+        .join("mesa-loader")
+        .join("Loader.jar")
+        .is_file())
+}

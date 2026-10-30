@@ -16,13 +16,6 @@ export interface CacheSizeInfo {
   totalBytes: number
 }
 
-export interface DailyLuckResult {
-  date: string
-  username: string
-  score: number
-  levelKey: string
-}
-
 export const toolsIpc = {
   toolsFetchSkin: (username: string): Promise<SkinFetchResult> =>
     invokeCommand<SkinFetchResult>('tools_fetch_skin', { username }),
@@ -48,10 +41,6 @@ export const toolsIpc = {
       instanceId,
       shortcutName: shortcutName ?? null,
     }),
-  toolsDailyLuck: (username: string): Promise<DailyLuckResult> =>
-    invokeCommand<DailyLuckResult>('tools_daily_luck', { username }),
-  toolsListMediaFiles: (folderPath: string, kind: string): Promise<string[]> =>
-    invokeCommand<string[]>('tools_list_media_files', { folderPath, kind }),
   assetsAllow: (path: string): Promise<void> => invokeCommand<void>('assets_allow', { path }),
   pathOpen: (path: string): Promise<void> => invokeCommand<void>('path_open', { path }),
 }

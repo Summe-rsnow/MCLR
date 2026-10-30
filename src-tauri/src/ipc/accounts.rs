@@ -6,7 +6,7 @@ pub use mclr_auth::{
 };
 use mclr_auth::{
     MicrosoftAuthService, MsAuthEndpoints, StoredAccount, crop_skin_head, set_active_cape,
-    upload_skin,
+    upload_authlib_skin, upload_skin,
 };
 use mclr_core::{AppError, TaskCenter};
 use std::collections::HashMap;
@@ -47,10 +47,16 @@ pub async fn accounts_add_offline(
     username: String,
     uuid_mode: String,
     custom_uuid: Option<String>,
+    skin_model: Option<String>,
 ) -> Result<AccountView, AppError> {
     let mode: OfflineUuidMode = uuid_mode.parse().map_err(AppError::from)?;
     state
-        .add_offline(&username, mode, custom_uuid.as_deref())
+        .add_offline(
+            &username,
+            mode,
+            custom_uuid.as_deref(),
+            skin_model.as_deref(),
+        )
         .await
         .map_err(AppError::from)
 }
@@ -207,10 +213,34 @@ pub async fn accounts_skin_upload(
         .ok_or_else(|| AppError::new("auth.accountNotFound"))?;
 
     let path = Path::new(&png_path);
-    if let StoredAccount::Microsoft { access_token, .. } = &account {
-        upload_skin(&client, access_token, &variant, path)
-            .await
-            .map_err(AppError::from)?;
+    match &account {
+        StoredAccount::Microsoft { access_token, .. } => {
+            upload_skin(&client, access_token, &variant, path)
+                .await
+                .map_err(AppError::from)?;
+        }
+        StoredAccount::Authlib {
+            server,
+            server_name,
+            uuid,
+            access_token,
+            ..
+        } => {
+            // Authlib servers accept the same skin file through their own endpoint;
+            // silently skipping it used to look like a successful upload.
+            let api_root = mclr_auth::yggdrasil::normalize_server_url(server);
+            upload_authlib_skin(&client, &api_root, access_token, uuid, &variant, path)
+                .await
+                .map_err(|e| {
+                    let label = server_name.as_deref().unwrap_or(server.as_str());
+                    AppError::new("auth.skinUploadFailed")
+                        .with_param("server", label.to_string())
+                        .with_detail(e.to_string())
+                })?;
+        }
+        _ => {
+            return Err(AppError::new("auth.skinUploadUnsupported"));
+        }
     }
 
     let id_for_crop = id.clone();

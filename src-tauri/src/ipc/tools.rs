@@ -1,11 +1,10 @@
 //! Tools IPC commands.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use base64::Engine;
-use chrono::Datelike;
 use mclr_core::{AppError, SettingsStore, TaskCenter, is_launcher_log_file, paths};
 use mclr_net::{DownloadSpec, Downloader};
 use serde::{Deserialize, Serialize};
@@ -31,15 +30,6 @@ pub struct CacheSizeInfo {
     pub logs_bytes: u64,
     pub skin_cache_bytes: u64,
     pub total_bytes: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct DailyLuckResult {
-    pub date: String,
-    pub username: String,
-    pub score: u8,
-    pub level_key: String,
 }
 
 #[derive(Deserialize)]
@@ -352,6 +342,47 @@ fn clear_dir_contents(dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Appends `dir` to `failed` when the removal failed, so the command can report it.
+fn collect_failures(result: std::io::Result<()>, dir: &Path, failed: &mut Vec<String>) {
+    if let Err(e) = result {
+        failed.push(format!("{}: {e}", dir.display()));
+    }
+}
+
+/// Clears a log directory but keeps the newest launcher log, which the running
+/// appender holds open (deleting it fails on Windows or detaches the writer).
+fn clear_log_dir_keep_newest(dir: &Path, failed: &mut Vec<String>) {
+    if !dir.exists() {
+        return;
+    }
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            failed.push(format!("{}: {e}", dir.display()));
+            return;
+        }
+    };
+
+    let mut logs: Vec<std::path::PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(mclr_core::is_launcher_log_file)
+        })
+        .collect();
+    logs.sort();
+    logs.pop();
+
+    for path in logs {
+        collect_failures(fs::remove_file(&path), &path, failed);
+    }
+
+    // Anything else in the logs directory (unrelated files) is left untouched.
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn tools_cache_clear(
@@ -364,20 +395,28 @@ pub async fn tools_cache_clear(
         let logs_p = paths::logs_dir();
         let skin_p = cache_p.join("skin");
 
+        let mut failed: Vec<String> = Vec::new();
+
         if clear_cache {
-            let _ = clear_dir_contents(&cache_p);
+            collect_failures(clear_dir_contents(&cache_p), &cache_p, &mut failed);
         } else if clear_skins {
-            let _ = clear_dir_contents(&skin_p);
+            collect_failures(clear_dir_contents(&skin_p), &skin_p, &mut failed);
         }
 
         if clear_logs {
-            let _ = clear_dir_contents(&logs_p);
+            clear_log_dir_keep_newest(&logs_p, &mut failed);
         }
 
-        compute_cache_sizes()
+        // Report failures instead of claiming success: the UI toasts "cleaned".
+        if !failed.is_empty() {
+            return Err(AppError::new("core.io")
+                .with_detail(format!("failed to remove: {}", failed.join(", "))));
+        }
+
+        Ok(compute_cache_sizes())
     })
     .await
-    .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))
+    .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?
 }
 
 #[tauri::command]
@@ -567,128 +606,9 @@ fn create_shell_link_win32(
     Ok(())
 }
 
-pub fn calculate_daily_luck(date_str: &str, username: &str) -> DailyLuckResult {
-    use sha2::{Digest, Sha256};
-
-    let seed = format!("{date_str}:{username}");
-    let mut hasher = Sha256::new();
-    hasher.update(seed.as_bytes());
-    let hash = hasher.finalize();
-
-    let first_u32 = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]);
-    let score = (first_u32 % 101) as u8;
-
-    let level_key = if score >= 90 {
-        "greatBlessing"
-    } else if score >= 75 {
-        "blessing"
-    } else if score >= 50 {
-        "middleBlessing"
-    } else if score >= 25 {
-        "smallBlessing"
-    } else {
-        "misfortune"
-    };
-
-    DailyLuckResult {
-        date: date_str.to_string(),
-        username: username.to_string(),
-        score,
-        level_key: level_key.to_string(),
-    }
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn tools_daily_luck(username: String) -> Result<DailyLuckResult, AppError> {
-    let now = chrono::Local::now();
-    let date_str = format!("{:04}-{:02}-{:02}", now.year(), now.month(), now.day());
-    Ok(calculate_daily_luck(&date_str, username.trim()))
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn tools_list_media_files(
-    folder_path: String,
-    kind: String,
-) -> Result<Vec<String>, AppError> {
-    tokio::task::spawn_blocking(move || {
-        let p = PathBuf::from(&folder_path);
-        if !p.exists() || !p.is_dir() {
-            return Ok(Vec::new());
-        }
-
-        let audio_extensions = ["mp3", "wav", "aac", "flac", "ogg"];
-        let image_extensions = ["png", "jpg", "jpeg", "webp"];
-
-        let allowed_extensions: &[&str] = match kind.as_str() {
-            "audio" => &audio_extensions,
-            "image" => &image_extensions,
-            _ => {
-                return Err(AppError::new("tools.media.invalidKind").with_param("kind", kind));
-            }
-        };
-
-        let mut files = Vec::new();
-        if let Ok(entries) = fs::read_dir(&p) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file()
-                    && let Some(ext) = path.extension().and_then(|e| e.to_str())
-                {
-                    let lower = ext.to_ascii_lowercase();
-                    if allowed_extensions.contains(&lower.as_str()) {
-                        files.push(path.to_string_lossy().to_string());
-                    }
-                }
-            }
-        }
-        files.sort();
-        Ok(files)
-    })
-    .await
-    .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_daily_luck_determinism() {
-        let luck1 = calculate_daily_luck("2026-10-24", "PlayerOne");
-        let luck2 = calculate_daily_luck("2026-10-24", "PlayerOne");
-        assert_eq!(luck1.score, luck2.score);
-        assert_eq!(luck1.level_key, luck2.level_key);
-        assert_eq!(luck1.date, "2026-10-24");
-        assert!(luck1.score <= 100);
-
-        // Different user should produce different or at least valid score
-        let luck3 = calculate_daily_luck("2026-10-24", "PlayerTwo");
-        assert!(luck3.score <= 100);
-
-        // Different date should produce valid score
-        let luck4 = calculate_daily_luck("2026-10-25", "PlayerOne");
-        assert!(luck4.score <= 100);
-    }
-
-    #[test]
-    fn test_daily_luck_level_keys() {
-        for score in 0..=100 {
-            let key = if score >= 90 {
-                "greatBlessing"
-            } else if score >= 75 {
-                "blessing"
-            } else if score >= 50 {
-                "middleBlessing"
-            } else if score >= 25 {
-                "smallBlessing"
-            } else {
-                "misfortune"
-            };
-            assert!(!key.is_empty());
-        }
-    }
 
     #[test]
     fn test_cache_info_and_clear() {
@@ -736,36 +656,6 @@ mod tests {
         }
         let _ = fs::remove_dir_all(&temp_path);
     }
-    #[test]
-    fn test_list_media_files() {
-        let temp_path =
-            std::env::temp_dir().join(format!("mclr_tools_media_test_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&temp_path);
-        fs::create_dir_all(&temp_path).unwrap();
-        fs::write(temp_path.join("song1.mp3"), b"").unwrap();
-        fs::write(temp_path.join("song2.FLAC"), b"").unwrap();
-        fs::write(temp_path.join("image.png"), b"").unwrap();
-        fs::write(temp_path.join("text.txt"), b"").unwrap();
-
-        let audio_files = {
-            let mut list = Vec::new();
-            for entry in fs::read_dir(&temp_path).unwrap().flatten() {
-                let p = entry.path();
-                if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
-                    let lower = ext.to_ascii_lowercase();
-                    if ["mp3", "wav", "aac", "flac", "ogg"].contains(&lower.as_str()) {
-                        list.push(p.to_string_lossy().to_string());
-                    }
-                }
-            }
-            list.sort();
-            list
-        };
-
-        assert_eq!(audio_files.len(), 2);
-        let _ = fs::remove_dir_all(&temp_path);
-    }
-
     #[tokio::test]
     async fn test_tools_save_skin() {
         let temp_dir =

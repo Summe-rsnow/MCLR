@@ -25,7 +25,7 @@ pub use install::{
 pub use instance::{
     InstanceConfig, InstanceInfo, InstanceKind, InstanceState, classify_instance, delete_instance,
     duplicate_instance, rename_instance, save_instance_config, scan_instances,
-    validate_instance_name,
+    touch_instance_last_played, validate_instance_name,
 };
 pub use java::{
     JavaConstraint, JavaInstallation, parse_major_version, parse_release_content, scan_java,

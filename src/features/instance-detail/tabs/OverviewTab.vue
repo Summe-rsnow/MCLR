@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { InstanceInfo } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
+import { awaitTask } from '../../tasks/awaitTask'
+import { useErrorText } from '../../../composables/useErrorText'
 import { useInstancesStore } from '../../instances/store'
 import {
   MSection,
@@ -27,6 +29,7 @@ const { t } = useI18n()
 const router = useRouter()
 const toast = useToast()
 const { confirm, confirmDanger } = useDialog()
+const { formatError } = useErrorText()
 const instancesStore = useInstancesStore()
 
 const showRenameModal = ref(false)
@@ -96,8 +99,17 @@ async function handleRepair() {
 
   repairing.value = true
   try {
-    await ipcClient.installRepair(props.instance.id)
-    toast.success(t('instanceDetail.overview.repairStarted'))
+    // `install_repair` only queues the task; the file check and the downloads it
+    // triggers finish later, so the result toast waits for the terminal state.
+    const taskId = await ipcClient.installRepair(props.instance.id)
+    const outcome = await awaitTask(taskId)
+    if (outcome.state === 'failed' || outcome.state === 'canceled') {
+      toast.danger(
+        outcome.error ? formatError(outcome.error) : t('instanceDetail.overview.repairFailed'),
+      )
+      return
+    }
+    toast.success(t('instanceDetail.overview.repairDone'))
   } catch (e: unknown) {
     toast.danger(String(e))
   } finally {

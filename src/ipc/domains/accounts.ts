@@ -49,11 +49,13 @@ export const accountsIpc = {
     username: string,
     uuidMode: string,
     customUuid?: string,
+    skinModel?: 'classic' | 'slim',
   ): Promise<AccountView> =>
     invokeCommand<AccountView>('accounts_add_offline', {
       username,
       uuidMode,
       customUuid,
+      skinModel: skinModel ?? null,
     }),
   accountsRenameOffline: (id: string, username: string): Promise<AccountView> =>
     invokeCommand<AccountView>('accounts_rename_offline', {

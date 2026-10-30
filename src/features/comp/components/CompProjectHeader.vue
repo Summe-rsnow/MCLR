@@ -11,6 +11,7 @@ import {
   type CompTypeKey,
   useToast,
 } from '../../../ui'
+import { useFormat } from '../../../composables/useFormat'
 
 const props = defineProps<{
   project: CompProject
@@ -42,13 +43,8 @@ function copyLink() {
   toast.success(t('comp.project.copiedLink'))
 }
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString()
-  } catch {
-    return iso
-  }
-}
+// Region-aware formatting: culture comes from the language settings.
+const { formatDate } = useFormat()
 </script>
 
 <template>

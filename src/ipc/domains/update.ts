@@ -17,6 +17,12 @@ export interface LauncherLogFile {
   modifiedAt: string
 }
 
+export interface LauncherLogCleanup {
+  removed: number
+  /** Files that could not be deleted (normally the log being written right now). */
+  skipped: number
+}
+
 export const updateIpc = {
   updateCheck: (channelOverride?: string | null): Promise<UpdateCheckResult> =>
     invokeCommand<UpdateCheckResult>('update_check', {
@@ -30,4 +36,11 @@ export const updateIpc = {
     invokeCommand<LauncherLogFile[]>('launcher_logs_list'),
   launcherLogRead: (fileName: string): Promise<string> =>
     invokeCommand<string>('launcher_log_read', { fileName }),
+  launcherLogsDir: (): Promise<string> => invokeCommand<string>('launcher_logs_dir'),
+  launcherLogsPrune: (retentionDays?: number | null): Promise<LauncherLogCleanup> =>
+    invokeCommand<LauncherLogCleanup>('launcher_logs_prune', {
+      retentionDays: retentionDays ?? null,
+    }),
+  launcherLogsClear: (): Promise<LauncherLogCleanup> =>
+    invokeCommand<LauncherLogCleanup>('launcher_logs_clear'),
 }

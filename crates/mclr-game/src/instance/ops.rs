@@ -256,6 +256,45 @@ pub fn delete_instance(mc_folder: &Path, id: &str) -> Result<(), GameError> {
     delete_instance_ext(mc_folder, id, false)
 }
 
+/// Records the last successful launch time, preserving every other config field.
+///
+/// Written as a single-key patch so a config edited concurrently is not overwritten
+/// with a stale snapshot of the other fields.
+pub fn touch_instance_last_played(
+    mc_folder: &Path,
+    id: &str,
+    timestamp: &str,
+) -> Result<(), GameError> {
+    let instance_dir = mc_folder.join("versions").join(id);
+    if !instance_dir.exists() {
+        return Err(GameError::InstanceNotFound(id.to_string()));
+    }
+
+    let path = instance_dir.join("mclr.instance.json");
+    let mut value = fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .filter(|v| v.is_object())
+        .or_else(|| serde_json::to_value(InstanceConfig::default()).ok());
+    let Some(obj) = value.as_mut().and_then(|v| v.as_object_mut()) else {
+        return Ok(());
+    };
+    obj.insert(
+        "lastPlayedAt".to_string(),
+        serde_json::Value::String(timestamp.to_string()),
+    );
+    let json_str = serde_json::to_string_pretty(&value)
+        .map_err(|e| GameError::InvalidVersionJson(e.to_string()))?;
+    fs::write(&path, json_str).map_err(GameError::Io)?;
+
+    if let Ok(mut cache_map) = INSTANCE_CACHE.lock() {
+        if let Some(cache) = cache_map.get_mut(mc_folder) {
+            cache.instances.remove(id);
+        }
+    }
+    Ok(())
+}
+
 /// Saves instance configuration to `<instance_dir>/mclr.instance.json`.
 pub fn save_instance_config(
     mc_folder: &Path,

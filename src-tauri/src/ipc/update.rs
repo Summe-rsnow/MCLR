@@ -219,6 +219,95 @@ pub async fn launcher_log_read(file_name: String) -> Result<String, AppError> {
 /// Maximum number of trailing bytes returned by [`read_log_tail`].
 const LAUNCHER_LOG_MAX_BYTES: usize = 200 * 1024;
 
+/// Outcome of a launcher log cleanup command.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherLogCleanup {
+    /// Files deleted by this call.
+    pub removed: u32,
+    /// Files that could not be deleted (normally the log still being written).
+    pub skipped: u32,
+}
+
+/// Log directory as an absolute path, so the UI can reveal it in the file manager.
+#[tauri::command]
+#[specta::specta]
+pub fn launcher_logs_dir() -> Result<String, AppError> {
+    let dir = paths::logs_dir();
+    fs::create_dir_all(&dir).map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
+/// Applies the retention policy right away instead of waiting for the next start.
+#[tauri::command]
+#[specta::specta]
+pub async fn launcher_logs_prune(
+    state: State<'_, SettingsStore>,
+    retention_days: Option<u32>,
+) -> Result<LauncherLogCleanup, AppError> {
+    let days = match retention_days {
+        Some(days) => days,
+        None => state.snapshot().await.system.log_retention_days,
+    };
+    super::run_blocking(move || prune_launcher_logs_in(&paths::logs_dir(), days)).await
+}
+
+/// Deletes every launcher log except the newest one, which the running appender owns.
+#[tauri::command]
+#[specta::specta]
+pub async fn launcher_logs_clear() -> Result<LauncherLogCleanup, AppError> {
+    super::run_blocking(|| clear_launcher_logs_in(&paths::logs_dir())).await
+}
+
+/// Retention pass over one logs directory; shared by the command and its tests.
+fn prune_launcher_logs_in(logs_dir: &Path, days: u32) -> Result<LauncherLogCleanup, AppError> {
+    let removed = mclr_core::prune_old_logs(logs_dir, days)
+        .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?;
+    Ok(LauncherLogCleanup {
+        removed: removed as u32,
+        skipped: 0,
+    })
+}
+
+/// Removes every launcher log in `logs_dir` except the newest.
+fn clear_launcher_logs_in(logs_dir: &Path) -> Result<LauncherLogCleanup, AppError> {
+    if !logs_dir.exists() {
+        return Ok(LauncherLogCleanup {
+            removed: 0,
+            skipped: 0,
+        });
+    }
+
+    let mut files: Vec<std::path::PathBuf> = fs::read_dir(logs_dir)
+        .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(is_launcher_log_file)
+        })
+        .collect();
+    files.sort();
+
+    // The newest file is the one being appended to right now; deleting it on
+    // Windows would either fail or silently detach the writer.
+    files.pop();
+
+    let mut removed = 0;
+    let mut skipped = 0;
+    for path in files {
+        if fs::remove_file(&path).is_ok() {
+            removed += 1;
+        } else {
+            skipped += 1;
+        }
+    }
+
+    Ok(LauncherLogCleanup { removed, skipped })
+}
+
 /// Reads at most the last [`LAUNCHER_LOG_MAX_BYTES`] bytes of `path` and decodes them lossily.
 ///
 /// Only the tail is read from disk, so a multi-megabyte log does not have to be
@@ -255,6 +344,74 @@ mod tests {
             "mclr-launcher-log-{}-{tag}-{nanos}.log",
             std::process::id()
         ))
+    }
+
+    fn log_names(dir: &std::path::Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        names
+    }
+
+    fn write_logs(dir: &std::path::Path, names: &[&str]) {
+        for name in names {
+            fs::write(dir.join(name), "line\n").unwrap();
+        }
+    }
+
+    #[test]
+    fn clear_launcher_logs_keeps_the_newest_file() {
+        let temp = tempfile::tempdir().unwrap();
+        write_logs(
+            temp.path(),
+            &[
+                "mclr.2026-10-26.log",
+                "mclr.2026-10-27.log",
+                "mclr.2026-10-28.log",
+                "notes.txt",
+            ],
+        );
+
+        let report = clear_launcher_logs_in(temp.path()).unwrap();
+
+        assert_eq!(report.removed, 2);
+        assert_eq!(report.skipped, 0);
+        assert_eq!(
+            log_names(temp.path()),
+            vec!["mclr.2026-10-28.log", "notes.txt"]
+        );
+    }
+
+    #[test]
+    fn clear_launcher_logs_on_a_missing_dir_is_a_noop() {
+        let temp = tempfile::tempdir().unwrap();
+        let report = clear_launcher_logs_in(&temp.path().join("logs")).unwrap();
+        assert_eq!(report.removed, 0);
+        assert_eq!(report.skipped, 0);
+    }
+
+    #[test]
+    fn prune_launcher_logs_applies_the_retention_window() {
+        let temp = tempfile::tempdir().unwrap();
+        write_logs(
+            temp.path(),
+            &[
+                "mclr.2026-10-24.log",
+                "mclr.2026-10-25.log",
+                "mclr.2026-10-26.log",
+            ],
+        );
+
+        let report = prune_launcher_logs_in(temp.path(), 2).unwrap();
+
+        assert_eq!(report.removed, 1);
+        assert_eq!(
+            log_names(temp.path()),
+            vec!["mclr.2026-10-25.log", "mclr.2026-10-26.log"]
+        );
     }
 
     #[test]

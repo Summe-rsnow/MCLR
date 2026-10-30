@@ -16,10 +16,10 @@ pub use error::CoreError;
 pub use logging::{init_logging, is_launcher_log_file, prune_old_logs};
 pub use secrets::{SecretsStatus, get_secret, secrets_status};
 pub use settings::{
-    CompFavoriteEntry, CompSettings, DownloadSettings, GameFolderEntry, GameSettings, JavaSettings,
-    LanguageSettings, LaunchSettings, MaterialMode, NetSettings, ProxyMode, Settings,
-    SettingsStore, SourcePriority, StatesSettings, SystemSettings, ThemeMode, UiSettings,
-    UpdateSettings, apply_patch, merge_patch,
+    CompFavoriteEntry, CompSettings, GameFolderEntry, GameSettings, JavaSettings, LanguageSettings,
+    LaunchSettings, MaterialMode, NetSettings, ProxyMode, Settings, SettingsStore, SourcePriority,
+    StatesSettings, SystemSettings, ThemeMode, UiSettings, UpdateSettings, apply_patch,
+    merge_patch,
 };
 pub use tasks::{TaskCenter, TaskNode, TaskState};
 

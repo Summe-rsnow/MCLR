@@ -9,8 +9,17 @@ export const commands = {
 	appInfo: () => typedError<AppInfo, AppError_Serialize>(__TAURI_INVOKE("app_info")),
 	secretsStatus: () => typedError<SecretsStatus, AppError_Serialize>(__TAURI_INVOKE("secrets_status")),
 	windowSetMaterial: (glass: boolean) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("window_set_material", { glass })),
+	/**  Quits the launcher even when it would otherwise hide to the tray. */
+	appQuit: () => typedError<null, AppError_Serialize>(__TAURI_INVOKE("app_quit")),
 	/**
-	 *  Allow a user-picked directory (background image / music folder) recursively.
+	 *  Whether the software-renderer bridge (Mesa loader agent) is installed.
+	 * 
+	 *  The renderer selector is only meaningful when this jar exists; without it every
+	 *  non-default choice silently falls back to the game default.
+	 */
+	rendererAgentAvailable: () => typedError<boolean, AppError_Serialize>(__TAURI_INVOKE("renderer_agent_available")),
+	/**
+	 *  Allow a user-picked directory (background image folder) recursively.
 	 * 
 	 *  The directory comes from a native dialog, but the command is still callable
 	 *  from the webview, so obviously system-critical locations are rejected: the
@@ -39,7 +48,7 @@ export const commands = {
 	accountsList: () => typedError<AccountView_Serialize[], AppError_Serialize>(__TAURI_INVOKE("accounts_list")),
 	accountsSelect: (id: string) => typedError<AccountView_Serialize[], AppError_Serialize>(__TAURI_INVOKE("accounts_select", { id })),
 	accountsRemove: (id: string) => typedError<AccountView_Serialize[], AppError_Serialize>(__TAURI_INVOKE("accounts_remove", { id })),
-	accountsAddOffline: (username: string, uuidMode: string, customUuid: string | null) => typedError<AccountView_Serialize, AppError_Serialize>(__TAURI_INVOKE("accounts_add_offline", { username, uuidMode, customUuid })),
+	accountsAddOffline: (username: string, uuidMode: string, customUuid: string | null, skinModel: string | null) => typedError<AccountView_Serialize, AppError_Serialize>(__TAURI_INVOKE("accounts_add_offline", { username, uuidMode, customUuid, skinModel })),
 	accountsRenameOffline: (id: string, username: string) => typedError<AccountView_Serialize, AppError_Serialize>(__TAURI_INVOKE("accounts_rename_offline", { id, username })),
 	accountsAddMicrosoft: () => typedError<string, AppError_Serialize>(__TAURI_INVOKE("accounts_add_microsoft")),
 	accountsAddAuthlib: (server: string, username: string, password: string) => typedError<AuthlibLoginResponse_Serialize, AppError_Serialize>(__TAURI_INVOKE("accounts_add_authlib", { server, username, password })),
@@ -122,12 +131,16 @@ export const commands = {
 	toolsCacheClear: (clearCache: boolean, clearLogs: boolean, clearSkins: boolean) => typedError<CacheSizeInfo, AppError_Serialize>(__TAURI_INVOKE("tools_cache_clear", { clearCache, clearLogs, clearSkins })),
 	toolsCustomDownload: (url: string, destPath: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("tools_custom_download", { url, destPath })),
 	toolsCreateShortcut: (instanceId: string, shortcutName: string | null) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("tools_create_shortcut", { instanceId, shortcutName })),
-	toolsDailyLuck: (username: string) => typedError<DailyLuckResult, AppError_Serialize>(__TAURI_INVOKE("tools_daily_luck", { username })),
-	toolsListMediaFiles: (folderPath: string, kind: string) => typedError<string[], AppError_Serialize>(__TAURI_INVOKE("tools_list_media_files", { folderPath, kind })),
 	updateCheck: (channelOverride: string | null) => typedError<UpdateCheckResult_Serialize, AppError_Serialize>(__TAURI_INVOKE("update_check", { channelOverride })),
 	updateInstall: (channelOverride: string | null) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("update_install", { channelOverride })),
 	launcherLogsList: () => typedError<LauncherLogFile[], AppError_Serialize>(__TAURI_INVOKE("launcher_logs_list")),
 	launcherLogRead: (fileName: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("launcher_log_read", { fileName })),
+	/**  Log directory as an absolute path, so the UI can reveal it in the file manager. */
+	launcherLogsDir: () => typedError<string, AppError_Serialize>(__TAURI_INVOKE("launcher_logs_dir")),
+	/**  Applies the retention policy right away instead of waiting for the next start. */
+	launcherLogsPrune: (retentionDays: number | null) => typedError<LauncherLogCleanup, AppError_Serialize>(__TAURI_INVOKE("launcher_logs_prune", { retentionDays })),
+	/**  Deletes every launcher log except the newest one, which the running appender owns. */
+	launcherLogsClear: () => typedError<LauncherLogCleanup, AppError_Serialize>(__TAURI_INVOKE("launcher_logs_clear")),
 };
 
 /* Types */
@@ -500,13 +513,6 @@ export type CurrentInstallInfo_Serialize = {
 	extras: CurrentExtras_Serialize,
 };
 
-export type DailyLuckResult = {
-	date: string,
-	username: string,
-	score: number,
-	levelKey: string,
-};
-
 export type DatapackInfo = {
 	id: string,
 	fileName: string,
@@ -530,16 +536,6 @@ export type DefaultIsolation_Deserialize = "off" | "modded" | "nonRelease" | "mo
 export type DefaultIsolation_Serialize = "off" | "modded" | "nonRelease" | "moddedOrNonRelease" | 
 /**  Legacy `config.json` files stored `"on"`. */
 "all";
-
-export type DownloadSettings = DownloadSettings_Serialize | DownloadSettings_Deserialize;
-
-export type DownloadSettings_Deserialize = {
-	autoSelectInstance?: boolean,
-};
-
-export type DownloadSettings_Serialize = {
-	autoSelectInstance: boolean,
-};
 
 /**  Candidate file or folder that can be selected for modpack export. */
 export type ExportCandidateEntry = {
@@ -669,6 +665,8 @@ export type InstanceConfig_Deserialize = {
 	preLaunchCommand?: string | null,
 	loginRequirement: string,
 	serverQuickPlay?: string | null,
+	/**  RFC 3339 timestamp of the last successful launch, set by the launcher. */
+	lastPlayedAt?: string | null,
 };
 
 /**  Per-instance configuration stored in `<instance_dir>/mclr.instance.json`. */
@@ -687,6 +685,8 @@ export type InstanceConfig_Serialize = {
 	preLaunchCommand: string | null,
 	loginRequirement: string,
 	serverQuickPlay: string | null,
+	/**  RFC 3339 timestamp of the last successful launch, set by the launcher. */
+	lastPlayedAt: string | null,
 };
 
 /**  Information describing a Minecraft instance. */
@@ -890,6 +890,14 @@ export type LaunchStartResult_Deserialize = {
 export type LaunchStartResult_Serialize = {
 	taskId: string,
 	processId: number | null,
+};
+
+/**  Outcome of a launcher log cleanup command. */
+export type LauncherLogCleanup = {
+	/**  Files deleted by this call. */
+	removed: number,
+	/**  Files that could not be deleted (normally the log still being written). */
+	skipped: number,
 };
 
 /**  Information about a launcher log file. */
@@ -1306,7 +1314,6 @@ export type Settings_Deserialize = {
 	java?: JavaSettings_Deserialize,
 	launch?: LaunchSettings_Deserialize,
 	comp?: CompSettings_Deserialize,
-	download?: DownloadSettings_Deserialize,
 	update?: UpdateSettings_Deserialize,
 	states?: StatesSettings_Deserialize,
 };
@@ -1322,7 +1329,6 @@ export type Settings_Serialize = {
 	java: JavaSettings_Serialize,
 	launch: LaunchSettings_Serialize,
 	comp: CompSettings_Serialize,
-	download: DownloadSettings_Serialize,
 	update: UpdateSettings_Serialize,
 	states: StatesSettings_Serialize,
 };
@@ -1354,12 +1360,20 @@ export type SystemSettings_Deserialize = {
 	logLevel?: string,
 	logRetentionDays?: number,
 	disableGpu?: boolean,
+	/**  Closing the main window hides it to the tray instead of quitting. */
+	keepInBackground?: boolean,
+	/**  The first-close prompt was answered with "don't ask again". */
+	closePromptDismissed?: boolean,
 };
 
 export type SystemSettings_Serialize = {
 	logLevel: string,
 	logRetentionDays: number,
 	disableGpu: boolean,
+	/**  Closing the main window hides it to the tray instead of quitting. */
+	keepInBackground: boolean,
+	/**  The first-close prompt was answered with "don't ask again". */
+	closePromptDismissed: boolean,
 };
 
 /**  A node in the hierarchical task tree. */
@@ -1401,15 +1415,10 @@ export type UiSettings_Deserialize = {
 	mode?: ThemeMode,
 	material?: MaterialMode,
 	scale?: number | null,
-	fontFamily?: string,
 	backgroundMode?: string,
 	backgroundPath?: string,
 	backgroundBlur?: number | null,
 	backgroundOpacity?: number | null,
-	musicEnabled?: boolean,
-	musicFolder?: string,
-	musicVolume?: number,
-	musicPlayMode?: string,
 };
 
 export type UiSettings_Serialize = {
@@ -1417,15 +1426,10 @@ export type UiSettings_Serialize = {
 	mode: ThemeMode,
 	material: MaterialMode,
 	scale: number | null,
-	fontFamily: string,
 	backgroundMode: string,
 	backgroundPath: string,
 	backgroundBlur: number | null,
 	backgroundOpacity: number | null,
-	musicEnabled: boolean,
-	musicFolder: string,
-	musicVolume: number,
-	musicPlayMode: string,
 };
 
 /**  Result of an update check. */

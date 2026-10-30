@@ -379,6 +379,28 @@ describe('UI Components', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([75])
   })
 
+  it('MSlider stop labels replace the readout, mark the active stop and jump on click', async () => {
+    const wrapper = mount(MSlider, {
+      props: { modelValue: 1, min: 0, max: 2, step: 1, labels: ['Low', 'Mid', 'High'] },
+    })
+
+    // Numeric readout is gone once labels are supplied.
+    expect(wrapper.find('.tabular-nums').exists()).toBe(false)
+
+    const stops = wrapper.findAll('button')
+    expect(stops.map((s) => s.text())).toEqual(['Low', 'Mid', 'High'])
+    expect(stops[1].classes()).toContain('text-primary')
+    expect(stops[0].classes()).toContain('text-fg-muted')
+
+    await stops[2].trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([2])
+    expect(wrapper.emitted('change')?.[0]).toEqual([2])
+
+    // Clicking the already active stop emits nothing.
+    await stops[1].trigger('click')
+    expect(wrapper.emitted('update:modelValue')).toHaveLength(1)
+  })
+
   it('MSegmented changes option', async () => {
     const wrapper = mount(MSegmented, {
       props: {

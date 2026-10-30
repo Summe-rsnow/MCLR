@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { i18n } from '../../../i18n'
 import { router } from '../../../router'
 import { setupMockIpc } from '../../../ipc/mock'
+import { ipcClient } from '../../../ipc/client'
 import zhCnSettingsSystem from '../../../locales/zh-CN/settingsSystem.json'
 import SettingsSystemPage from '../SettingsSystemPage.vue'
 import { resetSettingsSystemMock } from '../mock'
@@ -108,6 +109,64 @@ describe('SettingsSystemPage (v0.0.12)', () => {
     expect(wrapper.find('[data-testid="update-coming-soon"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="update-coming-soon"]').text()).toContain('敬请期待')
     expect(wrapper.find('[data-testid="check-update-btn"]').exists()).toBe(false)
+  })
+
+  it('persists the window close behaviour switches under 系统与诊断', async () => {
+    const wrapper = mount(SettingsSystemPage, {
+      global: {
+        plugins: [createPinia(), i18n, router],
+      },
+    })
+    await flushPromises()
+
+    const systemTab = wrapper.findAll('button').find((b) => b.text().includes('系统与诊断'))
+    await systemTab!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('窗口与后台')
+    expect(wrapper.text()).toContain('关闭窗口时保持后台运行（系统托盘）')
+    expect(wrapper.text()).toContain('关闭窗口时不再询问')
+
+    const keepSwitch = wrapper.find('[data-testid="toggle-keep-background"] button')
+    expect(keepSwitch.attributes('aria-checked')).toBe('false')
+    await keepSwitch.trigger('click')
+    await flushPromises()
+
+    let saved = await ipcClient.settingsGet()
+    expect(saved.system?.keepInBackground).toBe(true)
+    // The partial system patch must not drop the neighbouring fields.
+    expect(saved.system?.logLevel).toBe('info')
+
+    await wrapper.find('[data-testid="toggle-close-prompt"] button').trigger('click')
+    await flushPromises()
+
+    saved = await ipcClient.settingsGet()
+    expect(saved.system?.closePromptDismissed).toBe(true)
+    expect(saved.system?.keepInBackground).toBe(true)
+  })
+
+  it('prunes launcher logs on demand with the configured retention', async () => {
+    const wrapper = mount(SettingsSystemPage, {
+      global: {
+        plugins: [createPinia(), i18n, router],
+      },
+    })
+    await flushPromises()
+
+    const systemTab = wrapper.findAll('button').find((b) => b.text().includes('系统与诊断'))
+    await systemTab!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="tab-system"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('超出保留天数的旧日志会在修改后立即清理')
+
+    const prune = vi
+      .spyOn(ipcClient, 'launcherLogsPrune')
+      .mockResolvedValue({ removed: 4, skipped: 0 })
+    await wrapper.find('[data-testid="prune-logs-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(prune).toHaveBeenCalledWith(7)
   })
 
   it('renders remaining tabs correctly', async () => {

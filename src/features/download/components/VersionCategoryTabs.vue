@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import type { VersionManifestEntry } from '../../../ipc/client'
 import { MCard, MBadge, MButton, MCollapse, MVirtualList } from '../../../ui'
 import { getMcFoolName } from '../compat'
+import { useFormat } from '../../../composables/useFormat'
 
 export interface LatestVersionItem extends VersionManifestEntry {
   category: 'release' | 'snapshot'
@@ -29,13 +30,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString()
-  } catch {
-    return iso
-  }
-}
+// Region-aware formatting: culture comes from the language settings.
+const { formatDate } = useFormat()
 </script>
 
 <template>

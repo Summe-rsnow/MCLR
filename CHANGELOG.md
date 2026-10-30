@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.29] - 2026-10-30
+
+A performance preset for the whole UI, a tray that keeps the launcher alive, real task
+controls, and a sweep that removed every feature the UI only pretended to have.
+
+### Added
+- **性能档位 (performance preset)**: one 性能 → 均衡 → 质量 slider in 设置 → 外观 sets
+  material, motion and the startup splash together, with a live summary of the combination.
+  The three original controls stay below it and the slider follows them, so it is a shortcut,
+  not a replacement.
+- **系统托盘 (system tray)**: tray icon with 显示主窗口 / 隐藏到托盘 / 退出, left click restores
+  the window, and a second launcher launch re-shows a window that is sitting in the tray.
+- **后台留存**: `system.keepInBackground` keeps the launcher running with its window hidden
+  (downloads and game processes continue); the first close asks once with a
+  「不再提醒」 checkbox, and both switches live in 设置 → 系统与诊断 → 窗口与后台.
+- **系统与诊断 page**: the old 综合设置 tab was split into 网络与下载 and 系统与诊断
+  (log level, retention + 立即清理, hardware acceleration, window/tray behaviour).
+- **Launcher log maintenance**: 打开日志文件夹 / 清理过期日志 / 清空日志 in the log page header
+  (same position as the game-log actions), `立即清理` next to the retention slider, and lowering
+  the retention now prunes immediately instead of at the next start.
+- **Instance sorting**: name / version / category / 最近游玩, shared between the toolbar and
+  settings through `game.sortBy`; the last-played stamp is written by a successful launch.
+- **Startup update check** when a signed feed is configured, and a shared `formatCulture`
+  formatter so 区域格式文化 actually affects dates.
+
+### Changed
+- **动画效果** segmented control is ordered cheapest-first (关闭 / 精简 / 完整).
+- **Authlib skin upload** hits `PUT /api/user/profile/<uuid>/skin` instead of silently
+  re-cropping the local file; unsupported account kinds now report an error.
+- **直连启动** starts the game for the selected instance and restores the server quick-play
+  setting afterwards, so the address is a one-shot.
+- **清理缓存** reports failures instead of always claiming success.
+- Renderer selector only offers the software/D3D12/Vulkan bridges when the mesa-loader agent
+  is installed, and says so when it is not.
+- 添加离线账号 skin model, dependency cascade prompts, offline-account creation and the
+  crash-analysis fallback now do what their labels say.
+
+### Fixed
+- **Task pause / resume / cancel finally work**: a `TaskControl` (cancel token + pause flag) is
+  threaded through the task centre and the downloader — pause stops the byte stream, cancel
+  stops writing, and a cancelled task can no longer be flipped back to success.
+- The launcher logs page no longer paints its actions inside the panel; both log tabs share the
+  page-header toolbar.
+- Removed dead settings and their render paths: background music, the unused font picker,
+  `download.autoSelectInstance`, and the never-reachable slideshow/video background modes
+  (schema v6 strips the stale keys, so existing configs keep their values).
+- FAQ no longer advertises a deleted "自动下载 Java" button or an unreachable Microsoft login,
+  and the announcement URL placeholder no longer promises a built-in feed.
+
+### Removed
+- `tools_daily_luck` (no UI ever called it) and `tools_list_media_files` (only used by the
+  removed slideshow mode).
+
 ## [0.0.28] - 2026-10-29
 
 Community modpacks are treated as standalone instances, the instance detail page leads with

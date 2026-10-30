@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ipcClient } from '../../ipc/client'
 import type { LauncherLogFile } from '../../ipc/client'
-import { MButton, MSelect, MSkeleton } from '../../ui'
+import { MSelect, MSkeleton } from '../../ui'
 const emit = defineEmits<{
   (e: 'files-loaded', files: LauncherLogFile[]): void
 }>()
@@ -20,8 +20,10 @@ async function loadLogFiles() {
   loading.value = true
   try {
     logFiles.value = await ipcClient.launcherLogsList()
-    if (logFiles.value.length > 0 && !selectedLogFile.value) {
-      selectedLogFile.value = logFiles.value[0].fileName
+    // Cleanup may have removed the file that was on screen; fall back to the newest.
+    const stillThere = logFiles.value.some((f) => f.fileName === selectedLogFile.value)
+    if (!stillThere) {
+      selectedLogFile.value = logFiles.value[0]?.fileName ?? ''
       await readSelectedLog()
     }
     emit('files-loaded', logFiles.value)
@@ -63,13 +65,16 @@ async function onSelectLogFile(val: string | number) {
 onMounted(async () => {
   await loadLogFiles()
 })
+
+// Cleanup lives in the page header; it reloads the list through this handle.
+defineExpose({ reload: loadLogFiles })
 </script>
 
 <template>
   <!-- `px-1 pt-1` keeps the outer focus rings of the controls inside this clipping panel. -->
   <div class="flex-1 min-h-0 flex flex-col space-y-3 overflow-hidden px-1 pt-1">
     <!-- Controls Header -->
-    <div class="flex flex-wrap items-center justify-between gap-3 shrink-0">
+    <div class="flex flex-wrap items-center gap-3 shrink-0">
       <div class="w-full sm:w-80">
         <div v-if="loading && logFiles.length === 0">
           <MSkeleton class="h-9 w-48 rounded-lg" />
@@ -83,16 +88,6 @@ onMounted(async () => {
           @update:model-value="onSelectLogFile"
         />
       </div>
-
-      <MButton
-        variant="tonal"
-        size="sm"
-        icon="i-lucide-refresh-cw"
-        :loading="loading"
-        @click="loadLogFiles"
-      >
-        {{ t('logs.launcher.refresh') }}
-      </MButton>
     </div>
 
     <!-- Log output container (rounded-xl overflow-hidden clips inner scrollbar) -->

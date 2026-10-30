@@ -1,7 +1,6 @@
 //! Global application settings model, persistence, and RFC 7386 JSON Merge Patch.
 
 pub mod comp;
-pub mod download;
 pub mod game;
 pub mod java;
 pub mod language;
@@ -15,7 +14,6 @@ pub mod update;
 use crate::error::CoreError;
 use crate::paths;
 pub use comp::{CompFavoriteEntry, CompSettings};
-pub use download::DownloadSettings;
 pub use game::{DefaultIsolation, GameFolderEntry, GameSettings};
 pub use java::JavaSettings;
 pub use language::LanguageSettings;
@@ -66,10 +64,26 @@ fn strip_removed_keys(value: &mut Value) {
     if let Some(java) = value.get_mut("java").and_then(|v| v.as_object_mut()) {
         java.remove("select");
     }
+    if let Some(ui) = value.get_mut("ui").and_then(|v| v.as_object_mut()) {
+        // v6: the background-music feature and the never-applied font picker were removed.
+        for key in [
+            "musicEnabled",
+            "musicFolder",
+            "musicVolume",
+            "musicPlayMode",
+            "fontFamily",
+        ] {
+            ui.remove(key);
+        }
+    }
+    // v6: the download sub-settings only ever held a field nothing read.
+    if let Some(root) = value.as_object_mut() {
+        root.remove("download");
+    }
 }
 
 /// Current settings schema version; bumped whenever `migrate` changes stored values.
-pub const CURRENT_SCHEMA_VERSION: u32 = 5;
+pub const CURRENT_SCHEMA_VERSION: u32 = 6;
 
 /// Upgrades persisted settings in place. Returns `true` when values changed and
 /// the caller must write the file back.
@@ -109,6 +123,12 @@ fn migrate(settings: &mut Settings) -> bool {
         settings.schema_version = 5;
         changed = true;
     }
+    if settings.schema_version < 6 {
+        // v6: background music, the unused font picker and `download.autoSelectInstance`
+        // were removed; those keys are stripped before deserialization.
+        settings.schema_version = 6;
+        changed = true;
+    }
     changed
 }
 
@@ -125,7 +145,6 @@ pub struct Settings {
     pub java: JavaSettings,
     pub launch: LaunchSettings,
     pub comp: CompSettings,
-    pub download: DownloadSettings,
     pub update: UpdateSettings,
     pub states: StatesSettings,
 }
@@ -142,7 +161,6 @@ impl Default for Settings {
             java: JavaSettings::default(),
             launch: LaunchSettings::default(),
             comp: CompSettings::default(),
-            download: DownloadSettings::default(),
             update: UpdateSettings::default(),
             states: StatesSettings::default(),
         }

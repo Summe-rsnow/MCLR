@@ -58,6 +58,14 @@ pub async fn launch_instance(
 
     match launch_res {
         Ok(result) => {
+            if result.process_id.is_some() {
+                // Feed the instance list sort "by last played": the launch actually happened.
+                let _ = mclr_game::instance::touch_instance_last_played(
+                    &mc_folder,
+                    &instance_id,
+                    &chrono::Utc::now().to_rfc3339(),
+                );
+            }
             if let Some(pid) = result.process_id {
                 let mut rx = watcher.subscribe();
                 let app_handle = app.clone();

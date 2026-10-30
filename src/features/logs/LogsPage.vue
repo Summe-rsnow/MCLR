@@ -39,6 +39,61 @@ watch(
 )
 
 const launcherLogsCount = ref(0)
+const launcherPanel = ref<InstanceType<typeof LauncherLogsPanel> | null>(null)
+const launcherBusy = ref(false)
+
+async function onOpenLauncherLogFolder() {
+  try {
+    await ipcClient.pathOpen(await ipcClient.launcherLogsDir())
+  } catch (err: unknown) {
+    toast.show({ message: String(err), type: 'danger' })
+  }
+}
+
+async function onPruneLauncherLogs() {
+  launcherBusy.value = true
+  try {
+    const report = await ipcClient.launcherLogsPrune()
+    toast.show({
+      message:
+        report.removed === 0
+          ? t('logs.launcher.pruneNothing')
+          : t('logs.launcher.pruneDone', { n: report.removed }),
+      type: report.removed === 0 ? 'info' : 'success',
+    })
+    await launcherPanel.value?.reload()
+    await fetchLauncherLogsCount()
+  } catch (err: unknown) {
+    toast.show({ message: String(err), type: 'danger' })
+  } finally {
+    launcherBusy.value = false
+  }
+}
+
+async function onClearLauncherLogs() {
+  const confirmed = await dialog.confirmDanger({
+    title: t('logs.launcher.clearConfirmTitle'),
+    content: t('logs.launcher.clearConfirmContent'),
+  })
+  if (!confirmed) return
+
+  launcherBusy.value = true
+  try {
+    const report = await ipcClient.launcherLogsClear()
+    toast.show({
+      message: t('logs.launcher.clearDone', { n: report.removed }),
+      type: 'success',
+    })
+    if (report.removed > 0) {
+      await launcherPanel.value?.reload()
+      await fetchLauncherLogsCount()
+    }
+  } catch (err: unknown) {
+    toast.show({ message: String(err), type: 'danger' })
+  } finally {
+    launcherBusy.value = false
+  }
+}
 
 async function fetchLauncherLogsCount() {
   try {
@@ -63,7 +118,13 @@ const tabs = computed(() => [
 ])
 
 async function onAnalyzeCrash() {
-  const instanceId = logsStore.selectedInstanceId || '1.20.1-vanilla'
+  // Without a running process there is no instance to analyse; guessing an id would
+  // just look for a folder that does not exist.
+  const instanceId = logsStore.selectedInstanceId
+  if (!instanceId) {
+    toast.show({ message: t('logs.crashAnalyzeNoInstance'), type: 'info' })
+    return
+  }
   await crashStore.analyzeInstance(instanceId, null, true)
 }
 
@@ -221,6 +282,47 @@ async function onKillClick() {
           </MButton>
         </div>
       </template>
+      <template v-else-if="activeTab === 'launcher'" #actions>
+        <div class="flex flex-wrap items-center gap-2">
+          <MButton
+            variant="tonal"
+            size="sm"
+            icon="i-lucide-folder-open"
+            data-testid="launcher-logs-open-folder"
+            @click="onOpenLauncherLogFolder"
+          >
+            {{ t('logs.launcher.openFolder') }}
+          </MButton>
+          <MButton
+            variant="tonal"
+            size="sm"
+            icon="i-lucide-eraser"
+            :loading="launcherBusy"
+            data-testid="launcher-logs-prune"
+            @click="onPruneLauncherLogs"
+          >
+            {{ t('logs.launcher.prune') }}
+          </MButton>
+          <MButton
+            variant="text"
+            size="sm"
+            icon="i-lucide-trash"
+            :disabled="launcherBusy"
+            data-testid="launcher-logs-clear"
+            @click="onClearLauncherLogs"
+          >
+            {{ t('logs.launcher.clear') }}
+          </MButton>
+          <MIconButton
+            icon="i-lucide-rotate-cw"
+            size="sm"
+            :title="t('common.refresh')"
+            :loading="launcherBusy"
+            data-testid="launcher-logs-refresh"
+            @click="launcherPanel?.reload()"
+          />
+        </div>
+      </template>
       <template v-else-if="activeTab === 'tasks'" #actions>
         <div class="flex items-center gap-2">
           <MButton
@@ -252,7 +354,10 @@ async function onKillClick() {
 
     <!-- Launcher Logs Tab -->
     <div v-else-if="activeTab === 'launcher'" class="flex-1 min-h-0 flex flex-col overflow-hidden">
-      <LauncherLogsPanel @files-loaded="(files) => (launcherLogsCount = files.length)" />
+      <LauncherLogsPanel
+        ref="launcherPanel"
+        @files-loaded="(files) => (launcherLogsCount = files.length)"
+      />
     </div>
 
     <!-- Tasks Tab -->

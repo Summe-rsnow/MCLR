@@ -10,6 +10,8 @@ pub fn builder() -> Builder<tauri::Wry> {
             crate::ipc::app::app_info,
             crate::ipc::app::secrets_status,
             crate::ipc::app::window_set_material,
+            crate::ipc::app::app_quit,
+            crate::ipc::app::renderer_agent_available,
             // [assets]
             crate::ipc::assets::assets_allow,
             // [settings]
@@ -123,13 +125,14 @@ pub fn builder() -> Builder<tauri::Wry> {
             crate::ipc::tools::tools_cache_clear,
             crate::ipc::tools::tools_custom_download,
             crate::ipc::tools::tools_create_shortcut,
-            crate::ipc::tools::tools_daily_luck,
-            crate::ipc::tools::tools_list_media_files,
             // [update]
             crate::ipc::update::update_check,
             crate::ipc::update::update_install,
             crate::ipc::update::launcher_logs_list,
             crate::ipc::update::launcher_log_read,
+            crate::ipc::update::launcher_logs_dir,
+            crate::ipc::update::launcher_logs_prune,
+            crate::ipc::update::launcher_logs_clear,
         ])
         // `usize`/`u64` fields (sizes, timestamps) are within JS safe-integer range here, and the
         // exporter refuses BigInt-style numbers by default.

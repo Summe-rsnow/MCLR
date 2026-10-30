@@ -65,9 +65,9 @@ export const useAccountsStore = defineStore('accounts', () => {
     username: string,
     uuidMode: string,
     customUuid?: string,
-    _model?: 'classic' | 'slim',
+    model?: 'classic' | 'slim',
   ) {
-    const newAcc = await ipcClient.accountsAddOffline(username, uuidMode, customUuid)
+    const newAcc = await ipcClient.accountsAddOffline(username, uuidMode, customUuid, model)
     await fetchAccounts()
     return newAcc
   }

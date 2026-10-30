@@ -6,6 +6,8 @@ import type { UnlistenFn } from '@tauri-apps/api/event'
 import TaskIndicator from '../tasks/TaskIndicator.vue'
 import QuickSettings from './QuickSettings.vue'
 import { useThemeStore } from '../../stores/theme'
+import { ipcClient } from '../../ipc/client'
+import { MButton, MCheckbox, MDialog } from '../../ui'
 
 defineProps<{
   scrolled?: boolean
@@ -13,6 +15,8 @@ defineProps<{
 
 const { t } = useI18n()
 const isMaximized = ref(false)
+const closePromptOpen = ref(false)
+const rememberCloseChoice = ref(false)
 let unlistenResized: UnlistenFn | null = null
 const themeStore = useThemeStore()
 
@@ -45,12 +49,43 @@ async function toggleMaximizeWindow() {
 }
 
 async function closeWindow() {
+  // First close asks what the button should do; the answer (and whether to keep
+  // asking) is stored in settings, so this only interrupts once.
+  try {
+    const settings = await ipcClient.settingsGet()
+    if (!settings.system?.closePromptDismissed) {
+      rememberCloseChoice.value = false
+      closePromptOpen.value = true
+      return
+    }
+  } catch {
+    // Non-tauri browser mode fallback: close straight away
+  }
+  await requestClose()
+}
+
+async function requestClose() {
   try {
     const win = getCurrentWindow()
     await win.close()
   } catch {
     // Non-tauri browser mode fallback
   }
+}
+
+async function chooseCloseBehavior(hideToTray: boolean) {
+  closePromptOpen.value = false
+  try {
+    await ipcClient.settingsPatch({
+      system: {
+        keepInBackground: hideToTray,
+        closePromptDismissed: rememberCloseChoice.value,
+      },
+    })
+  } catch {
+    // Settings unavailable: still honour the picked action for this close
+  }
+  await requestClose()
 }
 
 onMounted(async () => {
@@ -132,5 +167,44 @@ onUnmounted(() => {
         </button>
       </div>
     </div>
+
+    <!-- First close: pick what the button does, optionally stop asking -->
+    <MDialog
+      :open="closePromptOpen"
+      :title="t('app.closePrompt.title')"
+      hide-footer
+      max-width="sm"
+      @update:open="closePromptOpen = $event"
+    >
+      <div class="flex flex-col gap-4" data-testid="close-prompt">
+        <p class="text-sm text-fg-muted leading-relaxed">{{ t('app.closePrompt.desc') }}</p>
+        <MCheckbox v-model="rememberCloseChoice" :label="t('app.closePrompt.remember')" />
+        <div class="flex flex-col gap-2">
+          <MButton
+            variant="primary"
+            block
+            icon="i-lucide-minus-square"
+            data-testid="close-prompt-hide"
+            @click="chooseCloseBehavior(true)"
+          >
+            {{ t('app.closePrompt.hideToTray') }}
+          </MButton>
+          <MButton
+            variant="tonal"
+            block
+            icon="i-lucide-power"
+            data-testid="close-prompt-quit"
+            @click="chooseCloseBehavior(false)"
+          >
+            {{ t('app.closePrompt.quit') }}
+          </MButton>
+        </div>
+        <div class="flex justify-end">
+          <MButton variant="text" size="sm" @click="closePromptOpen = false">
+            {{ t('common.cancel') }}
+          </MButton>
+        </div>
+      </div>
+    </MDialog>
   </header>
 </template>

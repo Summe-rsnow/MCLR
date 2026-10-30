@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CompFile } from '../../../ipc/client'
 import { MCard, MButton, MBadge, MEmpty, MSkeleton, MCollapse } from '../../../ui'
+import { useFormat } from '../../../composables/useFormat'
 
 export interface FileGroup {
   id: string
@@ -29,13 +30,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString()
-  } catch {
-    return iso
-  }
-}
+// Region-aware formatting: culture comes from the language settings.
+const { formatDate } = useFormat()
 
 function formatFileSize(bytes: number): string {
   if (bytes >= 1024 * 1024) {

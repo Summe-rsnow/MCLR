@@ -5,7 +5,18 @@ import { useRoute } from 'vue-router'
 import { availableLocales, i18n } from '../../i18n'
 import { ipcClient, type UpdateCheckResult } from '../../ipc/client'
 import { useErrorText } from '../../composables/useErrorText'
-import { MSelect, MSlider, MSwitch, MSection, MSettingRow, MHelpTooltip, useToast } from '../../ui'
+import { setFormatCulture } from '../../composables/useFormat'
+import { setAppLocale } from '../../composables/useLocale'
+import {
+  MButton,
+  MSelect,
+  MSlider,
+  MSwitch,
+  MSection,
+  MSettingRow,
+  MHelpTooltip,
+  useToast,
+} from '../../ui'
 import SystemNetworkSection from './components/SystemNetworkSection.vue'
 import SystemUpdateSection from './components/SystemUpdateSection.vue'
 
@@ -16,18 +27,23 @@ const route = useRoute()
 // Self-update stays a placeholder until the build ships signed-updater secrets.
 const updaterConfigured = ref(false)
 
-const validTabs = ['gameManage', 'misc', 'language', 'update'] as const
+const validTabs = ['gameManage', 'network', 'system', 'language', 'update'] as const
 type SystemTab = (typeof validTabs)[number]
+
+/** `misc` used to hold both the network and the diagnostics sections. */
+function normalizeTab(raw: unknown): SystemTab | null {
+  const tab = String(raw ?? '')
+  if (tab === 'misc') return 'network'
+  return (validTabs as readonly string[]).includes(tab) ? (tab as SystemTab) : null
+}
 
 // Internal ref for unit tests that trigger tab clicks directly
 const localTab = ref<SystemTab>('gameManage')
 
 const activeTab = computed<SystemTab>({
   get() {
-    const queryTab = route?.query?.tab as string
-    if (queryTab && (validTabs as readonly string[]).includes(queryTab)) {
-      return queryTab as SystemTab
-    }
+    const queryTab = normalizeTab(route?.query?.tab)
+    if (queryTab) return queryTab
     return localTab.value
   },
   set(val: SystemTab) {
@@ -47,6 +63,9 @@ const connectionsPerFile = ref(8)
 const maxConcurrentFiles = ref(16)
 const logLevel = ref('info')
 const logRetentionDays = ref(7)
+const pruningLogs = ref(false)
+const keepInBackground = ref(false)
+const closePromptDismissed = ref(false)
 const hardwareAccel = ref(true)
 const showRestartNotice = ref(false)
 
@@ -99,10 +118,13 @@ async function loadSettings() {
       logLevel.value = s.system.logLevel
       logRetentionDays.value = s.system.logRetentionDays
       hardwareAccel.value = !s.system.disableGpu
+      keepInBackground.value = s.system.keepInBackground
+      closePromptDismissed.value = s.system.closePromptDismissed
     }
     if (s.language) {
       selectedLocale.value = s.language.locale
       formatCulture.value = s.language.formatCulture
+      setFormatCulture(formatCulture.value)
     }
     if (s.update) {
       updateChannel.value = s.update.channel
@@ -143,6 +165,35 @@ async function saveMiscSettings() {
   })
 }
 
+async function saveWindowSettings() {
+  try {
+    await ipcClient.settingsPatch({
+      system: {
+        keepInBackground: keepInBackground.value,
+        closePromptDismissed: closePromptDismissed.value,
+      },
+    })
+  } catch (err: unknown) {
+    toast.danger(formatError(err))
+  }
+}
+
+async function onPruneLogs() {
+  pruningLogs.value = true
+  try {
+    const report = await ipcClient.launcherLogsPrune(logRetentionDays.value)
+    if (report.removed === 0) {
+      toast.info(t('settingsSystem.misc.logPruneNothing'))
+    } else {
+      toast.success(t('settingsSystem.misc.logPruneDone', { n: report.removed }))
+    }
+  } catch (err: unknown) {
+    toast.danger(formatError(err))
+  } finally {
+    pruningLogs.value = false
+  }
+}
+
 async function onToggleHardwareAccel(val: boolean) {
   hardwareAccel.value = val
   showRestartNotice.value = true
@@ -152,7 +203,7 @@ async function onToggleHardwareAccel(val: boolean) {
 async function onChangeLocale(val: string | number) {
   const loc = String(val)
   selectedLocale.value = loc
-  i18n.global.locale.value = loc
+  setAppLocale(loc)
   await ipcClient.settingsPatch({
     language: {
       locale: loc,
@@ -163,6 +214,7 @@ async function onChangeLocale(val: string | number) {
 
 async function onChangeFormatCulture(val: string | number) {
   formatCulture.value = String(val)
+  setFormatCulture(formatCulture.value)
   await ipcClient.settingsPatch({
     language: {
       locale: selectedLocale.value,
@@ -222,7 +274,12 @@ onMounted(async () => {
       <button type="button" @click="activeTab = 'gameManage'">
         {{ t('settingsSystem.tabs.gameManage') }}
       </button>
-      <button type="button" @click="activeTab = 'misc'">{{ t('settingsSystem.tabs.misc') }}</button>
+      <button type="button" @click="activeTab = 'network'">
+        {{ t('settingsSystem.tabs.network') }}
+      </button>
+      <button type="button" @click="activeTab = 'system'">
+        {{ t('settingsSystem.tabs.system') }}
+      </button>
       <button type="button" @click="activeTab = 'language'">
         {{ t('settingsSystem.tabs.language') }}
       </button>
@@ -275,8 +332,8 @@ onMounted(async () => {
       </MSection>
     </div>
 
-    <!-- 2. Launcher Misc -->
-    <div v-if="activeTab === 'misc'" class="space-y-6" data-testid="tab-misc">
+    <!-- 2. Network -->
+    <div v-if="activeTab === 'network'" class="space-y-6" data-testid="tab-network">
       <SystemNetworkSection
         v-model:proxy-mode="proxyMode"
         v-model:proxy-url="proxyUrl"
@@ -286,10 +343,14 @@ onMounted(async () => {
         v-model:max-concurrent-files="maxConcurrentFiles"
         @change="saveMiscSettings"
       />
+    </div>
 
+    <!-- 3. Diagnostics & logs -->
+    <div v-if="activeTab === 'system'" class="space-y-6" data-testid="tab-system">
       <MSection :title="t('settingsSystem.misc.systemTitle')" icon="i-lucide-wrench">
         <div class="flex flex-col">
           <MSettingRow :label="t('settingsSystem.misc.logLevel')">
+            <template #hint>{{ t('settingsSystem.misc.logLevelHint') }}</template>
             <MSelect
               :model-value="logLevel"
               :options="[
@@ -310,13 +371,26 @@ onMounted(async () => {
           </MSettingRow>
 
           <MSettingRow :label="t('settingsSystem.misc.logRetentionDays', { n: logRetentionDays })">
-            <div class="w-64">
-              <MSlider
-                v-model="logRetentionDays"
-                :min="1"
-                :max="30"
-                @update:model-value="saveMiscSettings"
-              />
+            <template #hint>{{ t('settingsSystem.misc.logRetentionHint') }}</template>
+            <div class="flex items-center gap-3">
+              <div class="w-56">
+                <MSlider
+                  v-model="logRetentionDays"
+                  :min="1"
+                  :max="30"
+                  @update:model-value="saveMiscSettings"
+                />
+              </div>
+              <MButton
+                variant="tonal"
+                size="sm"
+                icon="i-lucide-eraser"
+                :loading="pruningLogs"
+                data-testid="prune-logs-btn"
+                @click="onPruneLogs"
+              >
+                {{ t('settingsSystem.misc.logPruneNow') }}
+              </MButton>
             </div>
           </MSettingRow>
 
@@ -335,6 +409,34 @@ onMounted(async () => {
                 {{ t('settingsSystem.misc.restartNotice') }}
               </span>
             </div>
+          </MSettingRow>
+        </div>
+      </MSection>
+
+      <MSection :title="t('settingsSystem.misc.windowSection')" icon="i-lucide-app-window">
+        <div class="flex flex-col">
+          <MSettingRow :label="t('settingsSystem.misc.keepInBackground')">
+            <template #label>
+              <span>{{ t('settingsSystem.misc.keepInBackground') }}</span>
+              <MHelpTooltip :text="t('settingsSystem.misc.keepInBackgroundHint')" />
+            </template>
+            <MSwitch
+              v-model="keepInBackground"
+              data-testid="toggle-keep-background"
+              @update:model-value="saveWindowSettings"
+            />
+          </MSettingRow>
+
+          <MSettingRow :label="t('settingsSystem.misc.closePromptDismissed')">
+            <template #label>
+              <span>{{ t('settingsSystem.misc.closePromptDismissed') }}</span>
+              <MHelpTooltip :text="t('settingsSystem.misc.closePromptDismissedHint')" />
+            </template>
+            <MSwitch
+              v-model="closePromptDismissed"
+              data-testid="toggle-close-prompt"
+              @update:model-value="saveWindowSettings"
+            />
           </MSettingRow>
         </div>
       </MSection>

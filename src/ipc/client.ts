@@ -84,6 +84,9 @@ export interface SecretsStatus {
 export const ipcClient = {
   appInfo: (): Promise<AppInfo> => unwrapResult(commands.appInfo()),
   secretsStatus: (): Promise<SecretsStatus> => invokeCommand<SecretsStatus>('secrets_status'),
+  appQuit: (): Promise<void> => invokeCommand<void>('app_quit'),
+  rendererAgentAvailable: (): Promise<boolean> =>
+    invokeCommand<boolean>('renderer_agent_available'),
   ...accountsIpc,
   ...compIpc,
   ...crashIpc,

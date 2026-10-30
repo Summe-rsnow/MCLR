@@ -218,11 +218,6 @@ export const useInstallStore = defineStore('install', () => {
     return taskId
   }
 
-  async function repair(instanceId: string) {
-    const taskId = await ipcClient.installRepair(instanceId)
-    return taskId
-  }
-
   return {
     manifest,
     loading,
@@ -247,6 +242,5 @@ export const useInstallStore = defineStore('install', () => {
     selectLoader,
     openInstallDialog,
     install,
-    repair,
   }
 })

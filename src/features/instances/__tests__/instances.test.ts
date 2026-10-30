@@ -63,6 +63,46 @@ describe('Instances feature', () => {
     expect(store.filteredInstances.every((i) => i.config?.pinned)).toBe(true)
   })
 
+  it('sorts the list by name, version, category and last played', async () => {
+    const store = useInstancesStore()
+    await store.fetchInstances()
+
+    // Give each instance a distinct last-played stamp so the order is deterministic.
+    const stamp = (day: number) => `2026-10-${String(day).padStart(2, '0')}T10:00:00Z`
+    store.instances.forEach((inst, index) => {
+      inst.config = { ...inst.config, lastPlayedAt: stamp(index + 1) }
+    })
+
+    store.sortBy = 'name'
+    const names = store.filteredInstances.map((i) => i.name)
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+
+    store.sortBy = 'lastPlayed'
+    const byLastPlayed = store.filteredInstances.map((i) => i.config?.lastPlayedAt ?? '')
+    expect(byLastPlayed).toEqual([...byLastPlayed].sort().reverse())
+
+    store.sortBy = 'version'
+    const versions = store.filteredInstances.map((i) => i.mcVersion)
+    expect(versions).toEqual(
+      [...versions].sort((a, b) => b.localeCompare(a, undefined, { numeric: true })),
+    )
+
+    store.sortBy = 'category'
+    const categories = store.filteredInstances.map((i) => i.config?.category ?? '')
+    expect(categories).toEqual([...categories].sort((a, b) => a.localeCompare(b)))
+  })
+
+  it('persists the sort choice through settings.game.sortBy', async () => {
+    const store = useInstancesStore()
+    await store.fetchInstances()
+
+    await store.setSort('lastPlayed')
+
+    const saved = await ipcClient.settingsGet()
+    expect(saved.game?.sortBy).toBe('lastPlayed')
+    expect(store.sortBy).toBe('lastPlayed')
+  })
+
   it('handles pin toggle, rename, duplicate, and remove', async () => {
     const store = useInstancesStore()
     await store.fetchInstances()

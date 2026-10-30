@@ -435,6 +435,7 @@ impl AccountStore {
         username: &str,
         uuid_mode: OfflineUuidMode,
         custom_uuid: Option<&str>,
+        skin_model: Option<&str>,
     ) -> Result<AccountView, AuthError> {
         let trimmed_name = username.trim();
         if trimmed_name.is_empty() {
@@ -442,7 +443,11 @@ impl AccountStore {
         }
 
         let uuid = compute_offline_uuid(trimmed_name, uuid_mode, custom_uuid)?;
-        let model = default_skin_model(&uuid).to_string();
+        // Explicit choice wins; otherwise derive the classic/slim default from the UUID.
+        let model = match skin_model {
+            Some(m) if m == "classic" || m == "slim" => m.to_string(),
+            _ => default_skin_model(&uuid).to_string(),
+        };
         let id = Uuid::new_v4().to_string();
 
         let account = StoredAccount::Offline {
@@ -961,7 +966,7 @@ mod tests {
         let store = AccountStore::open().expect("open store");
         for name in names {
             store
-                .add_offline(name, OfflineUuidMode::Standard, None)
+                .add_offline(name, OfflineUuidMode::Standard, None, None)
                 .await
                 .expect("add offline account");
         }

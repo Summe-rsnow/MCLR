@@ -7,6 +7,16 @@
     "scale": "界面缩放",
     "background": "背景设置"
   },
+  "performance": {
+    "label": "性能档位",
+    "desc": "一键设置下方的材质、动画与启动动画：性能档关闭模糊与动画以省电，均衡档保留精简过渡，质量档启用流光玻璃与完整动画。下方三项仍可单独微调",
+    "performance": "性能",
+    "balanced": "均衡",
+    "quality": "质量",
+    "performanceSummary": "扁平纯色 · 关闭动画 · 跳过启动动画",
+    "balancedSummary": "扁平纯色 · 精简动画 · 播放启动动画",
+    "qualitySummary": "流光玻璃 · 完整动画 · 播放启动动画"
+  },
   "motion": {
     "label": "动画效果",
     "desc": "控制界面过渡、列表交错与环境背景动画",
@@ -39,13 +49,8 @@
     "scaleValue": "{val}%"
   },
   "background": {
-    "mode": "背景显示模式",
-    "modeNone": "无背景 (纯色)",
-    "modeImage": "静态图片",
-    "modeSlideshow": "多图轮播",
-    "modeVideo": "动态视频",
-    "path": "媒体文件或目录路径",
-    "pathPlaceholder": "请选择图片、视频文件或轮播文件夹",
+    "path": "背景图片路径",
+    "pathPlaceholder": "请选择背景图片文件",
     "browse": "选择背景图片",
     "change": "更换图片",
     "blur": "高斯模糊度",

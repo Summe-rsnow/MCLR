@@ -25,6 +25,24 @@
 
 ---
 
+## 2b. System Tray & Background Residency (`src-tauri/src/tray.rs`)
+- The tray icon (`main-tray`) is built once in `setup` with the window icon; menu: 显示主窗口 / 隐藏到托盘 / 退出 MCLR, left click restores the window, right click opens the menu.
+- `system.keepInBackground` (default `false`) controls the window close button: when on, `WindowEvent::CloseRequested` for the `main` window is prevented and the window is hidden, so downloads/tasks keep running; when off, closing exits the app as before.
+- The close handler runs on the window thread and must not await the settings store, so `settings_patch` mirrors the flag into `tray::BackgroundResidency` (an `AtomicBool`); startup seeds it from the loaded settings.
+- A second launch (single-instance plugin) calls `tray::show_main` before forwarding `--launch`, so a launcher that is sitting in the tray comes back instead of staying invisible.
+- The first close asks the user (hide to tray vs. quit) with a 「不再提醒」 checkbox: the picked action is written to `system.keepInBackground`, and `system.closePromptDismissed` records whether the question should be skipped next time (both editable in 设置 → 系统与诊断 → 窗口与后台).
+
+---
+
+## 2c. Launcher Logs (`mclr_core::logging` + `src-tauri/src/ipc/update.rs`)
+- Files live in `paths::logs_dir()` as `mclr.<YYYY-MM-DD>.log`, one per day (`tracing_appender` daily rotation).
+- Retention is a *file* window (`system.logRetentionDays`, default 7): the newest file is always kept, because it is the one the running appender writes to.
+- `launcher_logs_prune(retentionDays?)` applies the window on demand (default = stored setting); `launcher_logs_clear()` deletes every launcher log except the newest; `launcher_logs_dir()` returns the directory so 「打开日志文件夹」 can reuse `path_open`. Both cleanup commands return `{ removed, skipped }`.
+- A `settings_patch` that touches `system.logRetentionDays` prunes immediately in the background, so lowering the window takes effect without restarting.
+- `system.logLevel` is baked into the `EnvFilter` at startup: changing it still requires a restart (the settings row says so).
+
+---
+
 ## 3. Error Handling
 - Each backend crate maintains a `thiserror` enum implementing `fn code(&self) -> &'static str` (`<crate>.<kind>`, e.g. `net.timeout`, `auth.xsts.noXboxAccount`) and an `Into<AppError>` conversion.
 - IPC handlers return `Result<T, AppError>`. `AppError` serializes to `{ "code": "...", "params": { ... }, "detail": "..." }`; the UI renders `error.<code>` from `src/locales/zh-CN/error.json` via `useErrorText()`.

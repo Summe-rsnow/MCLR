@@ -89,14 +89,10 @@ export interface Settings {
     mode: 'light' | 'dark' | 'system'
     material: 'flat' | 'glass'
     scale: number
-    fontFamily: string
     backgroundMode: string
     backgroundPath: string
     backgroundBlur: number
     backgroundOpacity: number
-    musicEnabled: boolean
-    musicFolder: string
-    musicVolume: number
   }
   language: {
     locale: string
@@ -106,6 +102,8 @@ export interface Settings {
     logLevel: string
     logRetentionDays: number
     disableGpu: boolean
+    keepInBackground: boolean
+    closePromptDismissed: boolean
   }
   net?: NetSettings
   comp?: CompSettings

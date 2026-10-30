@@ -22,6 +22,8 @@
   },
   "auth": {
     "notFound": "找不到指定的账号",
+    "skinUploadFailed": "上传皮肤到 {server} 失败",
+    "skinUploadUnsupported": "该账号类型不支持上传皮肤",
     "offlineInvalidUsername": "离线模式用户名格式无效",
     "offlineInvalidUuid": "自定义 UUID 格式无效",
     "ms": {

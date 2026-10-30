@@ -1,5 +1,6 @@
 use crate::error::NetError;
 use futures_util::StreamExt;
+use mclr_core::tasks::TaskControl;
 use mclr_core::{NetSettings, TaskCenter};
 use md5::Md5;
 use reqwest::header::{CONTENT_RANGE, RANGE};
@@ -133,6 +134,20 @@ impl Downloader {
         spec: DownloadSpec,
         task_center: Option<(&TaskCenter, &str)>,
     ) -> Result<(), NetError> {
+        self.download_with_control(spec, task_center, None).await
+    }
+
+    /// Download one file, honouring an externally owned pause/cancel handle.
+    ///
+    /// `download_many` needs this: its workers hold a `TaskControl` but have no
+    /// `TaskCenter` reference, and without it a pause could only take effect between
+    /// files — a 20 MB jar would keep streaming to completion.
+    async fn download_with_control(
+        &self,
+        spec: DownloadSpec,
+        task_center: Option<(&TaskCenter, &str)>,
+        control: Option<&TaskControl>,
+    ) -> Result<(), NetError> {
         let part_path = PathBuf::from(format!("{}.mclr-part", spec.dest.display()));
         if let Some(parent) = spec.dest.parent() {
             tokio::fs::create_dir_all(parent).await?;
@@ -159,7 +174,7 @@ impl Downloader {
             let _ = tokio::fs::remove_file(&part_path).await;
 
             let download_result = self
-                .download_single_file(url, &spec, &part_path, task_center)
+                .download_single_file(url, &spec, &part_path, task_center, control)
                 .await;
             match download_result {
                 Ok(outcome) => {
@@ -211,33 +226,41 @@ impl Downloader {
         spec: &DownloadSpec,
         part_path: &Path,
         task_center: Option<(&TaskCenter, &str)>,
+        control: Option<&TaskControl>,
     ) -> Result<FileOutcome, NetError> {
         // A known size makes the range probe pointless: pick the path directly.
         if let Some(size) = spec.size {
             if size < SMALL_FILE_THRESHOLD {
                 return self
-                    .download_stream(url, part_path, Some(size), task_center, spec)
+                    .download_stream(url, part_path, Some(size), task_center, spec, control)
                     .await
                     .map(FileOutcome::Streamed);
             }
             return self
-                .download_chunked_or_stream(url, part_path, size, task_center, spec)
+                .download_chunked_or_stream(url, part_path, size, task_center, spec, control)
                 .await;
         }
 
         // Only an unknown size needs to probe range support
         match self.probe_range(url).await {
             Ok(Some(total_size)) if total_size < SMALL_FILE_THRESHOLD => self
-                .download_stream(url, part_path, Some(total_size), task_center, spec)
+                .download_stream(url, part_path, Some(total_size), task_center, spec, control)
                 .await
                 .map(FileOutcome::Streamed),
             Ok(Some(total_size)) => {
-                self.download_chunked_or_stream(url, part_path, total_size, task_center, spec)
-                    .await
+                self.download_chunked_or_stream(
+                    url,
+                    part_path,
+                    total_size,
+                    task_center,
+                    spec,
+                    control,
+                )
+                .await
             }
             // Server returned 200 OK without partial content, or the probe failed
             Ok(None) | Err(_) => self
-                .download_stream(url, part_path, spec.size, task_center, spec)
+                .download_stream(url, part_path, spec.size, task_center, spec, control)
                 .await
                 .map(FileOutcome::Streamed),
         }
@@ -252,9 +275,10 @@ impl Downloader {
         total_size: u64,
         task_center: Option<(&TaskCenter, &str)>,
         spec: &DownloadSpec,
+        control: Option<&TaskControl>,
     ) -> Result<FileOutcome, NetError> {
         match self
-            .download_chunked(url, part_path, total_size, task_center)
+            .download_chunked(url, part_path, total_size, task_center, control)
             .await
         {
             Ok(()) => Ok(FileOutcome::Chunked),
@@ -265,7 +289,7 @@ impl Downloader {
                     url
                 );
                 let _ = tokio::fs::remove_file(part_path).await;
-                self.download_stream(url, part_path, Some(total_size), task_center, spec)
+                self.download_stream(url, part_path, Some(total_size), task_center, spec, control)
                     .await
                     .map(FileOutcome::Streamed)
             }
@@ -306,6 +330,7 @@ impl Downloader {
         total_size: Option<u64>,
         task_center: Option<(&TaskCenter, &str)>,
         spec: &DownloadSpec,
+        control: Option<&TaskControl>,
     ) -> Result<StreamHashes, NetError> {
         let resp = self.client.get(url.clone()).send().await?;
         if !resp.status().is_success() {
@@ -316,6 +341,15 @@ impl Downloader {
         let mut sha256_hasher = required_hash(&spec.sha256).map(|_| Sha256::new());
         let mut md5_hasher = required_hash(&spec.md5).map(|_| Md5::new());
 
+        // Resolved once: the lock is not taken per chunk.
+        let control = match control {
+            Some(control) => Some(control.clone()),
+            None => match task_center {
+                Some((tc, tid)) => tc.control(tid).await,
+                None => None,
+            },
+        };
+
         let mut file = File::create(part_path).await?;
         let mut stream = resp.bytes_stream();
 
@@ -324,6 +358,13 @@ impl Downloader {
         let mut last_report = Instant::now();
 
         while let Some(chunk_res) = stream.next().await {
+            // Pause/cancel are honoured between chunks so a single large file can be
+            // stopped instead of running to completion.
+            if let Some(control) = &control
+                && control.checkpoint().await.is_err()
+            {
+                return Err(NetError::Canceled);
+            }
             let chunk = chunk_res.map_err(NetError::Http)?;
             file.write_all(&chunk).await?;
             if let Some(hasher) = sha1_hasher.as_mut() {
@@ -371,7 +412,17 @@ impl Downloader {
         part_path: &Path,
         total_size: u64,
         task_center: Option<(&TaskCenter, &str)>,
+        control: Option<&TaskControl>,
     ) -> Result<(), ChunkedError> {
+        // Resolved once for all chunk workers: pause/cancel apply per streamed chunk.
+        let chunk_control = match control {
+            Some(control) => Some(control.clone()),
+            None => match task_center {
+                Some((tc, tid)) => tc.control(tid).await,
+                None => None,
+            },
+        };
+
         // 1. Pre-allocate part file
         let mut file = OpenOptions::new()
             .read(true)
@@ -428,6 +479,7 @@ impl Downloader {
             let part_path = part_path.to_path_buf();
             let slow_check_duration = self.slow_check_duration;
             let slow_speed_threshold = self.slow_speed_threshold;
+            let control = chunk_control.clone();
 
             let handle = tokio::spawn(async move {
                 loop {
@@ -441,13 +493,16 @@ impl Downloader {
                     };
 
                     let chunk_res = download_single_chunk(
-                        &client,
-                        &url_clone,
-                        &part_path,
+                        ChunkJob {
+                            client: &client,
+                            url: &url_clone,
+                            part_path: &part_path,
+                            total_downloaded: &downloaded_clone,
+                            slow_check_duration,
+                            slow_speed_threshold,
+                            control: control.as_ref(),
+                        },
                         &mut chunk,
-                        &downloaded_clone,
-                        slow_check_duration,
-                        slow_speed_threshold,
                     )
                     .await;
 
@@ -485,6 +540,9 @@ impl Downloader {
                                     "Chunk retries exceeded".into(),
                                 )));
                             }
+                        }
+                        Err(ChunkError::Canceled) => {
+                            return Err(ChunkedError::Fatal(NetError::Canceled));
                         }
                         Err(ChunkError::Io(e)) => {
                             return Err(ChunkedError::Fatal(NetError::Io(e)));
@@ -726,6 +784,12 @@ impl Downloader {
             count_map.insert("count".to_string(), specs.len().to_string());
             let _ = tc.update_title_params(tid, count_map).await;
         }
+        // Resolved once for the whole batch; each worker polls it between files.
+        let control = match task_center {
+            Some((tc, tid)) => tc.control(tid).await,
+            None => None,
+        };
+
         let max_files = (self.settings.max_concurrent_files as usize).clamp(1, 128);
 
         let total_bytes: u64 = specs.iter().map(|s| s.size.unwrap_or(0)).sum();
@@ -746,6 +810,7 @@ impl Downloader {
             let settings = self.settings.clone();
             let slow_check_duration = self.slow_check_duration;
             let slow_speed_threshold = self.slow_speed_threshold;
+            let control = control.clone();
 
             workers.spawn(async move {
                 let dl = Downloader::new(client, settings)
@@ -761,8 +826,17 @@ impl Downloader {
                         break;
                     };
 
+                    if let Some(control) = &control
+                        && control.checkpoint().await.is_err()
+                    {
+                        results.push((index, Err(NetError::Canceled)));
+                        // Nothing else will run: drop the rest of the queue.
+                        queue.lock().await.clear();
+                        break;
+                    }
+
                     let spec_size = spec.size.unwrap_or(0);
-                    let result = dl.download(spec, None).await;
+                    let result = dl.download_with_control(spec, None, control.as_ref()).await;
                     if result.is_ok() {
                         completed_bytes.fetch_add(spec_size, Ordering::Relaxed);
                     }
@@ -843,17 +917,31 @@ enum ChunkError {
     PrematureEof,
     /// Server answered with a full-body success instead of `206 Partial Content`.
     RangeUnsupported,
+    /// The task was cancelled while this chunk was streaming.
+    Canceled,
 }
 
-async fn download_single_chunk(
-    client: &Client,
-    url: &Url,
-    part_path: &Path,
-    chunk: &mut Chunk,
-    total_downloaded: &AtomicU64,
+/// Everything a chunk download needs from the parent download.
+struct ChunkJob<'a> {
+    client: &'a Client,
+    url: &'a Url,
+    part_path: &'a Path,
+    total_downloaded: &'a AtomicU64,
     slow_check_duration: Duration,
     slow_speed_threshold: u64,
-) -> Result<(), ChunkError> {
+    control: Option<&'a TaskControl>,
+}
+
+async fn download_single_chunk(job: ChunkJob<'_>, chunk: &mut Chunk) -> Result<(), ChunkError> {
+    let ChunkJob {
+        client,
+        url,
+        part_path,
+        total_downloaded,
+        slow_check_duration,
+        slow_speed_threshold,
+        control,
+    } = job;
     let mut file = OpenOptions::new()
         .write(true)
         .open(part_path)
@@ -882,6 +970,12 @@ async fn download_single_chunk(
     let mut attempt_bytes = 0u64;
 
     while chunk.remaining() > 0 {
+        // Pause blocks here and cancel aborts, so an in-flight chunk stops mid-stream.
+        if let Some(control) = control
+            && let Err(_aborted) = control.checkpoint().await
+        {
+            return Err(ChunkError::Canceled);
+        }
         match stream.next().await {
             Some(Ok(bytes)) => {
                 let to_write = (bytes.len() as u64).min(chunk.remaining()) as usize;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ipcClient, type LaunchSettings } from '../../ipc/client'
 import { useToast } from '../../ui/useToast'
@@ -19,6 +19,8 @@ const { t } = useI18n()
 const toast = useToast()
 
 const isSaving = ref(false)
+// The software-renderer bridge only exists when its agent jar is installed.
+const rendererBridgeAvailable = ref(false)
 
 // Launch settings form state
 /** Balanced JVM defaults, matching PCL's recommended JVM argument head. */
@@ -50,6 +52,28 @@ const launchSettings = ref<LaunchSettings>({
   lwjglUnsafeAgent: true,
 })
 
+/**
+ * Only offer renderer modes the bundled Mesa bridge can actually apply; a dead
+ * choice would silently fall back to the game default.
+ */
+const rendererOptions = computed(() => {
+  const options = [{ label: t('settingsGame.launch.rendererDefault'), value: 'default' }]
+  if (rendererBridgeAvailable.value) {
+    options.push(
+      { label: t('settingsGame.launch.rendererSoftware'), value: 'software' },
+      { label: t('settingsGame.launch.rendererD3d12'), value: 'd3d12' },
+      { label: t('settingsGame.launch.rendererVulkan'), value: 'vulkan' },
+    )
+  } else if (launchSettings.value.renderer !== 'default') {
+    // Keep a previously saved choice visible instead of pretending it is default.
+    options.push({
+      label: t('settingsGame.launch.rendererSaved', { value: launchSettings.value.renderer }),
+      value: launchSettings.value.renderer,
+    })
+  }
+  return options
+})
+
 function resetJvmArgs() {
   launchSettings.value.jvmArgs = ''
   void saveLaunchSettings()
@@ -65,6 +89,11 @@ onMounted(async () => {
     const s = await ipcClient.settingsGet()
     if (s.launch) {
       launchSettings.value = { ...launchSettings.value, ...s.launch }
+    }
+    try {
+      rendererBridgeAvailable.value = await ipcClient.rendererAgentAvailable()
+    } catch {
+      rendererBridgeAvailable.value = false
     }
   } catch (err) {
     console.warn('Failed to load settings in SettingsGamePage:', err)
@@ -199,18 +228,20 @@ async function saveLaunchSettings() {
               <span>{{ t('settingsGame.launch.renderer') }}</span>
               <MHelpTooltip :text="t('settingsGame.launch.rendererHint')" />
             </template>
-            <MSelect
-              v-model="launchSettings.renderer"
-              :options="[
-                { label: t('settingsGame.launch.rendererDefault'), value: 'default' },
-                { label: t('settingsGame.launch.rendererSoftware'), value: 'software' },
-                { label: t('settingsGame.launch.rendererD3d12'), value: 'd3d12' },
-                { label: t('settingsGame.launch.rendererVulkan'), value: 'vulkan' },
-              ]"
-              size="sm"
-              class="w-56"
-              @update:model-value="saveLaunchSettings"
-            />
+            <div class="flex flex-col items-end gap-1">
+              <MSelect
+                v-model="launchSettings.renderer"
+                :options="rendererOptions"
+                :disabled="!rendererBridgeAvailable"
+                size="sm"
+                class="w-56"
+                data-testid="select-renderer"
+                @update:model-value="saveLaunchSettings"
+              />
+              <span v-if="!rendererBridgeAvailable" class="text-xs text-warning">
+                {{ t('settingsGame.launch.rendererUnavailable') }}
+              </span>
+            </div>
           </MSettingRow>
 
           <div class="flex flex-col gap-2 py-3">

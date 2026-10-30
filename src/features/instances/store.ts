@@ -9,10 +9,42 @@ import {
 } from '../../ipc/client'
 import { createResource } from '../../composables/useResource'
 
+export type InstanceSort = 'name' | 'version' | 'category' | 'lastPlayed'
+
 export interface InstanceCardGroup {
   key: CardKind
   titleKey: string
   items: InstanceInfo[]
+}
+
+function lastPlayedMs(instance: InstanceInfo): number {
+  const raw = instance.config?.lastPlayedAt
+  if (!raw) return 0
+  const ms = Date.parse(raw)
+  return Number.isNaN(ms) ? 0 : ms
+}
+
+/** Sorts a copy of the list; the backend order is the PCL card order, never a user choice. */
+function sortInstances(list: InstanceInfo[], sort: InstanceSort): InstanceInfo[] {
+  const copy = [...list]
+  switch (sort) {
+    case 'version':
+      copy.sort((a, b) => b.mcVersion.localeCompare(a.mcVersion, undefined, { numeric: true }))
+      break
+    case 'category':
+      copy.sort((a, b) => {
+        const byCategory = (a.config?.category ?? '').localeCompare(b.config?.category ?? '')
+        return byCategory !== 0 ? byCategory : a.name.localeCompare(b.name)
+      })
+      break
+    case 'lastPlayed':
+      copy.sort((a, b) => lastPlayedMs(b) - lastPlayedMs(a) || a.name.localeCompare(b.name))
+      break
+    case 'name':
+    default:
+      copy.sort((a, b) => a.name.localeCompare(b.name))
+  }
+  return copy
 }
 
 const CARD_GROUP_CONFIG: Array<{ key: CardKind; titleKey: string }> = [
@@ -37,7 +69,7 @@ export const useInstancesStore = defineStore('instances', () => {
   const currentFolder = ref<string>('')
   const searchQuery = ref('')
   const filterType = ref<'all' | 'pinned' | 'vanilla' | 'modded'>('all')
-  const sortBy = ref<'name' | 'version' | 'category'>('name')
+  const sortBy = ref<InstanceSort>('name')
   const showHidden = ref(false)
 
   // Sync resource data to local reactive array
@@ -92,7 +124,7 @@ export const useInstancesStore = defineStore('instances', () => {
       )
     }
 
-    return result
+    return sortInstances(result, sortBy.value)
   })
 
   // PCL card groups
@@ -152,8 +184,14 @@ export const useInstancesStore = defineStore('instances', () => {
       const settings = await ipcClient.settingsGet()
       folders.value = settings.game?.folders ?? []
       currentFolder.value = settings.game?.currentFolder ?? ''
-      if (settings.game?.sortBy && ['name', 'version', 'category'].includes(settings.game.sortBy)) {
-        sortBy.value = settings.game.sortBy as 'name' | 'version' | 'category'
+      const saved = settings.game?.sortBy
+      if (
+        saved === 'name' ||
+        saved === 'version' ||
+        saved === 'category' ||
+        saved === 'lastPlayed'
+      ) {
+        sortBy.value = saved
       }
     } catch {
       // Fallback
@@ -161,9 +199,20 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   async function fetchInstances(force = true) {
+    // Re-read the sort preference so a change made in settings applies on the next load.
+    await loadSettings()
     await resource.refresh(force)
     if (resource.data.value) {
       instances.value = [...resource.data.value]
+    }
+  }
+
+  async function setSort(next: InstanceSort) {
+    sortBy.value = next
+    try {
+      await ipcClient.settingsPatch({ game: { sortBy: next } })
+    } catch {
+      // Persisting the preference must never block sorting
     }
   }
 
@@ -325,6 +374,7 @@ export const useInstancesStore = defineStore('instances', () => {
     searchQuery,
     filterType,
     sortBy,
+    setSort,
     showHidden,
     filteredInstances,
     cardGroups,

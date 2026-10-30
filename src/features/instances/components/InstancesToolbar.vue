@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import type { InstanceSort } from '../store'
 import { MCard, MSelect, MIconButton, MInput, MSwitch } from '../../../ui'
 
 defineProps<{
   currentFolder: string
   folderOptions: Array<{ label: string; value: string }>
   searchQuery: string
-  sortBy: 'name' | 'version' | 'category'
+  sortBy: InstanceSort
   sortOptions: Array<{ label: string; value: string }>
   showHidden: boolean
 }>()
@@ -14,7 +15,7 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'update:currentFolder', val: string): void
   (e: 'update:searchQuery', val: string): void
-  (e: 'update:sortBy', val: 'name' | 'version' | 'category'): void
+  (e: 'update:sortBy', val: InstanceSort): void
   (e: 'update:showHidden', val: boolean): void
   (e: 'manageFolders'): void
 }>()
@@ -63,7 +64,7 @@ const { t } = useI18n()
           :model-value="sortBy"
           :options="sortOptions"
           size="sm"
-          @update:model-value="emit('update:sortBy', $event as 'name' | 'version' | 'category')"
+          @update:model-value="emit('update:sortBy', $event as InstanceSort)"
         />
       </div>
 

@@ -3,7 +3,6 @@ import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import SettingsAppearancePage from '../SettingsAppearancePage.vue'
-import AppShell from '../../shell/AppShell.vue'
 import { useThemeStore } from '../../../stores/theme'
 import { setupMockIpc } from '../../../ipc/mock'
 import zhCnSettingsAppearance from '../../../locales/zh-CN/settingsAppearance.json'
@@ -28,6 +27,9 @@ describe('Appearance and Personalisation feature', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     setupMockIpc()
+    // Motion/splash preferences live in localStorage, so tests that change them
+    // would otherwise leak into every later default tier.
+    localStorage.clear()
     // Reset document styles
     document.documentElement.style.fontSize = ''
   })
@@ -62,7 +64,44 @@ describe('Appearance and Personalisation feature', () => {
     await store.setMaterial('glass')
     expect(store.material).toBe('glass')
   })
-  it('updates motion mode in useThemeStore and renders segmented control', async () => {
+  it('maps the performance tier onto material, motion and startup splash', async () => {
+    const store = useThemeStore()
+    expect(store.material).toBe('flat')
+    expect(store.motion).toBe('full')
+    expect(store.startupSplash).toBe(true)
+    expect(store.performanceTier).toBe('balanced')
+
+    await store.setPerformanceTier('performance')
+    expect(store.material).toBe('flat')
+    expect(store.motion).toBe('off')
+    expect(store.startupSplash).toBe(false)
+    expect(store.performanceTier).toBe('performance')
+
+    await store.setPerformanceTier('quality')
+    expect(store.material).toBe('glass')
+    expect(store.motion).toBe('full')
+    expect(store.startupSplash).toBe(true)
+    expect(store.performanceTier).toBe('quality')
+
+    await store.setPerformanceTier('balanced')
+    expect(store.material).toBe('flat')
+    expect(store.motion).toBe('reduced')
+    expect(store.startupSplash).toBe(true)
+  })
+
+  it('derives the tier when material or motion is changed elsewhere', async () => {
+    const store = useThemeStore()
+
+    // Quick settings can still flip the material on its own.
+    await store.setMaterial('glass')
+    expect(store.performanceTier).toBe('quality')
+
+    await store.setMaterial('flat')
+    store.setMotion('off')
+    expect(store.performanceTier).toBe('performance')
+  })
+
+  it('keeps the original motion and splash controls alongside the slider', async () => {
     const store = useThemeStore()
     expect(store.motion).toBe('full')
     store.setMotion('reduced')
@@ -80,22 +119,75 @@ describe('Appearance and Personalisation feature', () => {
     expect(wrapper.text()).toContain('完整')
     expect(wrapper.text()).toContain('精简')
     expect(wrapper.text()).toContain('关闭')
+    expect(wrapper.text()).toContain('高级材质效果')
+    expect(wrapper.text()).toContain('扁平纯色')
+    expect(wrapper.text()).toContain('流光玻璃')
+    expect(wrapper.text()).toContain('启动动画')
+
+    const motionRow = wrapper
+      .findAll('.m-setting-row')
+      .find((row) => row.text().includes('动画效果'))
+    expect(motionRow).toBeDefined()
+    // Cheapest first: closing the animation sits on the left, matching the tier slider.
+    expect(
+      motionRow!
+        .findAll('button')
+        .map((b) => b.text())
+        .filter(Boolean),
+    ).toEqual(['关闭', '精简', '完整'])
+
+    store.setStartupSplash(false)
+    expect(store.startupSplash).toBe(false)
   })
 
-  it('renders startup splash switch and toggles startupSplash in themeStore', async () => {
+  it('moves the tier slider when a manual control changes', async () => {
     const store = useThemeStore()
-    expect(store.startupSplash).toBe(true)
-
     const wrapper = mount(SettingsAppearancePage, {
       global: {
         plugins: [i18n],
       },
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('启动动画')
 
-    store.setStartupSplash(false)
+    const slider = wrapper.find('[data-testid="perf-tier-slider"] input[type="range"]')
+    expect((slider.element as HTMLInputElement).value).toBe('1')
+
+    await store.setMaterial('glass')
+    await flushPromises()
+    expect((slider.element as HTMLInputElement).value).toBe('2')
+  })
+
+  it('renders the tier slider with three stops and applies a picked tier', async () => {
+    const store = useThemeStore()
+    const wrapper = mount(SettingsAppearancePage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('性能档位')
+
+    const slider = wrapper.find('[data-testid="perf-tier-slider"]')
+    expect(slider.exists()).toBe(true)
+    expect(slider.findAll('button').map((b) => b.text())).toEqual(['性能', '均衡', '质量'])
+    // Balanced is active by default, and the hint spells out the combination.
+    expect(slider.findAll('button')[1].classes()).toContain('text-primary')
+    expect(wrapper.text()).toContain('扁平纯色 · 精简动画 · 播放启动动画')
+
+    const range = slider.find('input[type="range"]')
+    expect(range.attributes('max')).toBe('2')
+    await range.setValue('0')
+
+    expect(store.performanceTier).toBe('performance')
+    expect(store.motion).toBe('off')
     expect(store.startupSplash).toBe(false)
+    expect(wrapper.text()).toContain('扁平纯色 · 关闭动画 · 跳过启动动画')
+
+    // Clicking a stop label jumps there.
+    await slider.findAll('button')[2].trigger('click')
+    expect(store.material).toBe('glass')
+    expect(store.performanceTier).toBe('quality')
   })
 
   it('applies UI scale to document.documentElement', async () => {
@@ -130,42 +222,6 @@ describe('Appearance and Personalisation feature', () => {
 
     expect(store.backgroundPath).toBe('')
     expect(store.backgroundMode).toBe('none')
-  })
-
-  it('renders video element when backgroundMode is video in SettingsAppearancePage preview and AppShell', async () => {
-    const store = useThemeStore()
-    store.setBackgroundMode('video')
-    store.setBackgroundPath('C:/videos/background.mp4')
-    store.setBackgroundBlur(10)
-    store.setBackgroundOpacity(0.5)
-
-    const pageWrapper = mount(SettingsAppearancePage, {
-      global: {
-        plugins: [i18n],
-      },
-    })
-    await flushPromises()
-
-    const previewVideo = pageWrapper.find('[data-testid="bg-preview-video"]')
-    expect(previewVideo.exists()).toBe(true)
-
-    const shellWrapper = mount(AppShell, {
-      global: {
-        plugins: [i18n],
-        stubs: {
-          RouterView: true,
-          TaskIndicator: true,
-          CrashDialog: true,
-        },
-      },
-    })
-    await flushPromises()
-
-    const bgVideo = shellWrapper.find('[data-testid="bg-video"]')
-    expect(bgVideo.exists()).toBe(true)
-    expect(bgVideo.attributes('autoplay')).toBeDefined()
-    expect(bgVideo.attributes('muted')).toBeDefined()
-    expect(bgVideo.attributes('loop')).toBeDefined()
   })
 
   it('renders empty state without contrast sample card when backgroundMode is none or no media path', async () => {

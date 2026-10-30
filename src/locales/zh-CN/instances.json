@@ -30,7 +30,8 @@
     "search": "搜索实例名称、版本...",
     "sortName": "名称",
     "sortVersion": "版本",
-    "sortCategory": "分类"
+    "sortCategory": "分类",
+    "sortLastPlayed": "最近游玩"
   },
   "folder": {
     "current": "游戏目录",

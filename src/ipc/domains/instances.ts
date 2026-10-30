@@ -35,6 +35,7 @@ export interface InstanceConfig {
   preLaunchCommand?: string | null
   loginRequirement: string
   serverQuickPlay?: string | null
+  lastPlayedAt?: string | null
 }
 
 export interface InstanceInfo {

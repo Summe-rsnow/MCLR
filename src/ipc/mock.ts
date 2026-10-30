@@ -15,14 +15,10 @@ export function setupMockIpc(): void {
       mode: 'system',
       material: 'flat',
       scale: 1.0,
-      fontFamily: '',
       backgroundMode: 'none',
       backgroundPath: '',
       backgroundBlur: 0.0,
       backgroundOpacity: 0.3,
-      musicEnabled: false,
-      musicFolder: '',
-      musicVolume: 50,
     },
     language: {
       locale: 'zh-CN',
@@ -32,6 +28,8 @@ export function setupMockIpc(): void {
       logLevel: 'info',
       logRetentionDays: 7,
       disableGpu: false,
+      keepInBackground: false,
+      closePromptDismissed: false,
     },
     launch: {
       ramMode: 'auto',
@@ -81,9 +79,6 @@ export function setupMockIpc(): void {
       autoCheck: true,
       announcementUrl: '',
     },
-    download: {
-      autoSelectInstance: true,
-    },
     states: {
       dismissedAnnouncements: [],
     },
@@ -98,6 +93,8 @@ export function setupMockIpc(): void {
       updatePubkey: false,
     }),
     window_set_material: () => null,
+    app_quit: () => null,
+    renderer_agent_available: () => false,
     settings_get: () => ({ ...mockSettings }),
     settings_patch: (args) => {
       const patch = (args.patch ?? {}) as Record<string, unknown>

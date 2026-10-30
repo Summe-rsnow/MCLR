@@ -67,7 +67,14 @@ app.use(pinia)
 app.use(i18n)
 app.use(router)
 
+import { ensureFormatCulture } from './composables/useFormat'
+import { ensureLocale } from './composables/useLocale'
+
 const themeStore = useThemeStore(pinia)
 themeStore.init()
+
+// Resolve the persisted UI language before the first paint so the choice survives
+// a restart instead of flashing back to the default locale.
+await Promise.all([ensureLocale(), ensureFormatCulture()])
 
 app.mount('#app')

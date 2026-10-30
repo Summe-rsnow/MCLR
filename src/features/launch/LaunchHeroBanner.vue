@@ -7,6 +7,8 @@ import { useInstancesStore } from '../instances/store'
 import { useToast } from '../../ui/useToast'
 import { useDialog } from '../../ui/useDialog'
 import { ipcClient } from '../../ipc/client'
+import { awaitTask } from '../tasks/awaitTask'
+import { useErrorText } from '../../composables/useErrorText'
 import { MPageHeader, MCard, MButton, MBadge, MLoaderIcon, MProgress } from '../../ui'
 
 defineProps<{
@@ -23,6 +25,7 @@ const { t } = useI18n()
 const router = useRouter()
 const toast = useToast()
 const dialog = useDialog()
+const { formatError } = useErrorText()
 const launchStore = useLaunchStore()
 const instancesStore = useInstancesStore()
 
@@ -58,7 +61,17 @@ async function onRepairClick() {
   if (!launchStore.selectedInstance) return
   emit('update:isRepairing', true)
   try {
-    await ipcClient.installRepair(launchStore.selectedInstance.id)
+    // The command only queues the task: verification and the downloads that
+    // follow happen in the background, so success must wait for the terminal state.
+    const taskId = await ipcClient.installRepair(launchStore.selectedInstance.id)
+    const outcome = await awaitTask(taskId)
+    if (outcome.state === 'failed' || outcome.state === 'canceled') {
+      toast.show({
+        message: outcome.error ? formatError(outcome.error) : t('launch.repairFailed'),
+        type: 'danger',
+      })
+      return
+    }
     toast.show({
       message: t('launch.repairSuccess'),
       type: 'success',
