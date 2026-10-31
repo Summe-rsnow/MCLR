@@ -36,7 +36,7 @@ pub fn list_screenshots_paged(
             Ok(ft) => ft,
             Err(_) => continue,
         };
-        if !file_type.is_file() {
+        if !file_type.is_file() && !file_type.is_symlink() {
             continue;
         }
         let path = entry.path();
@@ -55,9 +55,14 @@ pub fn list_screenshots_paged(
 
         // `entry.metadata()` reuses the data the directory enumeration already returned;
         // `fs::metadata` on the joined path costs a second full stat (measured ~160x slower
-        // over 1000 files on Windows).
+        // over 1000 files on Windows). It never traverses a link, so links fall back to the
+        // path stat to keep symlinked screenshots visible.
         let meta = match entry.metadata() {
-            Ok(m) => m,
+            Ok(m) if m.is_file() => m,
+            Ok(_) => match fs::metadata(&path) {
+                Ok(m) if m.is_file() => m,
+                _ => continue,
+            },
             Err(_) => continue,
         };
         let size = meta.len();

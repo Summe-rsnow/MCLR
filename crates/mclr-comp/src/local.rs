@@ -1004,7 +1004,9 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
             Ok(ft) => ft,
             Err(_) => continue,
         };
-        if !file_type.is_file() {
+        // Plain files are the common case and need nothing extra; links reach the metadata
+        // step below, which pays a path stat only for them.
+        if !file_type.is_file() && !file_type.is_symlink() {
             continue;
         }
 
@@ -1022,7 +1024,13 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
 
         let enabled = is_jar;
         let metadata = match entry.metadata() {
-            Ok(m) => m,
+            Ok(m) if m.is_file() => m,
+            // `entry.metadata()` never traverses a link, while the previous `fs::metadata(&path)`
+            // did. Follow it once here so a jar symlinked into the folder is still scanned.
+            Ok(_) => match fs::metadata(&path) {
+                Ok(m) if m.is_file() => m,
+                _ => continue,
+            },
             Err(_) => continue,
         };
         let size = metadata.len();
