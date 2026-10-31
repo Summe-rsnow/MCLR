@@ -34,4 +34,4 @@
 | v0.0.27 | Smoothness, CPU & memory: incremental logs, compositor shimmer, verified-manifest fast path, download pool | done | v0.0.27 | v0.0.27 | 2026-10-28 |
 | v0.0.28 | Standalone modpack instances, mods-first resource tabs, mod artwork pipeline & full dependency refresh | done | v0.0.28 | v0.0.28 | 2026-10-29 |
 | v0.0.29 | Performance preset, system tray & background residency, real task pause/cancel, launcher log maintenance & fake-feature audit sweep | done | 9896837 | v0.0.29 | 2026-10-30 |
-| v0.0.30 | Zero-allocation hashing, short-lock mod cache, parallel scans, buffered downloads, virtualised logs & legacy Forge subfolder fix | done | pending | v0.0.30 | 2026-10-31 |
+| v0.0.30 | Zero-allocation hashing, short-lock mod cache, parallel scans, buffered downloads, virtualised logs & legacy Forge subfolder fix | done | 5e70b61 | v0.0.30 | 2026-10-31 |
