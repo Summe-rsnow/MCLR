@@ -29,6 +29,9 @@ export default defineConfig({
           if (id.includes('/culori/')) return 'vendor-color'
           if (id.includes('@tanstack/vue-virtual') || id.includes('@tanstack/virtual-core'))
             return 'vendor-virtual'
+          if (id.includes('@tauri-apps/')) return 'vendor-tauri'
+          // No iconify rule: `@iconify-json/*` is read from disk by UnoCSS `presetIcons` and
+          // never enters the module graph, so icons ship as generated CSS rather than JS.
           return undefined
         },
       },

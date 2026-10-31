@@ -58,6 +58,10 @@ pub fn scan_instances(mc_folder: &Path) -> Result<Vec<InstanceInfo>, GameError> 
     // Freshly computed cache entries for this pass; published in one short lock
     // at the end so no filesystem work happens while holding the cache lock.
     let mut pending: Vec<(String, CachedInstance)> = Vec::new();
+    // Parsed parent version JSONs, keyed by `inheritsFrom` id. A single scan walks
+    // many instances that inherit the same vanilla/loader parent, so parsing each
+    // parent once turns O(instances) reads into O(distinct parents).
+    let mut parent_cache: HashMap<String, Option<VersionJson>> = HashMap::new();
 
     for entry in entries.flatten() {
         let file_type = match entry.file_type() {
@@ -220,21 +224,13 @@ pub fn scan_instances(mc_folder: &Path) -> Result<Vec<InstanceInfo>, GameError> 
         };
 
         let effective_json = if let Some(parent_id) = &version_json.inherits_from {
-            let parent_json_path = versions_dir
-                .join(parent_id)
-                .join(format!("{parent_id}.json"));
-            if parent_json_path.exists() {
-                if let Ok(parent_str) = fs::read_to_string(&parent_json_path) {
-                    if let Ok(parent_v) = VersionJson::parse(&parent_str) {
-                        merge_version_json(version_json.clone(), parent_v)
-                    } else {
-                        version_json.clone()
-                    }
-                } else {
-                    version_json.clone()
-                }
-            } else {
-                version_json.clone()
+            let parent_json = parent_cache
+                .entry(parent_id.clone())
+                .or_insert_with(|| load_parent_version_json(&versions_dir, parent_id))
+                .clone();
+            match parent_json {
+                Some(parent_v) => merge_version_json(version_json.clone(), parent_v),
+                None => version_json.clone(),
             }
         } else {
             version_json.clone()
@@ -299,4 +295,14 @@ pub fn scan_instances(mc_folder: &Path) -> Result<Vec<InstanceInfo>, GameError> 
     }
 
     Ok(instances)
+}
+
+/// Reads and parses `<versions>/<parent_id>/<parent_id>.json`, returning `None` when
+/// the parent is missing, unreadable, or malformed (callers then keep the child JSON).
+fn load_parent_version_json(versions_dir: &Path, parent_id: &str) -> Option<VersionJson> {
+    let parent_json_path = versions_dir
+        .join(parent_id)
+        .join(format!("{parent_id}.json"));
+    let parent_str = fs::read_to_string(parent_json_path).ok()?;
+    VersionJson::parse(&parent_str).ok()
 }

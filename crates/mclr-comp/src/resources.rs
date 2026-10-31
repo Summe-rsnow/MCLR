@@ -1,6 +1,7 @@
 #![allow(clippy::collapsible_if)]
 //! Unified resource management: scanning, metadata extraction, toggling, import/export.
 
+use std::collections::HashSet;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -265,12 +266,21 @@ pub fn scan_resources(
     // For legacy Forge mods, also scan mods/<mc_version>/ if present
     if kind == ResourceKind::Mod {
         if let Some(ver) = mc_version {
-            let legacy_dir = base_folder.join(ver);
-            if legacy_dir.is_dir() {
-                scan_dir_entries(&legacy_dir, &base_folder, kind, &mut entries)?;
+            if !ver.is_empty() {
+                let legacy_dir = base_folder.join(ver);
+                if legacy_dir.is_dir() {
+                    scan_dir_entries(&legacy_dir, &base_folder, kind, &mut entries)?;
+                }
             }
         }
     }
+
+    // The legacy pass (and any future overlapping pass) can observe the same file twice —
+    // e.g. when the version resolves back to the `mods` folder itself. Collapse such
+    // overlaps on the normalized relative path so the caller never sees duplicates and
+    // the first observation (the base folder pass) wins.
+    let mut seen: HashSet<String> = HashSet::with_capacity(entries.len());
+    entries.retain(|entry| seen.insert(entry.rel_path.replace('\\', "/")));
 
     Ok(entries)
 }
@@ -993,6 +1003,7 @@ pub fn export_resource_list(entries: &[ResourceEntry], format: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     use tempfile::tempdir;
 
     #[test]
@@ -1046,6 +1057,47 @@ mod tests {
         // Delete permanently
         delete_resources(std::slice::from_ref(&file_path), true).unwrap();
         assert!(!file_path.exists());
+    }
+
+    #[test]
+    fn test_scan_resources_includes_legacy_mc_version_subfolder() {
+        let dir = tempdir().unwrap();
+        let mods = dir.path().join("mods");
+        let legacy = mods.join("1.12.2");
+        fs::create_dir_all(&legacy).unwrap();
+        fs::write(mods.join("modern.jar"), b"modern").unwrap();
+        fs::write(legacy.join("legacy.jar"), b"legacy").unwrap();
+
+        let entries = scan_resources(dir.path(), Some("1.12.2"), ResourceKind::Mod, None).unwrap();
+        let mut names: Vec<&str> = entries.iter().map(|e| e.file_name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(names, vec!["legacy.jar", "modern.jar"]);
+
+        let legacy_entry = entries
+            .iter()
+            .find(|e| e.file_name == "legacy.jar")
+            .unwrap();
+        assert_eq!(
+            legacy_entry.rel_path.replace('\\', "/"),
+            "1.12.2/legacy.jar"
+        );
+        assert!(legacy_entry.enabled);
+
+        // No entry may be reported twice, even though the legacy folder is nested inside
+        // the folder the first pass already walked.
+        let mut seen = HashSet::new();
+        for entry in &entries {
+            assert!(
+                seen.insert(entry.rel_path.replace('\\', "/")),
+                "duplicate rel_path emitted: {}",
+                entry.rel_path
+            );
+        }
+
+        // An empty or missing version scans only the base mods folder.
+        let base_only = scan_resources(dir.path(), Some(""), ResourceKind::Mod, None).unwrap();
+        assert_eq!(base_only.len(), 1);
+        assert_eq!(base_only[0].file_name, "modern.jar");
     }
 
     #[test]

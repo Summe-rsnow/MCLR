@@ -336,7 +336,7 @@ function navigateToDetail(id: string, tab?: string) {
         <!-- Group Content in MCollapse -->
         <MCollapse :open="!isGroupCollapsed(group.key)">
           <TransitionGroup
-            name="m-list"
+            :name="group.items.length > 24 ? undefined : 'm-list'"
             tag="div"
             class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 pt-2"
           >

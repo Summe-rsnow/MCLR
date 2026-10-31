@@ -3,7 +3,9 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Cursor, Read, Seek};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
+use std::time::SystemTime;
 
 use mclr_core::paths;
 use serde::{Deserialize, Serialize};
@@ -44,21 +46,70 @@ struct NestedJarRef {
     artifact_version: Option<String>,
 }
 
-fn load_cache() -> HashMap<String, JarInJarCacheEntry> {
-    let cache_file = paths::cache_dir().join("jarinjar.json");
-    fs::read_to_string(&cache_file)
-        .ok()
-        .and_then(|c| serde_json::from_str(&c).ok())
-        .unwrap_or_default()
+/// Entries of one `jarinjar.json` cache file.
+type JarCacheMap = HashMap<String, JarInJarCacheEntry>;
+
+/// In-memory store: `cache file -> (file mtime, entries)`.
+type JarCacheStore = HashMap<PathBuf, (Option<SystemTime>, JarCacheMap)>;
+
+/// In-memory mirror of `jarinjar.json`: `cache file -> (file mtime, entries)`.
+///
+/// Storing the mtime lets an external write (another process, a cleared cache) invalidate
+/// the in-memory copy automatically, and keying by path keeps separate data directories
+/// isolated. The mutex is only held for a lookup or a clone; all `fs` and serde work runs
+/// outside it so a slow disk never serialises concurrent scans.
+static JAR_IN_JAR_CACHE: LazyLock<Mutex<JarCacheStore>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn jar_cache_file() -> PathBuf {
+    paths::cache_dir().join("jarinjar.json")
 }
 
-fn save_cache(cache: &HashMap<String, JarInJarCacheEntry>) {
-    let cache_dir = paths::cache_dir();
-    let _ = fs::create_dir_all(&cache_dir);
-    let cache_file = cache_dir.join("jarinjar.json");
+fn file_mtime(path: &Path) -> Option<SystemTime> {
+    fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+fn lock_cache() -> std::sync::MutexGuard<'static, JarCacheStore> {
+    JAR_IN_JAR_CACHE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn load_cache() -> JarCacheMap {
+    let cache_file = jar_cache_file();
+    let disk_mtime = file_mtime(&cache_file);
+
+    // Fast path: disk unchanged since the last load/save, so serve the in-memory copy. The
+    // lock is held only for the lookup and the clone that follows it.
+    if disk_mtime.is_some() {
+        let guard = lock_cache();
+        if let Some((cached_mtime, map)) = guard.get(&cache_file)
+            && *cached_mtime == disk_mtime
+        {
+            return map.clone();
+        }
+    }
+
+    // Miss or external modification: read and parse with no lock held.
+    let map: JarCacheMap = fs::read_to_string(&cache_file)
+        .ok()
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or_default();
+
+    lock_cache().insert(cache_file, (disk_mtime, map.clone()));
+    map
+}
+
+fn save_cache(cache: &JarCacheMap) {
+    let cache_file = jar_cache_file();
+    if let Some(parent) = cache_file.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
     if let Ok(json) = serde_json::to_string(cache) {
         let _ = fs::write(&cache_file, json);
     }
+    let new_mtime = file_mtime(&cache_file);
+    lock_cache().insert(cache_file, (new_mtime, cache.clone()));
 }
 
 fn read_entry_text<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> Option<String> {

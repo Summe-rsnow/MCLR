@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from 'vue'
+import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLaunchStore } from './store'
@@ -70,6 +70,11 @@ onMounted(async () => {
   if (showNews.value) {
     loadNewsAndAnnouncements()
   }
+})
+
+// Detach the process event listener so navigating away does not leak subscriptions.
+onUnmounted(() => {
+  launchStore.stopListening()
 })
 
 const instanceOptions = computed(() => {

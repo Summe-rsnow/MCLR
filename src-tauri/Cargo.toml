@@ -49,6 +49,7 @@ hex.workspace = true
 base64.workspace = true
 dirs.workspace = true
 chrono.workspace = true
+futures-util.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

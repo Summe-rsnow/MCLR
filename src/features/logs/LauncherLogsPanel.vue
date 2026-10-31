@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ipcClient } from '../../ipc/client'
 import type { LauncherLogFile } from '../../ipc/client'
-import { MSelect, MSkeleton } from '../../ui'
+import { MSelect, MSkeleton, MVirtualList } from '../../ui'
 const emit = defineEmits<{
   (e: 'files-loaded', files: LauncherLogFile[]): void
 }>()
@@ -57,6 +57,11 @@ const displayContent = computed(() => {
   return t('logs.launcher.empty')
 })
 
+// Single scroll container shared by the panel and MVirtualList, which needs it to
+// measure rows against the real scroller instead of hunting for an ancestor.
+const scrollContainer = ref<HTMLElement | null>(null)
+const logLines = computed(() => displayContent.value.split(/\r?\n/))
+
 async function onSelectLogFile(val: string | number) {
   selectedLogFile.value = String(val)
   await readSelectedLog()
@@ -108,11 +113,25 @@ defineExpose({ reload: loadLogFiles })
         <MSkeleton class="h-3 w-[90%]" />
         <MSkeleton class="h-3 w-[70%]" />
       </div>
-      <pre
+      <div
         v-else
+        ref="scrollContainer"
         data-testid="launcher-log-content"
-        class="flex-1 p-4 pr-3 font-mono text-xs overflow-y-auto whitespace-pre-wrap text-fg select-text h-full"
-        >{{ displayContent }}</pre>
+        class="flex-1 p-4 pr-3 font-mono text-xs overflow-y-auto text-fg select-text h-full"
+      >
+        <!-- MVirtualList renders plain DOM below 200 lines and virtualizes above. -->
+        <MVirtualList
+          :items="logLines"
+          :item-key="(_line, i) => i"
+          :estimate-size="20"
+          :threshold="200"
+          :scroll-el="scrollContainer"
+        >
+          <template #item="{ item: line }">
+            <div class="whitespace-pre-wrap break-all leading-5 min-h-[20px]">{{ line }}</div>
+          </template>
+        </MVirtualList>
+      </div>
     </div>
   </div>
 </template>

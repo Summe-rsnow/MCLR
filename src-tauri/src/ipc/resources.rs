@@ -64,32 +64,69 @@ pub async fn resources_list(
     rel: Option<String>,
     request_id: Option<String>,
 ) -> Result<Vec<ResourceEntry>, AppError> {
-    let game_dir = super::game_dir_for(&state, &instance_id).await;
-    let g_dir = game_dir.clone();
+    let mc_folder = super::current_mc_folder(&state).await;
+    let g_dir = super::game_dir_for(&state, &instance_id).await;
     let r = rel.clone();
+    let inst_id = instance_id.clone();
 
-    // Phase 1: fast filesystem scan, plus the single local-mod cache for mod metadata
-    let mut entries =
-        super::run_blocking(move || scan_resources(&g_dir, None, kind, r.as_deref())).await?;
+    // Phase 1: a single blocking pass resolves the instance's Minecraft version, scans the
+    // resource folder (legacy `mods/<mc_version>/` included) and loads the local-mod cache.
+    let (mut entries, local_mods) = super::run_blocking(move || {
+        // Only mods have a version-specific legacy folder, so no other kind pays for the
+        // instance scan.
+        let mc_version = if kind == ResourceKind::Mod {
+            mclr_game::instance::scan_instances(&mc_folder)
+                .unwrap_or_default()
+                .into_iter()
+                .find(|i| i.id == inst_id || i.name == inst_id)
+                .map(|i| i.mc_version)
+                .filter(|v| !v.is_empty() && v.as_str() != "Unknown")
+        } else {
+            None
+        };
 
-    let mut local_mods: Vec<LocalModInfo> = Vec::new();
+        let entries = scan_resources(&g_dir, mc_version.as_deref(), kind, r.as_deref())?;
+
+        let mut local_mods: Vec<LocalModInfo> = Vec::new();
+        if kind == ResourceKind::Mod {
+            let mods_dir = g_dir.join("mods");
+            local_mods = mclr_comp::local::scan_local_mods(&mods_dir).unwrap_or_default();
+            // Legacy Forge installs keep their jars in `mods/<mc_version>/`, so that folder
+            // has to contribute local-mod metadata too instead of falling back to bare file
+            // names. `scan_resources` already listed those entries.
+            if let Some(ver) = mc_version.as_deref() {
+                let legacy_dir = mods_dir.join(ver);
+                if legacy_dir.is_dir() {
+                    local_mods
+                        .extend(mclr_comp::local::scan_local_mods(&legacy_dir).unwrap_or_default());
+                }
+            }
+        }
+
+        Ok::<_, AppError>((entries, local_mods))
+    })
+    .await?;
+
     if kind == ResourceKind::Mod {
-        let mods_dir = game_dir.join("mods");
-        local_mods = super::run_blocking(move || mclr_comp::local::scan_local_mods(&mods_dir))
-            .await
-            .unwrap_or_default();
-
-        let by_name: HashMap<&str, &LocalModInfo> = local_mods
+        let by_path: HashMap<PathBuf, &LocalModInfo> = local_mods
             .iter()
-            .map(|m| (m.file_name.as_str(), m))
+            .map(|m| (PathBuf::from(&m.path), m))
+            .collect();
+        let by_name_size: HashMap<(&str, u64), &LocalModInfo> = local_mods
+            .iter()
+            .map(|m| ((m.file_name.as_str(), m.size), m))
             .collect();
         for entry in &mut entries {
-            let Some(m) = by_name.get(entry.file_name.as_str()) else {
+            // Full path first: the flat folder and the legacy subfolder can both hold a jar
+            // with the same name, so file name plus size alone is ambiguous.
+            let matched = by_path.get(Path::new(&entry.path)).copied().or_else(|| {
+                by_name_size
+                    .get(&(entry.file_name.as_str(), entry.size))
+                    .copied()
+            });
+            let Some(m) = matched else {
                 continue;
             };
-            if m.size != entry.size {
-                continue;
-            }
             entry.title = Some(m.name.clone());
             entry.description = m.description.clone();
             entry.version = Some(m.version.clone()).filter(|v| !v.is_empty());

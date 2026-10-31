@@ -12,6 +12,8 @@ import type {
 import { ipcClient } from '../../ipc/client'
 import { MButton, MEmpty, MSkeleton, MVirtualList, useToast, useDialog } from '../../ui'
 import { useInstancesStore } from '../instances/store'
+import { awaitTask } from '../tasks/awaitTask'
+import { useErrorText } from '../../composables/useErrorText'
 import ResourceToolbar from './components/ResourceToolbar.vue'
 import ResourceItemRow from './components/ResourceItemRow.vue'
 import ResourceModals from './components/ResourceModals.vue'
@@ -21,7 +23,8 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const { formatError } = useErrorText()
 const toast = useToast()
 const { confirmDanger } = useDialog()
 const instancesStore = useInstancesStore()
@@ -107,28 +110,51 @@ function computeScore(entry: ResourceEntry, query: string): number {
   return score
 }
 
-// Counts for filter chips
+// Duplicate detection & filter counts
+/**
+ * Identity used for duplicate detection.
+ *
+ * Only entries carrying a real `modId` or `projectId` can be duplicates of each other (two
+ * jars of the same project). Falling back to title or file name would flag unrelated jars that
+ * merely share a display name, so entries without either identifier are never grouped.
+ */
+function resourceDuplicateKey(e: ResourceEntry): string | null {
+  if (e.modId) return `mod:${e.modId.toLowerCase()}`
+  if (e.projectId) return `proj:${e.projectId.toLowerCase()}`
+  return null
+}
+
+const duplicateStats = computed(() => {
+  const counts = new Map<string, number>()
+  for (const e of entries.value) {
+    const key = resourceDuplicateKey(e)
+    if (!key) continue
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+
+  const keys = new Set<string>()
+  let count = 0
+  for (const [key, occurrences] of counts) {
+    if (occurrences > 1) {
+      keys.add(key)
+      count += occurrences
+    }
+  }
+
+  return { keys, count }
+})
+
 const filterCounts = computed(() => {
   let enabled = 0
   let disabled = 0
   let updatable = 0
   let error = 0
 
-  const nameMap = new Map<string, number>()
   for (const e of entries.value) {
     if (e.enabled) enabled++
     else disabled++
     if (e.updateAvailable) updatable++
     if (e.state === 'unavailable') error++
-
-    const key = e.modId || e.projectId || e.title || e.fileName
-    nameMap.set(key, (nameMap.get(key) || 0) + 1)
-  }
-
-  let duplicate = 0
-  for (const e of entries.value) {
-    const key = e.modId || e.projectId || e.title || e.fileName
-    if ((nameMap.get(key) || 0) > 1) duplicate++
   }
 
   return {
@@ -137,9 +163,14 @@ const filterCounts = computed(() => {
     disabled,
     updatable,
     error,
-    duplicate,
+    duplicate: duplicateStats.value.count,
   }
 })
+
+// Sorting follows the active UI language so accented and CJK names order naturally.
+const collator = computed(
+  () => new Intl.Collator(locale.value, { numeric: true, sensitivity: 'base' }),
+)
 
 const filteredEntries = computed(() => {
   const query = debouncedQuery.value
@@ -160,25 +191,22 @@ const filteredEntries = computed(() => {
   } else if (activeFilter.value === 'error') {
     list = list.filter((e) => e.state === 'unavailable')
   } else if (activeFilter.value === 'duplicate') {
-    const counts = new Map<string, number>()
-    for (const e of entries.value) {
-      const key = e.modId || e.projectId || e.title || e.fileName
-      counts.set(key, (counts.get(key) || 0) + 1)
-    }
+    const dupKeys = duplicateStats.value.keys
     list = list.filter((e) => {
-      const key = e.modId || e.projectId || e.title || e.fileName
-      return (counts.get(key) || 0) > 1
+      const key = resourceDuplicateKey(e)
+      return key !== null && dupKeys.has(key)
     })
   }
 
   // Sort
   const sortKey = activeSort.value
+  const compare = (x: string, y: string) => collator.value.compare(x, y)
   return [...list].sort((a, b) => {
     if (a.isDir && !b.isDir) return -1
     if (!a.isDir && b.isDir) return 1
     switch (sortKey) {
       case 'fileName':
-        return a.fileName.localeCompare(b.fileName)
+        return compare(a.fileName, b.fileName)
       case 'tagCount':
         return b.tags.length - a.tags.length
       case 'createdTime':
@@ -189,7 +217,7 @@ const filteredEntries = computed(() => {
       default: {
         const nameA = a.title || a.fileName
         const nameB = b.title || b.fileName
-        return nameA.localeCompare(nameB)
+        return compare(nameA, nameB)
       }
     }
   })
@@ -323,12 +351,29 @@ function handleUpdateClick(entry: ResourceEntry) {
   updateDialogOpen.value = true
 }
 
+/** Failure text for an update task: its own error, or a generic message when it carries none. */
+function updateFailedText(error: unknown): string {
+  return error ? formatError(error) : t('resources.update.failed')
+}
+
 async function doSingleUpdate(entry: ResourceEntry) {
   if (!entry.latestFile) return
   try {
-    await ipcClient.localModUpdate(props.instanceId, entry.fileName, entry.latestFile)
-    toast.success(t('resources.update.success'))
+    const taskId = await ipcClient.localModUpdate(
+      props.instanceId,
+      entry.fileName,
+      entry.latestFile,
+    )
     updateDialogOpen.value = false
+    // The command only queues the download, so the task must reach a terminal state before
+    // announcing success — otherwise a failed download still reports an update.
+    const outcome = await awaitTask(taskId)
+    if (outcome.state === 'failed' || outcome.state === 'canceled') {
+      toast.danger(updateFailedText(outcome.error))
+      return
+    }
+    toast.success(t('resources.update.success'))
+    await loadResources()
   } catch (err: unknown) {
     toast.danger(String(err))
   }
@@ -361,8 +406,15 @@ async function doBatchUpdate(list: ResourceEntry[]) {
     }))
 
   try {
-    await ipcClient.localModsUpdateMany(props.instanceId, updates)
+    const taskId = await ipcClient.localModsUpdateMany(props.instanceId, updates)
+    // Same as the single update: downloading and verification happen inside the task.
+    const outcome = await awaitTask(taskId)
+    if (outcome.state === 'failed' || outcome.state === 'canceled') {
+      toast.danger(updateFailedText(outcome.error))
+      return
+    }
     toast.success(t('resources.update.success'))
+    await loadResources()
   } catch (err: unknown) {
     toast.danger(String(err))
   }
@@ -470,21 +522,31 @@ async function handleBatchDelete() {
   }
 }
 
+/** Toggle requests in flight at once; keeps large batches fast without flooding the backend. */
+const TOGGLE_CONCURRENCY = 8
+
+/**
+ * Applies a toggle to every entry, eight at a time.
+ *
+ * `doToggle` handles its own errors, so a rejected batch member can never abort the run.
+ */
+async function runToggleBatches(targets: ResourceEntry[]) {
+  for (let i = 0; i < targets.length; i += TOGGLE_CONCURRENCY) {
+    await Promise.all(targets.slice(i, i + TOGGLE_CONCURRENCY).map((entry) => doToggle(entry)))
+  }
+}
+
 async function handleBatchToggle(enable: boolean) {
   const selectedEntries = entries.value.filter(
     (e) => selectedPaths.value.has(e.path) && e.enabled !== enable,
   )
-  for (const entry of selectedEntries) {
-    await doToggle(entry)
-  }
+  await runToggleBatches(selectedEntries)
 }
 
 async function handleBatchToggleAll(enable: boolean) {
   const targetEntries = entries.value.filter((e) => e.enabled !== enable)
   if (targetEntries.length === 0) return
-  for (const entry of targetEntries) {
-    await doToggle(entry)
-  }
+  await runToggleBatches(targetEntries)
   toast.success(enable ? t('resources.actions.enableAll') : t('resources.actions.disableAll'))
 }
 
@@ -656,25 +718,25 @@ onMounted(async () => {
   try {
     unlistenPatch = await listen<ResourcesPatchEvent>('resources://patch', (event) => {
       if (event.payload.instanceId !== props.instanceId) return
+      // The backend already coalesces patches (50 ms / 64 items), so one Map per batch keeps
+      // every batch at O(P) instead of rescanning the entry list per patch. The map is built
+      // synchronously — no requestAnimationFrame — so hidden tray windows still apply patches.
+      const byName = new Map(entries.value.map((e) => [e.fileName, e]))
       for (const patch of event.payload.patches) {
-        const idx = entries.value.findIndex((e) => e.fileName === patch.fileName)
-        if (idx !== -1) {
-          const cur = entries.value[idx]
-          if (cur) {
-            if (patch.title !== undefined) cur.title = patch.title
-            if (patch.description !== undefined) cur.description = patch.description
-            if (patch.version !== undefined) cur.version = patch.version
-            if (patch.tags !== undefined && patch.tags !== null) cur.tags = patch.tags
-            if (patch.modId !== undefined) cur.modId = patch.modId
-            if (patch.projectId !== undefined) cur.projectId = patch.projectId
-            if (patch.icon !== undefined) cur.icon = patch.icon
-            if (patch.latestFile !== undefined) cur.latestFile = patch.latestFile
-            if (patch.updateAvailable !== undefined && patch.updateAvailable !== null) {
-              cur.updateAvailable = patch.updateAvailable
-            }
-            if (patch.state !== undefined && patch.state !== null) cur.state = patch.state
-          }
+        const cur = byName.get(patch.fileName)
+        if (!cur) continue
+        if (patch.title !== undefined) cur.title = patch.title
+        if (patch.description !== undefined) cur.description = patch.description
+        if (patch.version !== undefined) cur.version = patch.version
+        if (patch.tags !== undefined && patch.tags !== null) cur.tags = patch.tags
+        if (patch.modId !== undefined) cur.modId = patch.modId
+        if (patch.projectId !== undefined) cur.projectId = patch.projectId
+        if (patch.icon !== undefined) cur.icon = patch.icon
+        if (patch.latestFile !== undefined) cur.latestFile = patch.latestFile
+        if (patch.updateAvailable !== undefined && patch.updateAvailable !== null) {
+          cur.updateAvailable = patch.updateAvailable
         }
+        if (patch.state !== undefined && patch.state !== null) cur.state = patch.state
       }
     })
   } catch {

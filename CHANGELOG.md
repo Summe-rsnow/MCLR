@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.30] - 2026-10-31
+
+A throughput pass over hashing, downloads and list rendering, plus the fixes that surfaced while
+measuring them: version-subfolder mods were invisible, updates announced success before their
+download ran, and batch toggles serialised one IPC call per file.
+
+### Added
+- **Legacy Forge 版本子目录**: `mods/<mc_version>/` is scanned and shown alongside the flat
+  `mods/` folder, and its jars get real mod metadata instead of bare file names.
+- **Release profile**: `lto = "thin"` + `codegen-units = 1` for cross-crate inlining, keeping
+  `panic = "unwind"` so a panicking blocking task cannot abort the launcher.
+- Contracts for the new invariants (zero-copy hashing, lock scope, patcher buffering) in
+  `docs/contracts.md`.
+
+### Changed
+- **Mod hashing allocates nothing**: `hash_file` streams two passes over one handle with a single
+  128 KiB buffer — a first pass for SHA1 plus the CurseForge filtered length, a second for
+  MurmurHash2 — instead of materialising the whitespace-filtered file in memory.
+- **Mod cache reads happen outside the lock**: `localmods.json` and `jarinjar.json` keep an
+  in-memory mirror keyed by cache path and invalidated by file mtime, so the mutex only guards a
+  `HashMap` clone while every read, parse and write runs unlocked.
+- **Cold mods folder scans run on four worker threads** instead of one.
+- **Toggling a mod no longer re-hashes it**: the cache entry migrates from `<name>.jar` to
+  `<name>.jar.disabled` with the renamed file's real size and mtime.
+- **Downloads buffer their writes**: the downloader accumulates 64 KiB before touching the file
+  and verifies with a 256 KiB read buffer.
+- **Batch mod updates download concurrently** (`net.max_concurrentFiles`, capped at 16), and each
+  superseded jar is deleted the moment its replacement is verified.
+- **Modpack import no longer blocks the runtime**: override extraction and the instance rescan run
+  on blocking worker threads.
+- **Instance scans memoise parent version JSONs**, so instances inheriting one loader version parse
+  it once.
+- **Launcher logs render through `MVirtualList`** (plain DOM below 200 lines, virtualised above).
+- **Task updates publish once per IPC batch** instead of once per task.
+- **`resources://patch` batches apply in O(P)** through one `Map` build per event.
+- **Batch enable/disable runs eight toggles at a time** instead of one after another.
+- **Instance groups above 24 items skip the FLIP transition.**
+- Sorting follows the active UI language through one `Intl.Collator` (`numeric`, `sensitivity:
+  base`) instead of `String#localeCompare`.
+
+### Fixed
+- **更新提示不再提前宣告成功**: single and batch mod updates wait for their task to reach a
+  terminal state; failures and cancellations report the task error and keep the list unrefreshed.
+- **重复项不再误报**: duplicate detection only groups entries that share a `modId` or
+  `projectId`; files without either are never flagged.
+- **Legacy subfolder mods match their metadata by full path**, so two jars with the same name in
+  `mods/` and `mods/<mc_version>/` cannot swap titles or artwork.
+- **`scan_resources` deduplicates on the normalised relative path**, so an empty or matching
+  version can never emit an entry twice.
+- **启动页监听器泄漏**: `LaunchPage` stops its task listener on unmount.
+- Empty `mc_version` no longer re-walks the `mods` folder.
+- **截图列表不再漏掉刚保存的截图**: the screenshot listing cached on the directory mtime, but
+  NTFS bumps that timestamp lazily — writing `d.png` left the mtime unchanged in roughly half of
+  the measured runs, so a fresh capture stayed invisible and a deleted one lingered. The cache is
+  gone; the scan now uses `DirEntry::file_type`/`metadata` (no second path stat), which is
+  **3.0 ms instead of 196 ms** for a 1000-file folder on this machine.
+- **Mod 扫描同样去掉逐文件的重复 stat**: `scan_local_mods` uses the enumeration's own file type
+  and metadata instead of `path.is_file()` + `fs::metadata(&path)`.
+
 ## [0.0.29] - 2026-10-30
 
 A performance preset for the whole UI, a tray that keeps the launcher alive, real task

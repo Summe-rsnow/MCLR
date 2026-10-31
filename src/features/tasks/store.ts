@@ -70,14 +70,21 @@ export const useTasksStore = defineStore('tasks', () => {
 
   function handleTaskUpdate(diff: TaskNode | TaskNode[]) {
     const updates = Array.isArray(diff) ? diff : [diff]
+    if (updates.length === 0) return
+    // Apply the whole batch to a clone and publish once, so derived computeds
+    // (taskTree / activeTasks / aggregates) evaluate once per IPC batch instead of per item.
+    const next = tasks.value.slice()
+    const indexById = new Map(next.map((t, i) => [t.id, i] as const))
     for (const u of updates) {
-      const idx = tasks.value.findIndex((t) => t.id === u.id)
-      if (idx >= 0) {
-        tasks.value[idx] = { ...tasks.value[idx], ...u }
+      const idx = indexById.get(u.id)
+      if (idx !== undefined) {
+        next[idx] = { ...next[idx], ...u }
       } else {
-        tasks.value.push(u)
+        indexById.set(u.id, next.length)
+        next.push(u)
       }
     }
+    tasks.value = next
   }
 
   async function startListening() {

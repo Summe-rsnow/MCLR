@@ -4,15 +4,34 @@ import { createI18n } from 'vue-i18n'
 import { createPinia, setActivePinia } from 'pinia'
 import ResourceToolbar from '../components/ResourceToolbar.vue'
 import ResourceItemRow from '../components/ResourceItemRow.vue'
+import ResourceModals from '../components/ResourceModals.vue'
 import ResourceList from '../ResourceList.vue'
 import { ipcClient } from '../../../ipc/client'
+import { awaitTask } from '../../tasks/awaitTask'
+import { useToast } from '../../../ui'
 import zhCnResources from '../../../locales/zh-CN/resources.json'
-import type { ResourceEntry } from '../../../ipc/client'
+import type { ResourceEntry, ResourcesPatchEvent } from '../../../ipc/client'
 
 // Local artwork is served through the asset protocol in the packaged app.
 vi.mock('@tauri-apps/api/core', () => ({
   convertFileSrc: (path: string) => `asset://localhost/${encodeURIComponent(path)}`,
 }))
+
+// ResourceList subscribes to `resources://patch` on mount. Keeping the handlers lets a test push a
+// batch exactly like the backend does, instead of reaching into component internals.
+const patchBus = vi.hoisted(() => ({
+  handlers: [] as ((event: { payload: ResourcesPatchEvent }) => void)[],
+}))
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn((name: string, handler: (event: { payload: ResourcesPatchEvent }) => void) => {
+    if (name === 'resources://patch') patchBus.handlers.push(handler)
+    return Promise.resolve(() => {})
+  }),
+}))
+
+// Mod updates are queued as background tasks, so the outcome is driven per test.
+vi.mock('../../tasks/awaitTask', () => ({ awaitTask: vi.fn() }))
 
 describe('Resources feature unit tests', () => {
   const dummyEntries: ResourceEntry[] = [
@@ -95,6 +114,54 @@ describe('Resources feature unit tests', () => {
       dependents: [],
     },
   ]
+
+  function makeEntry(overrides: Partial<ResourceEntry> = {}): ResourceEntry {
+    return {
+      path: '/mods/x.jar',
+      relPath: 'x.jar',
+      fileName: 'x.jar',
+      isDir: false,
+      size: 1024,
+      createdMs: null,
+      modifiedMs: null,
+      enabled: true,
+      state: 'ok',
+      title: null,
+      description: null,
+      version: null,
+      icon: null,
+      tags: [],
+      modId: null,
+      projectId: null,
+      latestFile: null,
+      updateAvailable: false,
+      dependents: [],
+      ...overrides,
+    }
+  }
+
+  async function mountList(entries: ResourceEntry[]) {
+    const listSpy = vi.spyOn(ipcClient, 'resourcesList').mockResolvedValue(entries)
+    patchBus.handlers.length = 0
+    const i18n = createI18n({
+      legacy: false,
+      locale: 'zh-CN',
+      messages: {
+        'zh-CN': {
+          resources: zhCnResources,
+          error: { unknown: 'Unknown error' },
+        },
+      },
+    })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(ResourceList, {
+      props: { instanceId: 'inst-1', kind: 'mod' },
+      global: { plugins: [i18n, pinia] },
+    })
+    await flushPromises()
+    return { wrapper, listSpy }
+  }
 
   it('correctly filters enabled and disabled resources', () => {
     const enabled = dummyEntries.filter((e) => e.enabled)
@@ -379,5 +446,166 @@ describe('Resources feature unit tests', () => {
     expect(actions.some((t) => t.includes('启用'))).toBe(true)
     expect(actions.some((t) => t.includes('禁用'))).toBe(true)
     expect(actions.some((t) => t.includes('删除'))).toBe(true)
+  })
+
+  it('flags duplicates only for entries sharing a modId or projectId', async () => {
+    const entries = [
+      makeEntry({ path: '/mods/a.jar', fileName: 'a.jar', title: 'Alpha', modId: 'shared-mod' }),
+      makeEntry({ path: '/mods/b.jar', fileName: 'b.jar', title: 'Beta', modId: 'shared-mod' }),
+      makeEntry({ path: '/mods/e.jar', fileName: 'e.jar', title: 'Epsilon', projectId: 'shared' }),
+      makeEntry({ path: '/mods/f.jar', fileName: 'f.jar', title: 'Foxtrot', projectId: 'shared' }),
+      // Same display name but no identity: unrelated files, never duplicates.
+      makeEntry({ path: '/mods/c.jar', fileName: 'c.jar', title: 'Mystery' }),
+      makeEntry({ path: '/mods/d.jar', fileName: 'd.jar', title: 'Mystery' }),
+    ]
+    const { wrapper } = await mountList(entries)
+
+    const chip = wrapper.findAll('button').find((b) => b.text().includes('重复'))
+    expect(chip).toBeDefined()
+    expect(chip!.text().replace(/\s+/g, ' ').trim()).toBe('重复 (4)')
+
+    await chip!.trigger('click')
+    await flushPromises()
+
+    const rows = wrapper.findAllComponents(ResourceItemRow)
+    expect(rows.map((row) => row.props('entry').fileName)).toEqual([
+      'a.jar',
+      'b.jar',
+      'e.jar',
+      'f.jar',
+    ])
+  })
+
+  it('applies a resources://patch batch to already loaded entries', async () => {
+    const { wrapper } = await mountList([makeEntry({ title: 'Fabric API' })])
+    expect(patchBus.handlers).toHaveLength(1)
+
+    patchBus.handlers[0]!({
+      payload: {
+        requestId: 'req-1',
+        instanceId: 'inst-1',
+        patches: [
+          { fileName: 'x.jar', title: 'Patched API', tags: ['Fabric'], modId: 'fabric-api' },
+          { fileName: 'missing.jar', title: 'Ignored' },
+        ],
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Patched API')
+    expect(wrapper.text()).not.toContain('Ignored')
+  })
+
+  it('waits for the update task before reporting a single update as successful', async () => {
+    const latest = dummyEntries[1]!.latestFile!
+    const entry = makeEntry({
+      path: '/path/to/mods/sodium.jar',
+      fileName: 'sodium.jar',
+      title: 'Sodium',
+      modId: 'sodium',
+      updateAvailable: true,
+      latestFile: latest,
+    })
+    const { wrapper, listSpy } = await mountList([entry])
+
+    const updateSpy = vi.spyOn(ipcClient, 'localModUpdate').mockResolvedValue('task-7')
+    const taskMock = vi.mocked(awaitTask)
+    taskMock.mockReset()
+    taskMock.mockResolvedValue({ state: 'success', error: null })
+    const { toasts } = useToast()
+    toasts.value.splice(0)
+
+    wrapper.findComponent(ResourceModals).vm.$emit('single-update', entry)
+    await flushPromises()
+
+    expect(updateSpy).toHaveBeenCalledWith('inst-1', 'sodium.jar', latest)
+    expect(taskMock).toHaveBeenCalledWith('task-7')
+    // Reloaded once more only after the queued download finished.
+    expect(listSpy).toHaveBeenCalledTimes(2)
+    expect(toasts.value.some((toast) => toast.type === 'success')).toBe(true)
+  })
+
+  it('reports a failed update task instead of a success toast', async () => {
+    const entry = makeEntry({
+      path: '/path/to/mods/sodium.jar',
+      fileName: 'sodium.jar',
+      title: 'Sodium',
+      updateAvailable: true,
+      latestFile: dummyEntries[1]!.latestFile,
+    })
+    const { wrapper, listSpy } = await mountList([entry])
+
+    vi.spyOn(ipcClient, 'localModUpdate').mockResolvedValue('task-8')
+    const taskMock = vi.mocked(awaitTask)
+    taskMock.mockReset()
+    taskMock.mockResolvedValue({ state: 'failed', error: null })
+    const { toasts } = useToast()
+    toasts.value.splice(0)
+
+    wrapper.findComponent(ResourceModals).vm.$emit('single-update', entry)
+    await flushPromises()
+
+    expect(taskMock).toHaveBeenCalledWith('task-8')
+    expect(listSpy).toHaveBeenCalledTimes(1)
+    expect(
+      toasts.value.some((toast) => toast.type === 'danger' && toast.message.includes('更新失败')),
+    ).toBe(true)
+  })
+
+  it('waits for the batch update task before reporting success', async () => {
+    const latest = dummyEntries[1]!.latestFile!
+    const entry = makeEntry({
+      path: '/path/to/mods/sodium.jar',
+      fileName: 'sodium.jar',
+      title: 'Sodium',
+      updateAvailable: true,
+      latestFile: latest,
+    })
+    const { wrapper, listSpy } = await mountList([entry])
+
+    const batchSpy = vi.spyOn(ipcClient, 'localModsUpdateMany').mockResolvedValue('task-9')
+    const taskMock = vi.mocked(awaitTask)
+    taskMock.mockReset()
+    taskMock.mockResolvedValue({ state: 'success', error: null })
+
+    wrapper.findComponent(ResourceModals).vm.$emit('batch-update', [entry])
+    await flushPromises()
+
+    expect(batchSpy).toHaveBeenCalledWith('inst-1', [
+      { currentFileName: 'sodium.jar', newFile: latest },
+    ])
+    expect(taskMock).toHaveBeenCalledWith('task-9')
+    expect(listSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('toggles a selected batch eight files at a time', async () => {
+    const entries: ResourceEntry[] = []
+    for (let index = 0; index < 20; index++) {
+      entries.push(makeEntry({ path: `/mods/m${index}.jar`, title: `Mod ${index}` }))
+    }
+    const { wrapper } = await mountList(entries)
+
+    let inFlight = 0
+    let maxInFlight = 0
+    const toggleSpy = vi.spyOn(ipcClient, 'resourceToggle')
+    toggleSpy.mockImplementation(async (_id, path) => {
+      inFlight++
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await Promise.resolve()
+      inFlight--
+      return `${path}.disabled`
+    })
+
+    const selectAllBtn = wrapper.findAll('button').find((b) => b.text().includes('全选'))
+    expect(selectAllBtn).toBeDefined()
+    await selectAllBtn!.trigger('click')
+
+    const disableBtn = wrapper.findAll('button').find((b) => b.text().trim() === '禁用')
+    expect(disableBtn).toBeDefined()
+    await disableBtn!.trigger('click')
+    await flushPromises()
+
+    expect(toggleSpy).toHaveBeenCalledTimes(20)
+    expect(maxInFlight).toBe(8)
   })
 })

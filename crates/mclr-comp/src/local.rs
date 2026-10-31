@@ -3,8 +3,9 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{Cursor, Read, Seek};
-use std::path::Path;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::time::SystemTime;
 
 use mclr_core::paths;
 use serde::{Deserialize, Serialize};
@@ -67,8 +68,10 @@ struct LocalModCacheItem {
     pub cached_at_secs: u64,
 }
 
-/// Chunk size used when hashing a mod file without loading it into memory.
-const HASH_CHUNK: usize = 64 * 1024;
+/// Chunk size used when hashing a mod file without loading it into memory. This is the only
+/// heap buffer the hashing path allocates, so it stays small enough to be irrelevant next to
+/// the file it streams.
+const HASH_CHUNK: usize = 128 * 1024;
 
 /// Bytes stripped before CurseForge fingerprinting: `\t`, `\n`, `\r` and space.
 #[inline]
@@ -87,13 +90,16 @@ pub fn compute_curseforge_murmur2(data: &[u8]) -> u32 {
     murmur2_fold(&filtered)
 }
 
-/// Streaming counterpart of [`compute_curseforge_murmur2`]: hashes `r` in 64 KiB chunks so
-/// the unfiltered file is never resident. The result is byte-for-byte identical to the
-/// slice version.
+/// Streaming counterpart of [`compute_curseforge_murmur2`]: hashes `r` in `HASH_CHUNK`
+/// chunks so the unfiltered file is never resident. The result is byte-for-byte identical to
+/// the slice version.
 ///
 /// MurmurHash2 mixes the *filtered* length into its seed (`1 ^ len`), so blocks can only be
 /// folded once the stream ends; the whitespace-stripped bytes are retained (a single
 /// allocation, smaller than the source) instead of the two buffers the slice path needs.
+/// Callers that already know the filtered length (for example `hash_file`, which counts it
+/// while hashing SHA1) should use `murmur2_stream_with_len` instead, which allocates nothing
+/// beyond the read buffer.
 pub fn compute_curseforge_murmur2_reader(r: &mut impl Read) -> std::io::Result<u32> {
     let mut filtered: Vec<u8> = Vec::new();
     let mut chunk = vec![0u8; HASH_CHUNK];
@@ -155,6 +161,64 @@ fn murmur2_fold(filtered: &[u8]) -> u32 {
     h ^= h >> 15;
 
     h
+}
+
+/// Zero-allocation streaming counterpart of [`compute_curseforge_murmur2`] for callers that
+/// already know the whitespace-stripped length (a first pass over the file counts it while
+/// computing SHA1).
+///
+/// Bytes are read through one [`HASH_CHUNK`] buffer and folded 4 at a time with a 4-byte
+/// stack-carried alignment tail, so no per-file allocation happens at all: the fingerprint
+/// of a 500 MB jar costs exactly one 128 KiB buffer.
+fn murmur2_stream_with_len(r: &mut impl Read, filtered_len: u32) -> std::io::Result<u32> {
+    const M: u32 = 0x5bd1e995;
+    const R: u32 = 24;
+
+    let mut h: u32 = 1 ^ filtered_len;
+    let mut tail = [0u8; 4];
+    let mut tail_len = 0usize;
+    let mut chunk = vec![0u8; HASH_CHUNK];
+
+    loop {
+        let n = r.read(&mut chunk)?;
+        if n == 0 {
+            break;
+        }
+        for &b in &chunk[..n] {
+            if is_curseforge_whitespace(b) {
+                continue;
+            }
+            tail[tail_len] = b;
+            tail_len += 1;
+            if tail_len == 4 {
+                let mut k = u32::from_le_bytes(tail);
+                k = k.wrapping_mul(M);
+                k ^= k >> R;
+                k = k.wrapping_mul(M);
+                h = h.wrapping_mul(M);
+                h ^= k;
+                tail_len = 0;
+            }
+        }
+    }
+
+    if tail_len == 3 {
+        h ^= (tail[0] as u32) | ((tail[1] as u32) << 8);
+        h ^= (tail[2] as u32) << 16;
+        h = h.wrapping_mul(M);
+    } else if tail_len == 2 {
+        h ^= (tail[0] as u32) | ((tail[1] as u32) << 8);
+        h = h.wrapping_mul(M);
+    } else if tail_len == 1 {
+        h ^= tail[0] as u32;
+        h = h.wrapping_mul(M);
+    }
+
+    h ^= h >> 13;
+    h = h.wrapping_mul(M);
+    h ^= h >> 15;
+
+    Ok(h)
 }
 
 /// Unfolds Java manifest lines according to RFC 822 / JAR specification (72-column limit,
@@ -604,21 +668,111 @@ fn current_timestamp_secs() -> u64 {
         .unwrap_or(0)
 }
 
-fn load_cache() -> HashMap<String, LocalModCacheItem> {
-    let cache_file = paths::cache_dir().join("localmods.json");
-    fs::read_to_string(&cache_file)
-        .ok()
-        .and_then(|c| serde_json::from_str(&c).ok())
-        .unwrap_or_default()
+/// Path-keyed cache map shared by every mods directory.
+type ModCacheMap = HashMap<String, LocalModCacheItem>;
+
+/// In-memory store: `cache file -> (file mtime, entries)`.
+type ModCacheStore = HashMap<PathBuf, (Option<SystemTime>, ModCacheMap)>;
+
+/// In-memory mirror of `localmods.json` instances: `cache file -> (file mtime, entries)`.
+///
+/// Keying by the cache file keeps several data directories (and tests) isolated, while the
+/// stored mtime makes entries written by another process visible automatically. The lock is
+/// only ever held for a `HashMap` lookup/clone — every `fs` call, JSON parse and JSON encode
+/// happens outside it.
+static LOCAL_MOD_CACHE: LazyLock<Mutex<ModCacheStore>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn mod_cache_file() -> PathBuf {
+    paths::cache_dir().join("localmods.json")
 }
 
-fn save_cache(cache: &HashMap<String, LocalModCacheItem>) {
-    let cache_dir = paths::cache_dir();
-    let _ = fs::create_dir_all(&cache_dir);
-    let cache_file = cache_dir.join("localmods.json");
-    if let Ok(json) = serde_json::to_string(cache) {
-        let _ = fs::write(&cache_file, json);
+fn file_mtime(path: &Path) -> Option<SystemTime> {
+    fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+fn lock_mod_cache() -> std::sync::MutexGuard<'static, ModCacheStore> {
+    LOCAL_MOD_CACHE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn load_cache_from(cache_file: &Path) -> ModCacheMap {
+    let disk_mtime = file_mtime(cache_file);
+
+    // Fast path: the on-disk file is unchanged since the last load/save, so serve the
+    // in-memory copy. Cloning under the lock is a few microseconds even for hundreds of mods.
+    if disk_mtime.is_some() {
+        let guard = lock_mod_cache();
+        if let Some((cached_mtime, map)) = guard.get(cache_file)
+            && *cached_mtime == disk_mtime
+        {
+            return map.clone();
+        }
     }
+
+    // Miss or external modification: read and parse with no lock held.
+    let map: ModCacheMap = fs::read_to_string(cache_file)
+        .ok()
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or_default();
+
+    lock_mod_cache().insert(cache_file.to_path_buf(), (disk_mtime, map.clone()));
+    map
+}
+
+fn save_cache_to(cache_file: &Path, cache: &ModCacheMap) {
+    if let Some(parent) = cache_file.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string(cache) {
+        let _ = fs::write(cache_file, json);
+    }
+    // Store the mtime produced by this write so the next `load_cache_from` stays in memory.
+    let new_mtime = file_mtime(cache_file);
+    lock_mod_cache().insert(cache_file.to_path_buf(), (new_mtime, cache.clone()));
+}
+
+fn load_cache() -> ModCacheMap {
+    load_cache_from(&mod_cache_file())
+}
+
+fn save_cache(cache: &ModCacheMap) {
+    save_cache_to(&mod_cache_file(), cache);
+}
+
+/// Moves a cache entry from `current_path` to `target_path` after a toggle renamed the file,
+/// so the renamed jar keeps its hashes, metadata and icon instead of being re-hashed.
+///
+/// The entry is only migrated when its recorded `size` still matches the file on disk; a
+/// mismatch means the file changed and a full re-scan is the correct answer. Returns whether
+/// the entry was migrated (and the cache file rewritten).
+fn migrate_cache_entry(
+    cache_file: &Path,
+    current_path: &Path,
+    target_path: &Path,
+    size: u64,
+    mtime_secs: u64,
+) -> bool {
+    let current_key = current_path.to_string_lossy().to_string();
+    let target_key = target_path.to_string_lossy().to_string();
+    if current_key == target_key {
+        return false;
+    }
+
+    let mut cache = load_cache_from(cache_file);
+    let Some(mut item) = cache
+        .get(&current_key)
+        .filter(|item| item.size == size)
+        .cloned()
+    else {
+        return false;
+    };
+    cache.remove(&current_key);
+    item.mtime_secs = mtime_secs;
+    cache.insert(target_key, item);
+    save_cache_to(cache_file, &cache);
+    true
 }
 
 /// SHA1s of `mods` whose Modrinth project id should be resolved now: hashes never looked up,
@@ -668,24 +822,166 @@ pub fn record_project_ids(lookups: &HashMap<String, Option<String>>) {
     }
 }
 
-/// Streams a jar from disk to compute its SHA1 (64 KiB reads) and CurseForge fingerprint
-/// without ever holding the whole file.
+/// Streams a jar from disk to compute its SHA1 and CurseForge fingerprint without ever
+/// holding the whole file (or even the whitespace-filtered file) in memory.
+///
+/// Two passes over one file handle:
+///
+/// 1. SHA1 of every byte plus a count of the bytes CurseForge keeps (whitespace stripped),
+/// 2. MurmurHash2 re-read with `1 ^ filtered_len` as the seed.
+///
+/// The second pass hits the OS page cache warmed by the first, and the only heap buffer in
+/// either pass is the 128 KiB [`HASH_CHUNK`] read buffer — a 500 MB jar costs the same
+/// memory as a 1 KB one.
 fn hash_file(path: &Path) -> std::io::Result<(String, u32)> {
     let mut file = fs::File::open(path)?;
     let mut hasher = Sha1::new();
     let mut buf = vec![0u8; HASH_CHUNK];
+    let mut filtered_len: u32 = 0;
+
     loop {
         let n = file.read(&mut buf)?;
         if n == 0 {
             break;
         }
-        hasher.update(&buf[..n]);
+        let chunk = &buf[..n];
+        hasher.update(chunk);
+        filtered_len = filtered_len.wrapping_add(
+            chunk
+                .iter()
+                .filter(|&&b| !is_curseforge_whitespace(b))
+                .count() as u32,
+        );
     }
     let sha1 = hex::encode(hasher.finalize());
 
     file.seek(std::io::SeekFrom::Start(0))?;
-    let murmur2 = compute_curseforge_murmur2_reader(&mut file)?;
+    let murmur2 = murmur2_stream_with_len(&mut file, filtered_len)?;
     Ok((sha1, murmur2))
+}
+
+/// A mod file whose cache entry is missing or stale: it still needs hashing, metadata
+/// parsing and (possibly) icon extraction.
+struct PendingMod {
+    file_name: String,
+    path: PathBuf,
+    path_key: String,
+    enabled: bool,
+    size: u64,
+    mtime_secs: u64,
+}
+
+/// Hashes and parses one cache-miss mod, returning its cache entry and public description.
+fn scan_pending_mod(pending: &PendingMod) -> Option<(LocalModCacheItem, LocalModInfo)> {
+    let (sha1, murmur2) = hash_file(&pending.path).ok()?;
+
+    let fallback_name = if let Some(stem) = pending.file_name.strip_suffix(".jar.disabled") {
+        stem
+    } else if let Some(stem) = pending.file_name.strip_suffix(".jar") {
+        stem
+    } else {
+        pending.file_name.as_str()
+    };
+
+    let mod_meta = parse_mod_metadata_path(&pending.path, fallback_name)
+        .unwrap_or_else(|| fallback_metadata(fallback_name));
+
+    // Artwork is only decoded on a cache miss, and is keyed by content hash so an
+    // updated jar always gets a fresh image.
+    let icon = mod_meta.icon.as_deref().and_then(|bytes| {
+        crate::resources::cache_icon_png(bytes, &format!("{sha1}:icon-v{ICON_CACHE_REV}"))
+    });
+
+    let cache_item = LocalModCacheItem {
+        mod_id: mod_meta.mod_id.clone(),
+        name: mod_meta.name.clone(),
+        version: mod_meta.version.clone(),
+        description: mod_meta.description.clone(),
+        authors: mod_meta.authors.clone(),
+        loader: mod_meta.loader.clone(),
+        sha1: sha1.clone(),
+        murmur2,
+        size: pending.size,
+        mtime_secs: pending.mtime_secs,
+        project_id: None,
+        update_file: None,
+        icon: icon.clone(),
+        icon_rev: ICON_CACHE_REV,
+        cached_at_secs: 0,
+    };
+
+    let info = LocalModInfo {
+        file_name: pending.file_name.clone(),
+        path: pending.path_key.clone(),
+        enabled: pending.enabled,
+        mod_id: mod_meta.mod_id,
+        name: mod_meta.name,
+        version: mod_meta.version,
+        description: mod_meta.description,
+        authors: mod_meta.authors,
+        loader: mod_meta.loader,
+        sha1,
+        murmur2,
+        size: pending.size,
+        project_id: None,
+        update_file: None,
+        icon,
+    };
+
+    Some((cache_item, info))
+}
+
+/// A freshly scanned mod plus the cache key it must be stored under.
+type ScannedMod = (String, LocalModCacheItem, LocalModInfo);
+
+/// Scans cache-miss mods, spreading the work over up to four worker threads.
+///
+/// Hashing and ZIP parsing are CPU- and disk-bound yet fully independent per file, so a mods
+/// folder full of newly added jars would otherwise serialise on a single core. The pool is
+/// capped at four workers: each holds one 128 KiB hash buffer, and saturating every core
+/// would starve the async runtime that called the scan.
+///
+/// Results carry their `path_key` so the caller merges them into the cache without a shared
+/// lock; a panicking worker only drops its own slice.
+fn scan_pending_mods(pending: &[PendingMod]) -> Vec<ScannedMod> {
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(4);
+
+    if pending.len() <= 1 || workers <= 1 {
+        return pending
+            .iter()
+            .filter_map(|p| {
+                scan_pending_mod(p).map(|(item, info)| (p.path_key.clone(), item, info))
+            })
+            .collect();
+    }
+
+    let chunk_size = pending.len().div_ceil(workers);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = pending
+            .chunks(chunk_size)
+            .map(|slice| {
+                scope.spawn(move || {
+                    slice
+                        .iter()
+                        .filter_map(|p| {
+                            scan_pending_mod(p).map(|(item, info)| (p.path_key.clone(), item, info))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+
+        let mut fresh = Vec::with_capacity(pending.len());
+        for handle in handles {
+            if let Ok(scanned) = handle.join() {
+                fresh.extend(scanned);
+            }
+        }
+        fresh
+    })
 }
 
 /// Scans the given `mods_dir` for `.jar` and `.jar.disabled` files, parsing metadata,
@@ -698,14 +994,21 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
     let mut cache = load_cache();
     let mut cache_modified = false;
     let mut results = Vec::new();
+    let mut pending: Vec<PendingMod> = Vec::new();
 
     let read_dir = fs::read_dir(mods_dir).map_err(CompError::Io)?;
     for entry in read_dir.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
+        // Both checks read the data the enumeration already returned; `path.is_file()` and
+        // `fs::metadata(&path)` would each cost a second full stat per entry.
+        let file_type = match entry.file_type() {
+            Ok(ft) => ft,
+            Err(_) => continue,
+        };
+        if !file_type.is_file() {
             continue;
         }
 
+        let path = entry.path();
         let file_name = match path.file_name().and_then(|n| n.to_str()) {
             Some(n) => n.to_string(),
             None => continue,
@@ -718,7 +1021,7 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
         }
 
         let enabled = is_jar;
-        let metadata = match fs::metadata(&path) {
+        let metadata = match entry.metadata() {
             Ok(m) => m,
             Err(_) => continue,
         };
@@ -757,73 +1060,27 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
             continue;
         }
 
-        let (sha1, murmur2) = match hash_file(&path) {
-            Ok(hashes) => hashes,
-            Err(_) => continue,
-        };
-
-        let fallback_name = if let Some(stem) = file_name.strip_suffix(".jar.disabled") {
-            stem
-        } else if let Some(stem) = file_name.strip_suffix(".jar") {
-            stem
-        } else {
-            &file_name
-        };
-
-        let mod_meta = parse_mod_metadata_path(&path, fallback_name)
-            .unwrap_or_else(|| fallback_metadata(fallback_name));
-
-        // Artwork is only decoded on a cache miss, and is keyed by content hash so an
-        // updated jar always gets a fresh image.
-        let icon = mod_meta.icon.as_deref().and_then(|bytes| {
-            crate::resources::cache_icon_png(bytes, &format!("{sha1}:icon-v{ICON_CACHE_REV}"))
-        });
-
-        let cache_item = LocalModCacheItem {
-            mod_id: mod_meta.mod_id.clone(),
-            name: mod_meta.name.clone(),
-            version: mod_meta.version.clone(),
-            description: mod_meta.description.clone(),
-            authors: mod_meta.authors.clone(),
-            loader: mod_meta.loader.clone(),
-            sha1: sha1.clone(),
-            murmur2,
+        pending.push(PendingMod {
+            file_name,
+            path,
+            path_key,
+            enabled,
             size,
             mtime_secs,
-            project_id: None,
-            update_file: None,
-            icon: icon.clone(),
-            icon_rev: ICON_CACHE_REV,
-            cached_at_secs: 0,
-        };
-
-        cache.insert(path_key.clone(), cache_item);
-        cache_modified = true;
-
-        results.push(LocalModInfo {
-            file_name,
-            path: path_key,
-            enabled,
-            mod_id: mod_meta.mod_id,
-            name: mod_meta.name,
-            version: mod_meta.version,
-            description: mod_meta.description,
-            authors: mod_meta.authors,
-            loader: mod_meta.loader,
-            sha1,
-            murmur2,
-            size,
-            project_id: None,
-            update_file: None,
-            icon,
         });
+    }
+
+    for (path_key, item, info) in scan_pending_mods(&pending) {
+        cache.insert(path_key, item);
+        cache_modified = true;
+        results.push(info);
     }
 
     if cache_modified {
         save_cache(&cache);
     }
 
-    results.sort_by_key(|a| a.name.to_lowercase());
+    results.sort_by_cached_key(|a| a.name.to_lowercase());
     Ok(results)
 }
 
@@ -857,9 +1114,28 @@ pub fn toggle_local_mod(
             }
         } else {
             fs::rename(&current_path, &target_path).map_err(CompError::Io)?;
+            // The bytes did not change, only the name: migrate the cache entry so the
+            // renamed jar keeps its hashes, metadata and icon without being re-hashed.
+            if let Ok(metadata) = fs::metadata(&target_path) {
+                let mtime_secs = metadata
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                migrate_cache_entry(
+                    &mod_cache_file(),
+                    &current_path,
+                    &target_path,
+                    metadata.len(),
+                    mtime_secs,
+                );
+            }
         }
     }
 
+    // Every other mod is a cache hit, so this only re-opens the toggled jar when the cache
+    // entry could not be migrated (for example a first toggle before any scan).
     let all_mods = scan_local_mods(mods_dir)?;
     all_mods
         .into_iter()
@@ -1282,5 +1558,154 @@ mod tests {
         assert!(toggled_back.enabled);
         assert!(mods_dir.join("test_mod.jar").exists());
         assert!(!mods_dir.join("test_mod.jar.disabled").exists());
+    }
+
+    #[test]
+    fn test_hash_file_matches_separate_sha1_and_murmur2() {
+        let dir = tempdir().unwrap();
+
+        // Remainder 0..3 covers every tail branch of the Murmur2 fold, and the payload is
+        // several 128 KiB chunks long with whitespace sprinkled in.
+        for remainder in 0..4usize {
+            let mut content: Vec<u8> = Vec::new();
+            for i in 0..(300 * 1024u32) {
+                content.push(b'a' + (i.wrapping_mul(31).wrapping_add(7) % 26) as u8);
+                if i % 53 == 0 {
+                    content.push(b' ');
+                }
+                if i % 97 == 0 {
+                    content.push(b'\n');
+                }
+                if i % 131 == 0 {
+                    content.push(b'\r');
+                }
+                if i % 211 == 0 {
+                    content.push(b'\t');
+                }
+            }
+            for k in 0..remainder {
+                content.push(b'z' + k as u8);
+            }
+
+            let filtered_len = content
+                .iter()
+                .filter(|&&b| !is_curseforge_whitespace(b))
+                .count();
+            assert_eq!(filtered_len % 4, remainder);
+            assert!(content.len() > 2 * HASH_CHUNK);
+
+            let path = dir.path().join(format!("mod_{remainder}.jar"));
+            fs::write(&path, &content).unwrap();
+
+            let (sha1, murmur2) = hash_file(&path).unwrap();
+
+            let mut hasher = Sha1::new();
+            hasher.update(&content);
+            assert_eq!(sha1, hex::encode(hasher.finalize()));
+
+            let expected_murmur2 = compute_curseforge_murmur2(&content);
+            assert_eq!(murmur2, expected_murmur2);
+
+            let mut cursor = Cursor::new(content.clone());
+            assert_eq!(
+                compute_curseforge_murmur2_reader(&mut cursor).unwrap(),
+                expected_murmur2
+            );
+        }
+    }
+
+    #[test]
+    fn test_cache_isolation_and_toggle_migration() {
+        let dir = tempdir().unwrap();
+        let cache_file = dir.path().join("cache").join("localmods.json");
+
+        let mods_dir = dir.path().join("mods");
+        fs::create_dir_all(&mods_dir).unwrap();
+        let current_path = mods_dir.join("example-mod.jar");
+        fs::write(&current_path, b"jar-bytes").unwrap();
+        let target_path = mods_dir.join("example-mod.jar.disabled");
+        let size = fs::metadata(&current_path).unwrap().len();
+
+        let item = LocalModCacheItem {
+            mod_id: "example".into(),
+            name: "Example".into(),
+            version: "1.0".into(),
+            description: None,
+            authors: vec!["author".into()],
+            loader: "fabric".into(),
+            sha1: "abc123".into(),
+            murmur2: 42,
+            size,
+            mtime_secs: 7,
+            project_id: None,
+            update_file: None,
+            icon: Some("icon.png".into()),
+            icon_rev: ICON_CACHE_REV,
+            cached_at_secs: 0,
+        };
+        let current_key = current_path.to_string_lossy().to_string();
+        let target_key = target_path.to_string_lossy().to_string();
+
+        save_cache_to(
+            &cache_file,
+            &HashMap::from([(current_key.clone(), item.clone())]),
+        );
+        assert_eq!(load_cache_from(&cache_file).len(), 1);
+
+        // The toggle migration carries the whole entry across and refreshes the mtime.
+        assert!(migrate_cache_entry(
+            &cache_file,
+            &current_path,
+            &target_path,
+            size,
+            9_999
+        ));
+        let cache = load_cache_from(&cache_file);
+        assert!(!cache.contains_key(&current_key));
+        let migrated = cache.get(&target_key).expect("entry must be migrated");
+        assert_eq!(migrated.mtime_secs, 9_999);
+        assert_eq!(migrated.sha1, "abc123");
+        assert_eq!(migrated.icon.as_deref(), Some("icon.png"));
+
+        // A size mismatch means the file changed; the entry must be left untouched.
+        assert!(!migrate_cache_entry(
+            &cache_file,
+            &target_path,
+            &current_path,
+            size + 1,
+            1
+        ));
+        assert!(load_cache_from(&cache_file).contains_key(&target_key));
+
+        // An external write to the cache file invalidates the in-memory mirror.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let external = HashMap::from([("external-key".to_string(), item)]);
+        fs::write(&cache_file, serde_json::to_string(&external).unwrap()).unwrap();
+        let reloaded = load_cache_from(&cache_file);
+        assert!(reloaded.contains_key("external-key"));
+        assert!(!reloaded.contains_key(&target_key));
+
+        // The real toggle keeps the renamed jar's hash and flips its enabled flag.
+        let jar_path = mods_dir.join("toggle_target.jar");
+        let file = fs::File::create(&jar_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file("fabric.mod.json", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(br#"{"id": "toggle_target", "name": "Toggle Target", "version": "1.0"}"#)
+            .unwrap();
+        zip.finish().unwrap();
+
+        let sha1_before = scan_local_mods(&mods_dir)
+            .unwrap()
+            .into_iter()
+            .find(|m| m.file_name == "toggle_target.jar")
+            .expect("scanned jar")
+            .sha1;
+
+        let toggled = toggle_local_mod(&mods_dir, "toggle_target.jar", false).unwrap();
+        assert_eq!(toggled.file_name, "toggle_target.jar.disabled");
+        assert!(!toggled.enabled);
+        assert_eq!(toggled.sha1, sha1_before);
+        assert!(mods_dir.join("toggle_target.jar.disabled").exists());
     }
 }

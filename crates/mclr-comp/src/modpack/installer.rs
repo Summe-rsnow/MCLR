@@ -294,18 +294,26 @@ pub async fn import_modpack(ctx: ModpackImportContext<'_>) -> Result<InstanceInf
     }
 
     // 5. Extract overrides into instance_dir
-    let extracted = extract_modpack_overrides(
-        &effective_archive_path,
-        &instance_dir,
-        &plan.override_prefixes,
-    )?;
+    // ZIP extraction is CPU/disk bound synchronous work: keep it off the async
+    // runtime's worker threads so downloads and IPC stay responsive.
+    let extract_archive = effective_archive_path;
+    let extract_dir = instance_dir.clone();
+    let extract_prefixes = std::mem::take(&mut plan.override_prefixes);
+    let extracted = tokio::task::spawn_blocking(move || {
+        extract_modpack_overrides(&extract_archive, &extract_dir, &extract_prefixes)
+    })
+    .await
+    .map_err(|e| CompError::Io(std::io::Error::other(e)))??;
     info!(
         "Extracted {extracted} override files into {}",
         instance_dir.display()
     );
 
     // 6. Return refreshed InstanceInfo
-    let instances = scan_instances(mc_folder).map_err(CompError::Game)?;
+    let scan_folder = mc_folder.to_path_buf();
+    let instances = tokio::task::spawn_blocking(move || scan_instances(&scan_folder))
+        .await
+        .map_err(|e| mclr_game::GameError::Io(std::io::Error::other(e)))??;
     if let Some(info) = instances.into_iter().find(|i| i.id == instance_name) {
         Ok(info)
     } else {

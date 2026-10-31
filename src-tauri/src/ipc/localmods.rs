@@ -3,7 +3,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
+use futures_util::stream::{self, StreamExt};
 use mclr_comp::resources::{ResourceEntry, ResourceKind};
 use mclr_comp::{
     CompError, CompFile, CurseForgeClient, JarInJarNode, LocalModInfo, ModrinthClient,
@@ -313,6 +315,7 @@ pub async fn local_mods_update_many(
         .await;
 
     let settings = state.get().await;
+    let concurrency = settings.net.max_concurrent_files.clamp(1, 16) as usize;
     let client = http.client();
     let downloader = Downloader::new(client, settings.net.clone());
     let tc = Arc::clone(&tasks_state);
@@ -320,34 +323,53 @@ pub async fn local_mods_update_many(
 
     tokio::spawn(async move {
         let _ = tc.start_task(&tid).await;
-        let mut overall_err = None;
+        let control = tc.control(&tid).await;
+        let total = updates.len().max(1);
+        let completed = Arc::new(AtomicUsize::new(0));
 
-        for item in updates {
-            let urls: Vec<Url> = item
-                .new_file
-                .download_urls
-                .iter()
-                .filter_map(|u| Url::parse(u).ok())
-                .collect();
-            if urls.is_empty() {
-                continue;
-            }
-            let dest_path = mods_dir.join(&item.new_file.file_name);
-            let spec = DownloadSpec {
-                urls,
-                dest: dest_path,
-                size: if item.new_file.size > 0 {
-                    Some(item.new_file.size)
-                } else {
-                    None
-                },
-                sha1: item.new_file.hashes.sha1,
-                sha256: None,
-                md5: None,
-            };
+        // Bounded concurrency: each mod owns its own jar, so one slow host no longer
+        // serialises the whole batch. Every superseded jar is deleted the moment its
+        // replacement is verified on disk, so a failure later in the batch can never
+        // leave a half-migrated instance behind.
+        let downloader = &downloader;
 
-            match downloader.download(spec, Some((&tc, &tid))).await {
-                Ok(()) => {
+        let results: Vec<Result<(), AppError>> = stream::iter(updates.into_iter().map(|item| {
+            let tc = Arc::clone(&tc);
+            let tid = tid.clone();
+            let completed = Arc::clone(&completed);
+            let control = control.clone();
+            let mods_dir = mods_dir.clone();
+            async move {
+                if let Some(ctrl) = &control
+                    && ctrl.checkpoint().await.is_err()
+                {
+                    return Err(AppError::from(mclr_net::error::NetError::Canceled));
+                }
+
+                let urls: Vec<Url> = item
+                    .new_file
+                    .download_urls
+                    .iter()
+                    .filter_map(|u| Url::parse(u).ok())
+                    .collect();
+                if !urls.is_empty() {
+                    let spec = DownloadSpec {
+                        urls,
+                        dest: mods_dir.join(&item.new_file.file_name),
+                        size: if item.new_file.size > 0 {
+                            Some(item.new_file.size)
+                        } else {
+                            None
+                        },
+                        sha1: item.new_file.hashes.sha1.clone(),
+                        sha256: None,
+                        md5: None,
+                    };
+
+                    downloader.download(spec, Some((&tc, &tid))).await?;
+
+                    // Per-file atomic replacement: the old jar only disappears once its
+                    // successor is fully downloaded and hash-verified.
                     if !item.current_file_name.is_empty()
                         && item.current_file_name != item.new_file.file_name
                     {
@@ -357,17 +379,25 @@ pub async fn local_mods_update_many(
                         }
                     }
                 }
-                Err(e) => {
-                    overall_err = Some(AppError::from(e));
-                    break;
-                }
-            }
-        }
 
-        if let Some(e) = overall_err {
-            let _ = tc.fail_task(&tid, e).await;
-        } else {
-            let _ = tc.complete_task(&tid).await;
+                let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                let _ = tc
+                    .update_progress(&tid, done as f32 / total as f32, 0)
+                    .await;
+                Ok(())
+            }
+        }))
+        .buffer_unordered(concurrency)
+        .collect()
+        .await;
+
+        match results.into_iter().find_map(Result::err) {
+            Some(e) => {
+                let _ = tc.fail_task(&tid, e).await;
+            }
+            None => {
+                let _ = tc.complete_task(&tid).await;
+            }
         }
     });
 

@@ -22,7 +22,9 @@ use url::Url;
 
 pub const SMALL_FILE_THRESHOLD: u64 = 4 * 1024 * 1024; // 4 MiB
 pub const TARGET_CHUNK_SIZE: u64 = 8 * 1024 * 1024; // 8 MiB
-pub const STREAM_BUFFER_SIZE: usize = 64 * 1024; // 64 KiB
+pub const STREAM_BUFFER_SIZE: usize = 256 * 1024; // 256 KiB
+/// Bytes accumulated per chunk before they are written to the part file.
+const WRITE_BUFFER_SIZE: usize = 64 * 1024; // 64 KiB
 pub const SLOW_CHECK_DURATION: Duration = Duration::from_secs(8);
 pub const SLOW_SPEED_BYTES_PER_SEC: u64 = 50 * 1024; // 50 KiB/s
 pub const SLOW_SPLIT_THRESHOLD: u64 = 2 * 1024 * 1024; // 2 MiB
@@ -968,41 +970,60 @@ async fn download_single_chunk(job: ChunkJob<'_>, chunk: &mut Chunk) -> Result<(
     let mut stream = resp.bytes_stream();
     let started_at = Instant::now();
     let mut attempt_bytes = 0u64;
+    // Writes are buffered to cut syscalls; `chunk.downloaded` only advances once the
+    // buffer physically lands on disk, so `chunk.current_offset()` always equals the
+    // part-file size and a split/retry can resume from a consistent offset.
+    let mut write_buf: Vec<u8> = Vec::with_capacity(WRITE_BUFFER_SIZE);
 
-    while chunk.remaining() > 0 {
+    // Single seek: every later write is sequential from here, which keeps the file
+    // position in lockstep with `chunk.current_offset()`.
+    file.seek(SeekFrom::Start(chunk.current_offset()))
+        .await
+        .map_err(ChunkError::Io)?;
+
+    while chunk.remaining() > write_buf.len() as u64 {
         // Pause blocks here and cancel aborts, so an in-flight chunk stops mid-stream.
-        if let Some(control) = control
-            && let Err(_aborted) = control.checkpoint().await
-        {
-            return Err(ChunkError::Canceled);
+        if let Some(control) = control {
+            // Cheap atomic probes: only pay for a flush when the chunk is about to
+            // block (paused) or stop (cancelled), so buffering is preserved otherwise.
+            if control.is_paused() || control.is_cancelled() {
+                flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded).await?;
+            }
+            if control.checkpoint().await.is_err() {
+                return Err(ChunkError::Canceled);
+            }
         }
         match stream.next().await {
             Some(Ok(bytes)) => {
-                let to_write = (bytes.len() as u64).min(chunk.remaining()) as usize;
-                let offset = chunk.current_offset();
-
-                file.seek(SeekFrom::Start(offset))
-                    .await
-                    .map_err(ChunkError::Io)?;
-                file.write_all(&bytes[..to_write])
-                    .await
-                    .map_err(ChunkError::Io)?;
-
-                chunk.downloaded += to_write as u64;
+                // Buffered bytes are already received but not yet attributed to
+                // `chunk.downloaded`, so they still count toward `remaining()`.
+                let outstanding = chunk.remaining() - write_buf.len() as u64;
+                let to_write = (bytes.len() as u64).min(outstanding) as usize;
+                write_buf.extend_from_slice(&bytes[..to_write]);
                 attempt_bytes += to_write as u64;
-                total_downloaded.fetch_add(to_write as u64, Ordering::Relaxed);
+
+                if write_buf.len() >= WRITE_BUFFER_SIZE {
+                    flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded).await?;
+                }
 
                 // Speed check after elapsed check duration
                 let elapsed = started_at.elapsed();
                 if elapsed >= slow_check_duration {
                     let speed = (attempt_bytes as f64 / elapsed.as_secs_f64()) as u64;
-                    if speed < slow_speed_threshold && chunk.remaining() >= SLOW_SPLIT_THRESHOLD {
+                    let outstanding = chunk.remaining() - write_buf.len() as u64;
+                    if speed < slow_speed_threshold && outstanding >= SLOW_SPLIT_THRESHOLD {
+                        // Persist the buffer first: the caller splits the range from
+                        // `current_offset()`, which must match the bytes on disk.
+                        flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded).await?;
                         return Err(ChunkError::SlowChunk);
                     }
                 }
             }
             Some(Err(e)) => return Err(ChunkError::Http(e)),
             None => {
+                // Buffered bytes are received bytes: persist them before judging
+                // whether the body was truncated.
+                flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded).await?;
                 if chunk.remaining() > 0 {
                     return Err(ChunkError::PrematureEof);
                 }
@@ -1011,6 +1032,27 @@ async fn download_single_chunk(job: ChunkJob<'_>, chunk: &mut Chunk) -> Result<(
         }
     }
 
+    flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded).await?;
     file.flush().await.map_err(ChunkError::Io)?;
+    Ok(())
+}
+
+/// Persists `write_buf` to the part file and only then attributes the bytes to the
+/// chunk, keeping `chunk.current_offset()` equal to the physical file size.
+async fn flush_write_buf(
+    file: &mut File,
+    write_buf: &mut Vec<u8>,
+    chunk: &mut Chunk,
+    total_downloaded: &AtomicU64,
+) -> Result<(), ChunkError> {
+    if write_buf.is_empty() {
+        return Ok(());
+    }
+    file.write_all(write_buf.as_slice())
+        .await
+        .map_err(ChunkError::Io)?;
+    chunk.downloaded += write_buf.len() as u64;
+    total_downloaded.fetch_add(write_buf.len() as u64, Ordering::Relaxed);
+    write_buf.clear();
     Ok(())
 }

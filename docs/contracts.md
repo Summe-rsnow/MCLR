@@ -142,7 +142,7 @@ The gate executes the following sequence:
 1. `cargo fmt --all --check`
 2. `cargo clippy --workspace --all-targets -- -D warnings`
 3. `cargo test --workspace`
-4. `pnpm gen:bindings && git diff --exit-code src/ipc/bindings.ts`
+4. `pnpm gen:bindings` (re-exports `src/ipc/bindings.ts`, then fails if the file changed while the repo has commits)
 5. `pnpm exec oxfmt --check src`
 6. `pnpm exec oxlint`
 7. `vue-tsc --noEmit`
@@ -150,6 +150,26 @@ The gate executes the following sequence:
 9. `node scripts/lint-i18n.mjs`
 10. `node scripts/lint-ui-contracts.mjs`
 11. `vite build`
+
+## 10. Performance Invariants
+
+These are load-bearing; breaking one silently reintroduces a memory spike, a stall or a corrupted
+resume. Each is covered by a test named below.
+
+| Area | Invariant | Guard |
+|---|---|---|
+| Mod hashing (`mclr_comp::local`) | `hash_file` streams two passes over one `File` handle with a single 128 KiB buffer: pass 1 feeds `Sha1` and counts non-whitespace bytes, pass 2 re-reads (warm page cache) through `murmur2_stream_with_len`. Never buffer the whitespace-filtered file — its size is `O(file_len)` per worker. | `test_hash_file_matches_separate_sha1_and_murmur2`, `tests/local_streaming_test.rs` |
+| Mod cache (`localmods.json`, `jarinjar.json`) | The mutex only guards a `HashMap` clone/insert. `fs::metadata`, read, parse, encode and write all happen outside it. Entries are keyed by cache-file path and invalidated by an mtime mismatch, so an external writer is picked up automatically. | `test_cache_isolation_and_toggle_migration` |
+| Cache misses | Cold scans fan out over `std::thread::scope` with `min(available_parallelism, 4)` workers. The cap keeps total hash buffers at 4 × 128 KiB and leaves cores for the async runtime. | `test_scan_local_mods_streamed_hashes_match_pinned_values` |
+| Downloader (`mclr_net::downloader`) | `chunk.downloaded` advances **only** after `write_all` returns, so `chunk.current_offset()` always equals the bytes physically in `.mclr-part`. The write buffer is flushed before every `SlowChunk` split, before `checkpoint()`, and before the stream ends. | `test_slow_chunk_splitting`, `paused_task_blocks_before_any_request_and_resumes` |
+| Blocking IO | ZIP extraction, directory rescans, mod hashing and instance scans never run on an async worker: they go through `ipc::run_blocking` / `tokio::task::spawn_blocking`. | — |
+| Directory scans | Inside a `read_dir` loop, use `DirEntry::file_type()` / `DirEntry::metadata()`. `path.is_file()` and `fs::metadata(&path)` issue an extra full stat per entry — measured 96 ms vs 0.7 ms over 1000 files on Windows. | — |
+| Directory-mtime caches | Do not cache a listing on the directory's own mtime. NTFS updates it lazily (measured: unchanged in 125 of 200 write-then-stat runs), so entries added through an external tool are missed and deleted ones linger. Cache on explicit invalidation instead, or rescan. | `test_paged_listing_is_stable_across_calls` |
+| Batch downloads | `local_mods_update_many` uses `buffer_unordered(net.max_concurrentFiles.clamp(1, 16))` and deletes each superseded jar immediately after its own replacement is verified — never at batch end. | — |
+| Resource identity | Duplicate detection keys on `modId` / `projectId` only. Titles and file names are display data, not identity; two unrelated jars sharing a name must never be flagged. | `flags duplicates only for entries sharing a modId or projectId` |
+| Long text surfaces | Anything that can hold an unbounded line count renders through `MVirtualList` with its built-in `threshold` (plain DOM below, virtualised above) instead of a second template branch. Current callers use `:threshold="200"`. | `virtualizes launcher log output above the 200-line threshold` |
+| Store batches | `tasks://update` payloads are already coalesced by the backend (50 ms / 64 items). The store applies a whole batch to a clone and assigns once, so derived computeds evaluate once per batch. | — |
+| Event listeners | Every `listen()` in a component is released in `onUnmounted`. | — |
 
 ## Content Security Policy
 

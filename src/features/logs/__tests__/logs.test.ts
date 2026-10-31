@@ -5,6 +5,7 @@ import { createI18n } from 'vue-i18n'
 import { createRouter, createWebHistory } from 'vue-router'
 import { useLogsStore } from '../store'
 import LogsPage from '../LogsPage.vue'
+import LauncherLogsPanel from '../LauncherLogsPanel.vue'
 import { useDialog } from '../../../ui/useDialog'
 import { useToast } from '../../../ui/useToast'
 import { setupMockIpc } from '../../../ipc/mock'
@@ -29,6 +30,13 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [{ path: '/logs', component: LogsPage }],
 })
+
+const mockLauncherLogFile = {
+  fileName: 'mclr-2026-10-25.log',
+  path: 'C:/Users/User/AppData/Roaming/MCLR/logs/mclr-2026-10-25.log',
+  size: 2048,
+  modifiedAt: '2026-10-25T10:00:00Z',
+}
 
 describe('Logs feature', () => {
   beforeEach(() => {
@@ -176,6 +184,38 @@ describe('Logs feature', () => {
       'MCLR initialized',
     )
     expect(wrapper.text()).not.toContain('Loading Minecraft 1.20.1')
+  })
+
+  it('virtualizes launcher log output above the 200-line threshold', async () => {
+    const lines = Array.from({ length: 250 }, (_, i) => `[INFO] launcher line ${i}`)
+    vi.spyOn(ipcClient, 'launcherLogsList').mockResolvedValue([mockLauncherLogFile])
+    vi.spyOn(ipcClient, 'launcherLogRead').mockResolvedValue(lines.join('\n'))
+
+    const wrapper = mount(LauncherLogsPanel, { global: { plugins: [i18n] } })
+    await flushPromises()
+
+    // The scroller keeps its stable test id so the log panel stays addressable.
+    expect(wrapper.find('[data-testid="launcher-log-content"]').exists()).toBe(true)
+    // Past the threshold the unified MVirtualList renders the virtualized branch.
+    expect(wrapper.find('[data-testid="m-virtual-list"]').exists()).toBe(true)
+    const rows = wrapper.findAll('[data-testid="launcher-log-content"] .whitespace-pre-wrap')
+    expect(rows.length).toBeLessThan(lines.length)
+    vi.restoreAllMocks()
+  })
+
+  it('renders short launcher logs plainly without the virtualized wrapper', async () => {
+    vi.spyOn(ipcClient, 'launcherLogsList').mockResolvedValue([mockLauncherLogFile])
+    vi.spyOn(ipcClient, 'launcherLogRead').mockResolvedValue('first line\nsecond line')
+
+    const wrapper = mount(LauncherLogsPanel, { global: { plugins: [i18n] } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="m-virtual-list"]').exists()).toBe(false)
+    const rows = wrapper.findAll('[data-testid="launcher-log-content"] .whitespace-pre-wrap')
+    expect(rows.length).toBe(2)
+    expect(rows[0].text()).toBe('first line')
+    expect(rows[1].text()).toBe('second line')
+    vi.restoreAllMocks()
   })
 
   it('prunes and clears launcher logs from the launcher tab', async () => {
