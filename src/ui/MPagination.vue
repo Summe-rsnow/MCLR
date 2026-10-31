@@ -61,7 +61,7 @@ function onSelect(target: number) {
     <nav
       role="navigation"
       :aria-label="t('common.pagination.label')"
-      class="m-overlay pointer-events-auto inline-flex items-center gap-1 rounded-full px-2 py-1.5 shadow-2 select-none"
+      class="m-overlay m-refract pointer-events-auto inline-flex items-center gap-1 rounded-full px-2 py-1.5 shadow-2 select-none"
       :class="{ 'fixed bottom-4 left-1/2 -translate-x-1/2 z-30': !dock && teleport }"
     >
       <span

@@ -5,7 +5,6 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import TaskIndicator from '../tasks/TaskIndicator.vue'
 import QuickSettings from './QuickSettings.vue'
-import { useThemeStore } from '../../stores/theme'
 import { ipcClient } from '../../ipc/client'
 import { MButton, MCheckbox, MDialog } from '../../ui'
 
@@ -18,7 +17,6 @@ const isMaximized = ref(false)
 const closePromptOpen = ref(false)
 const rememberCloseChoice = ref(false)
 let unlistenResized: UnlistenFn | null = null
-const themeStore = useThemeStore()
 
 async function checkMaximized() {
   try {
@@ -114,9 +112,7 @@ onUnmounted(() => {
     class="relative h-11 shrink-0 flex items-center justify-between px-3 z-40 select-none"
     :class="[
       scrolled
-        ? themeStore.material === 'glass'
-          ? 'bg-canvas/70 backdrop-blur-md border-b border-line/50 transition-colors duration-200'
-          : 'bg-canvas border-b border-line shadow-sm transition-colors duration-200'
+        ? 'm-titlebar-scrolled transition-colors duration-200'
         : 'bg-transparent border-b border-transparent transition-colors duration-200',
     ]"
   >

@@ -295,7 +295,7 @@ function onConfirmJump() {
               variant="tonal"
               size="xs"
               icon="i-lucide-circle-arrow-right"
-              class="rounded-full shadow-2 bg-panel/90 backdrop-blur-md"
+              class="m-overlay m-refract rounded-full shadow-2"
               data-testid="news-jump-btn"
               @click="openJumpDialog"
             >

@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.31] - 2026-11-01
+
+A materials-and-navigation pass: frozen glass is finally visible in packaged builds, paging through
+community resources and official news no longer waits on the network, the community browser's
+filters follow the tab and platform they belong to, and installing a modpack asks for the new
+instance name only after a version is picked.
+
+### Fixed
+- **Glass material no longer disappears in packaged builds**: every rule in `material.css` now writes
+  `-webkit-backdrop-filter` before `backdrop-filter`, so LightningCSS keeps the standard property
+  (it treated the prefixed-only tail as a duplicate and dropped it, leaving WebView2 without any
+  blur on `MPagination`, `MCard`, `MDrawer`, `MTooltip`, the `SidebarNav` pill and the title bar).
+- The floating pagination dock no longer covers the last row of community resource cards.
+- The community toolbar no longer sends `categoryId`-less searches for categories CurseForge knows,
+  and never sends `modLoaderType` for shaders, resource packs, datapacks or worlds.
+
+### Added
+- **CurseForge category search**: `resolve_cf_category_id` maps the launcher's tab-scoped category
+  keys onto CurseForge ids (numeric ids pass through), and `CurseForgeClient::search` appends
+  `categoryId` when one resolves.
+- `src/features/comp/constants.ts`: per-tab category catalogue with `cfId` / `mrSlug`, per-tab loader
+  definitions with their supported platforms, and the `isPlatformSupportedForType` /
+  `isSortSupportedOnPlatform` / `isCategorySupportedOnPlatform` / `resolveCategoryForPlatform`
+  capability helpers.
+- **Official news page cache and adjacent-page prefetching** (`useHomeStore`), keyed by page with
+  in-flight deduplication.
+- **Community results page cache, in-flight deduplication and adjacent-page prefetching**
+  (`useCompStore`), scoped to the full filter key.
+- `.m-titlebar-scrolled` surface rule (flat, glass and dark glass variants).
+- 83 locale keys for the new category and loader labels.
+
+### Changed
+- Community resources page size is 24 — divisible by the 1-, 2- and 3-column grids and 12 + 12 in
+  the dual-platform view.
+- Filters are sanitised before every search: worlds fall back to CurseForge on the Modrinth view,
+  `follows` falls back to `relevance` on CurseForge, and categories/loaders the selected platform
+  cannot honour are cleared.
+- `all`-platform searches query both backends at half a page each, but switch to a full single-
+  platform page when only one backend supports the active filter combination.
+- Community filters are tab- and platform-aware: category options come from the active tab, the
+  loader selector disappears on resource packs/datapacks/worlds and is disabled for shaders on
+  CurseForge, `follows` is disabled there, and the MC version selector is now visible on the
+  modpack tab too.
+- Modpack installs ask for the new instance name in a confirmation dialog after a version is
+  clicked; the version list no longer sits behind an upfront name field, and modpack version lists
+  can be filtered by loader.
+- Floating surfaces (`MPagination`, `MTooltip`, `MDialog`, the news jump button) share the
+  `.m-overlay.m-refract` glass stack; `MDialog` dropped its `bg-panel` / `border-line` utility
+  overrides so the token system controls its surface.
+- `TitleBar` uses the `.m-titlebar-scrolled` rule instead of branching on the material setting.
+
 ## [0.0.30] - 2026-10-31
 
 A throughput pass over hashing, downloads and list rendering, plus the fixes that surfaced while

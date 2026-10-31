@@ -208,7 +208,7 @@ export default {
     }
 
     const offset = query.offset || 0
-    const limit = query.limit || 20
+    const limit = query.limit || 24
     const hits = list.slice(offset, offset + limit)
 
     return {

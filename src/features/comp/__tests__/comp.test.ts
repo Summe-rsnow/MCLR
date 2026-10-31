@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
@@ -7,6 +7,7 @@ import DOMPurify from 'dompurify'
 import { useCompStore } from '../store'
 import CompBrowserPage from '../CompBrowserPage.vue'
 import CompDetailPage from '../CompDetailPage.vue'
+import CompQuickDownloadDialog from '../components/CompQuickDownloadDialog.vue'
 import { ipcClient } from '../../../ipc/client'
 import { setupMockIpc } from '../../../ipc/mock'
 import zhCnComp from '../../../locales/zh-CN/comp.json'
@@ -526,6 +527,177 @@ describe('Community platform feature (Comp)', () => {
     expect(options.indexOf('26.3')).toBeLessThan(options.indexOf('1.21.4'))
     expect(options.indexOf('1.21.4')).toBeLessThan(options.indexOf('1.20.1'))
     expect(options.indexOf('1.20.1')).toBeLessThan(options.indexOf('1.7.10'))
+  })
+
+  it('pages by 24 items and prefetches the neighbouring page', async () => {
+    const store = useCompStore()
+    expect(store.limit).toBe(24)
+
+    store.compType = 'mod'
+    store.platform = 'modrinth'
+    store.query = ''
+    // The mock catalogue holds two Modrinth mods, so a page size of 1 produces two pages.
+    store.limit = 1
+    const searchSpy = vi.spyOn(ipcClient, 'compSearch')
+
+    await store.search(true)
+    expect(store.pageCount).toBe(2)
+    expect(store.hits).toHaveLength(1)
+    await flushPromises()
+
+    const requestedOffsets = searchSpy.mock.calls
+      .map(([query]) => query.offset)
+      .sort((a, b) => a - b)
+    // Page 1 plus the background prefetch of page 2.
+    expect(requestedOffsets).toEqual([0, 1])
+
+    await store.goToPage(2)
+    expect(store.page).toBe(2)
+    expect(store.hits).toHaveLength(1)
+    // Paging used the prefetched snapshot: page 2 was never requested a second time.
+    expect(searchSpy.mock.calls.filter(([query]) => query.offset === 1)).toHaveLength(1)
+
+    searchSpy.mockRestore()
+  })
+
+  it('scopes categories, loaders and sort options to the active tab and platform', async () => {
+    const store = useCompStore()
+    const wrapper = mount(CompBrowserPage, {
+      global: {
+        plugins: [i18n],
+        stubs: { RouterLink: true },
+      },
+    })
+    await flushPromises()
+
+    const toolbar = wrapper.findComponent({ name: 'CompSearchToolbar' })
+    const valuesOf = (prop: string) =>
+      (toolbar.props(prop) as Array<{ value: string; disabled?: boolean }>).map((o) => o.value)
+    const disabledOf = (prop: string, value: string) =>
+      (toolbar.props(prop) as Array<{ value: string; disabled?: boolean }>).find(
+        (o) => o.value === value,
+      )?.disabled
+
+    // Mod tab: mod-only categories, mod loaders, loader selector visible.
+    expect(valuesOf('categoryOptions')).toContain('worldgen')
+    expect(valuesOf('categoryOptions')).not.toContain('kitchen-sink')
+    expect(valuesOf('loaderOptions')).toEqual(
+      expect.arrayContaining(['fabric', 'forge', 'neoforge', 'quilt']),
+    )
+    expect(valuesOf('loaderOptions')).not.toContain('iris')
+    expect(toolbar.props('showLoader')).toBe(true)
+
+    // Modpack tab: modpack categories and loaders, still loader-filterable.
+    store.compType = 'modpack'
+    await flushPromises()
+    expect(valuesOf('categoryOptions')).toContain('kitchen-sink')
+    expect(valuesOf('categoryOptions')).not.toContain('worldgen')
+    expect(toolbar.props('showLoader')).toBe(true)
+
+    // Shader tab: iris/optifine/canvas are the loader facets, and they are Modrinth-only.
+    store.compType = 'shader'
+    await flushPromises()
+    expect(valuesOf('categoryOptions')).toContain('realistic')
+    expect(valuesOf('categoryOptions')).not.toContain('worldgen')
+    expect(valuesOf('loaderOptions')).toEqual(
+      expect.arrayContaining(['iris', 'optifine', 'canvas']),
+    )
+    expect(toolbar.props('loaderDisabled')).toBe(false)
+
+    // CurseForge cannot sort by follows, has no Modrinth-only categories and no shader loaders.
+    store.platform = 'curseforge'
+    await flushPromises()
+    expect(disabledOf('sortOptions', 'follows')).toBe(true)
+    expect(disabledOf('sortOptions', 'downloads')).toBeFalsy()
+    expect(disabledOf('categoryOptions', 'semi-realistic')).toBe(true)
+    expect(disabledOf('categoryOptions', 'realistic')).toBeFalsy()
+    expect(toolbar.props('loaderDisabled')).toBe(true)
+
+    // Mod loaders do exist on CurseForge, so that selector stays usable there.
+    store.compType = 'mod'
+    await flushPromises()
+    expect(toolbar.props('showLoader')).toBe(true)
+    expect(toolbar.props('loaderDisabled')).toBe(false)
+
+    // Worlds exist on CurseForge only and are not loader-bound at all.
+    store.compType = 'world'
+    store.platform = 'all'
+    await flushPromises()
+    expect(disabledOf('platformOptions', 'modrinth')).toBe(true)
+    expect(toolbar.props('showLoader')).toBe(false)
+    expect(valuesOf('categoryOptions')).toContain('survival')
+
+    // Resource packs and datapacks hide the loader selector as well.
+    store.compType = 'resourcepack'
+    await flushPromises()
+    expect(toolbar.props('showLoader')).toBe(false)
+    store.compType = 'datapack'
+    await flushPromises()
+    expect(toolbar.props('showLoader')).toBe(false)
+  })
+
+  it('asks for the modpack instance name only after install is clicked', async () => {
+    const modpackProject = {
+      id: '685172',
+      slug: 'cobblemon-modpack',
+      platform: 'curseforge' as const,
+      title: 'Cobblemon Official Modpack',
+      summary: 'Packs',
+      description: '',
+      author: 'CobblemonTeam',
+      downloads: 5000000,
+      follows: 28000,
+      iconUrl: '',
+      categories: [],
+      compType: 'modpack' as const,
+      mcVersions: ['1.20.1'],
+      loaders: ['fabric'],
+      updatedAt: '2024-05-18T16:00:00Z',
+    }
+    const installSpy = vi.spyOn(ipcClient, 'modpackInstallRemote')
+
+    const wrapper = mount(CompQuickDownloadDialog, {
+      props: { open: true, project: modpackProject },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    // No upfront name input: the version list is usable the moment the dialog opens.
+    expect(document.body.querySelector('[data-testid="modpack-instance-name-input"]')).toBeNull()
+
+    // Overlays are teleported to <body>, so the version rows live outside the wrapper root.
+    const installButton = Array.from(document.body.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('开始安装'),
+    )
+    expect(installButton).toBeDefined()
+    installButton!.click()
+    await flushPromises()
+
+    const nameField = document.body.querySelector(
+      '[data-testid="modpack-instance-name-input"]',
+    ) as HTMLElement | null
+    expect(nameField).not.toBeNull()
+    // The name is pre-filled from the project title so a single confirm is enough.
+    expect((nameField!.querySelector('input') as HTMLInputElement).value).toBe(
+      'Cobblemon Official Modpack',
+    )
+    // Nothing was installed yet: the click only opened the prompt.
+    expect(installSpy).not.toHaveBeenCalled()
+
+    const nameDialog = nameField!.closest('[role="dialog"]') as HTMLElement
+    const confirmButton = Array.from(nameDialog.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('开始安装'),
+    )
+    expect(confirmButton).toBeDefined()
+    confirmButton!.click()
+    await flushPromises()
+
+    expect(installSpy).toHaveBeenCalledTimes(1)
+    expect(installSpy.mock.calls[0][1]).toBe('Cobblemon Official Modpack')
+    expect(installSpy.mock.calls[0][0].id).toBeDefined()
+
+    installSpy.mockRestore()
+    wrapper.unmount()
   })
 
   it('opens CompQuickDownloadDialog on card click and navigates on view details', async () => {

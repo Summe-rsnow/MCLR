@@ -63,7 +63,7 @@ function onConfirm() {
 <template>
   <MOverlay :open="open" transition="m-modal" @close="onCancel">
     <div
-      class="m-overlay m-refract bg-panel w-full p-6 rounded-2xl flex flex-col gap-4 text-fg shadow-2xl border border-line"
+      class="m-overlay m-refract w-full p-6 rounded-2xl flex flex-col gap-4 text-fg shadow-2xl"
       :class="maxWidthClass"
       role="dialog"
       aria-modal="true"

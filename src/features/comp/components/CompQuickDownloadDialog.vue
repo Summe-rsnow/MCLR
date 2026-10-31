@@ -46,6 +46,9 @@ const downloadingFileId = ref<string | null>(null)
 const targetInstanceId = ref<string>('')
 const autoMatchInstance = ref(true)
 const modpackInstanceName = ref('')
+/** Set by the install click: the name prompt only exists so the click can be confirmed. */
+const modpackNameDialogOpen = ref(false)
+const pendingModpackFile = ref<CompFile | null>(null)
 const selectedMcVersion = ref('')
 const selectedLoader = ref('')
 
@@ -162,7 +165,12 @@ watch(autoMatchInstance, (auto) => {
 watch(
   () => props.open,
   async (isOpen) => {
-    if (!isOpen || !props.project) return
+    if (!isOpen || !props.project) {
+      // Never leave the name prompt floating over a dialog that was closed under it.
+      modpackNameDialogOpen.value = false
+      pendingModpackFile.value = null
+      return
+    }
 
     if (isModpack.value) {
       // Nothing to target: the archive is unpacked into a fresh instance of its own.
@@ -199,7 +207,6 @@ watch(
 // PCL compatibility check algorithm
 const filteredFiles = computed(() => {
   const isNonModType =
-    props.project?.compType === 'modpack' ||
     props.project?.compType === 'resourcepack' ||
     props.project?.compType === 'shader' ||
     props.project?.compType === 'datapack' ||
@@ -248,10 +255,6 @@ function getChannelVariant(channel: string): 'primary' | 'warning' | 'neutral' {
 }
 
 async function handleDownload(file: CompFile) {
-  if (isModpack.value) {
-    await handleInstallModpack(file)
-    return
-  }
   if (!targetInstanceId.value) {
     toast.warning(t('comp.quickDownload.selectInstanceFirst'))
     return
@@ -281,13 +284,28 @@ function onViewDetails() {
   emit('view-details', props.project)
 }
 
-async function handleInstallModpack(file: CompFile) {
+/**
+ * A modpack is not installed *into* anything: it becomes a new instance. Asking for that
+ * instance's name here — instead of demanding it before the user has even picked a version —
+ * keeps the version list one click away.
+ */
+function openModpackNameDialog(file: CompFile) {
+  pendingModpackFile.value = file
+  modpackInstanceName.value = (props.project?.title || file.name || 'Modpack')
+    .replace(/[/\\?%*:|"<>]/g, '_')
+    .trim()
+  modpackNameDialogOpen.value = true
+}
+
+async function confirmInstallModpack() {
+  const file = pendingModpackFile.value
   const name = modpackInstanceName.value.trim()
-  if (!name) {
+  if (!file || !name) {
     toast.warning(t('comp.modpackInstallDialog.instanceNamePlaceholder'))
     return
   }
   downloadingFileId.value = file.id
+  modpackNameDialogOpen.value = false
   try {
     const taskId = await ipcClient.modpackInstallRemote(file, name)
     emit('update:open', false)
@@ -307,6 +325,7 @@ async function handleInstallModpack(file: CompFile) {
     toast.danger(msg)
   } finally {
     downloadingFileId.value = null
+    pendingModpackFile.value = null
   }
 }
 function onSelectVersion(ver: string) {
@@ -373,24 +392,9 @@ function onSelectLoader(ldr: string) {
         </MButton>
       </div>
 
-      <!-- Modpack: New Instance Name Input (PCL Logic: Modpack creates new instance) -->
-      <div
-        v-if="project.compType === 'modpack'"
-        class="p-3 rounded-xl bg-sunken/40 border border-line space-y-1.5"
-      >
-        <label class="text-xs font-semibold text-fg-muted block">
-          {{ t('comp.modpackInstallDialog.instanceName') }}:
-        </label>
-        <MInput
-          v-model="modpackInstanceName"
-          :placeholder="t('comp.modpackInstallDialog.instanceNamePlaceholder')"
-          size="sm"
-        />
-      </div>
-
       <!-- Non-Modpack: Target Instance & Auto-Match Bar -->
       <div
-        v-else
+        v-if="project.compType !== 'modpack'"
         class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-sunken/40 border border-line"
       >
         <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -456,9 +460,9 @@ function onSelectLoader(ldr: string) {
           </button>
         </div>
 
-        <!-- Loader Chips (if mod type) -->
+        <!-- Loader Chips (mods and modpacks are the loader-bound types) -->
         <div
-          v-if="project.compType === 'mod'"
+          v-if="project.compType === 'mod' || project.compType === 'modpack'"
           class="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-line/40"
         >
           <span class="font-semibold text-fg-muted shrink-0 mr-1">
@@ -539,8 +543,8 @@ function onSelectLoader(ldr: string) {
               size="sm"
               class="shrink-0"
               :loading="downloadingFileId === file.id"
-              :disabled="file.distributionDisabled || !modpackInstanceName.trim()"
-              @click="handleInstallModpack(file)"
+              :disabled="file.distributionDisabled"
+              @click="openModpackNameDialog(file)"
             >
               <span class="i-lucide-box mr-1 w-3.5 h-3.5" />
               {{ t('comp.modpackInstallDialog.install') }}
@@ -560,6 +564,32 @@ function onSelectLoader(ldr: string) {
           </div>
         </div>
       </div>
+    </div>
+  </MDialog>
+
+  <!-- The instance name is only needed once a specific version is chosen, so it is asked here
+       rather than blocking the version list behind an upfront input. -->
+  <MDialog
+    :open="modpackNameDialogOpen"
+    :title="t('comp.modpackInstallDialog.title')"
+    :confirm-text="t('comp.modpackInstallDialog.install')"
+    :cancel-text="t('comp.downloadDialog.cancel')"
+    :confirm-loading="downloadingFileId !== null"
+    :confirm-disabled="!modpackInstanceName.trim()"
+    @update:open="modpackNameDialogOpen = $event"
+    @confirm="confirmInstallModpack"
+    @cancel="modpackNameDialogOpen = false"
+  >
+    <div class="space-y-2 py-2">
+      <label class="text-xs font-semibold text-fg-muted block">
+        {{ t('comp.modpackInstallDialog.instanceName') }}
+      </label>
+      <MInput
+        v-model="modpackInstanceName"
+        data-testid="modpack-instance-name-input"
+        :placeholder="t('comp.modpackInstallDialog.instanceNamePlaceholder')"
+        @keydown.enter="confirmInstallModpack"
+      />
     </div>
   </MDialog>
 </template>

@@ -30,6 +30,100 @@ impl Default for CurseForgeClient {
     }
 }
 
+/// Maps the launcher's tab-scoped category keys onto CurseForge category ids.
+///
+/// CurseForge identifies a category only by a numeric id that is scoped to a class id, so the
+/// same key (`"adventure"`) means something different per tab. A key that is already numeric is
+/// passed through, which keeps raw ids usable from the query string.
+pub fn resolve_cf_category_id(comp_type: CompType, category: &str) -> Option<u32> {
+    let key = category.trim();
+    if key.is_empty() {
+        return None;
+    }
+    if let Ok(id) = key.parse::<u32>()
+        && id > 0
+    {
+        return Some(id);
+    }
+
+    let id = match (comp_type, key.to_lowercase().as_str()) {
+        (CompType::Mod, "worldgen") => 406,
+        (CompType::Mod, "biomes") => 407,
+        (CompType::Mod, "ores") => 408,
+        (CompType::Mod, "structures") => 409,
+        (CompType::Mod, "dimensions") => 410,
+        (CompType::Mod, "mobs") => 411,
+        (CompType::Mod, "technology") => 412,
+        (CompType::Mod, "transportation") => 414,
+        (CompType::Mod, "pipes") => 415,
+        (CompType::Mod, "farming") => 416,
+        (CompType::Mod, "energy") => 417,
+        (CompType::Mod, "magic") => 419,
+        (CompType::Mod, "storage") => 420,
+        (CompType::Mod, "library") => 421,
+        (CompType::Mod, "adventure") => 422,
+        (CompType::Mod, "display") => 423,
+        (CompType::Mod, "decoration") => 424,
+        (CompType::Mod, "equipment") => 434,
+        (CompType::Mod, "social" | "server") => 435,
+        (CompType::Mod, "food") => 436,
+        (CompType::Mod, "redstone") => 4558,
+        (CompType::Mod, "automation") => 4843,
+        (CompType::Mod, "utility") => 5191,
+        (CompType::Mod, "optimization") => 6814,
+        (CompType::Mod, "creative") => 9026,
+        (CompType::Modpack, "scifi") => 4471,
+        (CompType::Modpack, "technology") => 4472,
+        (CompType::Modpack, "magic") => 4473,
+        (CompType::Modpack, "adventure") => 4475,
+        (CompType::Modpack, "exploration") => 4476,
+        (CompType::Modpack, "minigame") => 4477,
+        (CompType::Modpack, "quests") => 4478,
+        (CompType::Modpack, "challenging" | "hardcore") => 4479,
+        (CompType::Modpack, "map-based") => 4480,
+        (CompType::Modpack, "lightweight") => 4481,
+        (CompType::Modpack, "extra-large") => 4482,
+        (CompType::Modpack, "combat") => 4483,
+        (CompType::Modpack, "multiplayer") => 4484,
+        (CompType::Modpack, "ftb") => 4487,
+        (CompType::Modpack, "skyblock") => 4736,
+        (CompType::Modpack, "vanilla-plus") => 5128,
+        (CompType::Resourcepack, "16x") => 393,
+        (CompType::Resourcepack, "32x") => 394,
+        (CompType::Resourcepack, "64x") => 395,
+        (CompType::Resourcepack, "128x") => 396,
+        (CompType::Resourcepack, "256x") => 397,
+        (CompType::Resourcepack, "512x+") => 398,
+        (CompType::Resourcepack, "steampunk") => 399,
+        (CompType::Resourcepack, "realistic") => 400,
+        (CompType::Resourcepack, "modern") => 401,
+        (CompType::Resourcepack, "medieval") => 402,
+        (CompType::Resourcepack, "vanilla-like") => 403,
+        (CompType::Resourcepack, "animated") => 404,
+        (CompType::Resourcepack, "modded") => 4465,
+        (CompType::Resourcepack, "fonts") => 5244,
+        (CompType::Shader, "realistic") => 6553,
+        (CompType::Shader, "fantasy") => 6554,
+        (CompType::Shader, "vanilla-like") => 6555,
+        (CompType::Datapack, "mod-related") => 6946,
+        (CompType::Datapack, "adventure") => 6948,
+        (CompType::Datapack, "fantasy") => 6949,
+        (CompType::Datapack, "library") => 6950,
+        (CompType::Datapack, "technology") => 6951,
+        (CompType::Datapack, "magic") => 6952,
+        (CompType::Datapack, "utility") => 6953,
+        (CompType::World, "adventure" | "world-adventure") => 248,
+        (CompType::World, "creative" | "world-creative") => 249,
+        (CompType::World, "minigame" | "world-minigame") => 250,
+        (CompType::World, "parkour" | "world-parkour") => 251,
+        (CompType::World, "puzzle" | "world-puzzle") => 252,
+        (CompType::World, "survival" | "world-survival") => 253,
+        (CompType::World, "modded-world" | "world-modded") => 4464,
+        _ => return None,
+    };
+    Some(id)
+}
+
 impl CurseForgeClient {
     pub fn new(priority: SourcePriority) -> Self {
         let mut default_headers = HeaderMap::new();
@@ -226,8 +320,15 @@ impl CurseForgeClient {
             let mut pairs = url.query_pairs_mut();
             pairs.append_pair("gameId", "432");
             pairs.append_pair("classId", &class_id.to_string());
-            if mod_loader_type > 0 {
+            // Only mods and modpacks are loadable artifacts on CurseForge; shaders, resource
+            // packs, datapacks and worlds reject `modLoaderType` (or return nothing for it).
+            if matches!(q.comp_type, CompType::Mod | CompType::Modpack) && mod_loader_type > 0 {
                 pairs.append_pair("modLoaderType", &mod_loader_type.to_string());
+            }
+            if let Some(category) = q.category.as_deref()
+                && let Some(category_id) = resolve_cf_category_id(q.comp_type, category)
+            {
+                pairs.append_pair("categoryId", &category_id.to_string());
             }
             if let Some(mc) = &q.mc_version
                 && !mc.is_empty()
@@ -683,7 +784,7 @@ fn rewrite_cdn_urls(raw_url: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{method, path, query_param};
+    use wiremock::matchers::{method, path, query_param, query_param_is_missing};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
@@ -832,6 +933,97 @@ mod tests {
         // File 1: allowModDistribution=false marks distribution_disabled=true
         assert!(files[1].distribution_disabled);
         assert!(files[1].download_urls.is_empty());
+    }
+
+    #[test]
+    fn test_resolve_cf_category_id_maps_tab_scoped_keys() {
+        assert_eq!(
+            resolve_cf_category_id(CompType::Mod, "technology"),
+            Some(412)
+        );
+        // The same key resolves per tab: "adventure" is a different CurseForge category for
+        // mods than for datapacks, and a different one again for worlds.
+        assert_eq!(
+            resolve_cf_category_id(CompType::Mod, "adventure"),
+            Some(422)
+        );
+        assert_eq!(
+            resolve_cf_category_id(CompType::Datapack, "adventure"),
+            Some(6948)
+        );
+        assert_eq!(
+            resolve_cf_category_id(CompType::World, "adventure"),
+            Some(248)
+        );
+        assert_eq!(
+            resolve_cf_category_id(CompType::Modpack, "quests"),
+            Some(4478)
+        );
+        assert_eq!(
+            resolve_cf_category_id(CompType::Shader, "realistic"),
+            Some(6553)
+        );
+        assert_eq!(
+            resolve_cf_category_id(CompType::Resourcepack, "16x"),
+            Some(393)
+        );
+        // Case and surrounding whitespace are irrelevant.
+        assert_eq!(
+            resolve_cf_category_id(CompType::World, "  Survival "),
+            Some(253)
+        );
+        // Raw ids pass through so the query string can carry them.
+        assert_eq!(resolve_cf_category_id(CompType::Mod, "412"), Some(412));
+        // Unknown keys and empty input must not invent a category.
+        assert_eq!(
+            resolve_cf_category_id(CompType::Mod, "not-a-category"),
+            None
+        );
+        assert_eq!(resolve_cf_category_id(CompType::Mod, "  "), None);
+        assert_eq!(resolve_cf_category_id(CompType::Mod, "0"), None);
+        // A key that belongs to another tab is not valid for this one.
+        assert_eq!(resolve_cf_category_id(CompType::Shader, "technology"), None);
+    }
+
+    #[tokio::test]
+    async fn test_curseforge_search_category_and_shader_loader_filtering() {
+        let server = MockServer::start().await;
+
+        // A shader search must send the tab-scoped category id and must NOT leak the loader as
+        // `modLoaderType`: CurseForge only understands loaders for mods and modpacks.
+        Mock::given(method("GET"))
+            .and(path("/v1/mods/search"))
+            .and(query_param("classId", "6552"))
+            .and(query_param("categoryId", "6553"))
+            .and(query_param_is_missing("modLoaderType"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [],
+                "pagination": { "totalCount": 0 }
+            })))
+            .mount(&server)
+            .await;
+
+        let client = CurseForgeClient::new(SourcePriority::OfficialFirst)
+            .with_base_url(server.uri())
+            .with_api_key(Some("test-cf-key".to_string()));
+
+        let shader_query = CompSearchQuery {
+            platform: CompPlatform::Curseforge,
+            comp_type: CompType::Shader,
+            query: String::new(),
+            mc_version: None,
+            loader: Some("fabric".to_string()),
+            category: Some("realistic".to_string()),
+            sort: CompSort::Relevance,
+            offset: 0,
+            limit: 20,
+        };
+        let shader_res = client
+            .search(&shader_query)
+            .await
+            .expect("shader search should reach the mock and match the category");
+        assert!(shader_res.hits.is_empty());
+        assert_eq!(shader_res.total_hits, 0);
     }
 
     #[tokio::test]

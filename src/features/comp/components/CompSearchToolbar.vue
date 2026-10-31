@@ -1,12 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { CompPlatform, CompSort } from '../../../ipc/client'
-import { MCard, MSelect, MIconButton, MInput } from '../../../ui'
-
-export interface SelectOption {
-  label: string
-  value: string
-}
+import { MCard, MSelect, MIconButton, MInput, type SelectOption } from '../../../ui'
 
 defineProps<{
   platform: CompPlatform | 'all'
@@ -24,6 +19,9 @@ defineProps<{
   loaderOptions: SelectOption[]
   searchPlaceholder: string
   compType?: string
+  /** Resource packs, datapacks and worlds are not loader-bound, so the selector disappears. */
+  showLoader?: boolean
+  loaderDisabled?: boolean
 }>()
 
 const query = defineModel<string>('query', { default: '' })
@@ -56,7 +54,7 @@ const { t } = useI18n()
         />
       </div>
 
-      <!-- Category -->
+      <!-- Category (options are scoped to the active tab) -->
       <div class="w-36 shrink-0">
         <MSelect
           :model-value="category || ''"
@@ -76,30 +74,33 @@ const { t } = useI18n()
         />
       </div>
 
-      <!-- Target Instance / Version (Hidden for Modpack since modpacks create new instances) -->
-      <div v-if="compType !== 'modpack'" class="flex items-center gap-1.5 shrink-0">
+      <!-- Target Instance (a modpack creates its own instance, so it never targets one) -->
+      <div v-if="compType !== 'modpack'" class="w-48 shrink-0">
         <MSelect
           :model-value="targetInstanceId"
           :options="targetInstanceOptions"
           size="sm"
-          class="w-48"
           @update:model-value="(val) => emit('update:target-instance', String(val))"
         />
+      </div>
+
+      <!-- MC Version -->
+      <div class="w-36 shrink-0">
         <MSelect
           :model-value="mcVersion || ''"
           :options="mcVersionOptions"
           size="sm"
-          class="w-36"
           @update:model-value="(val) => emit('update:mc-version', String(val))"
         />
       </div>
 
       <!-- Loader -->
-      <div class="w-36 shrink-0">
+      <div v-if="showLoader !== false" class="w-36 shrink-0">
         <MSelect
           :model-value="loader || ''"
           :options="loaderOptions"
           size="sm"
+          :disabled="loaderDisabled"
           @update:model-value="(val) => emit('update:loader', String(val))"
         />
       </div>

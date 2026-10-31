@@ -7,6 +7,13 @@ import { useInstancesStore } from '../instances/store'
 import { useLaunchStore } from '../launch/store'
 import type { CompType, CompPlatform, CompSort } from '../../ipc/client'
 import {
+  COMP_CATEGORIES_BY_TYPE,
+  getLoaderDefsForType,
+  isCategorySupportedOnPlatform,
+  isPlatformSupportedForType,
+  isSortSupportedOnPlatform,
+} from './constants'
+import {
   MTabs,
   MIconButton,
   MCard,
@@ -19,6 +26,7 @@ import {
   MImage,
   compTypeMeta,
   type CompTypeKey,
+  type SelectOption,
   useToast,
 } from '../../ui'
 import type { CompFavoriteEntry, CompProject } from '../../ipc/client'
@@ -72,7 +80,11 @@ function applyTargetInstance(
         primaryLoader = raw.split(/\s+/)[0] || null
       }
     }
-    if (primaryLoader === 'forge' && inst.mcVersion && isForgeUnder114(inst.mcVersion)) {
+    // Only mods and modpacks are loadable artifacts: for every other tab the instance only
+    // contributes its game version.
+    if (compStore.compType !== 'mod' && compStore.compType !== 'modpack') {
+      compStore.loader = null
+    } else if (primaryLoader === 'forge' && inst.mcVersion && isForgeUnder114(inst.mcVersion)) {
       compStore.loader = null
     } else {
       compStore.loader = primaryLoader
@@ -131,36 +143,42 @@ const tabs = computed(() => [
   { key: 'favorites', label: t('comp.tabs.favorites') },
 ])
 
-const platformOptions = computed(() => [
+const platformOptions = computed<SelectOption[]>(() => [
   { label: t('comp.platform.all'), value: 'all' },
-  { label: t('comp.platform.modrinth'), value: 'modrinth' },
-  { label: t('comp.platform.curseforge'), value: 'curseforge' },
+  {
+    label: t('comp.platform.modrinth'),
+    value: 'modrinth',
+    disabled: !isPlatformSupportedForType(compStore.compType, 'modrinth'),
+  },
+  {
+    label: t('comp.platform.curseforge'),
+    value: 'curseforge',
+    disabled: !isPlatformSupportedForType(compStore.compType, 'curseforge'),
+  },
 ])
 
-const categoryOptions = computed(() => [
+/** Categories are scoped to the active tab, and each platform only supports a subset. */
+const categoryOptions = computed<SelectOption[]>(() => [
   { label: t('comp.search.categories.all'), value: '' },
-  { label: t('comp.search.categories.technology'), value: 'technology' },
-  { label: t('comp.search.categories.magic'), value: 'magic' },
-  { label: t('comp.search.categories.adventure'), value: 'adventure' },
-  { label: t('comp.search.categories.optimization'), value: 'optimization' },
-  { label: t('comp.search.categories.utility'), value: 'utility' },
-  { label: t('comp.search.categories.decoration'), value: 'decoration' },
-  { label: t('comp.search.categories.storage'), value: 'storage' },
-  { label: t('comp.search.categories.equipment'), value: 'equipment' },
-  { label: t('comp.search.categories.food'), value: 'food' },
-  { label: t('comp.search.categories.worldgen'), value: 'worldgen' },
-  { label: t('comp.search.categories.library'), value: 'library' },
-  { label: t('comp.search.categories.shaderpacks'), value: 'shaderpacks' },
-  { label: t('comp.search.categories.quests'), value: 'quests' },
+  ...COMP_CATEGORIES_BY_TYPE[compStore.compType].map((def) => ({
+    label: t(def.labelKey),
+    value: def.value,
+    disabled: !isCategorySupportedOnPlatform(compStore.compType, def.value, compStore.platform),
+  })),
 ])
 
-const sortOptions = computed(() => [
-  { label: t('comp.search.sorts.default'), value: 'relevance' },
-  { label: t('comp.search.sorts.downloads'), value: 'downloads' },
-  { label: t('comp.search.sorts.follows'), value: 'follows' },
-  { label: t('comp.search.sorts.newest'), value: 'newest' },
-  { label: t('comp.search.sorts.updated'), value: 'updated' },
-])
+const sortOptions = computed<SelectOption[]>(() =>
+  [
+    { label: t('comp.search.sorts.default'), value: 'relevance' },
+    { label: t('comp.search.sorts.downloads'), value: 'downloads' },
+    { label: t('comp.search.sorts.follows'), value: 'follows' },
+    { label: t('comp.search.sorts.newest'), value: 'newest' },
+    { label: t('comp.search.sorts.updated'), value: 'updated' },
+  ].map((option) => ({
+    ...option,
+    disabled: !isSortSupportedOnPlatform(option.value as CompSort, compStore.platform),
+  })),
+)
 
 const searchPlaceholder = computed(() => t('comp.search.placeholder'))
 const standardMcVersions = [
@@ -209,18 +227,35 @@ const mcVersionOptions = computed(() => {
   ]
 })
 
-/** Official loader artwork, shared with `MLoaderIcon` via the same public assets. */
-const LOADER_LOGO = (kind: string) => `/assets/icons/loaders/${kind}.png`
+const loaderDefs = computed(() => getLoaderDefsForType(compStore.compType))
+const showLoader = computed(() => loaderDefs.value.length > 0)
+/**
+ * Disabled only when the selected platform supports none of this tab's loaders — e.g. shader
+ * loaders are Modrinth-only, while mod loaders exist on CurseForge too.
+ */
+const loaderDisabled = computed(() => {
+  if (!showLoader.value || compStore.platform === 'all') return false
+  return !loaderDefs.value.some((def) => def.platforms.includes(compStore.platform as CompPlatform))
+})
 
-const loaderOptions = computed(() => [
-  { label: t('comp.search.allLoaders'), value: '', icon: 'i-lucide-layers' },
-  { label: 'Fabric', value: 'fabric', image: LOADER_LOGO('fabric') },
-  { label: 'Forge', value: 'forge', image: LOADER_LOGO('forge') },
-  { label: 'NeoForge', value: 'neoforge', image: LOADER_LOGO('neoforge') },
-  { label: 'Quilt', value: 'quilt', image: LOADER_LOGO('quilt') },
-  { label: 'OptiFine', value: 'optifine', image: LOADER_LOGO('optifine') },
-  { label: 'Iris', value: 'iris', icon: 'i-lucide-gem' },
-])
+const loaderOptions = computed<SelectOption[]>(() => {
+  const allOption: SelectOption = {
+    label: t('comp.search.allLoaders'),
+    value: '',
+    icon: 'i-lucide-layers',
+  }
+  const options: SelectOption[] = [allOption]
+  for (const def of loaderDefs.value) {
+    options.push({
+      label: def.labelKey ? t(def.labelKey) : (def.label ?? def.value),
+      value: def.value,
+      icon: def.icon,
+      image: def.image,
+      disabled: loaderDisabled.value,
+    })
+  }
+  return options
+})
 
 function onTabChange(tabValue: string): void {
   compStore.activeTab = tabValue as CompType | 'favorites'
@@ -286,7 +321,8 @@ function onCategoryChange(val: string | number): void {
 
 function onRefresh(): void {
   if (compStore.activeTab !== 'favorites') {
-    compStore.search(true)
+    // Refresh must bypass the page cache, otherwise it would re-render the same snapshot.
+    compStore.search(false, true)
   }
 }
 
@@ -429,6 +465,8 @@ watch(
       :target-instance-options="targetInstanceOptions"
       :mc-version-options="mcVersionOptions"
       :loader-options="loaderOptions"
+      :show-loader="showLoader"
+      :loader-disabled="loaderDisabled"
       :search-placeholder="searchPlaceholder"
       @update:platform="onPlatformChange"
       @update:category="onCategoryChange"
@@ -487,7 +525,8 @@ watch(
     </div>
 
     <!-- Content Area: Regular Search Hits -->
-    <div v-else class="flex-1 space-y-3">
+    <!-- `pb-20` keeps the floating pagination dock from covering the last card row. -->
+    <div v-else class="flex-1 space-y-3 pb-20">
       <!-- Loading Skeletons -->
       <div
         v-if="compStore.loading && compStore.hits.length === 0"

@@ -125,6 +125,36 @@ describe('HomePage & Home Feature', () => {
     expect(pager.exists()).toBe(true)
   })
 
+  it('serves a prefetched news page from memory instead of refetching it', async () => {
+    const newsFetchSpy = vi.spyOn(ipcClient, 'newsFetch').mockImplementation(async (page = 1) => [
+      {
+        id: `news-p${page}`,
+        title: `Page ${page}`,
+        summary: '',
+        date: '2026-03-01',
+        category: 'Release',
+        imageUrl: null,
+        articleUrl: 'https://example.com',
+      },
+    ])
+    const homeStore = useHomeStore()
+
+    await homeStore.loadNews(1)
+    // Page 1 renders immediately; page 2 is already being warmed behind it.
+    expect(homeStore.page).toBe(1)
+    await flushPromises()
+    expect(newsFetchSpy.mock.calls.map(([page]) => page)).toEqual([1, 2])
+
+    await homeStore.loadNews(2)
+    expect(homeStore.page).toBe(2)
+    // The page came from the prefetch cache: its content is what page 2 returned, and it was
+    // requested exactly once.
+    expect(homeStore.news[0].id).toBe('news-p2')
+    expect(newsFetchSpy.mock.calls.filter(([page]) => page === 2)).toHaveLength(1)
+
+    newsFetchSpy.mockRestore()
+  })
+
   it('dismisses announcement and patches settings', async () => {
     const mockAnnouncementList = [
       {
