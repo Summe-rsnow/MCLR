@@ -37,6 +37,12 @@ export const useCompStore = defineStore('comp', () => {
   const category = ref<string | null>(null)
   const sort = ref<CompSort>('relevance')
 
+  // `CompBrowserPage` is unmounted when the user leaves it, so everything that must survive a
+  // return trip lives here with the filters: the target instance and whether the user already
+  // answered "which instance".
+  const targetInstanceId = ref<string>('')
+  const targetInstanceChosen = ref(false)
+
   const hits = ref<CompProject[]>([])
   const totalHits = ref(0)
   const offset = ref(0)
@@ -447,6 +453,8 @@ export const useCompStore = defineStore('comp', () => {
     loader,
     category,
     sort,
+    targetInstanceId,
+    targetInstanceChosen,
     hits,
     totalHits,
     offset,

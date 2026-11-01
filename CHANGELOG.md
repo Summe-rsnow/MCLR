@@ -5,6 +5,79 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.32] - unreleased
+
+Browsing and install-progress honesty: the community browser comes back where you left it, cards
+show a readable date instead of a raw timestamp, modpack progress only ever moves forward and names
+the stage it is in, a slow link no longer fails a download, and the mod list checks updates by
+itself, matches them to the instance's loader and can update a whole selection at once.
+
+### Fixed
+- **Community browsing session is restored**: revisiting 社区资源 keeps the tab, page and filters
+  (a page-cache hit renders without a skeleton), and the target instance choice survives the
+  remount — including an explicit 「不指定实例」, which is no longer overwritten by the default.
+- **Modpack install progress no longer jumps**: stage progress is mapped into a window of the bar
+  (`TaskCenter::set_progress_window`) and holds the highest value seen, so the four stages that each
+  report their own `0.0..=1.0` cannot rewind the bar or show `0%` while running.
+- **`Network timeout: Chunk retries exceeded` is gone**: slowness no longer shares the error retry
+  budget — a slow range is split while that pays off and otherwise resumed from where it stopped,
+  so a throttled link finishes instead of failing (`crates/mclr-net/src/downloader.rs`).
+- **Mod update matching follows the mod loader**: detection labels (`"Fabric 0.15.11"`) were sent
+  as platform loader facets, which matched nothing on Modrinth and filtered nothing on CurseForge.
+  `canonical_loader_id` maps them to `fabric` / `forge` / `neoforge` / `quilt` / `liteloader` and
+  reports unindexed flavours as unknown instead of guessing.
+- **A wrong-loader build is never offered as an update**: `select_best_file` used to relax its
+  game-version or loader filter whenever any file matched the other one, so a Forge-only build
+  became the "update" for a Fabric instance. Both filters are now strict (no match → no update),
+  the Modrinth answer is re-checked against the instance loader, and an unrecognised loader offers
+  no updates at all instead of guessing.
+- **Update candidates follow the same rules as PCL**: only a strictly newer build counts (an older
+  or equal one is never a "update"), and a file the author forbade redistributing is skipped
+  instead of failing when the user clicks it. ISO timestamps are parsed, so CurseForge's
+  millisecond suffix and Modrinth's second precision compare as instants.
+- **Duplicate scrollbar in an instance's mod list**: `overflow-x: hidden` made `.m-page` (and the
+  detail-page wrappers) real scroll containers, so the virtual list picked a page that never
+  scrolls and grew its own useless scrollbar. They now use `overflow-x: clip`, which clips without
+  creating a scroll container.
+
+### Added
+- `TaskCenter::set_progress_window` plus the `tasks.stages.*` locale block, and a stage line under
+  the task title (`下载整合包压缩包 → 解析整合包内容 → 安装游戏与加载器 → 下载模组与资源文件 → 解压覆盖文件`).
+- The modpack archive download owns the first 8% of the bar; the CurseForge file-id resolution now
+  runs concurrently with the base game install.
+- Mod updates are checked automatically when the list opens (silently when nothing is found) and
+  when the instance changes. The automatic pass respects a 6-hour cache — a finished lookup is
+  reused instead of re-querying Modrinth and CurseForge on every visit — while the 检查更新 button
+  passes `force` and always goes to the network.
+- The batch-selection bar gains `更新 (N)`, so select-all plus one click updates every selected mod
+  in a single task.
+- The update check uses the instance's whole detected loader set (Forge + OptiFine, Cleanroom +
+  Forge, ...), canonicalised on the backend, so a build tagged with any of them still counts.
+
+### Changed
+- Community cards print `下载量 · 关注量` on the left and a day-precision date on the right; the
+  loaders text and the clipped platform badge are gone (`MBrandIcon` already carries the platform).
+- The follow count is hidden when a platform reports none: CurseForge has no follow metric and its
+  search payload carries `thumbsUpCount: 0`, so the card and the project header no longer print a
+  meaningless `0` there.
+
+### Fixed (leftover state)
+- **Finished tasks really go away**: `TaskCenter::clear_finished` drops `success` / `failed` /
+  `canceled` tasks from the registry (a child survives while its parent is still live), and
+  「清除已完成」 now calls it — filtering only the local list meant the next `tasks_fetch` brought
+  every old failure straight back.
+- **A failed modpack install leaves nothing behind**: the version directory is removed when the
+  import created it and then failed, and the downloaded archive is deleted from `cache/modpacks/`
+  after the attempt instead of staying there for good.
+
+### Added (manual cleanup)
+- **工具箱 · 失败任务残留** (`tools_cleanup_failed_tasks`): one button that deletes only what
+  incomplete tasks left behind — `<name>.mclr-part` writes and abandoned `cache/modpacks/` archives,
+  both older than an hour so a live download is never touched. `CacheSizeInfo` reports
+  `failed_task_bytes` so the row shows the size before cleaning; nothing else in the cache or the
+  game folder is a candidate. The command also refuses to run while any task is still active
+  (`tools.tasksRunning`), because only an idle launcher can guarantee a part file is abandoned.
+
 ## [0.0.31] - 2026-11-01
 
 A materials-and-navigation pass: frozen glass is finally visible in packaged builds, paging through

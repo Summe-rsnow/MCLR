@@ -77,6 +77,10 @@ pub async fn modpack_import_file(
                 let _ = tc.fail_task(&tid, e.into()).await;
             }
         }
+
+        // The archive is a 100 MB+ copy of what the instance now holds, and nothing reads it
+        // again (a retry downloads to the same path anyway), so it must not be left in `cache/`.
+        let _ = tokio::fs::remove_file(&archive_path).await;
     });
 
     Ok(task_id)
@@ -148,8 +152,16 @@ pub async fn modpack_install_remote(
 
     tokio::spawn(async move {
         let _ = tc.start_task(&tid).await;
+        // The archive is the first 8% of the install; without this the bar would hit 100% on the
+        // download and then jump back down when the import stages take over.
+        let _ = tc.set_progress_window(&tid, 0.0, 0.08).await;
+        let mut stage_params = HashMap::new();
+        stage_params.insert("stage".to_string(), "download".to_string());
+        let _ = tc.update_title_params(&tid, stage_params).await;
+
         // Step 1: download the modpack archive
         if let Err(e) = downloader.download(spec, Some((&tc, &tid))).await {
+            let _ = tokio::fs::remove_file(&archive_path).await;
             let _ = tc.fail_task(&tid, e.into()).await;
             return;
         }

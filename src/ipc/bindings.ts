@@ -29,6 +29,8 @@ export const commands = {
 	settingsGet: () => typedError<Settings_Serialize, AppError_Serialize>(__TAURI_INVOKE("settings_get")),
 	settingsPatch: (patch: Value) => typedError<Settings_Serialize, AppError_Serialize>(__TAURI_INVOKE("settings_patch", { patch })),
 	tasksList: () => typedError<TaskNode_Serialize[], AppError_Serialize>(__TAURI_INVOKE("tasks_list")),
+	/**  Drops every finished task from the registry and returns the removed ids. */
+	tasksClearFinished: () => typedError<string[], AppError_Serialize>(__TAURI_INVOKE("tasks_clear_finished")),
 	taskCancel: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("task_cancel", { id })),
 	taskPause: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("task_pause", { id })),
 	taskResume: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("task_resume", { id })),
@@ -81,7 +83,7 @@ export const commands = {
 	localModsList: (instanceId: string) => typedError<LocalModInfo_Serialize[], AppError_Serialize>(__TAURI_INVOKE("local_mods_list", { instanceId })),
 	localModToggle: (instanceId: string, fileName: string, enabled: boolean) => typedError<LocalModInfo_Serialize, AppError_Serialize>(__TAURI_INVOKE("local_mod_toggle", { instanceId, fileName, enabled })),
 	localModDelete: (instanceId: string, fileName: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("local_mod_delete", { instanceId, fileName })),
-	localModsCheckUpdates: (instanceId: string, mcVersion: string, loader: string) => typedError<LocalModInfo_Serialize[], AppError_Serialize>(__TAURI_INVOKE("local_mods_check_updates", { instanceId, mcVersion, loader })),
+	localModsCheckUpdates: (instanceId: string, mcVersion: string, loader: string, force: boolean) => typedError<LocalModInfo_Serialize[], AppError_Serialize>(__TAURI_INVOKE("local_mods_check_updates", { instanceId, mcVersion, loader, force })),
 	localModUpdate: (instanceId: string, currentFileName: string, newFile: CompFile_Deserialize) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("local_mod_update", { instanceId, currentFileName, newFile })),
 	localModJarInJar: (instanceId: string, fileName: string) => typedError<JarInJarNode[], AppError_Serialize>(__TAURI_INVOKE("local_mod_jar_in_jar", { instanceId, fileName })),
 	compResolveDependencies: (file: CompFile_Deserialize, instanceId: string, mcVersion: string, loader: string) => typedError<ResolvedDependencyItem_Serialize[], AppError_Serialize>(__TAURI_INVOKE("comp_resolve_dependencies", { file, instanceId, mcVersion, loader })),
@@ -129,6 +131,11 @@ export const commands = {
 	toolsGenerateSkinAvatar: (skinPath: string, size: number) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("tools_generate_skin_avatar", { skinPath, size })),
 	toolsCacheInfo: () => typedError<CacheSizeInfo, AppError_Serialize>(__TAURI_INVOKE("tools_cache_info")),
 	toolsCacheClear: (clearCache: boolean, clearLogs: boolean, clearSkins: boolean) => typedError<CacheSizeInfo, AppError_Serialize>(__TAURI_INVOKE("tools_cache_clear", { clearCache, clearLogs, clearSkins })),
+	/**
+	 *  Removes only what incomplete tasks left behind: partial downloads and abandoned modpack
+	 *  archives. Nothing that a finished install or a working cache entry depends on is touched.
+	 */
+	toolsCleanupFailedTasks: () => typedError<CacheSizeInfo, AppError_Serialize>(__TAURI_INVOKE("tools_cleanup_failed_tasks")),
 	toolsCustomDownload: (url: string, destPath: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("tools_custom_download", { url, destPath })),
 	toolsCreateShortcut: (instanceId: string, shortcutName: string | null) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("tools_create_shortcut", { instanceId, shortcutName })),
 	updateCheck: (channelOverride: string | null) => typedError<UpdateCheckResult_Serialize, AppError_Serialize>(__TAURI_INVOKE("update_check", { channelOverride })),
@@ -265,6 +272,8 @@ export type CacheSizeInfo = {
 	cacheBytes: number,
 	logsBytes: number,
 	skinCacheBytes: number,
+	/**  Leftovers of tasks that never finished: partial downloads and cached modpack archives. */
+	failedTaskBytes: number,
 	totalBytes: number,
 };
 

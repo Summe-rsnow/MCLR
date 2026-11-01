@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.31`
-- **Next Milestone**: `v0.0.32` (towards `v0.1.0`)
+- **Current Version**: `0.0.32`
+- **Next Milestone**: `v0.0.33` (towards `v0.1.0`)
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -36,3 +36,4 @@
 | v0.0.29 | Performance preset, system tray & background residency, real task pause/cancel, launcher log maintenance & fake-feature audit sweep | done | 9896837 | v0.0.29 | 2026-10-30 |
 | v0.0.30 | Zero-allocation hashing, short-lock mod cache, parallel scans, buffered downloads, virtualised logs & legacy Forge subfolder fix | done | 5e70b61 | v0.0.30 | 2026-10-31 |
 | v0.0.31 | Glass material fix, adjacent page prefetching, dynamic comp filters & deferred modpack naming | done | 6f5a996 | v0.0.31 | 2026-11-01 |
+| v0.0.32 | Community session resume, honest modpack progress, slow-link download fix, strict loader-aware updates & failed-task cleanup | done | (pending) | v0.0.32 | 2026-11-01 |

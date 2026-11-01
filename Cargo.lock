@@ -2833,7 +2833,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-app"
-version = "0.0.31"
+version = "0.0.32"
 dependencies = [
  "arboard",
  "base64 0.23.1",
@@ -2875,7 +2875,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-auth"
-version = "0.0.31"
+version = "0.0.32"
 dependencies = [
  "aes-gcm",
  "async-trait",
@@ -2906,7 +2906,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-cli"
-version = "0.0.31"
+version = "0.0.32"
 dependencies = [
  "anyhow",
  "clap",
@@ -2925,8 +2925,9 @@ dependencies = [
 
 [[package]]
 name = "mclr-comp"
-version = "0.0.31"
+version = "0.0.32"
 dependencies = [
+ "chrono",
  "fastnbt",
  "flate2",
  "hex",
@@ -2955,7 +2956,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-core"
-version = "0.0.31"
+version = "0.0.32"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2975,7 +2976,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-crash"
-version = "0.0.31"
+version = "0.0.32"
 dependencies = [
  "chrono",
  "mclr-comp",
@@ -2994,7 +2995,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-game"
-version = "0.0.31"
+version = "0.0.32"
 dependencies = [
  "chrono",
  "dirs",
@@ -3023,7 +3024,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-loaders"
-version = "0.0.31"
+version = "0.0.32"
 dependencies = [
  "async-trait",
  "hex",
@@ -3046,7 +3047,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-net"
-version = "0.0.31"
+version = "0.0.32"
 dependencies = [
  "futures-util",
  "hex",
@@ -3071,7 +3072,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-saves"
-version = "0.0.31"
+version = "0.0.32"
 dependencies = [
  "arboard",
  "fastnbt",
@@ -3094,7 +3095,7 @@ dependencies = [
 
 [[package]]
 name = "mclr-update"
-version = "0.0.31"
+version = "0.0.32"
 dependencies = [
  "mclr-core",
  "mclr-net",

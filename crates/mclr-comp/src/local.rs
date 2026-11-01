@@ -17,7 +17,7 @@ use crate::curseforge::CurseForgeClient;
 use crate::error::CompError;
 use crate::model::CompFile;
 use crate::modrinth::ModrinthClient;
-use crate::resolver::select_best_file;
+use crate::resolver::select_best_file_for;
 
 /// Information about a locally installed mod in the instance's `mods` folder.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -1172,10 +1172,75 @@ pub fn delete_local_mod(mods_dir: &Path, file_name: &str) -> Result<(), CompErro
 }
 
 /// Checks updates for installed local mods against Modrinth and CurseForge.
+/// Parses an ISO-8601 release date from either platform (`2024-01-02T03:04:05Z`,
+/// `2024-01-02T03:04:05.000Z`). Falls back to the raw string so an unknown format still compares
+/// lexicographically instead of being treated as "older than everything".
+fn release_instant(value: &str) -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map(|d| d.with_timezone(&chrono::Utc))
+        .or_else(|_| {
+            chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S").map(|d| d.and_utc())
+        })
+        .unwrap_or_else(|_| chrono::DateTime::from_timestamp(0, 0).unwrap_or_default())
+}
+
+/// A candidate may be offered as an update only when it is strictly newer than what is installed
+/// and can actually be downloaded.
+///
+/// Mirrors the rules PCL applies: a build without distribution permission is skipped instead of
+/// failing later on click, and an older or equal build is never presented as an update.
+fn offers_update(candidate: &CompFile, installed_date: &str) -> bool {
+    if candidate.distribution_disabled || candidate.download_urls.is_empty() {
+        return false;
+    }
+    release_instant(&candidate.release_date) > release_instant(installed_date)
+}
+
+/// True when every mod with a cache entry was checked within [`UPDATE_CHECK_TTL_SECS`].
+///
+/// A mod with no cache entry (new file, first run) makes the answer stale: it has never been
+/// looked up, so the network has to be asked at least once.
+fn cache_is_fresh_at(cache_file: &Path, mods: &[LocalModInfo]) -> bool {
+    let cache = load_cache_from(cache_file);
+    let now = current_timestamp_secs();
+    mods.iter().all(|m| {
+        cache
+            .get(&m.path)
+            .is_some_and(|entry| now.saturating_sub(entry.cached_at_secs) < UPDATE_CHECK_TTL_SECS)
+    })
+}
+
+/// How long a finished update lookup is reused before the network is asked again.
+pub const UPDATE_CHECK_TTL_SECS: u64 = 6 * 3600;
+
 pub async fn check_local_mods_updates(
     mods_dir: &Path,
     mc_version: &str,
-    loader: &str,
+    instance_loaders: &[String],
+    force: bool,
+    modrinth: &ModrinthClient,
+    curseforge: Option<&CurseForgeClient>,
+) -> Result<Vec<LocalModInfo>, CompError> {
+    check_local_mods_updates_at(
+        &mod_cache_file(),
+        mods_dir,
+        mc_version,
+        instance_loaders,
+        force,
+        modrinth,
+        curseforge,
+    )
+    .await
+}
+
+/// Same as [`check_local_mods_updates`] with an explicit cache file (testable, and free of the
+/// process-wide cache lock when the caller wants its own).
+pub async fn check_local_mods_updates_at(
+    cache_file: &Path,
+    mods_dir: &Path,
+    mc_version: &str,
+    instance_loaders: &[String],
+    force: bool,
     modrinth: &ModrinthClient,
     curseforge: Option<&CurseForgeClient>,
 ) -> Result<Vec<LocalModInfo>, CompError> {
@@ -1184,14 +1249,42 @@ pub async fn check_local_mods_updates(
         return Ok(mods);
     }
 
+    // Entering the list asks this every time, so a just-finished lookup is reused for a while;
+    // the explicit "check updates" button passes `force` to actually go to the network. The scan
+    // above already restores the cached verdicts, so a cached answer is a complete answer.
+    if !force && cache_is_fresh_at(cache_file, &mods) {
+        // A cache hit still has to report the stored verdicts: the scan reads its own cache, and
+        // this function must be self-contained about the file it was given.
+        let cache = load_cache_from(cache_file);
+        for m in &mut mods {
+            if let Some(entry) = cache.get(&m.path) {
+                m.project_id = entry.project_id.clone();
+                m.update_file = entry.update_file.clone();
+            }
+        }
+        return Ok(mods);
+    }
+
     let sha1_list: Vec<String> = mods.iter().map(|m| m.sha1.clone()).collect();
 
+    // The instance's detection labels (`"Fabric 0.15.11"`, `"OptiFine HD U I6"`) name loaders the
+    // platforms index differently. An instance may run more than one (Forge + OptiFine, Cleanroom
+    // + Forge), so every recognised id is kept: a build tagged only with the secondary loader is
+    // still installable there. When nothing is recognised the launcher cannot prove which build
+    // the instance can run and offers no updates at all — a wrong-loader jar is worse than a
+    // missing prompt.
+    let mut update_loaders: Vec<&'static str> = Vec::new();
+    for label in instance_loaders {
+        if let Some(id) = mclr_game::instance::canonical_loader_id(label)
+            && !update_loaders.contains(&id)
+        {
+            update_loaders.push(id);
+        }
+    }
+    let loader = update_loaders.first().copied().unwrap_or("");
+
     // 1 & 2. Concurrently query Modrinth SHA1 identification and version files update
-    let loaders = if loader.is_empty() {
-        Vec::new()
-    } else {
-        vec![loader.to_string()]
-    };
+    let loaders: Vec<String> = update_loaders.iter().map(|id| id.to_string()).collect();
     let game_versions = if mc_version.is_empty() {
         Vec::new()
     } else {
@@ -1206,11 +1299,16 @@ pub async fn check_local_mods_updates(
     let modrinth_updates = modrinth_updates_res.unwrap_or_default();
 
     for m in &mut mods {
-        if let Some(cf_file) = modrinth_files.get(&m.sha1) {
-            m.project_id = Some(cf_file.project_id.clone());
+        // The same lookup also returns the metadata of the installed file, which is what the
+        // "is this actually newer" comparison needs.
+        let installed = modrinth_files.get(&m.sha1);
+        if let Some(installed) = installed {
+            m.project_id = Some(installed.project_id.clone());
         }
         if let Some(update_file) = modrinth_updates.get(&m.sha1)
+            && crate::resolver::file_supports_any_loader(&update_file.loaders, &update_loaders)
             && update_file.hashes.sha1.as_deref() != Some(&m.sha1)
+            && installed.is_some_and(|f| offers_update(update_file, &f.release_date))
         {
             m.project_id = Some(update_file.project_id.clone());
             m.update_file = Some(update_file.clone());
@@ -1235,7 +1333,12 @@ pub async fn check_local_mods_updates(
                         .iter()
                         .any(|item| item.murmur2 == m2 && item.update_file.is_none())
                 {
-                    check_targets.push((cf_file.project_id.clone(), cf_file.id.clone(), m2));
+                    check_targets.push((
+                        cf_file.project_id.clone(),
+                        cf_file.id.clone(),
+                        m2,
+                        cf_file.release_date.clone(),
+                    ));
                 }
             }
 
@@ -1253,7 +1356,7 @@ pub async fn check_local_mods_updates(
                 };
 
                 let mut join_set = tokio::task::JoinSet::new();
-                for (project_id, current_file_id, m2) in check_targets {
+                for (project_id, current_file_id, m2, installed_date) in check_targets {
                     let client = cf_client.clone();
                     let mc_v_c = mc_v.clone();
                     let ldr_c = ldr.clone();
@@ -1261,20 +1364,23 @@ pub async fn check_local_mods_updates(
                         let files_res = client
                             .get_files(&project_id, mc_v_c.as_deref(), ldr_c.as_deref())
                             .await;
-                        (project_id, current_file_id, m2, files_res)
+                        (project_id, current_file_id, m2, installed_date, files_res)
                     });
                 }
 
                 while let Some(res) = join_set.join_next().await {
-                    if let Ok((project_id, current_file_id, m2, Ok(files))) = res
+                    if let Ok((project_id, current_file_id, m2, installed_date, Ok(files))) = res
                         && let Some(m) = mods
                             .iter_mut()
                             .find(|item| item.murmur2 == m2 && item.update_file.is_none())
                     {
                         m.project_id = Some(project_id);
-                        if let Some(best_file) = select_best_file(&files, mc_version, loader)
+                        if !update_loaders.is_empty()
+                            && let Some(best_file) =
+                                select_best_file_for(&files, mc_version, &update_loaders)
                             && best_file.id != current_file_id
                             && best_file.hashes.murmur2 != Some(m2)
+                            && offers_update(&best_file, &installed_date)
                         {
                             m.update_file = Some(best_file);
                         }
@@ -1285,7 +1391,7 @@ pub async fn check_local_mods_updates(
     }
 
     // Update disk cache with identified project_id and update_file
-    let mut cache = load_cache();
+    let mut cache = load_cache_from(cache_file);
     let now_secs = current_timestamp_secs();
     for m in &mods {
         if let Some(entry) = cache.get_mut(&m.path) {
@@ -1294,7 +1400,7 @@ pub async fn check_local_mods_updates(
             entry.cached_at_secs = now_secs;
         }
     }
-    save_cache(&cache);
+    save_cache_to(cache_file, &cache);
 
     Ok(mods)
 }
@@ -1333,6 +1439,232 @@ mod tests {
             get_manifest_attribute(manifest, "Implementation-Version").as_deref(),
             Some("1.2.3")
         );
+    }
+
+    /// Builds a jar carrying a `fabric.mod.json`, so the scanner sees a real Fabric mod.
+    fn write_test_jar(dir: &Path, name: &str) -> PathBuf {
+        let jar_path = dir.join(name);
+        let file = fs::File::create(&jar_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let json = r#"{"id":"example","name":"Example","version":"1.0.0"}"#;
+        zip.start_file("fabric.mod.json", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(json.as_bytes()).unwrap();
+        zip.finish().unwrap();
+        jar_path
+    }
+
+    fn version_file_json(loaders: &[&str], date: &str, file_name: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": format!("id-{file_name}"),
+            "project_id": "p1",
+            "name": file_name,
+            "version_number": "2.0.0",
+            "game_versions": ["1.20.1"],
+            "version_type": "release",
+            "loaders": loaders,
+            "date_published": date,
+            "files": [{
+                "hashes": { "sha1": format!("hash-{file_name}") },
+                "url": format!("https://cdn.modrinth.com/{file_name}"),
+                "filename": file_name,
+                "primary": true,
+                "size": 2000
+            }],
+            "dependencies": []
+        })
+    }
+
+    /// Runs the update check against a fake Modrinth with the given *candidate* behaviour; the
+    /// installed file is always a 2023 fabric build.
+    async fn update_check_for(loaders: &[&str], date: &str) -> Option<CompFile> {
+        let server = wiremock::MockServer::start().await;
+        let mods_dir = tempdir().unwrap();
+        let jar = write_test_jar(mods_dir.path(), "example.jar");
+        let sha1 = {
+            use sha1::{Digest, Sha1};
+            let mut hasher = Sha1::new();
+            hasher.update(fs::read(&jar).unwrap());
+            hex::encode(hasher.finalize())
+        };
+
+        let installed = version_file_json(&["fabric"], "2023-01-01T00:00:00Z", "old.jar");
+        let candidate = version_file_json(loaders, date, "new.jar");
+
+        wiremock::Mock::given(wiremock::matchers::method("POST"))
+            .and(wiremock::matchers::path("/v2/version_files"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({ sha1.clone(): installed })),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(wiremock::matchers::method("POST"))
+            .and(wiremock::matchers::path("/v2/version_files/update"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({ sha1.clone(): candidate })),
+            )
+            .mount(&server)
+            .await;
+
+        let client = ModrinthClient::default().with_base_url(server.uri());
+        let mods = check_local_mods_updates(
+            mods_dir.path(),
+            "1.20.1",
+            &["Fabric 0.15.11".to_string()],
+            true,
+            &client,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(mods.len(), 1);
+        mods.into_iter().next().unwrap().update_file
+    }
+
+    #[tokio::test]
+    async fn update_check_reuses_a_fresh_cache_unless_forced() {
+        let server = wiremock::MockServer::start().await;
+        let mods_dir = tempdir().unwrap();
+        write_test_jar(mods_dir.path(), "example.jar");
+        let path_key = scan_local_mods(mods_dir.path()).unwrap()[0].path.clone();
+
+        // A verdict already on disk, written less than the TTL ago.
+        let cache_file = mods_dir.path().join("localmods-cache.json");
+        let mut cache = load_cache_from(&cache_file);
+        cache.insert(
+            path_key,
+            LocalModCacheItem {
+                mod_id: "example".to_string(),
+                name: "Example".to_string(),
+                version: "1.0.0".to_string(),
+                description: None,
+                authors: Vec::new(),
+                loader: "fabric".to_string(),
+                sha1: String::new(),
+                murmur2: 0,
+                size: 1024,
+                mtime_secs: 0,
+                project_id: Some("p1".to_string()),
+                update_file: Some(make_comp_file("2024-06-01T00:00:00Z")),
+                icon: None,
+                icon_rev: ICON_CACHE_REV,
+                cached_at_secs: current_timestamp_secs(),
+            },
+        );
+        save_cache_to(&cache_file, &cache);
+
+        let client = ModrinthClient::default().with_base_url(server.uri());
+        let loaders = vec!["Fabric 0.15.11".to_string()];
+
+        // Entering the page: the fresh verdict is reused, the network is untouched.
+        let cached = check_local_mods_updates_at(
+            &cache_file,
+            mods_dir.path(),
+            "1.20.1",
+            &loaders,
+            false,
+            &client,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(
+            server.received_requests().await.unwrap().is_empty(),
+            "a cache hit must not call the platforms"
+        );
+        assert!(
+            cached[0].update_file.is_some(),
+            "the cached verdict is reported"
+        );
+
+        // The explicit button bypasses the cache.
+        check_local_mods_updates_at(
+            &cache_file,
+            mods_dir.path(),
+            "1.20.1",
+            &loaders,
+            true,
+            &client,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(!server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn update_check_ignores_a_build_for_another_loader() {
+        // The instance is Fabric; a newer Forge-only build is not an update for it.
+        assert!(
+            update_check_for(&["forge"], "2024-06-01T00:00:00Z")
+                .await
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn update_check_accepts_a_newer_build_for_the_instance_loader() {
+        // The detection label ("Fabric 0.15.11") must reach the API as the `fabric` facet.
+        let file = update_check_for(&["fabric"], "2024-06-01T00:00:00Z").await;
+        assert_eq!(file.map(|f| f.file_name), Some("new.jar".to_string()));
+    }
+
+    #[tokio::test]
+    async fn update_check_never_offers_a_downgrade_or_an_equal_build() {
+        // Older than the installed 2023 build.
+        assert!(
+            update_check_for(&["fabric"], "2022-05-01T00:00:00Z")
+                .await
+                .is_none()
+        );
+        // Same instant: not an update either.
+        assert!(
+            update_check_for(&["fabric"], "2023-01-01T00:00:00Z")
+                .await
+                .is_none()
+        );
+    }
+
+    fn make_comp_file(date: &str) -> CompFile {
+        use crate::model::{CompFileHashes, CompPlatform, CompReleaseChannel};
+        CompFile {
+            id: "f1".to_string(),
+            project_id: "p1".to_string(),
+            platform: CompPlatform::Curseforge,
+            name: "Example".to_string(),
+            file_name: "example.jar".to_string(),
+            mc_versions: vec!["1.20.1".to_string()],
+            loaders: vec!["fabric".to_string()],
+            channel: CompReleaseChannel::Release,
+            release_date: date.to_string(),
+            size: 1024,
+            hashes: CompFileHashes::default(),
+            download_urls: vec!["https://example.com/example.jar".to_string()],
+            distribution_disabled: false,
+            dependencies: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn offers_update_requires_a_newer_downloadable_build() {
+        let mut file = make_comp_file("2024-06-01T00:00:00Z");
+        assert!(offers_update(&file, "2024-01-01T00:00:00Z"));
+
+        // Equal and older builds are not updates.
+        assert!(!offers_update(&file, "2024-06-01T00:00:00Z"));
+        assert!(!offers_update(&file, "2024-07-01T00:00:00Z"));
+
+        // Milliseconds in the timestamp (CurseForge format) still compare as an instant.
+        assert!(!offers_update(&file, "2024-06-01T00:00:00.000Z"));
+
+        // Distribution disabled / no URLs: skipped rather than failing when the user clicks.
+        file.distribution_disabled = true;
+        assert!(!offers_update(&file, "2024-01-01T00:00:00Z"));
+        file.distribution_disabled = false;
+        file.download_urls.clear();
+        assert!(!offers_update(&file, "2024-01-01T00:00:00Z"));
     }
 
     #[test]

@@ -83,7 +83,10 @@ const { formatDate } = useFormat()
                 count: project.downloads.toString(),
               })
             }}</span>
-            <span>{{ t('comp.project.follows', { count: project.follows.toString() }) }}</span>
+            <!-- Same rule as the card: a platform without follows must not show "0". -->
+            <span v-if="project.follows > 0">{{
+              t('comp.project.follows', { count: project.follows.toString() })
+            }}</span>
             <span>{{
               t('comp.project.updated', {
                 date: formatDate(project.updatedAt),

@@ -9,8 +9,8 @@ use specta::Type;
 use std::collections::BTreeMap;
 
 pub use classifier::{
-    card_display_order, classify_cards, classify_instance, extract_loader_versions,
-    extract_mc_version, is_april_fools, is_modable_instance,
+    canonical_loader_id, card_display_order, classify_cards, classify_instance,
+    extract_loader_versions, extract_mc_version, is_april_fools, is_modable_instance,
 };
 pub use ops::{
     delete_instance, delete_instance_ext, duplicate_instance, rename_instance,

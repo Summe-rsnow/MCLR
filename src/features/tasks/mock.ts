@@ -68,6 +68,24 @@ const handlers = {
     }
     return null
   },
+  tasks_clear_finished: () => {
+    // Mirrors `TaskCenter::clear_finished`: terminal tasks go, but a finished stage stays while
+    // the parent card it is nested under is still live.
+    const terminal = (state: string) =>
+      state === 'success' || state === 'failed' || state === 'canceled'
+    const byId = new Map(mockTasks.map((t) => [t.id, t]))
+    const removed = mockTasks
+      .filter((t) => {
+        if (!terminal(t.state)) return false
+        const parent = t.parentId ? byId.get(t.parentId) : undefined
+        return !parent || terminal(parent.state)
+      })
+      .map((t) => t.id)
+    for (let i = mockTasks.length - 1; i >= 0; i--) {
+      if (removed.includes(mockTasks[i].id)) mockTasks.splice(i, 1)
+    }
+    return removed
+  },
   task_resume: (args: Record<string, unknown>) => {
     const id = String(args.id)
     const task = mockTasks.find((t) => t.id === id)

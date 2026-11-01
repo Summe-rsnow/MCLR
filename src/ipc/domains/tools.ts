@@ -13,6 +13,8 @@ export interface CacheSizeInfo {
   cacheBytes: number
   logsBytes: number
   skinCacheBytes: number
+  /** Leftovers of tasks that never finished: partial downloads and abandoned modpack archives. */
+  failedTaskBytes: number
   totalBytes: number
 }
 
@@ -24,6 +26,9 @@ export const toolsIpc = {
   toolsGenerateSkinAvatar: (skinPath: string, size: number): Promise<string> =>
     invokeCommand<string>('tools_generate_skin_avatar', { skinPath, size }),
   toolsCacheInfo: (): Promise<CacheSizeInfo> => invokeCommand<CacheSizeInfo>('tools_cache_info'),
+  /** Removes only leftovers of failed tasks: partial downloads and abandoned modpack archives. */
+  toolsCleanupFailedTasks: (): Promise<CacheSizeInfo> =>
+    invokeCommand<CacheSizeInfo>('tools_cleanup_failed_tasks'),
   toolsCacheClear: (
     clearCache: boolean,
     clearLogs: boolean,

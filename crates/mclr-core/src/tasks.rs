@@ -102,6 +102,19 @@ pub struct TaskAborted;
 struct InternalTask {
     node: TaskNode,
     control: TaskControl,
+    /// Slice of the bar this task's reports are mapped into: `(base, span)`.
+    progress_window: (f32, f32),
+    /// Highest report seen since the window was set — per-stage restarts hold, never rewind.
+    progress_high: f32,
+    /// False until `set_progress_window` is used: otherwise reports are stored verbatim.
+    windowed: bool,
+}
+
+fn is_terminal(state: TaskState) -> bool {
+    matches!(
+        state,
+        TaskState::Success | TaskState::Failed | TaskState::Canceled
+    )
 }
 
 /// Thread-safe registry and coordinator for all long-running tasks.
@@ -152,6 +165,9 @@ impl TaskCenter {
                 InternalTask {
                     node: node.clone(),
                     control: control.clone(),
+                    progress_window: (0.0, 1.0),
+                    progress_high: 0.0,
+                    windowed: false,
                 },
             );
         }
@@ -186,6 +202,39 @@ impl TaskCenter {
         Ok(())
     }
 
+    /// Restricts this task's progress reports to a slice of the bar.
+    ///
+    /// `base` is where the slice starts and `span` its width, so a stage keeps reporting its own
+    /// `0.0..=1.0` while the visible progress advances across the whole task. Within one slice
+    /// progress never moves backwards, which is what absorbs stages that internally restart
+    /// (libraries, then assets, then the loader installer).
+    pub async fn set_progress_window(
+        &self,
+        id: &str,
+        base: f32,
+        span: f32,
+    ) -> Result<(), CoreError> {
+        let base = base.clamp(0.0, 1.0);
+        let span = span.clamp(0.0, 1.0 - base);
+        let mut diff = Vec::new();
+        {
+            let mut lock = self.tasks.write().await;
+            let task = lock
+                .get_mut(id)
+                .ok_or_else(|| CoreError::TaskNotFound(id.to_string()))?;
+            if is_terminal(task.node.state) {
+                return Ok(());
+            }
+            task.progress_window = (base, span);
+            task.progress_high = 0.0;
+            task.windowed = true;
+            task.node.progress = task.node.progress.max(base);
+            diff.push(task.node.clone());
+        }
+        let _ = self.update_tx.send(diff);
+        Ok(())
+    }
+
     /// Updates task progress (clamped to 0.0..=1.0) and current speed in bytes/sec.
     pub async fn update_progress(
         &self,
@@ -193,14 +242,25 @@ impl TaskCenter {
         progress: f32,
         speed_bps: u64,
     ) -> Result<(), CoreError> {
-        let clamped = progress.clamp(0.0, 1.0);
+        let local = progress.clamp(0.0, 1.0);
         let mut diff = Vec::new();
         {
             let mut lock = self.tasks.write().await;
             let task = lock
                 .get_mut(id)
                 .ok_or_else(|| CoreError::TaskNotFound(id.to_string()))?;
-            task.node.progress = clamped;
+            // A late report from a finished stage must not repaint a closed task.
+            if is_terminal(task.node.state) {
+                return Ok(());
+            }
+            let mapped = if task.windowed {
+                task.progress_high = task.progress_high.max(local);
+                let (base, span) = task.progress_window;
+                base + task.progress_high * span
+            } else {
+                local
+            };
+            task.node.progress = mapped.clamp(0.0, 1.0);
             task.node.speed_bps = speed_bps;
             diff.push(task.node.clone());
         }
@@ -357,6 +417,45 @@ impl TaskCenter {
         let lock = self.tasks.read().await;
         lock.values().map(|t| t.node.clone()).collect()
     }
+
+    /// True while any task is still in flight (`waiting` / `running` / `paused`).
+    ///
+    /// Callers that delete files a task may still be writing use this as a hard gate: a cleanup
+    /// that runs mid-download cannot know which part files are live.
+    pub async fn has_active_tasks(&self) -> bool {
+        let lock = self.tasks.read().await;
+        lock.values().any(|task| !is_terminal(task.node.state))
+    }
+
+    /// Drops every finished task (`success` / `failed` / `canceled`) and returns their ids.
+    ///
+    /// The registry lives in memory and would otherwise grow for the whole session: a task that
+    /// ended an hour ago still holds its card, and the UI brings it back on every fetch. A task is
+    /// only dropped when its parent is dropped too, so a running stage never loses the card it is
+    /// nested under.
+    pub async fn clear_finished(&self) -> Vec<String> {
+        let mut lock = self.tasks.write().await;
+        let terminal: Vec<String> = lock
+            .iter()
+            .filter(|(_, task)| is_terminal(task.node.state))
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        let mut removed = Vec::new();
+        for id in terminal {
+            let parent_terminal = match lock.get(&id).and_then(|t| t.node.parent_id.clone()) {
+                Some(parent) => lock
+                    .get(&parent)
+                    .map(|p| is_terminal(p.node.state))
+                    .unwrap_or(true),
+                None => true,
+            };
+            if parent_terminal && lock.remove(&id).is_some() {
+                removed.push(id);
+            }
+        }
+        removed
+    }
 }
 
 impl Default for TaskCenter {
@@ -413,6 +512,125 @@ mod tests {
         let update = rx.recv().await.unwrap();
         assert_eq!(update[0].state, TaskState::Success);
         assert_eq!(update[0].progress, 1.0);
+    }
+
+    async fn progress_of(center: &TaskCenter, id: &str) -> f32 {
+        center
+            .list_tasks()
+            .await
+            .into_iter()
+            .find(|t| t.id == id)
+            .map(|t| t.progress)
+            .unwrap_or(-1.0)
+    }
+
+    #[tokio::test]
+    async fn test_progress_window_maps_stages_and_never_rewinds() {
+        let center = TaskCenter::new();
+        let (id, _) = center
+            .create_task(None, "tasks.titles.modpackInstall", HashMap::new())
+            .await;
+        center.start_task(&id).await.unwrap();
+
+        // Stage 1 owns 0..8% of the bar.
+        center.set_progress_window(&id, 0.0, 0.08).await.unwrap();
+        center.update_progress(&id, 0.5, 0).await.unwrap();
+        assert!((progress_of(&center, &id).await - 0.04).abs() < 1e-6);
+
+        // Stage 2 owns 8%..70% and reports its own 0..1 scale.
+        center.set_progress_window(&id, 0.08, 0.62).await.unwrap();
+        center.update_progress(&id, 0.5, 0).await.unwrap();
+        assert!((progress_of(&center, &id).await - 0.39).abs() < 1e-6);
+
+        // A stage that restarts internally holds the bar instead of rewinding it.
+        center.update_progress(&id, 0.1, 0).await.unwrap();
+        assert!((progress_of(&center, &id).await - 0.39).abs() < 1e-6);
+
+        // Terminal tasks ignore late reports.
+        center.complete_task(&id).await.unwrap();
+        center.update_progress(&id, 0.0, 0).await.unwrap();
+        assert_eq!(progress_of(&center, &id).await, 1.0);
+    }
+
+    #[tokio::test]
+    async fn has_active_tasks_tracks_only_live_work() {
+        let center = TaskCenter::new();
+        assert!(!center.has_active_tasks().await);
+
+        let (id, _) = center
+            .create_task(None, "task.download", HashMap::new())
+            .await;
+        // Waiting counts: its worker has not touched the disk yet, but it will.
+        assert!(center.has_active_tasks().await);
+
+        center.start_task(&id).await.unwrap();
+        assert!(center.has_active_tasks().await);
+
+        center.pause_task(&id).await.unwrap();
+        assert!(center.has_active_tasks().await);
+
+        center.resume_task(&id).await.unwrap();
+        center.complete_task(&id).await.unwrap();
+        assert!(!center.has_active_tasks().await);
+
+        let (failed, _) = center
+            .create_task(None, "task.download", HashMap::new())
+            .await;
+        center
+            .fail_task(&failed, AppError::new("net.timeout"))
+            .await
+            .unwrap();
+        assert!(!center.has_active_tasks().await);
+    }
+
+    #[tokio::test]
+    async fn clear_finished_drops_only_closed_tasks_and_their_children() {
+        let center = TaskCenter::new();
+        let (done, _) = center
+            .create_task(None, "task.download", HashMap::new())
+            .await;
+        center.start_task(&done).await.unwrap();
+        center.complete_task(&done).await.unwrap();
+
+        let (failed, _) = center
+            .create_task(None, "task.download", HashMap::new())
+            .await;
+        center.start_task(&failed).await.unwrap();
+        center
+            .fail_task(&failed, AppError::new("net.timeout"))
+            .await
+            .unwrap();
+
+        let (running, _) = center
+            .create_task(None, "task.download", HashMap::new())
+            .await;
+        center.start_task(&running).await.unwrap();
+
+        // A finished child under a live parent survives: its card is nested under work that is
+        // still on screen.
+        let (child, _) = center
+            .create_task(Some(running.clone()), "task.download", HashMap::new())
+            .await;
+        center.complete_task(&child).await.unwrap();
+
+        let removed = center.clear_finished().await;
+        assert_eq!(removed.len(), 2);
+        assert!(removed.contains(&done) && removed.contains(&failed));
+
+        let left: Vec<String> = center
+            .list_tasks()
+            .await
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
+        assert_eq!(left.len(), 2);
+        assert!(left.contains(&running) && left.contains(&child));
+
+        // Clearing again is a no-op; closing the parent releases everything.
+        assert!(center.clear_finished().await.is_empty());
+        center.cancel_task(&running).await.unwrap();
+        assert_eq!(center.clear_finished().await.len(), 2);
+        assert!(center.list_tasks().await.is_empty());
     }
 
     #[tokio::test]

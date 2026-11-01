@@ -40,6 +40,7 @@
     "itemCache": "网络与资源缓存",
     "itemLogs": "启动器与游戏日志",
     "itemSkins": "玩家皮肤与头像缓存",
+    "failedTasks": "失败任务残留",
     "totalSize": "占用总空间",
     "noneSelected": "请至少选择一项要清理的内容",
     "confirmTitle": "清理缓存确认",

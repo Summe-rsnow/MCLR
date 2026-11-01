@@ -83,6 +83,17 @@ pub fn extract_modpack_overrides(
     Ok(extracted_count)
 }
 
+/// Starts a stage: switches the task's progress window and tells the UI what is running.
+/// A missing task context (fixtures, offline import) is not an error.
+async fn begin_stage(task_ctx: Option<(&TaskCenter, &str)>, base: f32, span: f32, stage: &str) {
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.set_progress_window(tid, base, span).await;
+        let mut params = HashMap::new();
+        params.insert("stage".to_string(), stage.to_string());
+        let _ = tc.update_title_params(tid, params).await;
+    }
+}
+
 fn cf_file_destination_folder(file_name: &str) -> &'static str {
     let lower = file_name.to_lowercase();
     if lower.ends_with(".jar") {
@@ -106,7 +117,22 @@ fn cf_file_destination_folder(file_name: &str) -> &'static str {
 /// 5. Resolves CurseForge file IDs if present.
 /// 6. Downloads all files via Downloader.
 /// 7. Extracts overrides into `instance_dir`.
+///
+/// A failed import removes the version directory it created, so a broken install cannot linger as
+/// a half-written instance holding every file that did download.
 pub async fn import_modpack(ctx: ModpackImportContext<'_>) -> Result<InstanceInfo, CompError> {
+    let instance_dir = ctx.mc_folder.join("versions").join(ctx.instance_name);
+    let existed = instance_dir.exists();
+
+    let result = import_modpack_inner(ctx).await;
+
+    if result.is_err() && !existed {
+        let _ = tokio::fs::remove_dir_all(&instance_dir).await;
+    }
+    result
+}
+
+async fn import_modpack_inner(ctx: ModpackImportContext<'_>) -> Result<InstanceInfo, CompError> {
     let ModpackImportContext {
         archive_path,
         instance_name,
@@ -121,6 +147,9 @@ pub async fn import_modpack(ctx: ModpackImportContext<'_>) -> Result<InstanceInf
 
     validate_instance_name(instance_name).map_err(CompError::Game)?;
 
+    // Everything below reports its own 0.0..=1.0; `begin_stage` maps each stage into its slice
+    // of the bar, so the visible progress never jumps back to 0 between stages.
+    begin_stage(task_ctx, 0.0, 0.08, "inspect").await;
     let mut plan = inspect_modpack(archive_path)?;
 
     // If nested archive, extract it and work with the inner archive
@@ -143,38 +172,76 @@ pub async fn import_modpack(ctx: ModpackImportContext<'_>) -> Result<InstanceInf
     let instance_dir = mc_folder.join("versions").join(instance_name);
     std::fs::create_dir_all(&instance_dir).map_err(CompError::Io)?;
 
-    // 1. Base game / loader installation
-    if install_base_game {
-        if let Some(loader_name) = &plan.inspect.loader {
-            let loader_kind = match loader_name.to_lowercase().as_str() {
-                "fabric" => Some(LoaderKind::Fabric),
-                "legacyfabric" => Some(LoaderKind::LegacyFabric),
-                "liteloader" => Some(LoaderKind::LiteLoader),
-                "labymod" => Some(LoaderKind::LabyMod),
-                "optifine" => Some(LoaderKind::OptiFine),
-                "forge" => Some(LoaderKind::Forge),
-                "neoforge" => Some(LoaderKind::NeoForge),
-                "cleanroom" => Some(LoaderKind::Cleanroom),
-                "quilt" => return Err(CompError::QuiltUnsupported),
-                _ => None,
-            };
+    // 1+3. The base game install (client jar, libraries, assets, loader installer) and the
+    // CurseForge file-id resolution touch disjoint state — the install writes
+    // `versions/<instance>`, `libraries/` and `assets/`, the metadata call writes nothing — so
+    // the metadata round trip hides inside the install instead of being added to it.
+    let cf_file_ids: Vec<u64> = plan.files.iter().filter_map(|f| f.cf_file_id).collect();
 
-            if let Some(kind) = loader_kind {
-                let default_java = mclr_core::JavaSettings::default();
-                let java_cfg = java_settings.unwrap_or(&default_java);
-                let ctx = LoaderInstallContext {
-                    client,
-                    net_settings,
-                    java_settings: java_cfg,
-                    mc_folder: mc_folder.to_path_buf(),
-                    mc_version: plan.inspect.mc_version.clone(),
-                    instance_name: instance_name.to_string(),
-                    loader_version: plan.inspect.loader_version.clone().unwrap_or_default(),
-                    optifine_version: None,
-                    task_ctx,
+    let base_install = async {
+        if !install_base_game {
+            // Offline / fixture mode: write minimal valid instance version JSON if missing
+            let json_path = instance_dir.join(format!("{instance_name}.json"));
+            if !json_path.exists() {
+                let dummy_json = serde_json::json!({
+                    "id": instance_name,
+                    "time": "2026-01-01T00:00:00+00:00",
+                    "releaseTime": "2026-01-01T00:00:00+00:00",
+                    "type": "release",
+                    "mainClass": "net.minecraft.client.main.Main",
+                    "inheritsFrom": plan.inspect.mc_version,
+                });
+                std::fs::write(&json_path, serde_json::to_string_pretty(&dummy_json)?)
+                    .map_err(CompError::Io)?;
+            }
+            return Ok::<(), CompError>(());
+        }
+
+        begin_stage(task_ctx, 0.08, 0.62, "baseGame").await;
+        match &plan.inspect.loader {
+            Some(loader_name) => {
+                let loader_kind = match loader_name.to_lowercase().as_str() {
+                    "fabric" => Some(LoaderKind::Fabric),
+                    "legacyfabric" => Some(LoaderKind::LegacyFabric),
+                    "liteloader" => Some(LoaderKind::LiteLoader),
+                    "labymod" => Some(LoaderKind::LabyMod),
+                    "optifine" => Some(LoaderKind::OptiFine),
+                    "forge" => Some(LoaderKind::Forge),
+                    "neoforge" => Some(LoaderKind::NeoForge),
+                    "cleanroom" => Some(LoaderKind::Cleanroom),
+                    "quilt" => return Err(CompError::QuiltUnsupported),
+                    _ => None,
                 };
-                install_with_loader(kind, ctx).await?;
-            } else {
+
+                if let Some(kind) = loader_kind {
+                    let default_java = mclr_core::JavaSettings::default();
+                    let java_cfg = java_settings.unwrap_or(&default_java);
+                    let ctx = LoaderInstallContext {
+                        client,
+                        net_settings,
+                        java_settings: java_cfg,
+                        mc_folder: mc_folder.to_path_buf(),
+                        mc_version: plan.inspect.mc_version.clone(),
+                        instance_name: instance_name.to_string(),
+                        loader_version: plan.inspect.loader_version.clone().unwrap_or_default(),
+                        optifine_version: None,
+                        task_ctx,
+                    };
+                    install_with_loader(kind, ctx).await?;
+                } else {
+                    mclr_game::install::install_vanilla(
+                        client,
+                        net_settings,
+                        mc_folder,
+                        &plan.inspect.mc_version,
+                        instance_name,
+                        task_ctx,
+                    )
+                    .await
+                    .map_err(CompError::Game)?;
+                }
+            }
+            None => {
                 mclr_game::install::install_vanilla(
                     client,
                     net_settings,
@@ -186,34 +253,21 @@ pub async fn import_modpack(ctx: ModpackImportContext<'_>) -> Result<InstanceInf
                 .await
                 .map_err(CompError::Game)?;
             }
-        } else {
-            mclr_game::install::install_vanilla(
-                client,
-                net_settings,
-                mc_folder,
-                &plan.inspect.mc_version,
-                instance_name,
-                task_ctx,
-            )
-            .await
-            .map_err(CompError::Game)?;
         }
-    } else {
-        // Offline / fixture mode: write minimal valid instance version JSON if missing
-        let json_path = instance_dir.join(format!("{instance_name}.json"));
-        if !json_path.exists() {
-            let dummy_json = serde_json::json!({
-                "id": instance_name,
-                "time": "2026-01-01T00:00:00+00:00",
-                "releaseTime": "2026-01-01T00:00:00+00:00",
-                "type": "release",
-                "mainClass": "net.minecraft.client.main.Main",
-                "inheritsFrom": plan.inspect.mc_version,
-            });
-            std::fs::write(&json_path, serde_json::to_string_pretty(&dummy_json)?)
-                .map_err(CompError::Io)?;
+        Ok(())
+    };
+
+    let cf_resolve = async {
+        if cf_file_ids.is_empty() {
+            return Ok::<_, CompError>(Vec::new());
         }
-    }
+        let cf = cf_client.ok_or(CompError::NotConfigured)?;
+        cf.get_files_batch(&cf_file_ids).await
+    };
+
+    let (base_result, cf_result) = tokio::join!(base_install, cf_resolve);
+    base_result?;
+    let resolved_files = cf_result?;
 
     // 2. Always force isolation = "on" in mclr.instance.json
     let config_path = instance_dir.join("mclr.instance.json");
@@ -228,19 +282,14 @@ pub async fn import_modpack(ctx: ModpackImportContext<'_>) -> Result<InstanceInf
     cfg.isolation = "on".to_string();
     std::fs::write(&config_path, serde_json::to_string_pretty(&cfg)?).map_err(CompError::Io)?;
 
-    // 3. Resolve CurseForge file IDs if present
-    let cf_file_ids: Vec<u64> = plan.files.iter().filter_map(|f| f.cf_file_id).collect();
-    if !cf_file_ids.is_empty() {
-        let cf = cf_client.ok_or(CompError::NotConfigured)?;
-        let resolved_files = cf.get_files_batch(&cf_file_ids).await?;
-
+    // 3. Apply the resolved CurseForge metadata
+    if !resolved_files.is_empty() {
         let mut resolved_map = HashMap::new();
         for rf in resolved_files {
             if let Ok(fid) = rf.id.parse::<u64>() {
                 resolved_map.insert(fid, rf);
             }
         }
-
         for file in &mut plan.files {
             if let Some(rf) = file.cf_file_id.and_then(|fid| resolved_map.get(&fid)) {
                 let subfolder = cf_file_destination_folder(&rf.file_name);
@@ -281,6 +330,7 @@ pub async fn import_modpack(ctx: ModpackImportContext<'_>) -> Result<InstanceInf
     }
 
     if !specs.is_empty() {
+        begin_stage(task_ctx, 0.70, 0.28, "files").await;
         info!(
             "Downloading {} modpack files into {}",
             specs.len(),
@@ -296,6 +346,7 @@ pub async fn import_modpack(ctx: ModpackImportContext<'_>) -> Result<InstanceInf
     // 5. Extract overrides into instance_dir
     // ZIP extraction is CPU/disk bound synchronous work: keep it off the async
     // runtime's worker threads so downloads and IPC stay responsive.
+    begin_stage(task_ctx, 0.98, 0.02, "overrides").await;
     let extract_archive = effective_archive_path;
     let extract_dir = instance_dir.clone();
     let extract_prefixes = std::mem::take(&mut plan.override_prefixes);
@@ -308,6 +359,9 @@ pub async fn import_modpack(ctx: ModpackImportContext<'_>) -> Result<InstanceInf
         "Extracted {extracted} override files into {}",
         instance_dir.display()
     );
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.update_progress(tid, 1.0, 0).await;
+    }
 
     // 6. Return refreshed InstanceInfo
     let scan_folder = mc_folder.to_path_buf();

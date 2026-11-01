@@ -10,6 +10,15 @@ pub async fn tasks_list(state: State<'_, Arc<TaskCenter>>) -> Result<Vec<TaskNod
     Ok(state.list_tasks().await)
 }
 
+/// Drops every finished task from the registry and returns the removed ids.
+#[tauri::command]
+#[specta::specta]
+pub async fn tasks_clear_finished(
+    state: State<'_, Arc<TaskCenter>>,
+) -> Result<Vec<String>, AppError> {
+    Ok(state.clear_finished().await)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn task_cancel(state: State<'_, Arc<TaskCenter>>, id: String) -> Result<(), AppError> {

@@ -6,6 +6,7 @@ import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { useCompStore } from '../store'
 import CompBrowserPage from '../CompBrowserPage.vue'
+import CompProjectCard from '../components/CompProjectCard.vue'
 import CompDetailPage from '../CompDetailPage.vue'
 import CompQuickDownloadDialog from '../components/CompQuickDownloadDialog.vue'
 import { ipcClient } from '../../../ipc/client'
@@ -738,5 +739,120 @@ describe('Community platform feature (Comp)', () => {
     expect(quickDialog.exists()).toBe(true)
     expect(quickDialog.props('open')).toBe(true)
     expect(quickDialog.props('project')?.id).toBe('AANobbMI')
+  })
+  it('renders a day-precision date and follow count in the card footer, without the platform badge', async () => {
+    const wrapper = mount(CompProjectCard, {
+      props: {
+        project: {
+          id: 'jei',
+          slug: 'jei',
+          platform: 'curseforge',
+          title: 'Just Enough Items',
+          summary: 'View items and recipes',
+          author: 'mezz',
+          downloads: 161700000,
+          follows: 2800,
+          iconUrl: '',
+          categories: ['utility'],
+          compType: 'mod',
+          mcVersions: ['1.20.1'],
+          loaders: ['forge'],
+          updatedAt: '2026-10-15T18:08:21.597Z',
+        },
+        isFavorite: false,
+        activeTab: 'mod',
+      },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const footer = wrapper.find('[data-testid="comp-card-footer"]')
+    expect(footer.exists()).toBe(true)
+    const text = footer.text()
+    // The raw ISO timestamp and the clipped platform badge are both gone.
+    expect(text).not.toContain('T18:08:21')
+    expect(text).not.toContain('curseforge')
+    // Day precision, no time part.
+    expect(text).toMatch(/\d{4}[/.-]\d{1,2}[/.-]\d{1,2}/)
+    // Follow count uses the users icon: the heart is already the favourite toggle.
+    expect(footer.find('.i-lucide-users').exists()).toBe(true)
+    expect(text).toContain('161.7M')
+    expect(text).toContain('2.8K')
+  })
+
+  it('omits the follow count entirely when the platform reports none', async () => {
+    // CurseForge search returns thumbsUpCount 0, so the metric must not print a bare "0".
+    const wrapper = mount(CompProjectCard, {
+      props: {
+        project: {
+          id: 'jei',
+          slug: 'jei',
+          platform: 'curseforge',
+          title: 'Just Enough Items',
+          summary: 'View items and recipes',
+          author: 'mezz',
+          downloads: 161700000,
+          follows: 0,
+          iconUrl: '',
+          categories: ['utility'],
+          compType: 'mod',
+          mcVersions: ['1.20.1'],
+          loaders: ['forge'],
+          updatedAt: '2026-10-15T18:08:21.597Z',
+        },
+        isFavorite: false,
+        activeTab: 'mod',
+      },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const footer = wrapper.find('[data-testid="comp-card-footer"]')
+    expect(footer.text()).toContain('161.7M')
+    expect(footer.text()).not.toMatch(/(^|\s)0(\s|$)/)
+    expect(footer.find('.i-lucide-users').exists()).toBe(false)
+  })
+
+  it('resumes the page and results after the browser page is remounted', async () => {
+    const store = useCompStore()
+    store.compType = 'mod'
+    store.platform = 'modrinth'
+    store.query = ''
+    store.limit = 1
+
+    const first = mount(CompBrowserPage, { global: { plugins: [i18n] } })
+    await flushPromises()
+    expect(store.pageCount).toBe(2)
+
+    await store.goToPage(2)
+    await flushPromises()
+    expect(store.page).toBe(2)
+    first.unmount()
+
+    const searchSpy = vi.spyOn(ipcClient, 'compSearch')
+    const second = mount(CompBrowserPage, { global: { plugins: [i18n] } })
+    await flushPromises()
+
+    // Page 2 comes back from the cache: no second request for the same offset.
+    expect(store.page).toBe(2)
+    expect(store.hits).toHaveLength(1)
+    expect(searchSpy.mock.calls.filter(([query]) => query.offset === 1)).toHaveLength(0)
+    searchSpy.mockRestore()
+    second.unmount()
+  })
+
+  it('restores the tab that was being browsed when the path carries no type', async () => {
+    const store = useCompStore()
+    store.activeTab = 'shader'
+    store.compType = 'shader'
+
+    const wrapper = mount(CompBrowserPage, { global: { plugins: [i18n] } })
+    await flushPromises()
+
+    expect(store.activeTab).toBe('shader')
+    expect(store.compType).toBe('shader')
+    const tabs = wrapper.findComponent({ name: 'MTabs' })
+    expect(tabs.props('modelValue')).toBe('shader')
+    wrapper.unmount()
   })
 })

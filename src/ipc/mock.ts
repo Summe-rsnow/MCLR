@@ -124,20 +124,27 @@ export function setupMockIpc(): void {
     }
   }
 
-  mockIPC(async (cmd, args) => {
-    const handler = handlers[cmd]
-    if (!handler) {
-      throw { code: 'unknown', params: { cmd }, detail: `Unhandled mock command: ${cmd}` }
-    }
-    const latency = mockLatencyMs()
-    if (latency > 0) {
-      const { promise, resolve } = Promise.withResolvers<void>()
-      setTimeout(resolve, latency)
-      await promise
-    }
-    const result = handler((args ?? {}) as Record<string, unknown>)
-    return isEmptyScenarioActive() && /_(list|scan)$/.test(cmd) && Array.isArray(result)
-      ? []
-      : result
-  })
+  mockIPC(
+    async (cmd, args) => {
+      const handler = handlers[cmd]
+      if (!handler) {
+        throw { code: 'unknown', params: { cmd }, detail: `Unhandled mock command: ${cmd}` }
+      }
+      const latency = mockLatencyMs()
+      if (latency > 0) {
+        const { promise, resolve } = Promise.withResolvers<void>()
+        setTimeout(resolve, latency)
+        await promise
+      }
+      const result = handler((args ?? {}) as Record<string, unknown>)
+      return isEmptyScenarioActive() && /_(list|scan)$/.test(cmd) && Array.isArray(result)
+        ? []
+        : result
+    },
+    {
+      // Backend-pushed events (`tasks://update`, `resources://patch`) can then be driven from a
+      // test with `emit()` instead of being swallowed by the "unhandled command" fallback.
+      shouldMockEvents: true,
+    },
+  )
 }

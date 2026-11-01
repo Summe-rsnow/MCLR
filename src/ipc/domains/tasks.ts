@@ -16,6 +16,8 @@ export interface TaskNode {
 
 export const tasksIpc = {
   tasksList: (): Promise<TaskNode[]> => invokeCommand<TaskNode[]>('tasks_list'),
+  /** Drops finished tasks from the backend registry and returns the removed ids. */
+  tasksClearFinished: (): Promise<string[]> => invokeCommand<string[]>('tasks_clear_finished'),
   taskCancel: (id: string): Promise<void> => invokeCommand<void>('task_cancel', { id }),
   taskPause: (id: string): Promise<void> => invokeCommand<void>('task_pause', { id }),
   taskResume: (id: string): Promise<void> => invokeCommand<void>('task_resume', { id }),

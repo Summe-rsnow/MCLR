@@ -11,6 +11,9 @@ export const useTasksStore = defineStore('tasks', () => {
   const tasks = ref<TaskNode[]>([])
   const loading = ref(false)
   const initialized = ref(false)
+  // Ids the user already cleared: a broadcast that was in flight when the task was dropped must
+  // not put it back on screen. Task ids are UUIDs, so an id is never reused.
+  const dismissed = new Set<string>()
   let unlisten: UnlistenFn | null = null
 
   const activeTasks = computed(() =>
@@ -69,7 +72,7 @@ export const useTasksStore = defineStore('tasks', () => {
   }
 
   function handleTaskUpdate(diff: TaskNode | TaskNode[]) {
-    const updates = Array.isArray(diff) ? diff : [diff]
+    const updates = (Array.isArray(diff) ? diff : [diff]).filter((u) => !dismissed.has(u.id))
     if (updates.length === 0) return
     // Apply the whole batch to a clone and publish once, so derived computeds
     // (taskTree / activeTasks / aggregates) evaluate once per IPC batch instead of per item.
@@ -131,10 +134,25 @@ export const useTasksStore = defineStore('tasks', () => {
     }
   }
 
-  function clearFinished() {
-    tasks.value = tasks.value.filter(
-      (t) => t.state === 'running' || t.state === 'waiting' || t.state === 'paused',
-    )
+  /**
+   * Removes finished tasks for good.
+   *
+   * Filtering only the local list is not enough: the registry keeps every task of the session, so
+   * the next `fetchTasks` would bring all the failed ones straight back. The backend drops them
+   * first, then the local list follows its answer.
+   */
+  async function clearFinished() {
+    try {
+      const removed = await ipcClient.tasksClearFinished()
+      for (const id of removed) dismissed.add(id)
+      const gone = new Set(removed)
+      tasks.value = tasks.value.filter((t) => !gone.has(t.id))
+    } catch {
+      // Backend unavailable (tests, browser mock): fall back to hiding them locally.
+      tasks.value = tasks.value.filter(
+        (t) => t.state === 'running' || t.state === 'waiting' || t.state === 'paused',
+      )
+    }
   }
 
   return {

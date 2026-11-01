@@ -25,62 +25,59 @@ pub struct ResolvedDependencyItem {
     pub installed: bool,
 }
 
+/// True when a file can be installed into an instance running `loader`.
+///
+/// An empty loader list means the artifact does not declare one (datapacks, loader-agnostic
+/// files) and is treated as compatible. A file that only declares other loaders is not.
+pub fn file_supports_loader(loaders: &[String], loader: &str) -> bool {
+    let loader = loader.trim();
+    loader.is_empty()
+        || loaders.is_empty()
+        || loaders.iter().any(|l| l.eq_ignore_ascii_case(loader))
+}
+
+/// True when a file can be installed into an instance running any of `instance_loaders`.
+///
+/// An instance may legitimately carry more than one loader (Forge + OptiFine, Cleanroom + Forge),
+/// and a build tagged with any of them is installable.
+pub fn file_supports_any_loader(loaders: &[String], instance_loaders: &[&str]) -> bool {
+    instance_loaders.is_empty()
+        || loaders.is_empty()
+        || loaders
+            .iter()
+            .any(|l| instance_loaders.iter().any(|id| l.eq_ignore_ascii_case(id)))
+}
+
 /// Selects the best compatible file for the given Minecraft version and loader.
 ///
-/// Priority:
-/// 1. Exact game version match (if any files match, restrict to matching files).
-/// 2. Loader match (if any candidate files match the loader, restrict to those).
-/// 3. Channel priority: `Release` > `Beta` > `Alpha`.
-/// 4. Release date descending (newest timestamp first).
+/// Both filters are strict: a candidate must match the game version (when one is known) and the
+/// loader. There is no "some files matched, so relax the other filter" fallback — that fallback is
+/// what made a Forge-only build look like an update for a Fabric instance. When nothing is
+/// compatible the answer is `None`, which callers surface as "no update".
+///
+/// Among compatible files: `Release` > `Beta` > `Alpha`, then newest release date.
 pub fn select_best_file(files: &[CompFile], mc_version: &str, loader: &str) -> Option<CompFile> {
-    if files.is_empty() {
-        return None;
-    }
+    select_best_file_for(files, mc_version, &[loader])
+}
 
+/// Same as [`select_best_file`] for an instance that runs several loaders at once.
+pub fn select_best_file_for(
+    files: &[CompFile],
+    mc_version: &str,
+    instance_loaders: &[&str],
+) -> Option<CompFile> {
     let mc_clean = mc_version.trim();
-    let loader_clean = loader.trim();
 
-    let has_mc_match = !mc_clean.is_empty()
-        && files.iter().any(|f| {
-            f.mc_versions
-                .iter()
-                .any(|v| v.eq_ignore_ascii_case(mc_clean))
-        });
-
-    let mc_filtered: Vec<&CompFile> = if has_mc_match {
-        files
-            .iter()
-            .filter(|f| {
-                f.mc_versions
+    let mut candidates: Vec<&CompFile> = files
+        .iter()
+        .filter(|f| {
+            mc_clean.is_empty()
+                || f.mc_versions
                     .iter()
                     .any(|v| v.eq_ignore_ascii_case(mc_clean))
-            })
-            .collect()
-    } else {
-        files.iter().collect()
-    };
-
-    let has_loader_match = !loader_clean.is_empty()
-        && mc_filtered.iter().any(|f| {
-            f.loaders.is_empty()
-                || f.loaders
-                    .iter()
-                    .any(|l| l.eq_ignore_ascii_case(loader_clean))
-        });
-
-    let mut candidates: Vec<&CompFile> = if has_loader_match {
-        mc_filtered
-            .into_iter()
-            .filter(|f| {
-                f.loaders.is_empty()
-                    || f.loaders
-                        .iter()
-                        .any(|l| l.eq_ignore_ascii_case(loader_clean))
-            })
-            .collect()
-    } else {
-        mc_filtered
-    };
+        })
+        .filter(|f| file_supports_any_loader(&f.loaders, instance_loaders))
+        .collect();
 
     candidates.sort_by(|a, b| {
         let channel_order = |c: CompReleaseChannel| match c {
@@ -369,6 +366,41 @@ mod tests {
 
         let best = select_best_file(&files, "1.20.1", "fabric").unwrap();
         assert_eq!(best.id, "f3_match");
+    }
+
+    #[test]
+    fn select_best_file_never_falls_back_to_another_loader_or_version() {
+        let other_loader = vec![make_test_file(
+            "forge_only",
+            &["1.20.1"],
+            &["forge"],
+            CompReleaseChannel::Release,
+            "2024-05-01",
+        )];
+        // A Fabric instance must not be told a Forge-only build is its update.
+        assert!(select_best_file(&other_loader, "1.20.1", "fabric").is_none());
+
+        let other_version = vec![make_test_file(
+            "fabric_121",
+            &["1.21"],
+            &["fabric"],
+            CompReleaseChannel::Release,
+            "2024-05-01",
+        )];
+        assert!(select_best_file(&other_version, "1.20.1", "fabric").is_none());
+
+        // Loader-agnostic artifacts (empty loader list) still qualify.
+        let agnostic = vec![make_test_file(
+            "datapack",
+            &["1.20.1"],
+            &[],
+            CompReleaseChannel::Release,
+            "2024-05-01",
+        )];
+        assert_eq!(
+            select_best_file(&agnostic, "1.20.1", "fabric").map(|f| f.id),
+            Some("datapack".to_string())
+        );
     }
 
     #[test]

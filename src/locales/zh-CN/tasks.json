@@ -66,5 +66,12 @@
     "auth.microsoft": "微软账号登录",
     "update.download": "下载更新",
     "export.title": "导出资源列表"
+  },
+  "stages": {
+    "download": "下载整合包压缩包",
+    "inspect": "解析整合包内容",
+    "baseGame": "安装游戏与加载器",
+    "files": "下载模组与资源文件",
+    "overrides": "解压覆盖文件"
   }
 }

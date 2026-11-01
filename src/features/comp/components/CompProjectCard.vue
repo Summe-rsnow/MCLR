@@ -1,15 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { CompProject, CompPlatform } from '../../../ipc/client'
-import {
-  MCard,
-  MBadge,
-  MIconButton,
-  MBrandIcon,
-  MImage,
-  compTypeMeta,
-  type CompTypeKey,
-} from '../../../ui'
+import { useFormat } from '../../../composables/useFormat'
+import { MCard, MIconButton, MBrandIcon, MImage, compTypeMeta, type CompTypeKey } from '../../../ui'
 
 defineProps<{
   project: CompProject
@@ -23,6 +16,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { formatDate } = useFormat()
 
 function formatNumber(num: number): string {
   if (num >= 1000000) {
@@ -88,23 +82,26 @@ function formatNumber(num: number): string {
       </div>
     </div>
 
-    <div class="mt-4 pt-3 border-t border-line flex items-center justify-between gap-2 text-xs">
+    <div
+      data-testid="comp-card-footer"
+      class="mt-4 pt-3 border-t border-line flex items-center justify-between gap-2 text-xs"
+    >
       <div class="flex items-center gap-3 shrink-0">
         <span class="text-xs text-fg-muted font-mono flex items-center gap-1">
           <i class="i-lucide-download w-3.5 h-3.5" />{{ formatNumber(project.downloads) }}
         </span>
-        <span class="text-xs text-fg-muted flex items-center gap-1">
-          <i class="i-lucide-clock w-3.5 h-3.5" />{{ project.updatedAt }}
+        <!-- CurseForge has no follow count: its search payload reports `thumbsUpCount` as 0, so a
+             printed 0 would be noise, not data. Hidden until the platform actually has one. -->
+        <span
+          v-if="project.follows > 0"
+          class="text-xs text-fg-muted font-mono flex items-center gap-1"
+        >
+          <i class="i-lucide-users w-3.5 h-3.5" />{{ formatNumber(project.follows) }}
         </span>
       </div>
-      <div class="flex items-center gap-2 overflow-hidden justify-end">
-        <span
-          v-if="project.loaders?.length"
-          class="text-xs text-fg-subtle truncate max-w-[120px]"
-          >{{ project.loaders.join(', ') }}</span
-        >
-        <MBadge variant="neutral" size="sm">{{ project.platform }}</MBadge>
-      </div>
+      <span class="text-xs text-fg-muted flex items-center gap-1 shrink-0">
+        <i class="i-lucide-clock w-3.5 h-3.5" />{{ formatDate(project.updatedAt) }}
+      </span>
     </div>
   </MCard>
 </template>

@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { useTasksStore } from '../../tasks/store'
 import { useDialog } from '../../../ui/useDialog'
 import { MCard, MEmpty, MProgress, MBadge, MIconButton, MSkeleton } from '../../../ui'
+import type { TaskNode } from '../../../ipc/client'
 
 const { t, te } = useI18n()
 const tasksStore = useTasksStore()
@@ -41,6 +42,15 @@ function resolveTaskTitle(key: string, params: Record<string, string>): string {
     return t(key, params)
   }
   return key
+}
+
+function taskStage(task: TaskNode): string {
+  // The stage is only meaningful while work is happening.
+  if (task.state !== 'running' && task.state !== 'paused') return ''
+  const stage = task.titleParams?.stage
+  if (!stage) return ''
+  const key = `tasks.stages.${stage}`
+  return te(key) ? t(key) : ''
 }
 
 function getTaskBadgeVariant(state: string): 'primary' | 'success' | 'danger' | 'neutral' {
@@ -125,9 +135,14 @@ async function onCancelTask(taskId: string) {
                   'i-lucide-ban text-fg-muted': task.state === 'canceled',
                 }"
               />
-              <span class="text-sm font-semibold text-fg truncate">
-                {{ resolveTaskTitle(task.titleKey, task.titleParams) }}
-              </span>
+              <div class="min-w-0">
+                <span class="block text-sm font-semibold text-fg truncate">
+                  {{ resolveTaskTitle(task.titleKey, task.titleParams) }}
+                </span>
+                <span v-if="taskStage(task)" class="block text-[11px] text-fg-muted truncate">
+                  {{ taskStage(task) }}
+                </span>
+              </div>
             </div>
 
             <div class="flex items-center gap-2 shrink-0">

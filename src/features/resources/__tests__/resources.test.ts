@@ -235,6 +235,39 @@ describe('Resources feature unit tests', () => {
     expect(batchDisabled.find((e) => e.path === dummyEntries[1].path)?.enabled).toBe(true)
   })
 
+  it('asks for the cached verdict on entry but forces a real lookup on the button', async () => {
+    const entries = dummyEntries
+    const listSpy = vi.spyOn(ipcClient, 'resourcesList').mockResolvedValue(entries)
+    // Installed before mount, so the automatic pass on entry is observed too.
+    const checkSpy = vi.spyOn(ipcClient, 'localModsCheckUpdates').mockResolvedValue([])
+
+    const i18n = createI18n({
+      legacy: false,
+      locale: 'zh-CN',
+      messages: { 'zh-CN': { resources: zhCnResources, error: { unknown: 'Unknown error' } } },
+    })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(ResourceList, {
+      props: { instanceId: 'inst-1', kind: 'mod' },
+      global: { plugins: [i18n, pinia] },
+    })
+    await flushPromises()
+
+    // Entering the list asks once, without bypassing the backend's 6-hour cache.
+    expect(checkSpy).toHaveBeenCalledTimes(1)
+    expect(checkSpy.mock.calls[0][3]).toBe(false)
+
+    wrapper.findComponent({ name: 'ResourceToolbar' }).vm.$emit('checkUpdates')
+    await flushPromises()
+
+    expect(checkSpy).toHaveBeenCalledTimes(2)
+    expect(checkSpy.mock.calls[1][3]).toBe(true)
+
+    checkSpy.mockRestore()
+    listSpy.mockRestore()
+  })
+
   it('renders "检查更新" button in ResourceToolbar for mod kind and emits checkUpdates', async () => {
     const i18n = createI18n({
       legacy: false,

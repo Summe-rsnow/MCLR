@@ -192,15 +192,23 @@ export const compIpc = {
     invokeCommand<LocalModInfo>('local_mod_toggle', { instanceId, fileName, enabled }),
   localModDelete: (instanceId: string, fileName: string): Promise<void> =>
     invokeCommand<void>('local_mod_delete', { instanceId, fileName }),
+  /**
+   * Re-reads local mod updates.
+   *
+   * `force` bypasses the backend's 6-hour cache: entering the page asks without it, the explicit
+   * "check updates" button passes it.
+   */
   localModsCheckUpdates: (
     instanceId: string,
     mcVersion: string,
     loader: string,
+    force = false,
   ): Promise<LocalModInfo[]> =>
     invokeCommand<LocalModInfo[]>('local_mods_check_updates', {
       instanceId,
       mcVersion,
       loader,
+      force,
     }),
   localModUpdate: (
     instanceId: string,

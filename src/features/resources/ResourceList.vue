@@ -380,18 +380,32 @@ async function doSingleUpdate(entry: ResourceEntry) {
 }
 
 // Batch Update
-function handleBatchUpdateClick() {
-  const updatables = entries.value.filter((e) => e.updateAvailable && e.latestFile)
-  if (updatables.length === 0) return
+/** Queues a bulk update, routing the first one (and any large one) through the risk prompt. */
+function requestBatchUpdate(list: ResourceEntry[]) {
+  if (list.length === 0) return
 
   const firstEver = !localStorage.getItem('mclr.firstModUpdate')
-  if (firstEver || updatables.length >= 15) {
-    pendingBatchUpdates.value = updatables
+  if (firstEver || list.length >= 15) {
+    pendingBatchUpdates.value = list
     batchUpdateRiskDialogOpen.value = true
     return
   }
 
-  doBatchUpdate(updatables)
+  doBatchUpdate(list)
+}
+
+function handleBatchUpdateClick() {
+  requestBatchUpdate(entries.value.filter((e) => e.updateAvailable && e.latestFile))
+}
+
+/** Selected entries that actually have a newer file to install. */
+const selectedUpdatables = computed(() =>
+  entries.value.filter((e) => selectedPaths.value.has(e.path) && e.updateAvailable && e.latestFile),
+)
+
+/** Select-all + one click: update every selected mod in a single task. */
+function handleSelectedUpdate() {
+  requestBatchUpdate(selectedUpdatables.value)
 }
 
 async function doBatchUpdate(list: ResourceEntry[]) {
@@ -414,6 +428,8 @@ async function doBatchUpdate(list: ResourceEntry[]) {
       return
     }
     toast.success(t('resources.update.success'))
+    // The refreshed rows no longer carry the old update flags, so a stale selection is dropped.
+    selectedPaths.value.clear()
     await loadResources()
   } catch (err: unknown) {
     toast.danger(String(err))
@@ -659,7 +675,13 @@ function importExtensions(resourceKind: string): string[] {
   }
 }
 
-async function handleCheckUpdates() {
+/**
+ * Re-reads every mod's upstream version.
+ *
+ * `auto` runs on entering the list: it stays silent when nothing is found, because a toast
+ * saying "already up to date" on every visit is noise, not information.
+ */
+async function handleCheckUpdates(auto = false) {
   if (checkingUpdates.value) return
   checkingUpdates.value = true
   try {
@@ -669,9 +691,18 @@ async function handleCheckUpdates() {
       target = instancesStore.instances.find((i) => i.id === props.instanceId)
     }
     const mcVersion = target?.mcVersion || ''
-    const loader = target?.loaders?.[0] || target?.kind || 'fabric'
+    // Load detection labels look like `"Fabric 0.15.11"`; the backend canonicalises them to the
+    // ids Modrinth and CurseForge index by, so no update is offered for another loader.
+    const loader = target?.loaders?.[0] || target?.kind || ''
 
-    const updatedMods = await ipcClient.localModsCheckUpdates(props.instanceId, mcVersion, loader)
+    // A manual click always re-reads the platforms; the automatic pass on entry accepts the
+    // backend's 6-hour cache so opening the page never hammers the network.
+    const updatedMods = await ipcClient.localModsCheckUpdates(
+      props.instanceId,
+      mcVersion,
+      loader,
+      !auto,
+    )
 
     let updateCount = 0
     for (const m of updatedMods) {
@@ -685,12 +716,14 @@ async function handleCheckUpdates() {
 
     if (updateCount > 0) {
       toast.success(t('resources.update.checkSuccess', { count: updateCount }))
-    } else {
+    } else if (!auto) {
       toast.info(t('resources.status.noUpdates'))
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    toast.danger(msg)
+    if (!auto) {
+      toast.danger(msg)
+    }
   } finally {
     checkingUpdates.value = false
   }
@@ -713,6 +746,12 @@ function handleKeyDown(ev: KeyboardEvent) {
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown)
   await loadResources()
+
+  // Entering the list is exactly when the user wants to know what is outdated, so the check
+  // runs by itself instead of waiting for a button press.
+  if (props.kind === 'mod' && entries.value.length > 0) {
+    void handleCheckUpdates(true)
+  }
 
   // Listen for background streaming patches
   try {
@@ -751,9 +790,14 @@ onBeforeUnmount(() => {
 
 watch(
   () => props.instanceId,
-  () => {
+  async () => {
     currentRelPath.value = ''
-    loadResources()
+    await loadResources()
+    // Switching instances inside the same mounted list must check that instance's mods, not
+    // keep the previous instance's verdicts.
+    if (props.kind === 'mod' && entries.value.length > 0) {
+      void handleCheckUpdates(true)
+    }
   },
 )
 </script>
@@ -799,6 +843,15 @@ watch(
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
+            <MButton
+              v-if="kind === 'mod' && selectedUpdatables.length > 0"
+              variant="primary"
+              size="sm"
+              icon="i-lucide-refresh-cw"
+              @click="handleSelectedUpdate"
+            >
+              {{ t('resources.actions.update') }} ({{ selectedUpdatables.length }})
+            </MButton>
             <MButton
               v-if="kind === 'mod'"
               variant="tonal"

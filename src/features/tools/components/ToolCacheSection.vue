@@ -3,22 +3,27 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ipcClient, type CacheSizeInfo } from '../../../ipc/client'
 import { useToast } from '../../../ui/useToast'
+import { useErrorText } from '../../../composables/useErrorText'
 import { useDialog } from '../../../ui/useDialog'
 import { MCard, MButton, MCheckbox, MHelpTooltip } from '../../../ui'
 
 const { t } = useI18n()
 const toast = useToast()
 const dialog = useDialog()
+const { formatError } = useErrorText()
 
 const cacheInfo = ref<CacheSizeInfo>({
   cacheBytes: 0,
   logsBytes: 0,
   skinCacheBytes: 0,
+  failedTaskBytes: 0,
   totalBytes: 0,
 })
 const cleanCacheChecked = ref(true)
 const cleanLogsChecked = ref(false)
 const cleanSkinsChecked = ref(false)
+// Leftovers of failed tasks are the one category that is always safe to delete.
+const cleanFailedTasksChecked = ref(true)
 const cacheCleaning = ref(false)
 const cacheCleanedNotice = ref(false)
 
@@ -53,6 +58,13 @@ async function cleanCache() {
     selectedCategories.push(t('tools.cache.itemSkins'))
     selectedBytes += cacheInfo.value.skinCacheBytes
   }
+  if (cleanFailedTasksChecked.value) {
+    selectedCategories.push(t('tools.cache.failedTasks'))
+    // A full cache wipe already removes these files; counting them twice would overstate it.
+    if (!cleanCacheChecked.value) {
+      selectedBytes += cacheInfo.value.failedTaskBytes
+    }
+  }
 
   if (selectedCategories.length === 0) {
     toast.warning(t('tools.cache.noneSelected'))
@@ -74,18 +86,24 @@ async function cleanCache() {
 
   cacheCleaning.value = true
   try {
-    cacheInfo.value = await ipcClient.toolsCacheClear(
-      cleanCacheChecked.value,
-      cleanLogsChecked.value,
-      cleanSkinsChecked.value,
-    )
+    // A full cache wipe already removes the leftovers, so the narrow pass only runs on its own.
+    if (cleanCacheChecked.value || cleanLogsChecked.value || cleanSkinsChecked.value) {
+      cacheInfo.value = await ipcClient.toolsCacheClear(
+        cleanCacheChecked.value,
+        cleanLogsChecked.value,
+        cleanSkinsChecked.value,
+      )
+    }
+    if (cleanFailedTasksChecked.value && !cleanCacheChecked.value) {
+      cacheInfo.value = await ipcClient.toolsCleanupFailedTasks()
+    }
     toast.success(t('tools.cache.cleaned'))
     cacheCleanedNotice.value = true
     setTimeout(() => {
       cacheCleanedNotice.value = false
     }, 5000)
   } catch (err: unknown) {
-    toast.danger(err instanceof Error ? err.message : String(err))
+    toast.danger(formatError(err))
   } finally {
     cacheCleaning.value = false
   }
@@ -136,6 +154,13 @@ defineExpose({
           <MCheckbox v-model="cleanSkinsChecked" :label="t('tools.cache.itemSkins')" />
           <span class="text-xs font-mono font-semibold text-fg tabular-nums">
             {{ formatBytes(cacheInfo.skinCacheBytes) }}
+          </span>
+        </div>
+
+        <div class="flex items-center justify-between p-3 rounded-xl m-well">
+          <MCheckbox v-model="cleanFailedTasksChecked" :label="t('tools.cache.failedTasks')" />
+          <span class="text-xs font-mono font-semibold text-fg tabular-nums">
+            {{ formatBytes(cacheInfo.failedTaskBytes) }}
           </span>
         </div>
       </div>

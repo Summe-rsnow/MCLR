@@ -327,6 +327,174 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_modpack_import_progress_is_monotonic_across_stages() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/download/fabric-api.jar"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(b"dummy fabric api binary"))
+            .mount(&server)
+            .await;
+
+        let index_json = serde_json::json!({
+            "formatVersion": 1,
+            "game": "minecraft",
+            "versionId": "1.0.0",
+            "name": "Ramp Test Pack",
+            "files": [
+                {
+                    "path": "mods/fabric-api.jar",
+                    "hashes": {},
+                    "env": { "client": "required" },
+                    "downloads": [format!("{}/download/fabric-api.jar", server.uri())],
+                    "fileSize": 23
+                }
+            ],
+            "dependencies": {
+                "minecraft": "1.20.1",
+                "fabric-loader": "0.15.11"
+            }
+        });
+        let index_bytes = serde_json::to_vec(&index_json).unwrap();
+
+        let zip_file = create_zip_with_files(&[
+            ("modrinth.index.json", &index_bytes),
+            ("overrides/options.txt", b"fov:70\n"),
+        ]);
+
+        let mc_dir = tempdir().unwrap();
+        let client = reqwest::Client::new();
+        let net_settings = mclr_core::NetSettings::default();
+
+        let center = mclr_core::TaskCenter::new();
+        let (tid, _) = center
+            .create_task(None, "tasks.titles.modpackInstall", Default::default())
+            .await;
+        center.start_task(&tid).await.unwrap();
+        let mut rx = center.subscribe();
+
+        import_modpack(ModpackImportContext {
+            archive_path: zip_file.path(),
+            instance_name: "ramp-instance",
+            mc_folder: mc_dir.path(),
+            client: &client,
+            net_settings: &net_settings,
+            java_settings: None,
+            cf_client: None,
+            task_ctx: Some((&center, &tid)),
+            install_base_game: false,
+        })
+        .await
+        .unwrap();
+
+        let mut samples = Vec::new();
+        while let Ok(batch) = rx.try_recv() {
+            for node in batch.into_iter().filter(|n| n.id == tid) {
+                samples.push(node.progress);
+            }
+        }
+        assert!(
+            samples.len() >= 4,
+            "expected window + download reports, got {samples:?}"
+        );
+        assert!(
+            samples.windows(2).all(|w| w[1] >= w[0]),
+            "progress rewound: {samples:?}"
+        );
+        assert!(samples.last().copied().unwrap_or(0.0) >= 0.98);
+    }
+
+    #[tokio::test]
+    async fn failed_import_leaves_no_version_directory_behind() {
+        // A CurseForge manifest without a client for it: the metadata resolution fails after the
+        // version directory was created, which is exactly the half-written state to clean up.
+        let manifest_json = serde_json::json!({
+            "minecraft": {
+                "version": "1.20.1",
+                "modLoaders": [{ "id": "forge-47.2.0", "primary": true }]
+            },
+            "manifestType": "minecraftModpack",
+            "manifestVersion": 1,
+            "name": "Doomed Pack",
+            "version": "1.0.0",
+            "author": "Tester",
+            "files": [{ "projectID": 238222, "fileID": 4593548, "required": true }],
+            "overrides": "overrides"
+        });
+        let manifest_bytes = serde_json::to_vec(&manifest_json).unwrap();
+        let zip_file = create_zip_with_files(&[("manifest.json", &manifest_bytes)]);
+
+        let mc_dir = tempdir().unwrap();
+        let client = reqwest::Client::new();
+        let net_settings = mclr_core::NetSettings::default();
+
+        let err = import_modpack(ModpackImportContext {
+            archive_path: zip_file.path(),
+            instance_name: "doomed-pack",
+            mc_folder: mc_dir.path(),
+            client: &client,
+            net_settings: &net_settings,
+            java_settings: None,
+            cf_client: None,
+            task_ctx: None,
+            install_base_game: false,
+        })
+        .await
+        .unwrap_err();
+        assert!(matches!(err, crate::error::CompError::NotConfigured));
+        assert!(
+            !mc_dir.path().join("versions").join("doomed-pack").exists(),
+            "failed import must not leave a half-written instance"
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_import_keeps_a_directory_it_did_not_create() {
+        // Importing into an existing version folder must never delete the user's directory.
+        let manifest_json = serde_json::json!({
+            "minecraft": {
+                "version": "1.20.1",
+                "modLoaders": [{ "id": "forge-47.2.0", "primary": true }]
+            },
+            "manifestType": "minecraftModpack",
+            "manifestVersion": 1,
+            "name": "Doomed Pack",
+            "version": "1.0.0",
+            "author": "Tester",
+            "files": [{ "projectID": 238222, "fileID": 4593548, "required": true }],
+            "overrides": "overrides"
+        });
+        let manifest_bytes = serde_json::to_vec(&manifest_json).unwrap();
+        let zip_file = create_zip_with_files(&[("manifest.json", &manifest_bytes)]);
+
+        let mc_dir = tempdir().unwrap();
+        let existing = mc_dir.path().join("versions").join("existing-pack");
+        std::fs::create_dir_all(&existing).unwrap();
+        std::fs::write(existing.join("keep.txt"), b"user data").unwrap();
+
+        let client = reqwest::Client::new();
+        let net_settings = mclr_core::NetSettings::default();
+        let err = import_modpack(ModpackImportContext {
+            archive_path: zip_file.path(),
+            instance_name: "existing-pack",
+            mc_folder: mc_dir.path(),
+            client: &client,
+            net_settings: &net_settings,
+            java_settings: None,
+            cf_client: None,
+            task_ctx: None,
+            install_base_game: false,
+        })
+        .await
+        .unwrap_err();
+        assert!(matches!(err, crate::error::CompError::NotConfigured));
+        assert_eq!(
+            std::fs::read(existing.join("keep.txt")).unwrap(),
+            b"user data"
+        );
+    }
+
+    #[tokio::test]
     async fn test_prism_multimc_zip_fixture_import() {
         let mmc_json = serde_json::json!({
             "components": [

@@ -153,6 +153,47 @@ describe('Tools Feature', () => {
     })
   })
 
+  it('tool 5: failed-task leftovers are their own category and show 0 B once cleaned', async () => {
+    resetToolsMock()
+    const { handleConfirm } = useDialog()
+    const wrapper = mount(ToolsPage, { global: { plugins: [i18n, router] } })
+    await flushPromises()
+
+    // Same row shape as the other three, and selected by default.
+    const row = wrapper
+      .findAll('.m-well')
+      .find((el) => el.text().includes(zhCnTools.cache.failedTasks))
+    expect(row).toBeDefined()
+    expect(row!.text()).toContain('45.8 MB')
+    expect(row!.find('input[type="checkbox"]').element).toHaveProperty('checked', true)
+
+    // Only this category selected: the whole-cache wipe must not run.
+    const cacheRow = wrapper
+      .findAll('.m-well')
+      .find((el) => el.text().includes(zhCnTools.cache.itemCache))!
+    const cacheBox = cacheRow.find('input[type="checkbox"]')
+    await cacheBox.setValue(false)
+    await flushPromises()
+
+    const cacheClearSpy = vi.spyOn(ipcClient, 'toolsCacheClear')
+    const cleanupSpy = vi.spyOn(ipcClient, 'toolsCleanupFailedTasks')
+
+    await wrapper.find('[data-testid="clean-cache-btn"]').trigger('click')
+    await flushPromises()
+    handleConfirm()
+    await flushPromises()
+
+    expect(cleanupSpy).toHaveBeenCalledTimes(1)
+    expect(cacheClearSpy).not.toHaveBeenCalled()
+    const reRead = wrapper
+      .findAll('.m-well')
+      .find((el) => el.text().includes(zhCnTools.cache.failedTasks))!
+    expect(reRead.text()).toContain('0 B')
+
+    cacheClearSpy.mockRestore()
+    cleanupSpy.mockRestore()
+  })
+
   it('tool 4: desktop shortcut creates .lnk for instance', async () => {
     const wrapper = mount(ToolsPage, {
       global: {

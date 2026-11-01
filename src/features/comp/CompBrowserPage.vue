@@ -41,7 +41,12 @@ const toast = useToast()
 const compStore = useCompStore()
 const instancesStore = useInstancesStore()
 const launchStore = useLaunchStore()
-const targetInstanceId = ref<string>('')
+const targetInstanceId = computed({
+  get: () => compStore.targetInstanceId,
+  set: (value: string) => {
+    compStore.targetInstanceId = value
+  },
+})
 
 function isForgeUnder114(mcVer: string): boolean {
   const parts = mcVer.split('.').map((p) => parseInt(p, 10))
@@ -57,6 +62,11 @@ function isForgeUnder114(mcVer: string): boolean {
  * match one already-installed game.
  */
 const isInstanceScopedTab = computed(() => compStore.activeTab !== 'modpack')
+
+function defaultInstanceId(): string {
+  if (launchStore.selectedInstance?.id) return launchStore.selectedInstance.id
+  return instancesStore.instances[0]?.id ?? ''
+}
 
 function applyTargetInstance(
   inst: { kind?: string; mcVersion?: string; loaders?: string[] } | null,
@@ -98,6 +108,7 @@ function applyTargetInstance(
 function onTargetInstanceChange(val: string | number) {
   const id = String(val || '')
   targetInstanceId.value = id
+  compStore.targetInstanceChosen = true
   if (id) {
     const inst = instancesStore.instances.find((i) => i.id === id || i.name === id) || null
     applyTargetInstance(inst, true)
@@ -111,6 +122,7 @@ function onTargetInstanceChange(val: string | number) {
 
 function clearTargetInstance() {
   targetInstanceId.value = ''
+  compStore.targetInstanceChosen = true
   if (router && route) {
     const q = { ...route.query }
     delete q.instance
@@ -377,42 +389,47 @@ onMounted(async () => {
   const routeType =
     (route?.params?.type as string) ||
     path.match(/^\/comp\/(mod|modpack|resourcepack|shader|datapack|world)/)?.[1]
-  const isFavorites = path === '/comp/favorites' || routeType === 'favorites'
-  if (isFavorites) {
-    compStore.activeTab = 'favorites'
-  } else if (routeType) {
-    compStore.activeTab = routeType as CompType
-    compStore.compType = routeType as CompType
-  } else {
-    compStore.activeTab = 'mod'
-    compStore.compType = 'mod'
+  const routeFavorites = path === '/comp/favorites' || routeType === 'favorites'
+
+  // The sidebar links to `/comp` with no tab, so a bare path resumes whatever tab was being
+  // browsed; only an explicit `/comp/<type>` overrides it.
+  const previousTab = compStore.activeTab
+  const nextTab: CompType | 'favorites' = routeFavorites
+    ? 'favorites'
+    : ((routeType as CompType | undefined) ?? previousTab)
+
+  compStore.activeTab = nextTab
+  if (nextTab !== 'favorites') {
+    compStore.compType = nextTab
   }
+  // Same tab as before the page was left: its filters, offset and page cache still apply.
+  const sameContext = nextTab === previousTab
 
-  // Only instance-scoped tabs adopt a target instance; a modpack never does.
-  if (isInstanceScopedTab.value) {
-    let defaultInstId = ''
-    if (route?.query?.instance) {
-      defaultInstId = String(route.query.instance)
-    } else if (launchStore.selectedInstance?.id) {
-      defaultInstId = launchStore.selectedInstance.id
-    } else if (instancesStore.instances.length > 0 && instancesStore.instances[0]?.id) {
-      defaultInstId = instancesStore.instances[0].id
-    }
-
-    if (defaultInstId) {
-      targetInstanceId.value = defaultInstId
+  let filtersChanged = false
+  if (nextTab !== 'favorites' && isInstanceScopedTab.value) {
+    const routeInstanceId = route?.query?.instance ? String(route.query.instance) : ''
+    const instanceIdToApply =
+      routeInstanceId || (compStore.targetInstanceChosen ? '' : defaultInstanceId())
+    if (instanceIdToApply) {
       const inst =
-        instancesStore.instances.find((i) => i.id === defaultInstId || i.name === defaultInstId) ||
-        null
+        instancesStore.instances.find(
+          (i) => i.id === instanceIdToApply || i.name === instanceIdToApply,
+        ) || null
+      const before = `${compStore.mcVersion ?? ''}|${compStore.loader ?? ''}`
+      targetInstanceId.value = instanceIdToApply
       applyTargetInstance(inst, false)
+      filtersChanged = before !== `${compStore.mcVersion ?? ''}|${compStore.loader ?? ''}`
     }
+    compStore.targetInstanceChosen = true
   }
 
   if (route?.query?.q) {
     compStore.query = String(route.query.q)
   }
-  if (!isFavorites) {
-    await compStore.search(true)
+  if (compStore.activeTab !== 'favorites') {
+    // Reopening the same context resumes the page that was showing; a page-cache hit renders
+    // synchronously instead of flashing a skeleton.
+    await compStore.search(!sameContext || filtersChanged)
   }
 })
 

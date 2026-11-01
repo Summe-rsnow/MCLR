@@ -78,16 +78,35 @@ pub async fn local_mods_check_updates(
     instance_id: String,
     mc_version: String,
     loader: String,
+    force: bool,
 ) -> Result<Vec<LocalModInfo>, AppError> {
     let settings = state.get().await;
     let modrinth = ModrinthClient::new(settings.net.source_priority);
     let curseforge = CurseForgeClient::new(settings.net.source_priority);
 
     let mods_dir = instance_mods_dir(&state, &instance_id).await;
+
+    // The instance, not the caller, knows which loaders it runs: detection can find several
+    // (Forge + OptiFine, Cleanroom + Forge) and the caller's single label only carries the first.
+    let mut loaders: Vec<String> = Vec::new();
+    let mc_folder = super::current_mc_folder(&state).await;
+    let scan_id = instance_id.clone();
+    if let Ok(instances) =
+        tokio::task::spawn_blocking(move || mclr_game::instance::scan_instances(&mc_folder)).await
+        && let Ok(instances) = instances
+        && let Some(instance) = instances.into_iter().find(|i| i.id == scan_id)
+    {
+        loaders = instance.loaders;
+    }
+    if loaders.is_empty() && !loader.trim().is_empty() {
+        loaders.push(loader);
+    }
+
     let mods = check_local_mods_updates(
         &mods_dir,
         &mc_version,
-        &loader,
+        &loaders,
+        force,
         &modrinth,
         Some(&curseforge),
     )

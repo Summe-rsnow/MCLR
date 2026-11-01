@@ -383,6 +383,27 @@ pub fn extract_loader_versions(loaders: &[String]) -> BTreeMap<String, String> {
     map
 }
 
+/// Canonical loader id for a detected label, as the mod platforms index it.
+///
+/// Detection produces display labels (`"Fabric 0.15.11"`, `"NeoForge 21.1.0"`) and instance
+/// kinds (`"forge"`); Modrinth and CurseForge only understand `fabric`, `forge`, `neoforge`,
+/// `quilt` and `liteloader`. Filtering with a label silently hides or mislabels every update,
+/// so anything that is not indexed is reported as unknown instead of guessed.
+pub fn canonical_loader_id(label: &str) -> Option<&'static str> {
+    let lower = label.trim().to_lowercase();
+    if lower.is_empty() {
+        return None;
+    }
+    // Platforms do not index these flavours: a filter would hide every real update.
+    if lower.contains("legacyfabric") || lower.contains("cleanroom") || lower.contains("labymod") {
+        return None;
+    }
+    // `neoforge` before `forge`, because the longer name contains the shorter one.
+    ["neoforge", "quilt", "fabric", "forge", "liteloader"]
+        .into_iter()
+        .find(|id| lower.contains(id))
+}
+
 pub fn is_modable_instance(loaders: &[String], card_type: Option<CardKind>) -> bool {
     if card_type == Some(CardKind::Api) {
         return true;
@@ -580,6 +601,27 @@ pub fn classify_cards(instances: &mut [InstanceInfo]) {
 mod tests {
     use super::*;
     use crate::version::{ArgumentEntry, Library, VersionJson};
+
+    #[test]
+    fn canonical_loader_id_maps_detection_labels_to_platform_ids() {
+        // Detection labels carry a version suffix.
+        assert_eq!(canonical_loader_id("Fabric 0.15.11"), Some("fabric"));
+        assert_eq!(canonical_loader_id("NeoForge 21.1.0"), Some("neoforge"));
+        assert_eq!(canonical_loader_id("Forge 47.2.0"), Some("forge"));
+        assert_eq!(canonical_loader_id("Quilt 0.24.0"), Some("quilt"));
+        assert_eq!(canonical_loader_id("LiteLoader"), Some("liteloader"));
+
+        // Instance kinds arrive bare and lowercased.
+        assert_eq!(canonical_loader_id("forge"), Some("forge"));
+        assert_eq!(canonical_loader_id("NEOFORGE"), Some("neoforge"));
+
+        // Flavours the platforms do not index must not filter: an id would hide every update.
+        assert_eq!(canonical_loader_id("LegacyFabric 0.14.5"), None);
+        assert_eq!(canonical_loader_id("Cleanroom 0.2.4"), None);
+        assert_eq!(canonical_loader_id("LabyMod"), None);
+        assert_eq!(canonical_loader_id("Vanilla"), None);
+        assert_eq!(canonical_loader_id(""), None);
+    }
 
     fn vjson(id: &str, libs: &[&str], main: Option<&str>) -> VersionJson {
         VersionJson {

@@ -154,6 +154,7 @@
   },
   "tools": {
     "invalidSkinData": "皮肤数据无效",
+    "tasksRunning": "还有任务在运行，请等它结束或取消后再清理残留文件",
     "saveFailed": "保存失败",
     "skin": {
       "invalidUsername": "请输入有效的玩家用户名",

@@ -62,6 +62,7 @@ enum FileOutcome {
 
 /// Failure of the chunked path — either fatal, or "this server ignores `Range`"
 /// which the caller answers by falling back to a single stream.
+#[derive(Debug)]
 enum ChunkedError {
     Fatal(NetError),
     RangeUnsupported,
@@ -89,6 +90,7 @@ struct Chunk {
     start: u64,
     end: u64, // inclusive
     downloaded: u64,
+    /// Retries after a real error (HTTP failure, truncated body), from the same offset.
     retries: u32,
 }
 
@@ -513,11 +515,14 @@ impl Downloader {
                             // Finished this chunk
                         }
                         Err(ChunkError::SlowChunk) => {
-                            // Dynamic split if remaining >= SLOW_SPLIT_THRESHOLD
+                            // Slowness is not a failure. Splitting is the only lever the chunked
+                            // path has, and it only pays off while both halves stay above the
+                            // threshold; past that point the range is simply resumed from where
+                            // it stopped, at whatever rate the connection sustains. A starved
+                            // link therefore still finishes instead of dying with a timeout.
                             let rem = chunk.remaining();
                             let mut lock = queue_clone.lock().await;
-                            if rem >= SLOW_SPLIT_THRESHOLD && chunk.retries < MAX_CHUNK_RETRIES {
-                                chunk.retries += 1;
+                            if rem >= SLOW_SPLIT_THRESHOLD * 2 {
                                 let half = rem / 2;
                                 let split_start = chunk.current_offset() + half;
                                 let old_end = chunk.end;
@@ -529,18 +534,16 @@ impl Downloader {
                                     start: split_start,
                                     end: old_end,
                                     downloaded: 0,
-                                    retries: chunk.retries,
+                                    retries: 0,
                                 };
 
                                 lock.push_back(chunk);
                                 lock.push_back(new_chunk);
-                            } else if chunk.retries < MAX_CHUNK_RETRIES {
-                                chunk.retries += 1;
-                                lock.push_back(chunk);
                             } else {
-                                return Err(ChunkedError::Fatal(NetError::Timeout(
-                                    "Chunk retries exceeded".into(),
-                                )));
+                                // Requeueing re-requests the remaining bytes from
+                                // `current_offset()`, so every round still makes progress and a
+                                // connection the server has quietly abandoned is replaced.
+                                lock.push_back(chunk);
                             }
                         }
                         Err(ChunkError::Canceled) => {
@@ -1055,4 +1058,124 @@ async fn flush_write_buf(
     total_downloaded.fetch_add(write_buf.len() as u64, Ordering::Relaxed);
     write_buf.clear();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    /// Serves `payload` with `Range` support, trickling every body out in `WRITE_SIZE` pieces.
+    ///
+    /// A wiremock response arrives in a burst, so the downloader's slow-chunk gate never sees a
+    /// real transfer rate. This server makes the rate real and keeps it low, and it answers the
+    /// first [`FAILED_REQUESTS`] requests for the head range with `503` so a chunk can arrive at
+    /// the slow gate with its retry budget already spent.
+    async fn spawn_slow_body_server(payload: Vec<u8>) -> String {
+        const WRITE_SIZE: usize = 256 * 1024;
+        const WRITE_DELAY: Duration = Duration::from_millis(5);
+        const FAILED_REQUESTS: usize = MAX_CHUNK_RETRIES as usize;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let head_failures = Arc::new(AtomicU64::new(0));
+
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    return;
+                };
+                let body = payload.clone();
+                let head_failures = Arc::clone(&head_failures);
+                tokio::spawn(async move {
+                    let mut buf = Vec::new();
+                    let mut byte = [0u8; 1];
+                    while socket.read_exact(&mut byte).await.is_ok() {
+                        buf.push(byte[0]);
+                        if buf.ends_with(b"\r\n\r\n") {
+                            break;
+                        }
+                    }
+                    let request = String::from_utf8_lossy(&buf).to_lowercase();
+                    let range = request
+                        .lines()
+                        .find_map(|line| line.strip_prefix("range: bytes="))
+                        .and_then(|value| {
+                            let (start, end) = value.split_once('-')?;
+                            Some((
+                                start.trim().parse::<usize>().ok()?,
+                                end.trim().parse::<usize>().ok()?,
+                            ))
+                        });
+
+                    let Some((start, end)) = range else {
+                        return;
+                    };
+
+                    // The head range is what every fresh attempt asks for first: fail it a fixed
+                    // number of times so the retry budget is spent before any transfer starts.
+                    if start == 0
+                        && head_failures.fetch_add(1, Ordering::SeqCst) < FAILED_REQUESTS as u64
+                    {
+                        let _ = socket
+                            .write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                            .await;
+                        let _ = socket.shutdown().await;
+                        return;
+                    }
+
+                    let end = end.min(body.len() - 1);
+                    let slice = body[start..=end].to_vec();
+                    let head = format!(
+                        "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {start}-{end}/{}\r\nConnection: close\r\n\r\n",
+                        slice.len(),
+                        body.len()
+                    );
+                    if socket.write_all(head.as_bytes()).await.is_err() {
+                        return;
+                    }
+                    for piece in slice.chunks(WRITE_SIZE) {
+                        if socket.write_all(piece).await.is_err() {
+                            return;
+                        }
+                        tokio::time::sleep(WRITE_DELAY).await;
+                    }
+                    let _ = socket.shutdown().await;
+                });
+            }
+        });
+
+        format!("http://{addr}/slow.bin")
+    }
+
+    /// A chunk that is slow must resume, never fail the transfer — even after its retry budget
+    /// was spent on real errors.
+    ///
+    /// Both conditions used to share one counter, so a throttling server produced
+    /// `Network timeout: Chunk retries exceeded` on a transfer that was still moving.
+    #[tokio::test]
+    async fn slow_chunk_resumes_after_spent_retries() {
+        let total_size = 5 * 1024 * 1024;
+        let mut payload = vec![0u8; total_size];
+        for (i, byte) in payload.iter_mut().enumerate() {
+            *byte = (i % 251) as u8;
+        }
+
+        let url = Url::parse(&spawn_slow_body_server(payload.clone()).await).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let part_path = dir.path().join("slow.bin.mclr-part");
+
+        // No connection ever reaches this threshold: the slow gate fires on the first read.
+        let downloader = Downloader::new(reqwest::Client::new(), NetSettings::default())
+            .with_slow_check(Duration::from_millis(1), 1_000_000_000);
+
+        downloader
+            .download_chunked(&url, &part_path, total_size as u64, None, None)
+            .await
+            .expect("a slow chunk must resume instead of failing the transfer");
+
+        let written = tokio::fs::read(&part_path).await.unwrap();
+        assert_eq!(written, payload);
+    }
 }

@@ -29,6 +29,8 @@ pub struct CacheSizeInfo {
     pub cache_bytes: u64,
     pub logs_bytes: u64,
     pub skin_cache_bytes: u64,
+    /// Leftovers of tasks that never finished: partial downloads and cached modpack archives.
+    pub failed_task_bytes: u64,
     pub total_bytes: u64,
 }
 
@@ -300,7 +302,88 @@ fn compute_logs_size(logs_dir: &Path) -> u64 {
     total
 }
 
-fn compute_cache_sizes() -> CacheSizeInfo {
+/// A partial download or cached archive younger than this may still belong to a live task.
+const FAILED_TASK_MIN_AGE: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+/// Files a task left behind when it failed or was interrupted.
+///
+/// Deliberately narrow: only `<name>.mclr-part` writes and the modpack archive cache. Nothing else
+/// in the game directory or the cache is ever a candidate, so a manual cleanup here cannot delete
+/// a working install.
+fn failed_task_leftovers(cache_root: &Path, mc_folder: Option<&Path>) -> Vec<std::path::PathBuf> {
+    let now = std::time::SystemTime::now();
+    let is_stale = |path: &Path| {
+        fs::metadata(path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|mtime| now.duration_since(mtime).ok())
+            .is_some_and(|age| age >= FAILED_TASK_MIN_AGE)
+    };
+
+    let mut leftovers = Vec::new();
+
+    // Modpack archives: a completed install deletes its own, so whatever is left is abandoned.
+    let modpacks_dir = cache_root.join("modpacks");
+    if let Ok(entries) = fs::read_dir(&modpacks_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() && is_stale(&path) {
+                leftovers.push(path);
+            }
+        }
+    }
+
+    // Partial downloads live next to their destination: inside the cache and inside the resource
+    // folders of every instance (mods, resourcepacks, shaderpacks).
+    let mut roots = vec![cache_root.to_path_buf()];
+    if let Some(mc_folder) = mc_folder {
+        for instance in mclr_game::instance::scan_instances(mc_folder).unwrap_or_default() {
+            let base = mc_folder.join("versions").join(&instance.id);
+            for sub in ["mods", "resourcepacks", "shaderpacks"] {
+                roots.push(base.join(sub));
+            }
+        }
+    }
+    for root in roots {
+        collect_part_files(&root, &is_stale, &mut leftovers, 0);
+    }
+
+    leftovers
+}
+
+/// Depth-limited walk: download destinations are shallow, and an unbounded recursion into the
+/// whole game folder would cost more than it saves.
+fn collect_part_files(
+    dir: &Path,
+    is_stale: &impl Fn(&Path) -> bool,
+    out: &mut Vec<std::path::PathBuf>,
+    depth: u32,
+) {
+    if depth > 4 {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        match entry.file_type() {
+            Ok(t) if t.is_dir() => collect_part_files(&path, is_stale, out, depth + 1),
+            Ok(t) if t.is_file() => {
+                let is_part = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.ends_with(".mclr-part"));
+                if is_part && is_stale(&path) {
+                    out.push(path);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn compute_cache_sizes(mc_folder: Option<&Path>) -> CacheSizeInfo {
     let cache_p = paths::cache_dir();
     let logs_p = paths::logs_dir();
     let skin_p = cache_p.join("skin");
@@ -308,20 +391,27 @@ fn compute_cache_sizes() -> CacheSizeInfo {
     let cache_bytes = compute_dir_size(&cache_p);
     let logs_bytes = compute_logs_size(&logs_p);
     let skin_cache_bytes = compute_dir_size(&skin_p);
+    let failed_task_bytes = failed_task_leftovers(&cache_p, mc_folder)
+        .iter()
+        .filter_map(|p| fs::metadata(p).ok())
+        .map(|m| m.len())
+        .sum();
     let total_bytes = cache_bytes + logs_bytes;
 
     CacheSizeInfo {
         cache_bytes,
         logs_bytes,
         skin_cache_bytes,
+        failed_task_bytes,
         total_bytes,
     }
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn tools_cache_info() -> Result<CacheSizeInfo, AppError> {
-    tokio::task::spawn_blocking(compute_cache_sizes)
+pub async fn tools_cache_info(state: State<'_, SettingsStore>) -> Result<CacheSizeInfo, AppError> {
+    let mc_folder = super::current_mc_folder(&state).await;
+    tokio::task::spawn_blocking(move || compute_cache_sizes(Some(&mc_folder)))
         .await
         .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))
 }
@@ -386,10 +476,12 @@ fn clear_log_dir_keep_newest(dir: &Path, failed: &mut Vec<String>) {
 #[tauri::command]
 #[specta::specta]
 pub async fn tools_cache_clear(
+    state: State<'_, SettingsStore>,
     clear_cache: bool,
     clear_logs: bool,
     clear_skins: bool,
 ) -> Result<CacheSizeInfo, AppError> {
+    let mc_folder = super::current_mc_folder(&state).await;
     tokio::task::spawn_blocking(move || {
         let cache_p = paths::cache_dir();
         let logs_p = paths::logs_dir();
@@ -413,7 +505,39 @@ pub async fn tools_cache_clear(
                 .with_detail(format!("failed to remove: {}", failed.join(", "))));
         }
 
-        Ok(compute_cache_sizes())
+        Ok(compute_cache_sizes(Some(&mc_folder)))
+    })
+    .await
+    .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?
+}
+
+/// Removes only what incomplete tasks left behind: partial downloads and abandoned modpack
+/// archives. Nothing that a finished install or a working cache entry depends on is touched.
+#[tauri::command]
+#[specta::specta]
+pub async fn tools_cleanup_failed_tasks(
+    state: State<'_, SettingsStore>,
+    tasks: State<'_, Arc<TaskCenter>>,
+) -> Result<CacheSizeInfo, AppError> {
+    // Hard gate: while any task is running, a part file on disk may belong to it. There is no
+    // per-task destination registry to check against, so an idle moment is the only condition
+    // under which "this file belongs to a failed task" can be asserted.
+    if tasks.has_active_tasks().await {
+        return Err(AppError::new("tools.tasksRunning").with_detail(
+            "wait for or cancel running tasks before cleaning leftovers".to_string(),
+        ));
+    }
+    let mc_folder = super::current_mc_folder(&state).await;
+    tokio::task::spawn_blocking(move || {
+        let mut failed: Vec<String> = Vec::new();
+        for path in failed_task_leftovers(&paths::cache_dir(), Some(&mc_folder)) {
+            collect_failures(fs::remove_file(&path), &path, &mut failed);
+        }
+        if !failed.is_empty() {
+            return Err(AppError::new("core.io")
+                .with_detail(format!("failed to remove: {}", failed.join(", "))));
+        }
+        Ok(compute_cache_sizes(Some(&mc_folder)))
     })
     .await
     .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?
@@ -609,6 +733,7 @@ fn create_shell_link_win32(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, SystemTime};
 
     #[test]
     fn test_cache_info_and_clear() {
@@ -631,7 +756,7 @@ mod tests {
         fs::write(cache_dir.join("temp.dat"), b"cache_bytes").unwrap();
         fs::write(logs_dir.join("mclr.2026-10-26.log"), b"log_bytes").unwrap();
 
-        let info = compute_cache_sizes();
+        let info = compute_cache_sizes(None);
         assert!(info.skin_cache_bytes > 0);
         assert!(info.cache_bytes >= info.skin_cache_bytes);
         assert!(info.logs_bytes > 0);
@@ -639,14 +764,14 @@ mod tests {
 
         // Clear skins only
         let _ = clear_dir_contents(&skin_dir);
-        let info2 = compute_cache_sizes();
+        let info2 = compute_cache_sizes(None);
         assert_eq!(info2.skin_cache_bytes, 0);
         assert!(info2.cache_bytes > 0); // temp.dat remains
 
         // Clear all cache and logs
         let _ = clear_dir_contents(&cache_dir);
         let _ = clear_dir_contents(&logs_dir);
-        let info3 = compute_cache_sizes();
+        let info3 = compute_cache_sizes(None);
         assert_eq!(info3.cache_bytes, 0);
         assert_eq!(info3.logs_bytes, 0);
         assert_eq!(info3.total_bytes, 0);
@@ -656,6 +781,47 @@ mod tests {
         }
         let _ = fs::remove_dir_all(&temp_path);
     }
+    /// Writes `name` with an mtime `age` in the past.
+    fn write_aged(path: &Path, age: Duration) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, b"leftover").unwrap();
+        let file = fs::File::options().write(true).open(path).unwrap();
+        file.set_modified(SystemTime::now() - age).unwrap();
+    }
+
+    #[test]
+    fn leftover_scan_only_reports_abandoned_task_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = tmp.path().join("cache");
+        let old = Duration::from_secs(3 * 60 * 60);
+        let fresh = Duration::ZERO;
+
+        let stale_archive = cache.join("modpacks").join("abandoned.mrpack");
+        let live_archive = cache.join("modpacks").join("running.mrpack");
+        let stale_part = cache.join("icons").join("icon.png.mclr-part");
+        let live_part = cache.join("icons").join("other.png.mclr-part");
+        let plain_cache = cache.join("icons").join("icon.png");
+
+        write_aged(&stale_archive, old);
+        write_aged(&live_archive, fresh);
+        write_aged(&stale_part, old);
+        write_aged(&live_part, fresh);
+        write_aged(&plain_cache, old);
+
+        let mut found = failed_task_leftovers(&cache, None);
+        found.sort();
+
+        assert_eq!(found, vec![stale_part, stale_archive]);
+
+        // Deleting only those two leaves the live download and the normal cache entry alone.
+        for path in &found {
+            fs::remove_file(path).unwrap();
+        }
+        assert!(live_archive.exists());
+        assert!(live_part.exists());
+        assert!(plain_cache.exists());
+    }
+
     #[tokio::test]
     async fn test_tools_save_skin() {
         let temp_dir =

@@ -31,7 +31,10 @@ pub use modpack::{
     ModpackInstallPlan, extract_modpack_overrides, import_modpack, inspect_modpack,
 };
 pub use modrinth::ModrinthClient;
-pub use resolver::{ResolvedDependencyItem, resolve_dependencies, select_best_file};
+pub use resolver::{
+    ResolvedDependencyItem, file_supports_any_loader, file_supports_loader, resolve_dependencies,
+    select_best_file, select_best_file_for,
+};
 pub use resources::{
     ImportResourcesResult, OverwritePolicy, ResourceEntry, ResourceKind, ResourceState,
     SchematicInfo, delete_resources, export_resource_list, import_resources, scan_resources,

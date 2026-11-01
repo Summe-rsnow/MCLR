@@ -89,7 +89,10 @@ main,
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  overflow-x: hidden;
+  /* `clip` rather than `hidden`: `hidden` would compute `overflow-y: auto` and turn every page
+     into a scroll container, so virtual lists would pick the page instead of the app scroller
+     and grow a second, useless scrollbar. */
+  overflow-x: clip;
 }
 
 .m-page > * {
