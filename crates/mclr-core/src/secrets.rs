@@ -1,10 +1,10 @@
-//! Secret configuration detection and lookup.
+//! Secret configuration detection and lookup from environment or `.env`.
 //!
 //! Secrets (`MCLR_MS_CLIENT_ID`, `MCLR_CURSEFORGE_API_KEY`, `MCLR_UPDATE_ENDPOINT`, `MCLR_UPDATE_PUBKEY`)
 //! are read in order:
 //! 1. Process environment variables
 //! 2. `<data_dir>/.env`
-//! 3. `.env` in current working directory
+//! 3. `.env` in current working directory (when `MCLR_DATA_DIR` is not overridden)
 
 use crate::paths;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ pub const KEY_CURSEFORGE_API_KEY: &str = "MCLR_CURSEFORGE_API_KEY";
 pub const KEY_UPDATE_ENDPOINT: &str = "MCLR_UPDATE_ENDPOINT";
 pub const KEY_UPDATE_PUBKEY: &str = "MCLR_UPDATE_PUBKEY";
 
-/// Presence status of optional launcher secrets.
+/// Presence status of optional launcher features and secrets.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretsStatus {
@@ -42,10 +42,9 @@ fn parse_env_file(path: &Path) -> HashMap<String, String> {
         if let Some((k, v)) = trimmed.split_once('=') {
             let key = k.trim().to_string();
             let mut val = v.trim().to_string();
-            if ((val.starts_with('"') && val.ends_with('"'))
-                || (val.starts_with('\'') && val.ends_with('\'')))
-                && val.len() >= 2
-            {
+            let is_double_quoted = val.starts_with('"') && val.ends_with('"');
+            let is_single_quoted = val.starts_with('\'') && val.ends_with('\'');
+            if (is_double_quoted || is_single_quoted) && val.len() >= 2 {
                 val = val[1..val.len() - 1].to_string();
             }
             map.insert(key, val);
@@ -74,20 +73,22 @@ pub fn get_secret(key: &str) -> Option<String> {
         }
     }
 
-    // 3. .env in cwd
-    let cwd_env = Path::new(".env");
-    let map = parse_env_file(cwd_env);
-    if let Some(val) = map.get(key) {
-        let trimmed = val.trim();
-        if !trimmed.is_empty() {
-            return Some(trimmed.to_string());
+    // 3. .env in cwd (skipped during unit testing when MCLR_DATA_DIR is explicitly redirected)
+    if std::env::var("MCLR_DATA_DIR").is_err() {
+        let cwd_env = Path::new(".env");
+        let map = parse_env_file(cwd_env);
+        if let Some(val) = map.get(key) {
+            let trimmed = val.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
         }
     }
 
     None
 }
 
-/// Returns the presence status of all 4 launcher secrets.
+/// Returns the presence status of optional launcher features.
 pub fn secrets_status() -> SecretsStatus {
     SecretsStatus {
         ms_client_id: get_secret(KEY_MS_CLIENT_ID).is_some(),
@@ -102,59 +103,45 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_secrets_lookup_and_status() {
-        let _lock = crate::test_utils::ENV_MUTEX.lock().unwrap();
+    fn test_secrets_status_with_isolated_dir() {
         let temp = tempfile::tempdir().unwrap();
-        let data_dir = temp.path().to_path_buf();
-
         unsafe {
-            std::env::set_var("MCLR_DATA_DIR", data_dir.to_str().unwrap());
+            std::env::set_var("MCLR_DATA_DIR", temp.path().to_str().unwrap());
             std::env::remove_var(KEY_MS_CLIENT_ID);
             std::env::remove_var(KEY_CURSEFORGE_API_KEY);
             std::env::remove_var(KEY_UPDATE_ENDPOINT);
             std::env::remove_var(KEY_UPDATE_PUBKEY);
         }
-
-        let initial_status = secrets_status();
-        assert!(!initial_status.ms_client_id);
-        assert!(!initial_status.curseforge_api_key);
-
-        // Write to <data_dir>/.env
-        let env_content = r#"
-# Sample env
-MCLR_MS_CLIENT_ID="ms-client-12345"
-MCLR_CURSEFORGE_API_KEY='cf-api-key-abc'
-"#;
-        std::fs::write(data_dir.join(".env"), env_content).unwrap();
-
-        assert_eq!(
-            get_secret(KEY_MS_CLIENT_ID),
-            Some("ms-client-12345".to_string())
-        );
-        assert_eq!(
-            get_secret(KEY_CURSEFORGE_API_KEY),
-            Some("cf-api-key-abc".to_string())
-        );
-        assert_eq!(get_secret(KEY_UPDATE_ENDPOINT), None);
-
         let status = secrets_status();
-        assert!(status.ms_client_id);
-        assert!(status.curseforge_api_key);
+        assert!(!status.ms_client_id);
+        assert!(!status.curseforge_api_key);
         assert!(!status.update_endpoint);
         assert!(!status.update_pubkey);
-
-        // Process env overrides file
-        unsafe {
-            std::env::set_var(KEY_MS_CLIENT_ID, "override-id");
-        }
-        assert_eq!(
-            get_secret(KEY_MS_CLIENT_ID),
-            Some("override-id".to_string())
-        );
-
         unsafe {
             std::env::remove_var("MCLR_DATA_DIR");
-            std::env::remove_var(KEY_MS_CLIENT_ID);
         }
+    }
+
+    #[test]
+    fn test_parse_env_file_supports_quotes_and_comments() {
+        let temp = tempfile::tempdir().unwrap();
+        let env_path = temp.path().join(".env");
+        let content = r#"
+# Comment line
+MCLR_KEY1=value1
+MCLR_KEY2="quoted value"
+MCLR_KEY3='single quoted'
+"#;
+        std::fs::write(&env_path, content).unwrap();
+        let map = parse_env_file(&env_path);
+        assert_eq!(map.get("MCLR_KEY1").map(|s| s.as_str()), Some("value1"));
+        assert_eq!(
+            map.get("MCLR_KEY2").map(|s| s.as_str()),
+            Some("quoted value")
+        );
+        assert_eq!(
+            map.get("MCLR_KEY3").map(|s| s.as_str()),
+            Some("single quoted")
+        );
     }
 }

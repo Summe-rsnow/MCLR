@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.33`
-- **Next Milestone**: `v0.0.34` (towards `v0.1.0`)
+- **Current Version**: `0.0.34`
+- **Next Milestone**: `v0.0.35` (towards `v0.1.0`)
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -39,7 +39,5 @@
 | v0.0.32 | Community session resume, honest modpack progress, slow-link download fix, strict loader-aware updates & failed-task cleanup | done | 7f7446a | v0.0.32 | 2026-11-01 |
 | v0.0.33 | Public Microsoft OAuth client ID, device code flow & accounts refresh | done | ed0e919 | v0.0.33 | 2026-11-02 |
 
+| v0.0.34 | TypeScript 6.0.3, secrets via .env, shadow clipping & mod update race fix | done | (pending) | v0.0.34 | 2026-11-02 |
 
----
-
-> For detailed historical slice plans and acceptance criteria from past releases, see [Historical Progress Archive](progress-archive.md).

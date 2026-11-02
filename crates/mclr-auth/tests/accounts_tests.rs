@@ -1,4 +1,3 @@
-use mclr_auth::DEFAULT_MS_CLIENT_ID;
 use mclr_auth::microsoft::{MicrosoftAuthService, MsAuthEndpoints};
 use mclr_auth::offline::{OfflineUuidMode, compute_offline_uuid};
 use mclr_auth::skin::crop_skin_head;
@@ -15,8 +14,11 @@ fn test_offline_uuid_steve_rfc4122_v3() {
     assert_eq!(uuid, "5627dd98e6be3c21b8a8e92344183641");
 }
 
+static ENV_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test]
 async fn test_store_dpapi_aes_gcm_roundtrip() {
+    let _lock = ENV_MUTEX.lock().await;
     let temp_dir = tempfile::tempdir().unwrap();
     let data_dir_str = temp_dir.path().to_str().unwrap().to_string();
 
@@ -239,14 +241,27 @@ async fn test_xsts_xerr_error_mappings() {
 }
 
 #[tokio::test]
-async fn test_default_client_id_used_when_unconfigured() {
+async fn test_missing_client_id_returns_not_configured() {
+    let _lock = ENV_MUTEX.lock().await;
+    let temp = tempfile::tempdir().unwrap();
     unsafe {
-        std::env::remove_var("MCLR_MS_CLIENT_ID");
+        std::env::set_var("MCLR_DATA_DIR", temp.path().to_str().unwrap());
+        std::env::remove_var(mclr_core::KEY_MS_CLIENT_ID);
     }
 
     let client = Client::new();
-    let service = MicrosoftAuthService::new(client, MsAuthEndpoints::default(), None).unwrap();
-    assert_eq!(service.client_id(), DEFAULT_MS_CLIENT_ID);
+    let err = MicrosoftAuthService::new(client, MsAuthEndpoints::default(), None).unwrap_err();
+    assert_eq!(err.code(), "notConfigured");
+
+    let app_err = AppError::from(err);
+    assert_eq!(app_err.code, "notConfigured");
+    assert_eq!(
+        app_err.params.get("what").map(|s| s.as_str()),
+        Some("microsoft")
+    );
+    unsafe {
+        std::env::remove_var("MCLR_DATA_DIR");
+    }
 }
 
 #[tokio::test]

@@ -338,7 +338,7 @@ function navigateToDetail(id: string, tab?: string) {
           <TransitionGroup
             :name="group.items.length > 24 ? undefined : 'm-list'"
             tag="div"
-            class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 pt-2"
+            class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 pt-2 pb-1.5"
           >
             <InstanceCard
               v-for="inst in group.items"

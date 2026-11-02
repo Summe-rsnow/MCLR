@@ -1255,7 +1255,7 @@ export type ScreenshotsPagedResult = {
 	total: number,
 };
 
-/**  Presence status of optional launcher secrets. */
+/**  Presence status of optional launcher features and secrets. */
 export type SecretsStatus = {
 	msClientId: boolean,
 	curseforgeApiKey: boolean,

@@ -38,7 +38,7 @@ Additional CSS variables set by `applyTheme`:
 
 ## 2. Surface Classes & Materials (`src/ui/theme/material.css`)
 
-- `.m-page`: Standard page container (`max-width: 1120px`, `px-8 pt-4 pb-6`, `gap-5`). All feature pages and detail sub-tabs standardize on this container to ensure 0 horizontal layout shift.
+- `.m-page`: Standard page container (`max-width: 1120px`, `px-8 pt-4 pb-6`, `gap-5`, `overflow-x: clip`). Uses `clip` rather than `hidden` so the container never computes `overflow-y: auto` or creates a secondary scroll container inside `main`.
 - `.m-panel`: Sidebar/navigation chrome (`panel` bg + `line` inner border in flat; translucent blurred surface in glass).
 - `.m-card`: Raised card surface (`raised` bg + `line` border + `shadow-1` in flat; blurred specular card in glass). Used via `<MCard>`.
 - `.m-well`: Sunken container (`sunken` bg + `line` border; opaque in both materials for legibility). Used via `<MCard variant="well">`.

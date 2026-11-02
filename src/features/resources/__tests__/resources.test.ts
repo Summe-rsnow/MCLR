@@ -528,6 +528,36 @@ describe('Resources feature unit tests', () => {
     expect(wrapper.text()).toContain('Patched API')
     expect(wrapper.text()).not.toContain('Ignored')
   })
+  it('does not wipe discovered updateAvailable or latestFile when resources://patch arrives', async () => {
+    const latest = dummyEntries[1]!.latestFile!
+    const entry = makeEntry({
+      fileName: 'sodium.jar',
+      title: 'Sodium',
+      updateAvailable: true,
+      latestFile: latest,
+    })
+    const { wrapper } = await mountList([entry])
+
+    patchBus.handlers[0]!({
+      payload: {
+        requestId: 'req-1',
+        instanceId: 'inst-1',
+        patches: [
+          {
+            fileName: 'sodium.jar',
+            icon: 'https://example.com/icon.webp',
+            updateAvailable: false,
+            latestFile: null,
+          },
+        ],
+      },
+    })
+    await flushPromises()
+
+    const item = wrapper.findComponent({ name: 'ResourceItemRow' })
+    expect(item.props('entry').updateAvailable).toBe(true)
+    expect(item.props('entry').latestFile).toEqual(latest)
+  })
 
   it('waits for the update task before reporting a single update as successful', async () => {
     const latest = dummyEntries[1]!.latestFile!

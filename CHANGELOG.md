@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.34] - 2026-11-02
+
+TypeScript 6.0.3, secrets via .env, instance shadow clipping fix & mod update race fix.
+
+### Fixed
+- **Instance card shadow clipping**: Resolved an issue where `.m-collapse-inner` with persistent `overflow: hidden` sliced off the bottom and side shadows of instance cards; `MCollapse` now transitions to `overflow: visible` after expanding (`transition: overflow 0s allow-discrete 240ms`), allowing card elevations and hover glow to diffuse naturally without clipping.
+- **Mod update count wiped by background patches**: Fixed a race condition where entering the mod list checked updates and displayed a discovery toast, only for the background project-metadata streaming task (`resources://patch`) to arrive moments later with hardcoded `update_available: Some(false)` and reset the count back to 0.
+
+### Changed
+- **TypeScript 6.0.3 Upgrade**: Upgraded `typescript` from `5.9.3` to `6.0.3` across the frontend toolchain.
+- **Secrets via .env**: Stored Microsoft client ID and CurseForge keys strictly in local `.env` (git-ignored) with a clean `.env.example` template; zero secrets or IDs hardcoded in binaries.
+- **Dependencies Upgrade**: Upgraded `@iconify-json/lucide` to `1.2.150`, `@tanstack/vue-virtual` to `3.13.50`, `vue-tsc` to `3.3.14`, `@types/node` to `26.6.6`, and Cargo dependencies (`zip` 9.2.2, `cc` 1.11.0).
+- **tsconfig Cleanups**: Removed deprecated `baseUrl` compiler option in `tsconfig.json` for seamless TypeScript 6.x / 7.x compatibility.
+
 ## [0.0.33] - 2026-11-02
 
 Out-of-the-box Microsoft Account OAuth 2.0 device code login, auto-closing device dialog & accounts refresh.

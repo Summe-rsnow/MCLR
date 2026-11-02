@@ -2,7 +2,6 @@
 
 use std::time::Duration;
 
-use mclr_core::secrets::{KEY_CURSEFORGE_API_KEY, get_secret};
 use mclr_core::settings::SourcePriority;
 use mclr_net::mirror::{SourceKind, racing_ladder, rewrite_url};
 use reqwest::Client;
@@ -138,7 +137,7 @@ impl CurseForgeClient {
             .build()
             .unwrap_or_else(|_| Client::new());
 
-        let api_key = get_secret(KEY_CURSEFORGE_API_KEY);
+        let api_key = mclr_core::get_secret(mclr_core::KEY_CURSEFORGE_API_KEY);
 
         Self {
             client,

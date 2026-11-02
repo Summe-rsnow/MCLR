@@ -8,3 +8,9 @@ src-tauri/gen/
 .DS_Store
 Thumbs.db
 .shots/
+
+# CurseForge artwork assets
+/cover-art.png
+/icon.png
+/logo.png
+/tile-art.png

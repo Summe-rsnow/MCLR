@@ -26,7 +26,9 @@ pub struct ResourcePatch {
     pub tags: Option<Vec<String>>,
     pub mod_id: Option<String>,
     pub project_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_file: Option<CompFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub update_available: Option<bool>,
     pub dependents: Option<Vec<String>>,
     pub state: Option<ResourceState>,
@@ -250,7 +252,7 @@ pub async fn resources_list(
                     mod_id: Some(m.mod_id.clone()),
                     project_id: project_id.clone(),
                     latest_file: None,
-                    update_available: Some(false),
+                    update_available: None,
                     dependents: None,
                     state: Some(ResourceState::Ok),
                     icon: mod_icon(remote_icon, m.icon.as_deref()),

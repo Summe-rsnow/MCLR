@@ -1,9 +1,6 @@
 //! Launcher self-update wrapper around Tauri updater plugin manifest and runtime configs.
 
-use mclr_core::{
-    AppError, get_secret,
-    secrets::{KEY_UPDATE_ENDPOINT, KEY_UPDATE_PUBKEY},
-};
+use mclr_core::AppError;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;
@@ -69,10 +66,10 @@ impl UpdateConfig {
     /// If either secret is missing or empty, returns `UpdateError::NotConfigured`.
     /// Appends `?channel=<channel>` or `&channel=<channel>` to the endpoint URL.
     pub fn from_runtime(channel: &str) -> Result<Self, UpdateError> {
-        let endpoint_raw = get_secret(KEY_UPDATE_ENDPOINT)
+        let endpoint_raw = mclr_core::get_secret(mclr_core::KEY_UPDATE_ENDPOINT)
             .filter(|s| !s.trim().is_empty())
             .ok_or(UpdateError::NotConfigured)?;
-        let pubkey = get_secret(KEY_UPDATE_PUBKEY)
+        let pubkey = mclr_core::get_secret(mclr_core::KEY_UPDATE_PUBKEY)
             .filter(|s| !s.trim().is_empty())
             .ok_or(UpdateError::NotConfigured)?;
 
@@ -83,14 +80,12 @@ impl UpdateConfig {
         } else {
             channel.trim()
         };
-        // Append or replace query parameter channel
         let mut query_pairs: Vec<(String, String)> = endpoint
             .query_pairs()
             .filter(|(k, _)| k != "channel")
             .map(|(k, v)| (k.into_owned(), v.into_owned()))
             .collect();
         query_pairs.push(("channel".to_string(), active_channel.to_string()));
-
         endpoint
             .query_pairs_mut()
             .clear()
@@ -245,12 +240,6 @@ mod tests {
 
     #[test]
     fn test_update_not_configured_when_env_missing() {
-        // Ensure env is clear for test
-        unsafe {
-            std::env::remove_var(KEY_UPDATE_ENDPOINT);
-            std::env::remove_var(KEY_UPDATE_PUBKEY);
-        }
-
         let res = UpdateConfig::from_runtime("stable");
         assert!(matches!(res, Err(UpdateError::NotConfigured)));
         let app_err: AppError = res.unwrap_err().into();

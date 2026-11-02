@@ -771,9 +771,13 @@ onMounted(async () => {
         if (patch.modId !== undefined) cur.modId = patch.modId
         if (patch.projectId !== undefined) cur.projectId = patch.projectId
         if (patch.icon !== undefined) cur.icon = patch.icon
-        if (patch.latestFile !== undefined) cur.latestFile = patch.latestFile
+        if (patch.latestFile !== undefined && patch.latestFile !== null) {
+          cur.latestFile = patch.latestFile
+        }
         if (patch.updateAvailable !== undefined && patch.updateAvailable !== null) {
-          cur.updateAvailable = patch.updateAvailable
+          if (patch.updateAvailable || !cur.updateAvailable) {
+            cur.updateAvailable = patch.updateAvailable
+          }
         }
         if (patch.state !== undefined && patch.state !== null) cur.state = patch.state
       }

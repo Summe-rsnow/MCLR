@@ -3,7 +3,7 @@
 ## Stack
 - **Shell**: Tauri 2.x stable (`tauri = "2"`, `@tauri-apps/cli@^2`), WebView2 on Windows 10/11 x64.
 - **Backend**: Rust edition 2024, `rust-version = "1.99"`, Cargo workspace (`resolver = "3"`), `tokio`, `reqwest` (rustls).
-- **Frontend**: Vue 3.5 + TypeScript + Vite 8 + Pinia + vue-router (hash history) + vue-i18n 11 (composition mode) + UnoCSS (`presetWind4`, `presetIcons` with `@iconify-json/lucide`) + `culori` (OKLCH palette).
+- **Frontend**: Vue 3.5 + TypeScript 6.0 + Vite 8 + Pinia + vue-router (hash history) + vue-i18n 11 (composition mode) + UnoCSS (`presetWind4`, `presetIcons` with `@iconify-json/lucide`) + `culori` (OKLCH palette).
 - **Toolchain**: Oxc suite (`oxlint` + `oxfmt`) for lightning-fast linting and code formatting; `tauri-specta` + `specta` generating `src/ipc/bindings.ts`.
 
 ---
@@ -13,7 +13,7 @@
 - `mclr-core`: paths, settings store, `AppError`, daily rolling logging, `TaskCenter`, secrets, events, shared traits (`AccountSession`).
 - `mclr-net`: HTTP client, proxy/DoH (`hickory-resolver`), mirror rewrite, source racing ladder, chunked downloader with dynamic work-stealing.
 - `mclr-game`: version JSON model, rules, libraries, assets, instances, Java manager, launch pipeline, process watch, install pipeline.
-- `mclr-auth`: offline, Microsoft OAuth 2.0 (device code flow), authlib-injector/Yggdrasil, Yggdrasil Connect, skin/cape, DPAPI+AES-256-GCM encrypted account store.
+- `mclr-auth`: offline, Microsoft OAuth 2.0 (device code flow with out-of-the-box public client ID), authlib-injector/Yggdrasil, Yggdrasil Connect, skin/cape, DPAPI+AES-256-GCM encrypted account store.
 - `mclr-loaders`: Fabric, LegacyFabric, Forge, NeoForge, Cleanroom, OptiFine, LiteLoader, LabyMod 4 installers and compatibility resolution.
 - `mclr-comp`: Modrinth, CurseForge, unified metadata model, dependency resolver, local mod scan, Jar-in-Jar inspector, modpack import/export (`.mrpack`, CurseForge `.zip`).
 - `mclr-saves`: NBT (`fastnbt`), saves, datapacks, `servers.dat`, SLP ping/SRV (Happy Eyeballs RFC 8305).
@@ -139,10 +139,8 @@ All floating, modal, and drawer surfaces follow a unified overlay architecture r
 Self-update is a **placeholder in this build** and the UI says so (「敬请期待」)
 instead of failing:
 
-- `update_check` reads the signed Tauri updater manifest, which requires
-  `MCLR_UPDATE_ENDPOINT` + `MCLR_UPDATE_PUBKEY` (env, `<data>/.env` or `./.env` via
-  `mclr_core::get_secret`). Without both it returns `notConfigured`.
-- The Settings → 检查更新 tab asks `secrets_status` first: when the pair is missing
+- `update_check` returns `notConfigured` until an official signed feed endpoint is configured.
+- The Settings → 检查更新 tab asks `secrets_status` first: when updater is unconfigured
   it renders a disabled button plus a 「敬请期待」 badge and never calls the command,
   so the tab has no error path to explain.
 - `mclr-cli update check --channel stable` still exercises the manifest path when

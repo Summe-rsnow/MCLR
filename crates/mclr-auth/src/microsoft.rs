@@ -192,10 +192,6 @@ pub struct MicrosoftLoginResult {
 }
 
 /// Well-known public Azure Client ID used for Minecraft device-code authentication (PCL / PrismLauncher standard).
-///
-/// Can be overridden at runtime via `MCLR_MS_CLIENT_ID` in environment variables or `.env`.
-pub const DEFAULT_MS_CLIENT_ID: &str = "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb";
-
 #[derive(Debug)]
 pub struct MicrosoftAuthService {
     client: Client,
@@ -211,10 +207,9 @@ impl MicrosoftAuthService {
     ) -> Result<Self, AuthError> {
         let client_id = match custom_client_id {
             Some(id) if !id.trim().is_empty() => id.trim().to_string(),
-            Some(_) => return Err(AuthError::NotConfigured { what: "microsoft" }),
-            None => match mclr_core::secrets::get_secret("MCLR_MS_CLIENT_ID") {
+            _ => match mclr_core::get_secret(mclr_core::KEY_MS_CLIENT_ID) {
                 Some(id) if !id.trim().is_empty() => id.trim().to_string(),
-                _ => DEFAULT_MS_CLIENT_ID.to_string(),
+                _ => return Err(AuthError::NotConfigured { what: "microsoft" }),
             },
         };
 

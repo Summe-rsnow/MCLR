@@ -14,7 +14,10 @@ pub mod test_utils;
 pub use account_session::{AccountKind, AccountSessionProvider, ResolvedAccountSession};
 pub use error::CoreError;
 pub use logging::{init_logging, is_launcher_log_file, prune_old_logs};
-pub use secrets::{SecretsStatus, get_secret, secrets_status};
+pub use secrets::{
+    KEY_CURSEFORGE_API_KEY, KEY_MS_CLIENT_ID, KEY_UPDATE_ENDPOINT, KEY_UPDATE_PUBKEY,
+    SecretsStatus, get_secret, secrets_status,
+};
 pub use settings::{
     CompFavoriteEntry, CompSettings, GameFolderEntry, GameSettings, JavaSettings, LanguageSettings,
     LaunchSettings, MaterialMode, NetSettings, ProxyMode, Settings, SettingsStore, SourcePriority,

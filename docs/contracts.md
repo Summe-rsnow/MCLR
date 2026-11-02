@@ -1,113 +1,160 @@
 # Cross-Cutting Contracts
 
+This document is the definitive engineering specification for runtime invariants, IPC security, error semantics, UI behavior, and quality verification across MCLR.
+
+---
+
 ## 1. Paths & Filesystem (`mclr_core::paths`)
-- Root data directory: `data_dir() = %APPDATA%/MCLR` (override via environment variable `MCLR_DATA_DIR` during testing).
-- Standard children:
+
+- **Root Data Directory**: `data_dir() = %APPDATA%/MCLR` (overridable via `MCLR_DATA_DIR` during automated testing).
+- **Standard Children**:
   - `config.json`: Application settings.
   - `accounts.enc`: AES-256-GCM encrypted account database.
-  - `master.key`: DPAPI-protected 32-byte encryption key.
+  - `master.key`: DPAPI-protected 32-byte master encryption key.
   - `cache/`: Download chunks, UVMC manifests, asset caches.
   - `logs/`: Daily rolling launcher logs (`mclr.YYYY-MM-DD.log`).
-  - `runtime/`: Managed Java installations.
+  - `runtime/`: Managed Java runtime installations.
   - `tools/`: Downloaded utility helpers (e.g. `authlib-injector.jar`).
-  - `.minecraft/`: Default game folder (if user selects it).
+  - `.minecraft/`: Default game folder (when selected by user).
 
 ---
 
-## 2. Settings Store (`mclr_core::settings`)
-- Unified `Settings` struct: `#[serde(rename_all="camelCase", default)]` with `schemaVersion: u32 = 2` (v1 configs are migrated on load: recommended JVM arguments + GPU preference).
-- Persistence: Atomic write (write to `.tmp` then rename), debounced 300 ms save.
-- IPC API:
+## 2. Configuration & State Management (`mclr_core::settings`)
+
+### 2.1 Settings Store
+- **Unified Schema**: `Settings` struct with `#[serde(rename_all="camelCase", default)]` and `schemaVersion: u32 = 2` (v1 configurations migrate automatically on load).
+- **Persistence**: Atomic write (write to `.tmp` then rename), debounced 300 ms flush.
+- **IPC Interface**:
   - `settings_get() -> Settings`
-  - `settings_patch(patch: serde_json::Value)`: RFC 7386 JSON Merge Patch; deserializes into `Settings` to validate, rejects invalid fields with `AppError{code: "settings.invalid"}`.
-  - Event: Broadcasts on `settings://changed` channel when configuration mutates.
-- Modularity: Feature sub-settings (`launch`, `java`, `net`, `ui`, `update`, `language`) reside in dedicated files under `mclr-core/src/settings/` and are registered in `settings/mod.rs`.
+  - `settings_patch(patch: serde_json::Value)`: RFC 7386 JSON Merge Patch; deserializes into `Settings` to validate, rejects unknown fields with `AppError { code: "settings.invalid" }`.
+  - **Broadcast**: Emits on Tauri channel `settings://changed` when configuration mutates.
+- **Modularity**: Sub-settings (`launch`, `java`, `net`, `ui`, `update`, `language`) reside in dedicated files under `mclr-core/src/settings/`.
+
+### 2.2 System Tray & Background Residency (`src-tauri/src/tray.rs`)
+- **Tray Menu**: Built once during `setup` with window icon; actions: `显示主窗口` / `隐藏到托盘` / `退出 MCLR`. Left click restores window, right click opens context menu.
+- **Background Residency**: `system.keepInBackground` (default `false`) controls window close behavior:
+  - When `true`: `WindowEvent::CloseRequested` for the main window is intercepted and hides the window so downloads/tasks continue running.
+  - When `false`: Closing the window terminates the application cleanly.
+- **Thread Safety**: `settings_patch` mirrors the residency flag into atomic state (`tray::BackgroundResidency`), preventing synchronous window-thread blocking.
+- **Single-Instance Wake**: Subsequent launches forward CLI arguments via `tauri-plugin-single-instance` and invoke `tray::show_main` to restore hidden windows.
+- **First-Close Prompt**: The initial close prompts user preference with a 「不再提醒」 checkbox, storing choices in `system.keepInBackground` and `system.closePromptDismissed`.
+
+### 2.3 Launcher Logging & Rotation (`mclr_core::logging`)
+- **Log Files**: Stored in `paths::logs_dir()` as `mclr.YYYY-MM-DD.log` (`tracing_appender` daily rotation).
+- **File Retention**: Guarded by `system.logRetentionDays` (default 7 days). The newest log is always preserved as it is held open by the active appender.
+- **Pruning & Maintenance**:
+  - `launcher_logs_prune(retentionDays?)`: Prunes logs exceeding retention threshold.
+  - `launcher_logs_clear()`: Purges all historical logs except the currently active file.
+  - Setting mutations on `system.logRetentionDays` trigger immediate background pruning.
+  - `system.logLevel` is baked into `EnvFilter` at boot; modifications take effect on next launch.
 
 ---
 
-## 2b. System Tray & Background Residency (`src-tauri/src/tray.rs`)
-- The tray icon (`main-tray`) is built once in `setup` with the window icon; menu: 显示主窗口 / 隐藏到托盘 / 退出 MCLR, left click restores the window, right click opens the menu.
-- `system.keepInBackground` (default `false`) controls the window close button: when on, `WindowEvent::CloseRequested` for the `main` window is prevented and the window is hidden, so downloads/tasks keep running; when off, closing exits the app as before.
-- The close handler runs on the window thread and must not await the settings store, so `settings_patch` mirrors the flag into `tray::BackgroundResidency` (an `AtomicBool`); startup seeds it from the loaded settings.
-- A second launch (single-instance plugin) calls `tray::show_main` before forwarding `--launch`, so a launcher that is sitting in the tray comes back instead of staying invisible.
-- The first close asks the user (hide to tray vs. quit) with a 「不再提醒」 checkbox: the picked action is written to `system.keepInBackground`, and `system.closePromptDismissed` records whether the question should be skipped next time (both editable in 设置 → 系统与诊断 → 窗口与后台).
+## 3. Error Handling Architecture
+
+- **Backend Discipline**: Every backend crate maintains a `thiserror` enum implementing `fn code(&self) -> &'static str` (`<crate>.<kind>`, e.g. `net.timeout`, `auth.xsts.noXboxAccount`) and an `Into<AppError>` conversion.
+- **Structured Representation**: `AppError` serializes to:
+  ```json
+  { "code": "crate.kind", "params": { "key": "value" }, "detail": "Optional technical context" }
+  ```
+- **Frontend Localization**: The webview never parses raw English error strings. The UI maps `error.<code>` from `src/locales/zh-CN/error.json` via `useErrorText().formatError(err)`.
 
 ---
 
-## 2c. Launcher Logs (`mclr_core::logging` + `src-tauri/src/ipc/update.rs`)
-- Files live in `paths::logs_dir()` as `mclr.<YYYY-MM-DD>.log`, one per day (`tracing_appender` daily rotation).
-- Retention is a *file* window (`system.logRetentionDays`, default 7): the newest file is always kept, because it is the one the running appender writes to.
-- `launcher_logs_prune(retentionDays?)` applies the window on demand (default = stored setting); `launcher_logs_clear()` deletes every launcher log except the newest; `launcher_logs_dir()` returns the directory so 「打开日志文件夹」 can reuse `path_open`. Both cleanup commands return `{ removed, skipped }`.
-- A `settings_patch` that touches `system.logRetentionDays` prunes immediately in the background, so lowering the window takes effect without restarting.
-- `system.logLevel` is baked into the `EnvFilter` at startup: changing it still requires a restart (the settings row says so).
+## 4. Background Tasks & Progress Windows (`mclr_core::tasks`)
 
----
-
-## 3. Error Handling
-- Each backend crate maintains a `thiserror` enum implementing `fn code(&self) -> &'static str` (`<crate>.<kind>`, e.g. `net.timeout`, `auth.xsts.noXboxAccount`) and an `Into<AppError>` conversion.
-- IPC handlers return `Result<T, AppError>`. `AppError` serializes to `{ "code": "...", "params": { ... }, "detail": "..." }`; the UI renders `error.<code>` from `src/locales/zh-CN/error.json` via `useErrorText()`.
-- Frontend maps error codes to localized strings in `locales/*/error.json`.
-
----
-
-## 4. Background Tasks (`mclr_core::tasks`)
-- `TaskCenter` holds an in-memory tree of active and completed tasks:
+- **Task Hierarchy**: `TaskCenter` manages an in-memory tree of active and completed tasks:
   ```rust
-  pub struct Task {
+  pub struct TaskNode {
       pub id: String,
       pub parent_id: Option<String>,
       pub title_key: String,
       pub title_params: HashMap<String, String>,
-      pub state: TaskState, // waiting | running | success | canceled | failed
+      pub state: TaskState, // waiting | running | paused | success | canceled | failed
       pub progress: f32,    // 0.0 ..= 1.0
-      pub speed_bps: Option<u64>,
+      pub speed_bps: u64,
       pub error: Option<AppError>,
   }
   ```
-- Cancellation & pause managed via `tokio_util::sync::CancellationToken`.
-- Event streaming: Coalesced updates broadcast on Tauri channel `tasks://update`.
-- IPC API: `tasks_list`, `task_cancel(id)`, `task_pause(id)`, `task_resume(id)`.
-- All long-running operations (game installation, resource download, modpack import/export, self-updates) must register as background tasks with localized `task.*` title keys.
+- **Progress Windows**: Multi-stage tasks utilize `TaskCenter::set_progress_window(id, base, span)` to map independent 0.0..=1.0 stage reports into monotonic slices (e.g. Modpack installation: 8% archive -> 62% base/loader -> 28% files -> 2% overrides). Progress never rewinds.
+- **Task Lifecycle**: Controlled via `TaskControl` checkpoints. Tasks pause and cancel cooperatively at safe boundaries.
+- **Task Cleansing**: `TaskCenter::clear_finished()` removes terminal tasks (`success`, `failed`, `canceled`). A finished child is kept while its parent task is still active.
+- **IPC Interface**: `tasks_list`, `tasks_clear_finished`, `task_cancel(id)`, `task_pause(id)`, `task_resume(id)`. Broadcasts stream on Tauri channel `tasks://update`.
 
 ---
 
-## 5. IPC Naming & Handler Conventions
-- **Command Naming**: Commands follow `<feature>_<verb>` snake_case (e.g. `instances_list`, `install_version_compat`).
-- **Payload Naming**: JSON fields are camelCase on both frontend and backend (`#[serde(rename_all="camelCase")]`).
-- **Event Naming**: Channel events follow `<feature>://<name>` (e.g. `launch://logBatch`, `tasks://update`).
-- **Non-Blocking Rule**: Any `#[tauri::command]` performing synchronous disk I/O, archive compression, cryptographic hashing, NBT parsing, or image manipulation **must** run inside `mclr_app::ipc::run_blocking(...)`.
-- **Registry**: Commands are registered in `src-tauri/src/commands.rs` inside marked `// [feature]` blocks.
+## 5. IPC Protocol & Security Containment
+
+### 5.1 Protocol Conventions
+- **Command Naming**: Commands follow `<feature>_<verb>` snake_case (e.g. `instances_list`, `modpack_import_file`).
+- **Data Naming**: JSON payloads use `camelCase` across frontend and backend boundaries (`#[serde(rename_all="camelCase")]`).
+- **Channel Events**: Tauri events follow `<feature>://<name>` (e.g. `tasks://update`, `launch://logBatch`, `accounts://deviceCode`).
+- **Non-Blocking Execution**: Any synchronous disk I/O, archive compression, cryptographic hashing, NBT parsing, or image manipulation **must** run inside `tokio::task::spawn_blocking` or `mclr_app::ipc::run_blocking`.
+- **Command Registry**: All commands are explicitly registered in `src-tauri/src/commands.rs` within marked `// [feature]` blocks.
+
+### 5.2 Path Containment (IPC Validation)
+All path-taking IPC commands validate targets in `src-tauri/src/security.rs` prior to execution:
+
+| Tier | Guarded Commands | Constraint |
+|---|---|---|
+| `ensure_allowed` / `ensure_all_allowed` | `resources_delete`, `resource_toggle`, `resources_import`, `screenshot_*`, `tools_save_skin`, `tools_custom_download`, `tools_cleanup_failed_tasks` | Target path must canonicalize strictly inside the launcher data directory, cache/logs/runtime/tools directories, or configured game instances |
+| `ensure_not_system_path` | `modpack_inspect`, `schematic_inspect`, `tools_generate_skin_avatar`, `path_open`, `assets_allow` | User-picked files may reside anywhere on user storage, but system roots, `\Windows`, `Program Files`, and `ProgramData` are refused |
+
+*Note*: Both tiers resolve the nearest existing ancestor, neutralizing `..` traversal, junctions, symlinks, and Windows verbatim (`\\?\`) bypasses.
+
+### 5.3 Content Security Policy (CSP)
+Enforced in `src-tauri/tauri.conf.json` and verified by `src-tauri/tests/csp_test.rs`:
+- `script-src 'self'`: Zero `'unsafe-eval'` or `'unsafe-inline'` in production.
+- `connect-src 'self' ipc: http://ipc.localhost`: **The webview never connects to the internet directly**; all network traffic routes through Rust.
+- `img-src`: Whitelists remote asset hosts (Modrinth, ForgeCDN, Minecraft/Microsoft news domains), `data:` (skins/SVGs), and `asset:` (local screenshots/backgrounds). No blanket `https:`.
+- `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, `form-action 'none'`.
+- Local filesystem access through `asset:` is restricted to runtime-authorized scopes (`ipc::assets::allow_defaults`).
 
 ---
 
-## 6. High-Risk Secondary Confirmation Contract
-Destructive or irreversible operations must mandate explicit secondary confirmation via `useDialog().confirmDanger(...)`:
+## 6. Internationalization & Locale Discipline (i18n)
+
+- **Engine**: `vue-i18n` v11 in Composition mode (`legacy: false`), default `locale` and `fallbackLocale` = `zh-CN`.
+- **Key Scheme**: Dot-separated hierarchy `area.sub.element` in camelCase (e.g. `accounts.dialog.msDeviceTitle`).
+- **Bundle Aggregation**: Locale files reside in `src/locales/<locale>/<feature>.json` and auto-merge via `import.meta.glob('./locales/*/*.json', { eager: true })`.
+- **Formatting Rules**: Plurals use `vue-i18n` pipe syntax. Numbers, byte sizes, and dates utilize deterministic app formatters (`formatBytes`, `formatDate`) bound to `language.formatCulture`.
+- **Lint Gate**: `scripts/lint-i18n.mjs` enforces:
+  - Zero raw CJK characters in `src/**/*.{vue,ts}` outside `src/locales/`, `*.test.ts`, and `mock.ts`.
+  - Every static `t('...')` reference must resolve to an existing key in `zh-CN`.
+  - Dynamic runtime keys (`t('error.' + code)`, `t(task.titleKey)`) must exist in their respective domain locale tables.
+
+---
+
+## 7. High-Risk Secondary Confirmation Contract
+
+Destructive or irreversible operations mandate explicit secondary confirmation via `useDialog().confirmDanger(...)`:
 
 1. **Covered Operations**:
-   - Deleting a Minecraft instance (removes files and game records).
+   - Deleting a Minecraft instance (purges files and configuration).
    - Deleting a world save (`saves.deleteConfirm`).
    - Removing an account from the local vault.
    - Deleting a Java runtime configuration.
    - Deleting local mods, resource packs, shaders, or server entries.
-   - Cleaning cache categories in Toolbox (permanently deletes HTTP, log, or skin caches).
+   - Cleaning cache categories in Toolbox (permanently deletes cache or log files).
    - Clearing active game process log buffers.
    - Canceling active background tasks or downloading jobs.
    - Force-terminating / killing a running Minecraft process.
 2. **Visual Contract**:
-   - Must render a prominent severity warning/danger icon badge (`i-lucide-triangle-alert` in `bg-danger-soft text-danger-fg`).
-   - Detailed callout box (`.m-well`) highlighting the exact item title, file path, or size to be purged.
-   - Confirm action button must use `variant="danger"`.
+   - Severity badge with warning/danger icon (`i-lucide-triangle-alert` in `bg-danger-soft text-danger-fg`).
+   - Detailed callout well (`.m-well`) highlighting the exact item title, file path, or size to be purged.
+   - Confirm action button styled with `variant="danger"`.
 3. **Acknowledgment Checkbox Guard (`requireCheckbox`)**:
-   - For high-severity data loss operations (such as permanently deleting a world save), an acknowledgment checkbox (e.g. `saves.deleteConfirm.checkbox`) must be specified. The confirm button remains disabled until the user checks this acknowledgment.
+   - Extreme-risk operations (such as world deletion) require checking an explicit acknowledgment checkbox before the confirm button enables.
 
 ---
 
-## 7. 7-Dimension UI Component Contract
-Every component in `src/ui/` and every feature surface must satisfy seven design dimensions verified across test and lint suites:
+## 8. UI Component & Motion Contract
 
-1. **Light Mode**: High-contrast OKLCH tonal palette ($\ge 4.5:1$ text contrast vs canvas/raised, $\ge 3:1$ borders/controls).
-2. **Dark Mode**: Low-glare dark OKLCH tonal palette ($\ge 4.5:1$ text contrast, $\ge 3:1$ interactive elements).
-3. **Flat Material**: Crisp, opaque, or subtle tinted surfaces (`bg-canvas`, `bg-raised`, `bg-sunken`, `bg-overlay`) without backdrop blur overhead.
+Every component in `src/ui/` and all feature views must satisfy seven core design dimensions:
+
+1. **Light Mode**: High-contrast OKLCH tonal palette ($>= 4.5:1$ text contrast vs canvas/raised, $>= 3:1$ borders/controls).
+2. **Dark Mode**: Low-glare dark OKLCH tonal palette ($>= 4.5:1$ text contrast, $>= 3:1$ interactive elements).
+3. **Flat Material**: Crisp, opaque surfaces (`bg-canvas`, `bg-raised`, `bg-sunken`, `bg-overlay`) without backdrop blur overhead.
 4. **Liquid Glass Material**: Acrylic/Mica translucency, frosted backdrop blur, specular inner border highlights, and `.m-refract` SVG displacement filter.
 5. **Skeleton State**: Components must provide an inline skeleton placeholder (via `MSkeleton` or `:loading="true"` / `:skeletonLines="N"`) matching the exact border-radius and bounding box of real content to prevent Cumulative Layout Shift (CLS).
 6. **Loading State**: Non-blocking loading indicators on buttons (`:loading="true"`), inputs, and lists without freezing user navigation.
@@ -118,22 +165,41 @@ Every component in `src/ui/` and every feature surface must satisfy seven design
 
 ---
 
-## 8. Zero-Warning & Zero-Suppression Policy
-Code quality across backend and frontend is strictly enforced with zero allowable warnings and zero warning suppressions:
+## 9. Performance Invariants & Resource Guarantees
 
-- **Rust Backend**:
-  - `cargo clippy --workspace --all-targets -- -D warnings` must pass cleanly.
-  - Zero `#[allow(...)]` attributes across all crates (including `dead_code`, `clippy::too_many_arguments`, and `async_fn_in_trait`).
-  - Functions with >7 parameters must encapsulate arguments into structured parameter objects (e.g. `ModpackExportParams`, `LaunchPipelineParams`, `ModpackImportContext`).
-- **Frontend / TypeScript / Vue**:
-  - Zero `eslint-disable`, `@ts-ignore`, or `@ts-expect-error` directives allowed in production sources.
-  - Zero unvetted `v-html` directives; all Markdown and rich HTML must be rendered through `<MMarkdown>` (which applies DOMPurify sanitization).
-  - All template icon names must be static string literals (`i-lucide-*`, `i-simple-icons-*`) so UnoCSS can extract them during build.
+Load-bearing performance invariants guarded by automated regression tests:
+
+| Area | Invariant | Guard Test |
+|---|---|---|
+| Mod Hashing (`mclr_comp::local`) | `hash_file` streams two passes over one `File` handle with a single 128 KiB buffer (pass 1: `Sha1`, pass 2: `murmur2_stream_with_len`). Never buffers the filtered file in memory. | `test_hash_file_matches_separate_sha1_and_murmur2` |
+| Mod Cache (`localmods.json`) | Mutex guards only in-memory `HashMap` clone/insert. Parsing, hashing, and serialization happen outside the lock. Keyed by path and invalidated on mtime mismatch. | `test_cache_isolation_and_toggle_migration` |
+| Cache Miss Concurrency | Cold mod scans fan out over `std::thread::scope` bounded to `min(available_parallelism, 4)` workers to cap buffer allocations. | `test_scan_local_mods_streamed_hashes_match_pinned_values` |
+| Chunked Downloader (`mclr_net`) | `chunk.downloaded` advances strictly after `write_all` flushes to disk. Slowness never exhausts error retries; slow chunks split or resume without failing. | `test_slow_chunk_splitting`, `test_slow_chunk_never_fails_the_download` |
+| Blocking Work | ZIP extraction, directory rescans, hashing, and instance scans never run on async runtime threads; they dispatch via `spawn_blocking`. | Verified by architecture rules |
+| Directory Scans | Inside `read_dir`, inspect `DirEntry::file_type()` / `metadata()`. Never call `path.is_file()` or `fs::metadata(&path)` redundantly (measured: 96 ms vs 0.7 ms over 1000 files). | Verified by architecture rules |
+| Safe Scroll Containers | Page and tab containers use `overflow-x: clip` rather than `hidden` to prevent CSS computed `overflow-y: auto` from spawning nested fake scrollports. | Verified in `material.css` & `InstanceDetailPage.vue` |
+| Long Text Virtualization | Any unbounded list or log view renders via `MVirtualList` with built-in thresholding. | Verified by log and mod tests |
+| Store Event Coalescing | High-frequency events (`tasks://update`) are batched before dispatching to frontend stores, triggering a single reactive recomputation per batch. | Verified by task benchmarks |
+| Event Lifecycle | Every event listener registered with `listen()` must unlisten on component unmount (`onBeforeUnmount` / `onUnmounted`). | Enforced across all feature views |
 
 ---
 
-## 9. Automated Verification Gate (`pnpm check`)
-Every change must pass the unified check gate before merge:
+## 10. Engineering Discipline & Verification Gate (`pnpm check`)
+
+Code quality across backend and frontend is strictly enforced with zero allowable compiler warnings and zero warning suppressions:
+
+### 10.1 Zero-Suppression Policy
+- **Rust Backend**:
+  - `cargo clippy --workspace --all-targets -- -D warnings` must pass cleanly.
+  - Zero `#[allow(...)]` attributes across all production crates.
+  - Functions with >7 parameters must encapsulate arguments into structured parameter objects.
+- **Frontend / TypeScript**:
+  - Zero `eslint-disable`, `@ts-ignore`, or `@ts-expect-error` directives in production code.
+  - Zero raw `v-html` directives; all Markdown and rich HTML must be sanitized through `<MMarkdown>`.
+  - Icon names in templates must be static string literals (`i-lucide-*`, `i-simple-icons-*`) for UnoCSS build extraction.
+
+### 10.2 Verification Gate Sequence
+Every commit must pass the unified verification pipeline:
 ```bash
 # Executed from app/
 pnpm check
@@ -142,7 +208,7 @@ The gate executes the following sequence:
 1. `cargo fmt --all --check`
 2. `cargo clippy --workspace --all-targets -- -D warnings`
 3. `cargo test --workspace`
-4. `pnpm gen:bindings` (re-exports `src/ipc/bindings.ts`, then fails if the file changed while the repo has commits)
+4. `pnpm gen:bindings` (re-exports `src/ipc/bindings.ts` and asserts idempotence)
 5. `pnpm exec oxfmt --check src`
 6. `pnpm exec oxlint`
 7. `vue-tsc --noEmit`
@@ -150,47 +216,3 @@ The gate executes the following sequence:
 9. `node scripts/lint-i18n.mjs`
 10. `node scripts/lint-ui-contracts.mjs`
 11. `vite build`
-
-## 10. Performance Invariants
-
-These are load-bearing; breaking one silently reintroduces a memory spike, a stall or a corrupted
-resume. Each is covered by a test named below.
-
-| Area | Invariant | Guard |
-|---|---|---|
-| Mod hashing (`mclr_comp::local`) | `hash_file` streams two passes over one `File` handle with a single 128 KiB buffer: pass 1 feeds `Sha1` and counts non-whitespace bytes, pass 2 re-reads (warm page cache) through `murmur2_stream_with_len`. Never buffer the whitespace-filtered file — its size is `O(file_len)` per worker. | `test_hash_file_matches_separate_sha1_and_murmur2`, `tests/local_streaming_test.rs` |
-| Mod cache (`localmods.json`, `jarinjar.json`) | The mutex only guards a `HashMap` clone/insert. `fs::metadata`, read, parse, encode and write all happen outside it. Entries are keyed by cache-file path and invalidated by an mtime mismatch, so an external writer is picked up automatically. | `test_cache_isolation_and_toggle_migration` |
-| Cache misses | Cold scans fan out over `std::thread::scope` with `min(available_parallelism, 4)` workers. The cap keeps total hash buffers at 4 × 128 KiB and leaves cores for the async runtime. | `test_scan_local_mods_streamed_hashes_match_pinned_values` |
-| Downloader (`mclr_net::downloader`) | `chunk.downloaded` advances **only** after `write_all` returns, so `chunk.current_offset()` always equals the bytes physically in `.mclr-part`. The write buffer is flushed before every `SlowChunk` split, before `checkpoint()`, and before the stream ends. | `test_slow_chunk_splitting`, `paused_task_blocks_before_any_request_and_resumes` |
-| Blocking IO | ZIP extraction, directory rescans, mod hashing and instance scans never run on an async worker: they go through `ipc::run_blocking` / `tokio::task::spawn_blocking`. | — |
-| Directory scans | Inside a `read_dir` loop, use `DirEntry::file_type()` / `DirEntry::metadata()`. `path.is_file()` and `fs::metadata(&path)` issue an extra full stat per entry — measured 96 ms vs 0.7 ms over 1000 files on Windows. | — |
-| Directory-mtime caches | Do not cache a listing on the directory's own mtime. NTFS updates it lazily (measured: unchanged in 125 of 200 write-then-stat runs), so entries added through an external tool are missed and deleted ones linger. Cache on explicit invalidation instead, or rescan. | `test_paged_listing_is_stable_across_calls` |
-| Batch downloads | `local_mods_update_many` uses `buffer_unordered(net.max_concurrentFiles.clamp(1, 16))` and deletes each superseded jar immediately after its own replacement is verified — never at batch end. | — |
-| Resource identity | Duplicate detection keys on `modId` / `projectId` only. Titles and file names are display data, not identity; two unrelated jars sharing a name must never be flagged. | `flags duplicates only for entries sharing a modId or projectId` |
-| Long text surfaces | Anything that can hold an unbounded line count renders through `MVirtualList` with its built-in `threshold` (plain DOM below, virtualised above) instead of a second template branch. Current callers use `:threshold="200"`. | `virtualizes launcher log output above the 200-line threshold` |
-| Store batches | `tasks://update` payloads are already coalesced by the backend (50 ms / 64 items). The store applies a whole batch to a clone and assigns once, so derived computeds evaluate once per batch. | — |
-| Event listeners | Every `listen()` in a component is released in `onUnmounted`. | — |
-
-## Content Security Policy
-
-`src-tauri/tauri.conf.json → app.security.csp` is enforced in the webview (`devCsp` is the looser dev variant: Vite HMR needs `ws://localhost:*` and inline bootstrap scripts).
-
-Design rules, guarded by `src-tauri/tests/csp_test.rs`:
-
-- `script-src 'self'` in production — no `'unsafe-eval'`, no `'unsafe-inline'`.
-- `connect-src 'self' ipc: http://ipc.localhost` — **the webview never talks to the internet**; every request goes through Rust. An injected script cannot exfiltrate or fetch arbitrary URLs.
-- `img-src` enumerates every remote host the UI renders (Modrinth / ForgeCDN / the Minecraft+Microsoft news domains whitelisted in `ipc/home.rs`), plus `data:` (skin heads, SVG noise) and `asset:` (local screenshots, backgrounds). Never a blanket `https:`.
-- `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, `form-action 'none'`.
-- Local files are exposed through the `asset:` protocol only for paths granted at runtime (`ipc::assets::allow_defaults` → data dir + configured game folders); the static scope list stays empty.
-- Supported hardening headers are set via `app.security.headers` (`X-Content-Type-Options: nosniff`, `Cross-Origin-Opener-Policy: same-origin`, a camera/mic/geolocation-denying `Permissions-Policy`). `Referrer-Policy` is not in Tauri's allow-list.
-
-## Path containment (IPC)
-
-Tauri v2 capabilities only restrict **plugin** commands; the app's own `#[tauri::command]`s are callable by anything inside the webview. Every command that accepts a path therefore validates it in `src-tauri/src/security.rs`:
-
-| Tier | Used by | Rule |
-|---|---|---|
-| `ensure_allowed` / `ensure_all_allowed` | `resources_delete`, `resource_toggle`, `resources_import`, `screenshot_*`, `tools_save_skin`, `tools_custom_download` | Must resolve inside the launcher data dir, cache/logs/runtime/tools dirs, or a configured game folder |
-| `ensure_not_system_path` | `modpack_inspect`, `schematic_inspect`, `tools_generate_skin_avatar`, `path_open`, `assets_allow` | Dialog-picked files may live anywhere the user owns, but filesystem roots, `\Windows`, `Program Files`, `ProgramData\Microsoft` etc. are refused |
-
-Both tiers canonicalize the nearest existing ancestor, so `..` segments, junctions and Windows verbatim (`\\?\`) prefixes cannot be used to slip past `starts_with`.

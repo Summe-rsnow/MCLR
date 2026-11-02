@@ -125,8 +125,15 @@
     visibility 0s 240ms;
 }
 .m-collapse-inner {
-  overflow: hidden;
   min-height: 0;
+  overflow: hidden;
+}
+.m-collapse[data-open='false'] .m-collapse-inner {
+  overflow: hidden;
+}
+.m-collapse[data-open='true'] .m-collapse-inner {
+  overflow: visible;
+  transition: overflow 0s allow-discrete 240ms;
 }
 
 /* m-list: TransitionGroup enter/leave 200 ms, move 240 ms */

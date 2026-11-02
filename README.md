@@ -10,7 +10,7 @@
 [![Rust](https://img.shields.io/badge/Rust-2024%20Edition-DEA584.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8DB.svg?style=flat-square&logo=tauri)](https://tauri.app/)
 [![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D.svg?style=flat-square&logo=vue.js)](https://vuejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6.svg?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6.svg?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011%20x64-0078D6.svg?style=flat-square&logo=windows)](https://www.microsoft.com/)
 
 [**下载体验**](#-下载与安装) · [**功能特性**](#-特性亮点) · [**文档导航**](#-文档导航) · [**构建指南**](#-开发与构建) · [**赞助支持**](#-赞助支持)
@@ -60,13 +60,11 @@
 
 | 文档 | 说明 |
 |---|---|
-| [**系统架构图谱**](docs/architecture.md) | Crate 职责划分、模块依赖拓扑与通信设计 |
+| [**系统架构图谱**](docs/architecture.md) | Crate 职责划分、模块依赖拓扑与进程通信模型 |
 | [**设计语言与规范**](docs/design-language.md) | Tonal Layers 颜色代号、表面层次、UI 契约与动效参数 |
-| [**接口与行为契约**](docs/contracts.md) | IPC 命令规范、错误分类、路径安全与数据校验 |
-| [**版本迭代路线图**](docs/progress.md) | 从 v0.0.1 到当前版本的全部里程碑演进记录 |
-| [**历史计划归档**](docs/progress-archive.md) | 历史里程碑详细切片计划与验收记录合辑 |
-| [**国际化规范**](docs/i18n.md) | 多语言与区域化格式约定 |
-| [**更新日志**](CHANGELOG.md) | 版本变更记录 (Keep a Changelog 格式) |
+| [**接口与行为契约**](docs/contracts.md) | IPC 命令规范、错误码体系、路径安全约束与多语言规范 (i18n) |
+| [**版本迭代路线图**](docs/progress.md) | 从 v0.0.1 到当前版本的里程碑演进记录与路线图 |
+| [**更新日志**](CHANGELOG.md) | 详尽版本变更记录 (Keep a Changelog 格式) |
 
 ---
 
