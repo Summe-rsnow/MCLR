@@ -37,4 +37,4 @@
 | v0.0.30 | Zero-allocation hashing, short-lock mod cache, parallel scans, buffered downloads, virtualised logs & legacy Forge subfolder fix | done | 5e70b61 | v0.0.30 | 2026-10-31 |
 | v0.0.31 | Glass material fix, adjacent page prefetching, dynamic comp filters & deferred modpack naming | done | 6f5a996 | v0.0.31 | 2026-11-01 |
 | v0.0.32 | Community session resume, honest modpack progress, slow-link download fix, strict loader-aware updates & failed-task cleanup | done | 7f7446a | v0.0.32 | 2026-11-01 |
-| v0.0.33 | Public Microsoft OAuth client ID, device code flow & accounts refresh | done | (pending) | v0.0.33 | 2026-11-02 |
+| v0.0.33 | Public Microsoft OAuth client ID, device code flow & accounts refresh | done | ed0e919 | v0.0.33 | 2026-11-02 |
