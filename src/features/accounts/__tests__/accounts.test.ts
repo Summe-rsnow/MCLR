@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
@@ -134,7 +134,7 @@ describe('Accounts feature', () => {
     expect(cards.length).toBe(4)
   })
 
-  it('marks the Microsoft login entry as coming soon instead of starting OAuth', async () => {
+  it('enables Microsoft login entry and initiates OAuth on click', async () => {
     const wrapper = mount(AccountsPage, {
       global: { plugins: [i18n] },
     })
@@ -147,18 +147,21 @@ describe('Accounts feature', () => {
     // MDialog teleports to <body>, so query the document.
     const ms = document.body.querySelector<HTMLButtonElement>('[data-testid="add-microsoft"]')
     expect(ms).toBeTruthy()
-    expect(ms!.getAttribute('aria-disabled')).toBe('true')
-    expect(
-      document.body.querySelector('[data-testid="microsoft-coming-soon"]')?.textContent,
-    ).toContain('敬请期待')
-
-    // Clicking must not open the OAuth dialog.
-    ms!.click()
-    await flushPromises()
-    expect(document.body.textContent).not.toContain('设备代码')
+    expect(ms!.getAttribute('aria-disabled')).toBeNull()
+    expect(document.body.querySelector('[data-testid="microsoft-coming-soon"]')).toBeNull()
 
     // Offline and third-party entries stay usable.
     const labels = [...document.body.querySelectorAll('button')].map((b) => b.textContent ?? '')
     expect(labels.some((t) => t.includes('离线'))).toBe(true)
+
+    const store = useAccountsStore()
+    const addMsSpy = vi.spyOn(store, 'addMicrosoft').mockResolvedValue('task-auth-ms')
+
+    // Clicking starts Microsoft login flow
+    ms!.click()
+    await flushPromises()
+    expect(addMsSpy).toHaveBeenCalledTimes(1)
+
+    addMsSpy.mockRestore()
   })
 })

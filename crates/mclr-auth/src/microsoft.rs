@@ -191,6 +191,11 @@ pub struct MicrosoftLoginResult {
     pub default_skin_model: String,
 }
 
+/// Well-known public Azure Client ID used for Minecraft device-code authentication (PCL / PrismLauncher standard).
+///
+/// Can be overridden at runtime via `MCLR_MS_CLIENT_ID` in environment variables or `.env`.
+pub const DEFAULT_MS_CLIENT_ID: &str = "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb";
+
 #[derive(Debug)]
 pub struct MicrosoftAuthService {
     client: Client,
@@ -206,9 +211,10 @@ impl MicrosoftAuthService {
     ) -> Result<Self, AuthError> {
         let client_id = match custom_client_id {
             Some(id) if !id.trim().is_empty() => id.trim().to_string(),
-            _ => match mclr_core::secrets::get_secret("MCLR_MS_CLIENT_ID") {
+            Some(_) => return Err(AuthError::NotConfigured { what: "microsoft" }),
+            None => match mclr_core::secrets::get_secret("MCLR_MS_CLIENT_ID") {
                 Some(id) if !id.trim().is_empty() => id.trim().to_string(),
-                _ => return Err(AuthError::NotConfigured { what: "microsoft" }),
+                _ => DEFAULT_MS_CLIENT_ID.to_string(),
             },
         };
 
@@ -217,6 +223,10 @@ impl MicrosoftAuthService {
             endpoints,
             client_id,
         })
+    }
+
+    pub fn client_id(&self) -> &str {
+        &self.client_id
     }
 
     /// Step 1: Request device code from Microsoft OAuth
@@ -249,13 +259,26 @@ impl MicrosoftAuthService {
         &self,
         device_code: &str,
         mut interval: u64,
+        control: Option<&mclr_core::tasks::TaskControl>,
     ) -> Result<(String, String), AuthError> {
         if interval == 0 {
             interval = 5;
         }
 
         loop {
+            if let Some(ctrl) = control
+                && ctrl.checkpoint().await.is_err()
+            {
+                return Err(AuthError::Other("Task was canceled".into()));
+            }
+
             sleep(Duration::from_secs(interval)).await;
+
+            if let Some(ctrl) = control
+                && ctrl.checkpoint().await.is_err()
+            {
+                return Err(AuthError::Other("Task was canceled".into()));
+            }
 
             let mut params = HashMap::new();
             params.insert("client_id", self.client_id.as_str());

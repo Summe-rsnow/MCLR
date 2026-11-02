@@ -60,6 +60,7 @@
     "authAccountPlaceholder": "请输入登录邮箱或账号",
     "authPassword": "密码",
     "authPasswordPlaceholder": "请输入密码",
+    "msLoadingCode": "正在向微软申请设备代码...",
     "msDevicePrompt": "请在浏览器中打开验证链接，并输入下方的设备代码完成授权：",
     "msCodeLabel": "验证代码",
     "msOpenBrowser": "打开验证页面",

@@ -47,6 +47,7 @@ const emit = defineEmits<{
   (e: 'select-profile', profile: AuthlibProfileView): void
   (e: 'confirm-skin-upload'): void
   (e: 'confirm-rename'): void
+  (e: 'cancel-microsoft-login'): void
 }>()
 
 const { t } = useI18n()
@@ -75,9 +76,8 @@ const skinModelOptions = computed(() => [
       <button
         type="button"
         data-testid="add-microsoft"
-        aria-disabled="true"
-        class="relative w-full flex items-center px-4 py-3 rounded-xl border border-line/60 bg-raised transition-all text-left select-none outline-none group cursor-not-allowed opacity-70"
-        @click.prevent
+        class="w-full flex items-center px-4 py-3 rounded-xl border border-line/60 bg-raised hover:bg-sunken/60 active:scale-[0.99] transition-all cursor-pointer text-left select-none outline-none group"
+        @click="emit('start-add-microsoft')"
       >
         <div
           class="w-10 h-10 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 text-primary"
@@ -88,13 +88,6 @@ const skinModelOptions = computed(() => [
           <span class="text-sm font-semibold text-fg">{{ t('accounts.types.microsoft') }}</span>
           <span class="text-xs text-fg-muted mt-0.5">OAuth 2.0 / Xbox Live</span>
         </div>
-        <!-- Coming-soon mask: veils the row but keeps the label readable. -->
-        <span class="absolute inset-0 rounded-xl bg-canvas/45" />
-        <span class="absolute inset-y-0 right-3 flex items-center">
-          <MBadge variant="warning" size="sm" data-testid="microsoft-coming-soon">
-            {{ t('accounts.dialog.comingSoon') }}
-          </MBadge>
-        </span>
       </button>
 
       <button
@@ -229,6 +222,7 @@ const skinModelOptions = computed(() => [
   <MDialog
     v-model:open="accountsStore.deviceCodeDialog"
     :title="t('accounts.dialog.msDeviceTitle')"
+    @cancel="emit('cancel-microsoft-login')"
   >
     <div v-if="accountsStore.deviceCodeData" class="flex flex-col gap-4 py-2">
       <p class="text-sm text-fg">
@@ -260,8 +254,12 @@ const skinModelOptions = computed(() => [
         {{ t('accounts.dialog.msWaiting') }}
       </p>
     </div>
+    <div v-else class="flex flex-col items-center justify-center py-10 gap-3">
+      <span class="i-lucide-loader-circle animate-spin w-8 h-8 text-primary" />
+      <span class="text-sm text-fg-muted">{{ t('accounts.dialog.msLoadingCode') }}</span>
+    </div>
     <template #footer>
-      <MButton variant="text" @click="accountsStore.deviceCodeDialog = false">
+      <MButton variant="text" @click="emit('cancel-microsoft-login')">
         {{ t('common.close') }}
       </MButton>
     </template>

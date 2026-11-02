@@ -5,7 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.0.32] - unreleased
+## [0.0.33] - 2026-11-02
+
+Out-of-the-box Microsoft Account OAuth 2.0 device code login, auto-closing device dialog & accounts refresh.
+
+### Added
+- **Public Microsoft OAuth 2.0 client ID**: Embeds a well-known public client ID (`c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb`), matching PCL / Prism Launcher out-of-the-box behavior so users can sign in without registering an Azure application manually.
+- **Unmasked Microsoft Account entry with instant loading state**: Removes the 'coming soon' veil and disabled state from `AccountModals.vue`; clicking immediately displays a loading modal with spinner while the device code is acquired.
+- **Automated authorization completion**: `startAddMicrosoft` now tracks the background task (`awaitTask`); upon successful browser authorization, the modal closes automatically, the account list re-fetches immediately, and a success notification is shown.
+- **Background task cancellation on modal close**: Closing the device code modal aborts the `poll_token` loop and cancels the background task immediately.
+- **Accounts list refresh button**: Added a dedicated refresh button (`i-lucide-rotate-cw`) in the accounts page header with loading animation.
+
+## [0.0.32] - 2026-11-01
 
 Browsing and install-progress honesty: the community browser comes back where you left it, cards
 show a readable date instead of a raw timestamp, modpack progress only ever moves forward and names

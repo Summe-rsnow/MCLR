@@ -1,3 +1,4 @@
+use mclr_auth::DEFAULT_MS_CLIENT_ID;
 use mclr_auth::microsoft::{MicrosoftAuthService, MsAuthEndpoints};
 use mclr_auth::offline::{OfflineUuidMode, compute_offline_uuid};
 use mclr_auth::skin::crop_skin_head;
@@ -178,7 +179,7 @@ async fn test_microsoft_flow_wiremock() {
     assert_eq!(device.user_code, "ABC-DEF");
 
     let (ms_tok, refresh_tok) = service
-        .poll_token(&device.device_code, 1)
+        .poll_token(&device.device_code, 1, None)
         .await
         .expect("poll token");
     assert_eq!(ms_tok, "ms-access-token-123");
@@ -238,13 +239,21 @@ async fn test_xsts_xerr_error_mappings() {
 }
 
 #[tokio::test]
-async fn test_missing_client_id_returns_not_configured() {
+async fn test_default_client_id_used_when_unconfigured() {
     unsafe {
         std::env::remove_var("MCLR_MS_CLIENT_ID");
     }
 
     let client = Client::new();
-    let err = MicrosoftAuthService::new(client, MsAuthEndpoints::default(), None).unwrap_err();
+    let service = MicrosoftAuthService::new(client, MsAuthEndpoints::default(), None).unwrap();
+    assert_eq!(service.client_id(), DEFAULT_MS_CLIENT_ID);
+}
+
+#[tokio::test]
+async fn test_empty_custom_client_id_returns_not_configured() {
+    let client = Client::new();
+    let err = MicrosoftAuthService::new(client, MsAuthEndpoints::default(), Some("   ".into()))
+        .unwrap_err();
     assert_eq!(err.code(), "notConfigured");
 
     let app_err = AppError::from(err);

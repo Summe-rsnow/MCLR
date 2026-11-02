@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAccountsStore } from './store'
-import type { AccountView, AuthlibProfileView } from '../../ipc/client'
+import { ipcClient, type AccountView, type AuthlibProfileView } from '../../ipc/client'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { MButton, MCard, MEmpty, MPageHeader, MSkeleton, useDialog, useToast } from '../../ui'
+import { awaitTask } from '../tasks/awaitTask'
+import { useErrorText } from '../../composables/useErrorText'
 import AccountCardItem from './components/AccountCardItem.vue'
 import AccountSkinPanel from './components/AccountSkinPanel.vue'
 import AccountModals from './components/AccountModals.vue'
@@ -13,6 +15,9 @@ const { t } = useI18n()
 const accountsStore = useAccountsStore()
 const { confirmDanger } = useDialog()
 const toast = useToast()
+const { formatError } = useErrorText()
+
+const currentMsTaskId = ref<string | null>(null)
 
 onMounted(async () => {
   await accountsStore.startListening()
@@ -99,14 +104,52 @@ async function handleAddOffline() {
 
 async function startAddMicrosoft() {
   showAddTypeDialog.value = false
+  // Immediately show device code dialog in loading state so the user gets instant visual feedback
+  accountsStore.deviceCodeData = null
+  accountsStore.deviceCodeDialog = true
   try {
-    await accountsStore.addMicrosoft()
+    const taskId = await accountsStore.addMicrosoft()
+    currentMsTaskId.value = taskId
+    const outcome = await awaitTask(taskId)
+    currentMsTaskId.value = null
+    accountsStore.deviceCodeDialog = false
+    accountsStore.deviceCodeData = null
+    if (outcome.state === 'success') {
+      await accountsStore.fetchAccounts()
+      toast.success(t('accounts.dialog.addSuccess'))
+    } else if (outcome.state === 'failed') {
+      const errorMsg = outcome.error ? formatError(outcome.error) : t('error.unknown')
+      toast.danger(errorMsg)
+    }
   } catch (err: unknown) {
-    const msg =
-      err && typeof err === 'object' && 'message' in err ? String(err.message) : t('error.unknown')
-    toast.danger(msg)
+    currentMsTaskId.value = null
+    accountsStore.deviceCodeDialog = false
+    accountsStore.deviceCodeData = null
+    toast.danger(formatError(err))
   }
 }
+
+async function cancelMicrosoftLogin() {
+  accountsStore.deviceCodeDialog = false
+  accountsStore.deviceCodeData = null
+  if (currentMsTaskId.value) {
+    try {
+      await ipcClient.taskCancel(currentMsTaskId.value)
+    } catch {
+      // ignore
+    }
+    currentMsTaskId.value = null
+  }
+}
+
+watch(
+  () => accountsStore.deviceCodeDialog,
+  (open) => {
+    if (!open && currentMsTaskId.value) {
+      void cancelMicrosoftLogin()
+    }
+  },
+)
 
 function startAddAuthlib() {
   showAddTypeDialog.value = false
@@ -278,6 +321,15 @@ async function openCloset(serverUrl: string) {
       icon="i-lucide-users"
     >
       <template #actions>
+        <MButton
+          variant="tonal"
+          size="md"
+          icon="i-lucide-rotate-cw"
+          :loading="accountsStore.loading"
+          @click="accountsStore.fetchAccounts"
+        >
+          {{ t('common.refresh') }}
+        </MButton>
         <MButton variant="primary" size="md" icon="i-lucide-plus" @click="openAddDialog">
           {{ t('accounts.addAccount') }}
         </MButton>
@@ -393,6 +445,7 @@ async function openCloset(serverUrl: string) {
       @select-profile="handleSelectProfile"
       @confirm-skin-upload="handleSkinUpload"
       @confirm-rename="handleRenameConfirm"
+      @cancel-microsoft-login="cancelMicrosoftLogin"
     />
   </div>
 </template>

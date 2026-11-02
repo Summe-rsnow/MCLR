@@ -9,7 +9,10 @@ pub mod store;
 pub mod yggdrasil;
 
 pub use error::AuthError;
-pub use microsoft::{DeviceCodeEvent, MicrosoftAuthService, MicrosoftLoginResult, MsAuthEndpoints};
+pub use microsoft::{
+    DEFAULT_MS_CLIENT_ID, DeviceCodeEvent, MicrosoftAuthService, MicrosoftLoginResult,
+    MsAuthEndpoints,
+};
 pub use offline::{OfflineUuidMode, compute_offline_uuid, default_skin_model};
 pub use skin::{
     CapeView, crop_head_png, crop_skin_head, default_head_data_url, generate_head_avatar,

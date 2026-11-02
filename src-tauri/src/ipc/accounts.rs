@@ -117,8 +117,9 @@ pub async fn accounts_add_microsoft(
             },
         );
 
+        let control = tc.control(&tid).await;
         let (ms_access_token, refresh_token) = match service
-            .poll_token(&device.device_code, device.interval)
+            .poll_token(&device.device_code, device.interval, control.as_ref())
             .await
         {
             Ok(tokens) => tokens,
