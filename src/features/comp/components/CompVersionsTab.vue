@@ -1,8 +1,18 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { CompFile } from '../../../ipc/client'
-import { MCard, MButton, MBadge, MEmpty, MSkeleton, MCollapse } from '../../../ui'
+import type { CompFile, CompProject } from '../../../ipc/client'
+import { ipcClient } from '../../../ipc/client'
+import {
+  MCard,
+  MButton,
+  MIconButton,
+  MBadge,
+  MEmpty,
+  MSkeleton,
+  MCollapse,
+  MImage,
+} from '../../../ui'
 import { useFormat } from '../../../composables/useFormat'
 
 export interface FileGroup {
@@ -12,12 +22,14 @@ export interface FileGroup {
   open: boolean
 }
 
-defineProps<{
+const props = defineProps<{
   filesLoading: boolean
   filteredFilesCount: number
   fileGroups: FileGroup[]
   mcVersionFilterOptions: Array<{ label: string; value: string }>
   loaderFilterOptions: Array<{ label: string; value: string }>
+  /** False for modpacks (installed whole) and unsupported platforms/types. */
+  presetSupported?: boolean
 }>()
 
 const selectedMcVersion = defineModel<string>('selectedMcVersion', { default: '' })
@@ -26,7 +38,16 @@ const selectedLoader = defineModel<string>('selectedLoader', { default: '' })
 const emit = defineEmits<{
   (e: 'download', file: CompFile): void
   (e: 'open-website'): void
+  (e: 'add-to-preset', file: CompFile): void
+  (e: 'open-dependency', project: CompProject): void
 }>()
+
+const filteredVersionOptions = computed(() =>
+  props.mcVersionFilterOptions.filter((o) => Boolean(o.value)),
+)
+const filteredLoaderOptions = computed(() =>
+  props.loaderFilterOptions.filter((o) => Boolean(o.value)),
+)
 
 const { t } = useI18n()
 
@@ -57,6 +78,42 @@ function isGroupOpen(id: string, index: number): boolean {
 function toggleGroup(id: string, index: number) {
   openState.value[id] = !isGroupOpen(id, index)
 }
+
+// --- Per-file dependencies -----------------------------------------------------------
+// Declared dependencies are just ids; the project cards come from one batched lookup per
+// file, cached so re-expanding a section never re-queries.
+const depOpenState = ref<Record<string, boolean>>({})
+const depProjects = ref<Record<string, CompProject[]>>({})
+const depLoading = ref<Record<string, boolean>>({})
+
+function dependencyIds(file: CompFile): string[] {
+  return Array.from(new Set(file.dependencies.map((dep) => dep.projectId)))
+}
+
+async function toggleFileDependencies(file: CompFile) {
+  const open = !depOpenState.value[file.id]
+  depOpenState.value = { ...depOpenState.value, [file.id]: open }
+  if (!open || depProjects.value[file.id] || file.dependencies.length === 0) return
+
+  depLoading.value = { ...depLoading.value, [file.id]: true }
+  try {
+    const projects = await ipcClient.compDepProjects(file.platform, dependencyIds(file))
+    depProjects.value = { ...depProjects.value, [file.id]: projects }
+  } catch {
+    depProjects.value = { ...depProjects.value, [file.id]: [] }
+  } finally {
+    depLoading.value = { ...depLoading.value, [file.id]: false }
+  }
+}
+
+function dependencyProject(fileId: string, projectId: string): CompProject | null {
+  return depProjects.value[fileId]?.find((p) => p.id === projectId) ?? null
+}
+
+function openDependency(file: CompFile, projectId: string) {
+  const project = dependencyProject(file.id, projectId)
+  if (project) emit('open-dependency', project)
+}
 </script>
 
 <template>
@@ -70,7 +127,7 @@ function toggleGroup(id: string, index: number) {
       <!-- Instance / MC Version Filter Chips -->
       <div class="flex flex-wrap items-center gap-1.5 text-xs">
         <span class="font-semibold text-fg-muted shrink-0 mr-1">
-          {{ t('comp.files.filterInstance') }}:
+          {{ t('comp.quickDownload.filterVersion') }}:
         </span>
         <button
           type="button"
@@ -82,10 +139,10 @@ function toggleGroup(id: string, index: number) {
           "
           @click="selectedMcVersion = ''"
         >
-          {{ t('comp.filter.all') }}
+          {{ t('comp.search.allMcVersions') }}
         </button>
         <button
-          v-for="option in mcVersionFilterOptions"
+          v-for="option in filteredVersionOptions"
           :key="option.value"
           type="button"
           class="px-2 py-0.5 rounded-lg transition cursor-pointer font-mono"
@@ -103,7 +160,7 @@ function toggleGroup(id: string, index: number) {
       <!-- Loader Filter Chips -->
       <div class="flex flex-wrap items-center gap-1.5 text-xs pt-1.5 border-t border-line/40">
         <span class="font-semibold text-fg-muted shrink-0 mr-1">
-          {{ t('comp.files.filterLoader') }}:
+          {{ t('comp.quickDownload.filterLoader') }}:
         </span>
         <button
           type="button"
@@ -115,10 +172,10 @@ function toggleGroup(id: string, index: number) {
           "
           @click="selectedLoader = ''"
         >
-          {{ t('comp.filter.all') }}
+          {{ t('comp.search.allLoaders') }}
         </button>
         <button
-          v-for="ldr in loaderFilterOptions"
+          v-for="ldr in filteredLoaderOptions"
           :key="ldr.value"
           type="button"
           class="px-2.5 py-0.5 rounded-lg transition cursor-pointer capitalize"
@@ -186,54 +243,144 @@ function toggleGroup(id: string, index: number) {
                 <div
                   v-for="file in group.files"
                   :key="file.id"
-                  class="p-3 rounded-xl bg-panel border border-line/70 hover:border-line-strong transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  class="p-3 rounded-xl bg-panel border border-line/70 hover:border-line-strong transition flex flex-col gap-2"
                 >
-                  <div class="min-w-0 flex-1 space-y-1.5">
-                    <div class="flex items-center gap-2">
-                      <MBadge :variant="getChannelVariant(file.channel)" size="sm">
+                  <!-- Top Row: Channel Badge & Full File Title -->
+                  <div class="flex items-start justify-between gap-2.5">
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                      <MBadge :variant="getChannelVariant(file.channel)" size="sm" class="shrink-0">
                         {{ t(`comp.files.channel.${file.channel}`) }}
                       </MBadge>
                       <span
-                        class="font-medium text-sm text-fg truncate select-text"
+                        class="font-medium text-xs text-fg break-all select-text leading-snug"
                         :title="file.name"
                       >
                         {{ file.name }}
                       </span>
                     </div>
+                  </div>
 
-                    <div class="text-xs text-fg-muted select-text">
-                      {{ formatDate(file.releaseDate) }} • {{ formatFileSize(file.size) }}
+                  <!-- Middle Row: Date, Size, Version & Loader Badges + Actions -->
+                  <div
+                    class="flex items-center justify-between gap-2 flex-wrap text-xs text-fg-muted"
+                  >
+                    <div class="flex items-center gap-1.5 flex-wrap select-text">
+                      <span>{{ formatDate(file.releaseDate) }}</span>
+                      <span>•</span>
+                      <span>{{ formatFileSize(file.size) }}</span>
+                      <template v-if="file.loaders.length > 0">
+                        <span>•</span>
+                        <MBadge
+                          v-for="l in file.loaders"
+                          :key="l"
+                          variant="neutral"
+                          size="sm"
+                          class="capitalize"
+                        >
+                          {{ l }}
+                        </MBadge>
+                      </template>
+                      <template v-if="file.mcVersions.length > 0">
+                        <span>•</span>
+                        <MBadge
+                          v-for="v in file.mcVersions.slice(0, 2)"
+                          :key="v"
+                          variant="neutral"
+                          size="sm"
+                          class="font-mono"
+                        >
+                          {{ v }}
+                        </MBadge>
+                        <span
+                          v-if="file.mcVersions.length > 2"
+                          :title="file.mcVersions.join(', ')"
+                          class="inline-flex cursor-help"
+                        >
+                          <MBadge variant="neutral" size="sm" class="font-mono">
+                            +{{ file.mcVersions.length - 2 }}
+                          </MBadge>
+                        </span>
+                      </template>
                     </div>
 
-                    <div class="flex flex-wrap gap-1 select-text pt-0.5">
-                      <MBadge v-for="v in file.mcVersions" :key="v" variant="neutral" size="sm">
-                        {{ v }}
-                      </MBadge>
-                      <MBadge
-                        v-for="l in file.loaders"
-                        :key="l"
-                        variant="neutral"
-                        size="sm"
-                        class="capitalize"
-                      >
-                        {{ l }}
-                      </MBadge>
+                    <div class="flex items-center gap-1.5 shrink-0 ml-auto">
+                      <div v-if="file.distributionDisabled" class="flex items-center gap-1.5">
+                        <span class="text-xs text-danger">{{
+                          t('comp.files.distributionDisabled')
+                        }}</span>
+                        <MButton variant="tonal" size="sm" @click="emit('open-website')">
+                          {{ t('comp.files.openWebsite') }}
+                        </MButton>
+                      </div>
+                      <template v-else>
+                        <MButton variant="primary" size="sm" @click="emit('download', file)">
+                          <span class="i-lucide-download mr-1 w-3.5 h-3.5" />
+                          {{ t('comp.files.download') }}
+                        </MButton>
+                        <MIconButton
+                          v-if="presetSupported"
+                          icon="i-lucide-package-plus"
+                          variant="tonal"
+                          size="sm"
+                          :tooltip="t('comp.fileDependencies.pinToPreset')"
+                          data-testid="pin-file-to-preset"
+                          @click="emit('add-to-preset', file)"
+                        />
+                      </template>
                     </div>
                   </div>
 
-                  <div class="shrink-0 flex items-center gap-2 self-end sm:self-center">
-                    <div v-if="file.distributionDisabled" class="flex items-center space-x-2">
-                      <span class="text-xs text-danger">{{
-                        t('comp.files.distributionDisabled')
-                      }}</span>
-                      <MButton variant="tonal" size="sm" @click="emit('open-website')">
-                        {{ t('comp.files.openWebsite') }}
-                      </MButton>
+                  <!-- Declared dependencies: one batched project lookup per file. -->
+                  <div v-if="file.dependencies.length > 0" class="pt-1.5 border-t border-line/40">
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline cursor-pointer"
+                      data-testid="file-dependencies-toggle"
+                      @click.stop="toggleFileDependencies(file)"
+                    >
+                      <span class="i-lucide-link w-3.5 h-3.5" />
+                      {{ t('comp.fileDependencies.title') }} ({{ file.dependencies.length }})
+                      <span
+                        class="i-lucide-chevron-down w-3.5 h-3.5 transition-transform"
+                        :class="{ 'rotate-180': depOpenState[file.id] }"
+                      />
+                    </button>
+
+                    <div v-if="depOpenState[file.id]" class="mt-2 space-y-1.5">
+                      <div
+                        v-if="depLoading[file.id]"
+                        class="text-xs text-fg-muted flex items-center gap-1.5"
+                      >
+                        <span class="i-lucide-loader-circle w-3.5 h-3.5 animate-spin" />
+                        {{ t('comp.fileDependencies.loading') }}
+                      </div>
+                      <template v-else>
+                        <button
+                          v-for="dep in file.dependencies"
+                          :key="dep.projectId + '-' + dep.kind"
+                          type="button"
+                          class="w-full flex items-center gap-2 p-2 rounded-lg border border-line bg-panel hover:border-line-strong text-left transition"
+                          :class="
+                            dependencyProject(file.id, dep.projectId)
+                              ? 'cursor-pointer'
+                              : 'cursor-default'
+                          "
+                          @click.stop="openDependency(file, dep.projectId)"
+                        >
+                          <MImage
+                            :src="dependencyProject(file.id, dep.projectId)?.iconUrl"
+                            fallback-icon="i-lucide-puzzle"
+                            class="w-6 h-6 rounded-md shrink-0"
+                          />
+                          <span class="text-xs text-fg truncate flex-1 min-w-0">
+                            {{ dependencyProject(file.id, dep.projectId)?.title || dep.projectId }}
+                          </span>
+                          <MBadge variant="neutral" size="sm">
+                            {{ t(`comp.fileDependencies.kind.${dep.kind}`) }}
+                          </MBadge>
+                        </button>
+                      </template>
                     </div>
-                    <MButton v-else variant="primary" size="sm" @click="emit('download', file)">
-                      <span class="i-lucide-download mr-1 w-3.5 h-3.5" />
-                      {{ t('comp.files.download') }}
-                    </MButton>
                   </div>
                 </div>
               </div>

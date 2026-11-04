@@ -8,10 +8,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use futures_util::stream::{self, StreamExt};
 use mclr_comp::resources::{ResourceEntry, ResourceKind};
 use mclr_comp::{
-    CompError, CompFile, CurseForgeClient, JarInJarNode, LocalModInfo, ModrinthClient,
-    ResolvedDependencyItem, check_local_mods_updates, delete_local_mod, resolve_dependencies,
-    scan_jar_in_jar, scan_local_mods, toggle_local_mod,
+    CompError, CompFile, CompType, CurseForgeClient, JarInJarNode, LocalModInfo,
+    ModDependencyReport, ModrinthClient, ResolvedDependencyItem, check_local_mods_updates,
+    delete_local_mod, resolve_dependencies, scan_jar_in_jar, scan_local_mods, toggle_local_mod,
 };
+use mclr_comp::{modname, naming};
 use mclr_core::{AppError, SettingsStore, TaskCenter};
 use mclr_net::{DownloadSpec, Downloader};
 use serde::{Deserialize, Serialize};
@@ -147,7 +148,32 @@ pub async fn local_mod_update(
     }
 
     let mods_dir = instance_mods_dir(&state, &instance_id).await;
-    let dest_path = mods_dir.join(&new_file.file_name);
+    let settings = state.get().await;
+
+    // The instance's own jar names the mod id; the dictionary is keyed by slug, so the
+    // local id is the only reliable link from an update row to its Chinese name.
+    let mod_id = if settings.comp.show_zh_name && !current_file_name.is_empty() {
+        let jar_path = mods_dir.join(&current_file_name);
+        tokio::task::spawn_blocking(move || {
+            mclr_comp::local::parse_mod_metadata_path(&jar_path, "").map(|m| m.mod_id)
+        })
+        .await
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
+    let zh_name = mod_id
+        .as_deref()
+        .and_then(modname::lookup_by_slug)
+        .map(modname::display_zh);
+    let dest_name = naming::format_download_name(
+        &new_file.file_name,
+        zh_name,
+        CompType::Mod,
+        settings.comp.filename_format,
+    );
+    let dest_path = mods_dir.join(&dest_name);
 
     let mut params = HashMap::new();
     params.insert("name".to_string(), new_file.name.clone());
@@ -171,7 +197,6 @@ pub async fn local_mod_update(
         md5: None,
     };
 
-    let settings = state.get().await;
     let client = http.client();
     let downloader = Downloader::new(client, settings.net.clone());
     let tc = Arc::clone(&tasks_state);
@@ -182,7 +207,9 @@ pub async fn local_mod_update(
         let _ = tc.start_task(&tid).await;
         match downloader.download(spec, Some((&tc, &tid))).await {
             Ok(()) => {
-                if !old_file_name.is_empty() && old_file_name != new_file.file_name {
+                // The formatted name can equal the old one (same mod, same version
+                // folder layout), in which case the fresh jar must stay on disk.
+                if !old_file_name.is_empty() && old_file_name != dest_name {
                     let old_path = mods_dir.join(&old_file_name);
                     if old_path.exists() {
                         let _ = delete_local_mod(&mods_dir, &old_file_name);
@@ -340,6 +367,38 @@ pub async fn local_mods_update_many(
     let tc = Arc::clone(&tasks_state);
     let tid = task_id.clone();
 
+    // Display names are resolved once, on the blocking pool, before the batch starts:
+    // every item would otherwise reopen its jar inside the download stream.
+    let filename_format = settings.comp.filename_format;
+    let zh_by_file: Arc<HashMap<String, String>> = if settings.comp.show_zh_name {
+        let names: Vec<String> = updates
+            .iter()
+            .map(|u| u.current_file_name.clone())
+            .filter(|n| !n.is_empty())
+            .collect();
+        let scan_dir = mods_dir.clone();
+        Arc::new(
+            super::run_blocking(move || {
+                let mut map = HashMap::new();
+                for name in names {
+                    let jar_path = scan_dir.join(&name);
+                    let Some(meta) = mclr_comp::local::parse_mod_metadata_path(&jar_path, "")
+                    else {
+                        continue;
+                    };
+                    if let Some(entry) = modname::lookup_by_slug(&meta.mod_id) {
+                        map.insert(name, modname::display_zh(entry).to_string());
+                    }
+                }
+                Ok::<_, AppError>(map)
+            })
+            .await
+            .unwrap_or_default(),
+        )
+    } else {
+        Arc::new(HashMap::new())
+    };
+
     tokio::spawn(async move {
         let _ = tc.start_task(&tid).await;
         let control = tc.control(&tid).await;
@@ -358,6 +417,7 @@ pub async fn local_mods_update_many(
             let completed = Arc::clone(&completed);
             let control = control.clone();
             let mods_dir = mods_dir.clone();
+            let zh_by_file = Arc::clone(&zh_by_file);
             async move {
                 if let Some(ctrl) = &control
                     && ctrl.checkpoint().await.is_err()
@@ -372,9 +432,15 @@ pub async fn local_mods_update_many(
                     .filter_map(|u| Url::parse(u).ok())
                     .collect();
                 if !urls.is_empty() {
+                    let dest_name = naming::format_download_name(
+                        &item.new_file.file_name,
+                        zh_by_file.get(&item.current_file_name).map(String::as_str),
+                        CompType::Mod,
+                        filename_format,
+                    );
                     let spec = DownloadSpec {
                         urls,
-                        dest: mods_dir.join(&item.new_file.file_name),
+                        dest: mods_dir.join(&dest_name),
                         size: if item.new_file.size > 0 {
                             Some(item.new_file.size)
                         } else {
@@ -389,9 +455,7 @@ pub async fn local_mods_update_many(
 
                     // Per-file atomic replacement: the old jar only disappears once its
                     // successor is fully downloaded and hash-verified.
-                    if !item.current_file_name.is_empty()
-                        && item.current_file_name != item.new_file.file_name
-                    {
+                    if !item.current_file_name.is_empty() && item.current_file_name != dest_name {
                         let old_path = mods_dir.join(&item.current_file_name);
                         if old_path.exists() {
                             let _ = delete_local_mod(&mods_dir, &item.current_file_name);
@@ -421,4 +485,57 @@ pub async fn local_mods_update_many(
     });
 
     Ok(task_id)
+}
+
+/// Dependency report for every jar of an instance.
+///
+/// Statuses come from the instance itself (enabled/disabled, declared ranges) and from the
+/// Jar-in-Jar trees, so a mod shipped inside another jar is not reported as missing.
+#[tauri::command]
+#[specta::specta]
+pub async fn local_mods_dependencies(
+    state: State<'_, SettingsStore>,
+    instance_id: String,
+) -> Result<Vec<ModDependencyReport>, AppError> {
+    let mods_dir = instance_mods_dir(&state, &instance_id).await;
+    let folder = super::current_mc_folder(&state).await;
+    let inst_id = instance_id.clone();
+    super::run_blocking(move || {
+        let mods = scan_local_mods(&mods_dir)?;
+        let instance_loader = mclr_game::instance::scan_instances(&folder)
+            .ok()
+            .and_then(|list| list.into_iter().find(|i| i.id == inst_id))
+            .map(|i| {
+                if !i.loaders.is_empty() {
+                    i.loaders.join(" ")
+                } else {
+                    format!("{:?}", i.kind)
+                }
+            });
+
+        fn collect_ids(nodes: &[JarInJarNode], out: &mut HashSet<String>) {
+            for node in nodes {
+                if !node.id.is_empty() {
+                    out.insert(node.id.to_ascii_lowercase());
+                }
+                collect_ids(&node.children, out);
+            }
+        }
+
+        // The scan cache keys on path + size + mtime, so this only touches the zip of a
+        // new or changed jar.
+        let mut bundled_ids: HashSet<String> = HashSet::new();
+        for m in &mods {
+            if let Ok(nodes) = scan_jar_in_jar(&mods_dir.join(&m.file_name)) {
+                collect_ids(&nodes, &mut bundled_ids);
+            }
+        }
+
+        Ok::<_, CompError>(mclr_comp::depcheck::analyze_with_loader(
+            &mods,
+            &bundled_ids,
+            instance_loader.as_deref(),
+        ))
+    })
+    .await
 }

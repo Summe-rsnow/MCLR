@@ -1,8 +1,9 @@
 {
   "name": "mclr",
   "private": true,
-  "version": "0.0.34",
+  "version": "0.0.35",
   "type": "module",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/MCLR-Team/MCLR/issues"
   },
@@ -16,7 +17,9 @@
     "lint": "oxlint",
     "fmt": "oxfmt src",
     "fmt:check": "oxfmt --check src",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "bump": "node scripts/bump-version.mjs",
+    "update:mcmod": "node scripts/update-mcmod-db.mjs"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.150",

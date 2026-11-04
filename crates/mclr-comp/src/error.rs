@@ -55,6 +55,11 @@ pub enum CompError {
 
     #[error("instance is not modable")]
     NotModable,
+
+    /// A resource-preset failure carrying its stable IPC error code
+    /// (`preset.nameExists`, `preset.notFound`, `preset.kindUnsupported`, ...).
+    #[error("preset error: {0}")]
+    Preset(&'static str),
 }
 
 impl CompError {
@@ -76,6 +81,7 @@ impl CompError {
             CompError::InvalidParams(_) => "comp.invalidParams",
             CompError::ToggleConflict => "resource.toggleConflict",
             CompError::NotModable => "resource.notModable",
+            CompError::Preset(code) => code,
         }
     }
 }

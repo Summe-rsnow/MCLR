@@ -8,6 +8,7 @@ import { installIpc } from './domains/install'
 import { instancesIpc } from './domains/instances'
 import { launchIpc } from './domains/launch'
 import { mediaIpc } from './domains/media'
+import { presetsIpc } from './domains/presets'
 import { resourcesIpc } from './domains/resources'
 import { savesIpc } from './domains/saves'
 import { serversIpc } from './domains/servers'
@@ -24,6 +25,7 @@ export * from './domains/install'
 export * from './domains/instances'
 export * from './domains/launch'
 export * from './domains/media'
+export * from './domains/presets'
 export * from './domains/resources'
 export * from './domains/saves'
 export * from './domains/servers'
@@ -95,6 +97,7 @@ export const ipcClient = {
   ...instancesIpc,
   ...launchIpc,
   ...mediaIpc,
+  ...presetsIpc,
   ...resourcesIpc,
   ...savesIpc,
   ...serversIpc,

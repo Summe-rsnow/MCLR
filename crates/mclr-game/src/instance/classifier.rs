@@ -14,61 +14,10 @@ static MC_VER_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 
 /// Extract Minecraft version from version JSON and string hints.
-pub fn extract_mc_version(version_json: &VersionJson, fallback_id: &str) -> String {
-    if let Some(inherits) = &version_json.inherits_from {
-        if !inherits.is_empty() {
-            return inherits.clone();
-        }
-    }
-
-    // 2. Try parsing from id using regex
-    if let Some(caps) = MC_VER_REGEX.captures(&version_json.id) {
-        if let Some(m) = caps.get(1) {
-            return m.as_str().to_string();
-        }
-    }
-
-    // 3. Try from fallback_id
-    if let Some(caps) = MC_VER_REGEX.captures(fallback_id) {
-        if let Some(m) = caps.get(1) {
-            return m.as_str().to_string();
-        }
-    }
-
-    if !version_json.id.is_empty() {
-        version_json.id.clone()
-    } else {
-        fallback_id.to_string()
-    }
-}
-
-/// Per-loader version extraction rules.
-///
-/// Mirrors PCL-CE: the game JSON arguments (`--fml.neoForgeVersion`,
-/// `--fml.forgeVersion`) are authoritative, Maven coordinates are the fallback,
-/// and each loader has its own way of encoding its version:
-///
-/// | Loader | Coordinate | Version part |
-/// | --- | --- | --- |
-/// | Fabric | `net.fabricmc:fabric-loader:0.15.11+build.1` | `0.15.11` |
-/// | Legacy Fabric | `net.legacyfabric:...` | `0.15.11` |
-/// | Quilt | `org.quiltmc:quilt-loader:0.23.1-beta.3` | whole |
-/// | Forge (1.13+) | `net.minecraftforge:forge:1.20.1-47.2.0-universal` | `47.2.0` |
-/// | Forge (≤1.12.2) | `net.minecraftforge:forge:1.12.2-14.23.5.2859` | `14.23.5.2859` |
-/// | NeoForge (1.20.1) | `net.neoforged:forge:1.20.1-47.1.99` | `47.1.99` |
-/// | NeoForge (1.20.2+) | `net.neoforged:neoforge:20.4.80-beta` | whole |
-/// | NeoForge (26.x+) | `net.neoforged:neoforge:26.3.0` | whole |
-/// | Cleanroom | `com.cleanroommc:cleanroom:0.2.4-alpha` | whole |
-/// | OptiFine | `optifine:OptiFine:1.20.1_HD_U_I6` | `HD_U_I6` |
-/// | LiteLoader | `com.mumfrey:liteloader:1.12.2-SNAPSHOT-r5` | whole |
-///
-/// `net.neoforged.fancymodloader:loader` carries the FancyModLoader version, which
-/// is **not** the NeoForge version, so it only proves presence.
 fn maven_version(coordinate: &str) -> &str {
     coordinate.split(':').nth(2).unwrap_or("")
 }
 
-/// Drops Maven classifier suffixes while keeping semantic ones (`-beta`, `-pre`).
 fn strip_maven_classifier(version: &str) -> &str {
     for suffix in [
         "-universal",
@@ -85,7 +34,6 @@ fn strip_maven_classifier(version: &str) -> &str {
     version
 }
 
-/// Forge-style coordinates embed the MC version: `1.20.1-47.2.0` → `47.2.0`.
 fn after_mc_prefix(version: &str) -> &str {
     match version.split_once('-') {
         Some((head, tail)) if head.chars().next().is_some_and(|c| c.is_ascii_digit()) => {
@@ -95,12 +43,10 @@ fn after_mc_prefix(version: &str) -> &str {
     }
 }
 
-/// `0.15.11+build.1` → `0.15.11`.
 fn strip_build_metadata(version: &str) -> &str {
     version.split('+').next().unwrap_or(version)
 }
 
-/// `1.20.1_HD_U_I6` → `HD_U_I6` (PCL shows OptiFine versions without the MC prefix).
 fn optifine_version(raw: &str) -> String {
     match raw.find("HD_U_") {
         Some(idx) => raw[idx..].to_string(),
@@ -108,34 +54,183 @@ fn optifine_version(raw: &str) -> String {
     }
 }
 
-/// Reads `--fml.neoForgeVersion <ver>` / `--fml.forgeVersion <ver>` from game args.
 fn version_from_game_args(version_json: &VersionJson, flag: &str) -> Option<String> {
-    let args = version_json.arguments.as_ref()?;
-    let mut expect_value = false;
-    for game_arg in &args.game {
-        let s = match game_arg {
-            crate::version::ArgumentEntry::Plain(s) => s.as_str(),
-            crate::version::ArgumentEntry::Conditional(cond) => {
-                if let crate::version::ArgumentValue::Single(s) = &cond.value {
-                    s.as_str()
-                } else {
-                    ""
+    if let Some(args) = &version_json.arguments {
+        let mut expect_value = false;
+        for game_arg in &args.game {
+            let s = match game_arg {
+                crate::version::ArgumentEntry::Plain(s) => s.as_str(),
+                crate::version::ArgumentEntry::Conditional(cond) => {
+                    if let crate::version::ArgumentValue::Single(s) = &cond.value {
+                        s.as_str()
+                    } else {
+                        ""
+                    }
                 }
+            };
+            if expect_value {
+                if !s.is_empty() && !s.starts_with("--") {
+                    return Some(s.to_string());
+                }
+                expect_value = false;
             }
-        };
-        if expect_value {
-            if !s.is_empty() && !s.starts_with("--") {
-                return Some(s.to_string());
+            if s == flag {
+                expect_value = true;
             }
-            expect_value = false;
         }
-        if s == flag {
-            expect_value = true;
+    }
+
+    if let Some(raw_args) = &version_json.minecraft_arguments {
+        let mut expect_value = false;
+        for token in raw_args.split_whitespace() {
+            if expect_value {
+                if !token.is_empty() && !token.starts_with("--") {
+                    return Some(token.to_string());
+                }
+                expect_value = false;
+            }
+            if token == flag {
+                expect_value = true;
+            }
         }
     }
     None
 }
 
+fn mc_version_from_neoforge(neoforge_ver: &str) -> Option<String> {
+    let clean = strip_maven_classifier(neoforge_ver);
+    let mut parts = clean.split('.');
+    let major: u32 = parts.next()?.parse().ok()?;
+    let minor: u32 = parts.next()?.parse().ok()?;
+    if major >= 26 {
+        Some(format!("{major}.{minor}"))
+    } else if major >= 20 {
+        if minor == 0 {
+            Some(format!("1.{major}"))
+        } else {
+            Some(format!("1.{major}.{minor}"))
+        }
+    } else {
+        None
+    }
+}
+
+fn is_plausible_mc_version(s: &str) -> bool {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    MC_VER_REGEX.is_match(trimmed)
+}
+
+/// Extract Minecraft version from version JSON, arguments, libraries, and string hints.
+pub fn extract_mc_version(version_json: &VersionJson, fallback_id: &str) -> String {
+    // 1. Inherits from (if it contains a valid version or isn't self-referential)
+    if let Some(inherits) = &version_json.inherits_from {
+        if !inherits.is_empty() && inherits != fallback_id && inherits != &version_json.id {
+            if let Some(caps) = MC_VER_REGEX.captures(inherits) {
+                if let Some(m) = caps.get(1) {
+                    return m.as_str().to_string();
+                }
+            }
+            return inherits.clone();
+        }
+    }
+
+    // 2. Check game arguments (--fml.mcVersion <ver>)
+    if let Some(arg_ver) = version_from_game_args(version_json, "--fml.mcVersion") {
+        if let Some(caps) = MC_VER_REGEX.captures(&arg_ver) {
+            if let Some(m) = caps.get(1) {
+                return m.as_str().to_string();
+            }
+        }
+        if is_plausible_mc_version(&arg_ver) {
+            return arg_ver;
+        }
+    }
+
+    // 3. Check libraries coordinates
+    for lib in &version_json.libraries {
+        let name = &lib.name;
+        let ver = maven_version(name);
+        if ver.is_empty() {
+            continue;
+        }
+
+        // Fabric / LegacyFabric intermediary (e.g. net.fabricmc:intermediary:1.20.1)
+        if name.starts_with("net.fabricmc:intermediary")
+            || name.starts_with("net.legacyfabric:intermediary")
+        {
+            if let Some(caps) = MC_VER_REGEX.captures(ver) {
+                if let Some(m) = caps.get(1) {
+                    return m.as_str().to_string();
+                }
+            }
+            return ver.to_string();
+        }
+
+        // Forge (e.g. net.minecraftforge:forge:1.20.1-47.2.0)
+        if (name.starts_with("net.minecraftforge:forge:")
+            || name.starts_with("net.neoforged:forge:"))
+            && ver.contains('-')
+        {
+            let mc_part = ver.split('-').next().unwrap_or("");
+            if let Some(caps) = MC_VER_REGEX.captures(mc_part) {
+                if let Some(m) = caps.get(1) {
+                    return m.as_str().to_string();
+                }
+            }
+        }
+
+        // NeoForge 20.x+ (e.g. net.neoforged:neoforge:21.1.248 -> 1.21.1)
+        if name.starts_with("net.neoforged:neoforge:") {
+            if let Some(derived) = mc_version_from_neoforge(ver) {
+                return derived;
+            }
+        }
+
+        // Vanilla client / server
+        if name.starts_with("net.minecraft:client:") || name.starts_with("com.mojang:minecraft:") {
+            if let Some(caps) = MC_VER_REGEX.captures(ver) {
+                if let Some(m) = caps.get(1) {
+                    return m.as_str().to_string();
+                }
+            }
+        }
+    }
+
+    // 4. Try parsing from version_json.id using regex
+    if let Some(caps) = MC_VER_REGEX.captures(&version_json.id) {
+        if let Some(m) = caps.get(1) {
+            return m.as_str().to_string();
+        }
+    }
+
+    // 5. Try from fallback_id (folder name)
+    if let Some(caps) = MC_VER_REGEX.captures(fallback_id) {
+        if let Some(m) = caps.get(1) {
+            return m.as_str().to_string();
+        }
+    }
+
+    // 6. Check asset_index id
+    if let Some(asset_idx) = &version_json.asset_index {
+        if let Some(caps) = MC_VER_REGEX.captures(&asset_idx.id) {
+            if let Some(m) = caps.get(1) {
+                return m.as_str().to_string();
+            }
+        }
+    }
+
+    // 7. If id itself looks like a Minecraft version
+    if is_plausible_mc_version(&version_json.id) {
+        version_json.id.clone()
+    } else if is_plausible_mc_version(fallback_id) {
+        fallback_id.to_string()
+    } else {
+        "Unknown".to_string()
+    }
+}
 #[derive(Default)]
 struct DetectedLoaders {
     fabric: Option<String>,
@@ -805,6 +900,70 @@ mod tests {
         assert_eq!(
             loaders(&json, "1.20.1"),
             vec!["Forge 47.2.0", "OptiFine HD_U_I6"]
+        );
+    }
+
+    #[test]
+    fn test_extract_mc_version_from_neoforge_and_args() {
+        // Tensura Neo Otherworld case: custom modpack id without inheritsFrom
+        let tensura_json = VersionJson {
+            id: "Tensura Neo Otherworld".to_string(),
+            inherits_from: None,
+            libraries: vec![Library {
+                name: "net.neoforged:neoforge:21.1.248".to_string(),
+                url: None,
+                downloads: None,
+                rules: Vec::new(),
+                natives: Default::default(),
+                extract: None,
+            }],
+            ..Default::default()
+        };
+        assert_eq!(
+            extract_mc_version(&tensura_json, "Tensura Neo Otherworld"),
+            "1.21.1"
+        );
+
+        // From game arguments --fml.mcVersion
+        let forge_json = VersionJson {
+            id: "Custom Modpack".to_string(),
+            inherits_from: None,
+            arguments: Some(crate::version::Arguments {
+                game: vec![
+                    crate::version::ArgumentEntry::Plain("--fml.mcVersion".to_string()),
+                    crate::version::ArgumentEntry::Plain("1.20.1".to_string()),
+                ],
+                jvm: Vec::new(),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(extract_mc_version(&forge_json, "Custom Modpack"), "1.20.1");
+
+        // Fabric intermediary library
+        let fabric_json = VersionJson {
+            id: "My Pack".to_string(),
+            inherits_from: None,
+            libraries: vec![Library {
+                name: "net.fabricmc:intermediary:1.20.4".to_string(),
+                url: None,
+                downloads: None,
+                rules: Vec::new(),
+                natives: Default::default(),
+                extract: None,
+            }],
+            ..Default::default()
+        };
+        assert_eq!(extract_mc_version(&fabric_json, "My Pack"), "1.20.4");
+
+        // Completely custom title with no version signals -> Unknown, not the custom title
+        let unknown_json = VersionJson {
+            id: "My Totally Custom Pack".to_string(),
+            inherits_from: None,
+            ..Default::default()
+        };
+        assert_eq!(
+            extract_mc_version(&unknown_json, "My Totally Custom Pack"),
+            "Unknown"
         );
     }
 }

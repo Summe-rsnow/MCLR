@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
@@ -11,6 +11,8 @@ import zhCnCommon from '../../../locales/zh-CN/common.json'
 import zhCnError from '../../../locales/zh-CN/error.json'
 import type { InstanceInfo } from '../../../ipc/client'
 import { useInstancesStore } from '../../instances/store'
+import { useInstallStore } from '../store'
+import { ipcClient } from '../../../ipc/client'
 
 const i18n = createI18n({
   legacy: false,
@@ -334,5 +336,86 @@ describe('Download / Install feature', () => {
     const grid = wrapper.find('[data-testid="primary-loader-grid"]')
     expect(grid.classes().join(' ')).toContain('grid-cols-[repeat(auto-fit,minmax(150px,1fr))]')
     expect(grid.classes()).not.toContain('flex-wrap')
+  })
+
+  it('install flow with two preset ids calls presets_apply once after install task succeeds', async () => {
+    const store = useInstallStore()
+    const applySpy = vi.spyOn(ipcClient, 'presetsApply').mockResolvedValue('task-apply-1')
+    vi.spyOn(ipcClient, 'installVanilla').mockResolvedValue('task-install-1')
+    vi.spyOn(ipcClient, 'tasksList').mockResolvedValue([
+      {
+        id: 'task-install-1',
+        parentId: null,
+        titleKey: '',
+        titleParams: {},
+        state: 'success',
+        progress: 1,
+        speedBps: 0,
+      },
+    ])
+    vi.spyOn(ipcClient, 'presetsApplyReport').mockResolvedValue({
+      instanceId: 'created-id-123',
+      gates: [],
+      rows: [],
+    })
+    const instancesStore = useInstancesStore()
+    vi.spyOn(instancesStore, 'fetchInstances').mockImplementation(async () => {
+      instancesStore.instances = [
+        {
+          id: 'created-id-123',
+          name: '1.20.1',
+          folder: 'C:\\mc',
+          path: 'C:\\mc\\versions\\1.20.1',
+          mcVersion: '1.20.1',
+          kind: 'vanilla',
+          loaders: [],
+          state: 'ok',
+          config: {
+            icon: 'grass_block',
+            category: 'Default',
+            pinned: false,
+            loginRequirement: 'any',
+            isolation: 'global',
+          },
+          modable: false,
+          card: 'regular',
+          releaseTime: null,
+          loaderVersions: {},
+        },
+      ]
+    })
+
+    store.selectedVersion = { id: '1.20.1', versionType: 'release', url: '', releaseTime: '' }
+    store.instanceName = '1.20.1'
+    store.pendingPresetIds = ['preset-a', 'preset-b']
+
+    const taskId = await store.install()
+    expect(taskId).toBe('task-install-1')
+    await flushPromises()
+
+    expect(applySpy).toHaveBeenCalledTimes(1)
+    expect(applySpy).toHaveBeenCalledWith({
+      instanceId: 'created-id-123',
+      presetIds: ['preset-a', 'preset-b'],
+      datapackWorld: null,
+      includeDependencies: true,
+      onOtherVersion: 'skip',
+    })
+  })
+
+  it('install flow with no presets selected never calls presets_apply', async () => {
+    const store = useInstallStore()
+    const applySpy = vi.spyOn(ipcClient, 'presetsApply').mockResolvedValue('task-apply-1')
+    vi.spyOn(ipcClient, 'installVanilla').mockResolvedValue('task-install-1')
+
+    store.selectedVersion = { id: '1.20.1', versionType: 'release', url: '', releaseTime: '' }
+    store.instanceName = '1.20.1'
+    store.pendingPresetIds = []
+
+    const taskId = await store.install()
+    expect(taskId).toBe('task-install-1')
+    await flushPromises()
+
+    expect(applySpy).not.toHaveBeenCalled()
   })
 })

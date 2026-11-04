@@ -52,6 +52,19 @@ To ensure long-term maintainability, backend crates avoid oversized single-file 
 - **`src-tauri::ipc::resources`**:
   - Extracted handlers for resource packs, shader packs, and world schematics to keep `localmods.rs` focused strictly on mod lifecycle.
 
+- **`mclr-comp::preset`**:
+  - `preset/model.rs`: Data types for presets, apply requests, link modes, and store statistics.
+  - `preset/store.rs`: Content-addressed store (`objects/<sha1[0..2]>/<sha1>`) with NTFS hardlinking and automatic copy fallback, atomic index, live ref tracking, and migration.
+  - `preset/repo.rs`: Resource presets repository (`presets.json`) with CRUD, pin, and add-item filter checks.
+  - `preset/ledger.rs`: Instance-level preset tracking (`mclr.presets.json`) recording applied resources and origin presets with safe path verification.
+  - `preset/installed.rs`: Fast multi-resource instance indexer using SHA1 and local mod caches.
+  - `preset/plan.rs`: Pure decision engine (`merge_presets` and `decide`) resolving compatibility, loader expansion, pinned files, and conflict detection.
+- **`mclr-comp::modname` & `naming`**:
+  - `modname.rs`: In-memory index of 27k+ Chinese mod names decoded from bundled protobuf-net dictionary (`mcmod.buf`).
+  - `naming.rs`: User-configurable filename formatter (PCL parity: brackets, fullwidth character sanitization, mixin tilde replacement).
+- **`mclr-comp::depcheck` & `versionrange`**:
+  - `versionrange.rs`: Semantic version range evaluator supporting Maven intervals and Fabric/npm predicates.
+  - `depcheck.rs`: Mod dependency and reverse-dependent analyzer identifying missing, mismatched, disabled, bundled, and conflicting mods.
 ---
 
 ## Modular IPC Client Architecture (`src/ipc/`)
@@ -66,6 +79,7 @@ src/ipc/
 └── domains/             # Domain-specific client modules
     ├── accounts.ts      # Microsoft / Offline / Authlib account actions
     ├── comp.ts          # Modrinth / CurseForge community search & downloads
+    ├── presets.ts       # Resource presets CRUD, apply, and content-addressed store
     ├── crash.ts         # Crash analysis and report generation
     ├── home.ts          # News feed and remote announcements
     ├── install.ts       # Version installation, manifest fetching & compat offload

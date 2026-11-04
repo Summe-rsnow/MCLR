@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.35] - 2026-11-04
+
+Resource presets with multi-preset merge and planning engine, content-addressed store with NTFS hardlinking, 27k+ offline Chinese mod names, mod dependency pre-analysis, quick download navigation with toolbelt & instance avatar selector parity.
+
+### Added
+- **Resource Presets (资源预设)**:
+  - Preset model and CRUD repository at `<data_dir>/presets.json` with multi-filter support (game versions and mod loaders).
+  - One-click multi-preset apply engine (`presets_apply`) with compatibility gating, conflict resolution, rule-based version pinning, and detailed apply reports.
+  - **Rule-based version pinning (规则化版本固定)**: supports pinning files by specific `(gameVersion, loader)` rules; unmatched game versions and loaders automatically fall back to the latest compatible release.
+  - Pnpm-style content-addressed store (`objects/<sha1[0..2]>/<sha1>`) with NTFS hardlinking and automatic copy fallback.
+  - Store management dialog with cache directory migration, hardlink toggle, live disk-saving statistics, and orphan cache pruning.
+  - Instance presets tab in instance detail view and optional preset selection in new instance creation configurator.
+  - One-click "Add to Preset" and "Pin Version to Preset" from community resource cards and version lists.
+- **PCL Parity Mod Capabilities**:
+  - Mod dependency pre-analysis and dependency drawer with interactive status badges (Installed, Disabled, Bundled, VersionMismatch, Missing, Conflict) and quick jump.
+  - Multi-loader environment awareness: ignores irrelevant Fabric dependencies when running on NeoForge/Forge, and ignores Forge dependencies on Fabric/Quilt.
+  - 27,000+ Chinese mod names decoded from bundled dictionary (`mcmod.buf`) with direct mcmod.cn encyclopedia links.
+  - User-configurable file naming preferences (brackets, prefixes, stem insertions) with automatic Mixin tilde replacement and fullwidth Windows filename sanitization.
+- **Community UI & Quick Download Overhaul**:
+  - In-dialog prerequisite navigation stack (`projectStack`) with clean breadcrumbs.
+  - Balanced 2+1 dialog header: Chinese name + platform badge on row 1 with right-aligned "View Details" button; English name and author metadata on row 2 with right-aligned action toolbelt (MCMod, website, preset, favorite, copy URL).
+  - Instance selector parity: displays instance avatars, custom block icons, and loader badges across search toolbar, quick download dialog, and detail view.
+
+### Fixed
+- **Transparent Image Fallback Artifacts**: Removed artificial background colors on `MImage.vue` and eliminated redundant background fallback spans, ensuring transparent PNGs (such as isometric 3D block icons) render seamlessly without black square artifacts.
+- **CSP Image Host Expansion**: Added mod community image hosts (`*.modrinth.com`, `*.forgecdn.net`, `*.githubusercontent.com`, `*.imgur.com`, `*.shields.io`, etc.) to WebView CSP `img-src` so project descriptions render author artwork and screenshots without browser blocks.
+- **Semver Descending Version Ordering**: Normalized version parsing in filter chips so `1.x` is correctly treated as `1.x.0` and ordered after `1.x.1`, `1.x.2`, etc.
+- **NeoForge vs Forge Detection**: Fixed substring matching bug that misidentified NeoForge instances as Forge.
 ## [0.0.34] - 2026-11-02
 
 TypeScript 6.0.3, secrets via .env, instance shadow clipping fix & mod update race fix.

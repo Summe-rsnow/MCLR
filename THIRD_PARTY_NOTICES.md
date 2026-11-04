@@ -56,3 +56,9 @@ Apache License 2.0 (see the full license text in that repository).
 
 Both are embedded in the binary and written to `<data>/tools/agents/` on first
 use; they can be disabled per user in `设置 → 启动 → 高级启动选项`.
+
+---
+
+## Chinese Mod Name Dictionary (`mcmod.buf`)
+
+`crates/mclr-comp/data/mcmod.buf` contains community-contributed Chinese mod names and mcmod.cn class mappings, built from [LuLu-ling/mcmod-data](https://github.com/LuLu-ling/mcmod-data) (data sourced from [MC百科](https://www.mcmod.cn/)). It is embedded in the binary to provide instant offline Chinese mod name display, and is updated locally prior to releases via `node scripts/update-mcmod-db.mjs`.

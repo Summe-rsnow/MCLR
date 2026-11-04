@@ -3,6 +3,7 @@ name = "mclr-comp"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 
 [dependencies]
 mclr-core.workspace = true
@@ -29,6 +30,7 @@ zip.workspace = true
 toml.workspace = true
 trash.workspace = true
 tempfile.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 wiremock.workspace = true

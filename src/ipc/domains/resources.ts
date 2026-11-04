@@ -1,5 +1,6 @@
 import { invokeCommand } from '../client'
 import type { CompFile, CompType } from '../bindings'
+import type { CompPlatform, CompProject } from './comp'
 
 export type ResourceKind = 'mod' | 'resourcePack' | 'shader' | 'schematic'
 export type ResourceState = 'ok' | 'unavailable'
@@ -16,6 +17,7 @@ export interface ResourceEntry {
   enabled: boolean
   state: ResourceState
   title?: string | null
+  zhName?: string | null
   description?: string | null
   version?: string | null
   icon?: string | null
@@ -30,6 +32,7 @@ export interface ResourceEntry {
 export interface ResourcePatch {
   fileName: string
   title?: string | null
+  zhName?: string | null
   description?: string | null
   version?: string | null
   tags?: string[] | null
@@ -76,6 +79,38 @@ export interface ImportResourcesResult {
 export interface CompPickTargetResult {
   instanceId?: string | null
   dir?: string | null
+}
+
+export type ModDepKind = 'required' | 'optional' | 'incompatible'
+
+export interface ModDep {
+  id: string
+  range?: string | null
+  kind: ModDepKind
+}
+
+export type DepStatus =
+  | 'installed'
+  | 'disabled'
+  | 'bundled'
+  | 'versionMismatch'
+  | 'missing'
+  | 'conflict'
+
+export interface DepItem {
+  id: string
+  kind: ModDepKind
+  range?: string | null
+  status: DepStatus
+  providerFile?: string | null
+  providerVersion?: string | null
+}
+
+export interface ModDependencyReport {
+  fileName: string
+  modId: string
+  deps: DepItem[]
+  dependents: string[]
 }
 
 export const resourcesIpc = {
@@ -141,4 +176,13 @@ export const resourcesIpc = {
       mcVersions: mcVersions ?? [],
       loaders: loaders ?? [],
     }),
+
+  localModsDependencies: (instanceId: string): Promise<ModDependencyReport[]> =>
+    invokeCommand<ModDependencyReport[]>('local_mods_dependencies', { instanceId }),
+
+  compDepLookup: (modId: string): Promise<CompProject | null> =>
+    invokeCommand<CompProject | null>('comp_dep_lookup', { modId }),
+
+  compDepProjects: (platform: CompPlatform, projectIds: string[]): Promise<CompProject[]> =>
+    invokeCommand<CompProject[]>('comp_dep_projects', { platform, projectIds }),
 }

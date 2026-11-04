@@ -1,13 +1,15 @@
 //! Community platform (Modrinth / CurseForge) IPC commands.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use futures_util::stream::{self, StreamExt};
 use mclr_comp::{
     CompError, CompFile, CompPlatform, CompProject, CompSearchQuery, CompSearchResult, CompType,
     CurseForgeClient, ModrinthClient,
 };
+use mclr_comp::{modname, naming};
 use mclr_core::{AppError, SettingsStore, TaskCenter};
 use mclr_net::{DownloadSpec, Downloader};
 use serde::{Deserialize, Serialize};
@@ -104,6 +106,7 @@ pub async fn comp_download(
     file: CompFile,
     target_instance: String,
     kind: CompType,
+    project_slug: Option<String>,
 ) -> Result<String, AppError> {
     if file.distribution_disabled || file.download_urls.is_empty() {
         return Err(CompError::DistributionDisabled {
@@ -134,7 +137,21 @@ pub async fn comp_download(
     tokio::fs::create_dir_all(&target_dir)
         .await
         .map_err(CompError::Io)?;
-    let dest_path = target_dir.join(&file.file_name);
+    let zh_name = if settings.comp.show_zh_name {
+        project_slug
+            .as_deref()
+            .and_then(modname::lookup_by_slug)
+            .map(modname::display_zh)
+    } else {
+        None
+    };
+    let dest_name = naming::format_download_name(
+        &file.file_name,
+        zh_name,
+        kind,
+        settings.comp.filename_format,
+    );
+    let dest_path = target_dir.join(dest_name);
 
     let mut params = HashMap::new();
     params.insert("name".to_string(), file.name.clone());
@@ -264,4 +281,65 @@ pub async fn comp_pick_target(
         })
     })
     .await
+}
+
+/// Resolves a bare mod id (or Modrinth slug) to its Modrinth project.
+///
+/// Used by the dependency drawer for a quick jump: a miss is an ordinary `None`, never an
+/// error, because a mod id simply does not have to exist on Modrinth.
+#[tauri::command]
+#[specta::specta]
+pub async fn comp_dep_lookup(
+    state: State<'_, SettingsStore>,
+    mod_id: String,
+) -> Result<Option<CompProject>, AppError> {
+    let settings = state.get().await;
+    let client = ModrinthClient::new(settings.net.source_priority);
+    Ok(client.get_project(&mod_id).await.ok())
+}
+
+/// Fetches several projects of one platform for the dependency list.
+///
+/// Missing or unreachable projects are dropped instead of failing the batch: a dependency
+/// list is still useful when one of its entries vanished from the platform.
+#[tauri::command]
+#[specta::specta]
+pub async fn comp_dep_projects(
+    state: State<'_, SettingsStore>,
+    platform: CompPlatform,
+    project_ids: Vec<String>,
+) -> Result<Vec<CompProject>, AppError> {
+    let settings = state.get().await;
+    let mut seen = HashSet::new();
+    let ids: Vec<String> = project_ids
+        .into_iter()
+        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
+        .collect();
+
+    let projects: Vec<Option<CompProject>> = match platform {
+        CompPlatform::Modrinth => {
+            let client = ModrinthClient::new(settings.net.source_priority);
+            let client = &client;
+            stream::iter(
+                ids.into_iter()
+                    .map(move |id| async move { client.get_project(&id).await.ok() }),
+            )
+            .buffer_unordered(6)
+            .collect()
+            .await
+        }
+        CompPlatform::Curseforge => {
+            let client = CurseForgeClient::new(settings.net.source_priority);
+            let client = &client;
+            stream::iter(
+                ids.into_iter()
+                    .map(move |id| async move { client.get_project(&id).await.ok() }),
+            )
+            .buffer_unordered(6)
+            .collect()
+            .await
+        }
+    };
+
+    Ok(projects.into_iter().flatten().collect())
 }

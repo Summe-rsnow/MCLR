@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type {
+  ModDependencyReport,
   ResourceEntry,
   ResourceKind,
   ResourcesPatchEvent,
@@ -14,9 +15,11 @@ import { MButton, MEmpty, MSkeleton, MVirtualList, useToast, useDialog } from '.
 import { useInstancesStore } from '../instances/store'
 import { awaitTask } from '../tasks/awaitTask'
 import { useErrorText } from '../../composables/useErrorText'
+import { findScrollParent, offsetWithin } from '../../composables/useScrollParent'
 import ResourceToolbar from './components/ResourceToolbar.vue'
 import ResourceItemRow from './components/ResourceItemRow.vue'
 import ResourceModals from './components/ResourceModals.vue'
+import ModDependencyDrawer from './components/ModDependencyDrawer.vue'
 const props = defineProps<{
   instanceId: string
   kind: ResourceKind
@@ -47,6 +50,20 @@ const currentRelPath = ref('')
 // Jar-in-Jar Drawer
 const jijDrawerOpen = ref(false)
 const selectedJijMod = ref<ResourceEntry | null>(null)
+
+// Dependency analysis
+const dependencyReports = ref<ModDependencyReport[]>([])
+const depDrawerOpen = ref(false)
+const depDrawerEntry = ref<ResourceEntry | null>(null)
+
+// Display preferences from `settings.comp`
+const showZhName = ref(true)
+const localNameStyle = ref(0)
+
+// Quick-jump highlight
+const listWrapRef = ref<HTMLElement | null>(null)
+const highlightedPath = ref<string | null>(null)
+let highlightTimer: ReturnType<typeof setTimeout> | null = null
 
 // Schematic info dialog
 const schematicDialogOpen = ref(false)
@@ -260,6 +277,136 @@ function handleNavigateDir(entry: ResourceEntry) {
   loadResources()
 }
 
+// --- Display preferences and dependency analysis -------------------------------------
+
+async function loadDisplaySettings() {
+  try {
+    const settings = await ipcClient.settingsGet()
+    showZhName.value = settings.comp?.showZhName ?? true
+    localNameStyle.value = settings.comp?.localNameStyle ?? 0
+  } catch {
+    // Keep the documented defaults when settings are unavailable.
+  }
+}
+
+/**
+ * Re-reads the mod dependency analysis.
+ *
+ * The backend caches jar parsing, so this is cheap enough to repeat after every toggle or
+ * delete — the statuses (disabled / missing / mismatched) depend on the files on disk.
+ */
+async function loadDependencies() {
+  if (props.kind !== 'mod') {
+    dependencyReports.value = []
+    return
+  }
+  try {
+    dependencyReports.value = await ipcClient.localModsDependencies(props.instanceId)
+  } catch {
+    dependencyReports.value = []
+  }
+}
+
+const dependencyByFile = computed(() => {
+  const byFile = new Map<string, ModDependencyReport>()
+  for (const report of dependencyReports.value) {
+    byFile.set(report.fileName, report)
+  }
+  return byFile
+})
+
+/** Rows carry a warning badge only for problems a user can act on. */
+const warningCounts = computed(() => {
+  const counts = new Map<string, number>()
+  for (const report of dependencyReports.value) {
+    const problems = report.deps.filter(
+      (dep) =>
+        (dep.kind !== 'optional' && dep.status === 'missing') ||
+        dep.status === 'versionMismatch' ||
+        dep.status === 'disabled' ||
+        dep.status === 'conflict',
+    ).length
+    if (problems > 0) counts.set(report.fileName, problems)
+  }
+  return counts
+})
+
+const depDrawerReport = computed(() => {
+  const fileName = depDrawerEntry.value?.fileName
+  return fileName ? (dependencyByFile.value.get(fileName) ?? null) : null
+})
+
+function openDependencyDrawer(entry: ResourceEntry) {
+  depDrawerEntry.value = entry
+  depDrawerOpen.value = true
+}
+
+async function focusRow(fileName: string): Promise<boolean> {
+  const entry = findEntryByName(fileName)
+  if (!entry) return false
+  return focusEntry(entry)
+}
+
+async function focusEntry(entry: ResourceEntry): Promise<boolean> {
+  // Anything that would filter the row out of the list is cleared before locating it.
+  searchQuery.value = ''
+  debouncedQuery.value = ''
+  activeFilter.value = 'all'
+  await nextTick()
+
+  const index = filteredEntries.value.findIndex((candidate) => candidate.path === entry.path)
+  if (index < 0) return false
+
+  scrollListToIndex(index)
+  await nextTick()
+
+  // The virtualizer may have just mounted the row; fine-tune once it exists.
+  listWrapRef.value
+    ?.querySelector<HTMLElement>(`[data-index="${index}"]`)
+    ?.scrollIntoView?.({ block: 'center' })
+
+  if (highlightTimer) clearTimeout(highlightTimer)
+  highlightedPath.value = entry.path
+  highlightTimer = setTimeout(() => {
+    highlightedPath.value = null
+    highlightTimer = null
+  }, 2000)
+  return true
+}
+
+/** Rough scroll for virtualised lists; the exact row is centred once it is rendered. */
+function scrollListToIndex(index: number) {
+  const wrap = listWrapRef.value
+  if (!wrap) return
+  const scroller = findScrollParent(wrap) ?? wrap
+  const inner = wrap.querySelector<HTMLElement>('[data-testid="m-virtual-list"]')
+  if (!inner) {
+    const rows = wrap.querySelectorAll<HTMLElement>('[data-resource-row]')
+    rows[index]?.scrollIntoView?.({ block: 'center' })
+    return
+  }
+  // Matches MVirtualList's `estimate-size` 64 + `gap` 10 below.
+  const estimate = 74
+  const top = offsetWithin(inner, scroller) + index * estimate
+  scroller.scrollTo?.({ top: Math.max(0, top - scroller.clientHeight / 2 + estimate / 2) })
+}
+
+async function handleDependencyJump(fileName: string) {
+  depDrawerOpen.value = false
+  await focusRow(fileName)
+}
+
+async function handleDependencyEnable(fileName: string) {
+  depDrawerOpen.value = false
+  const entry = findEntryByName(fileName)
+  if (!entry) return
+  if (!entry.enabled) await doToggle(entry)
+  // The toggle renames the file (`.disabled` suffix), so focus the object, not the old name.
+  await focusEntry(entry)
+}
+
+defineExpose({ focusRow })
+
 function handleNavigateBack() {
   if (!currentRelPath.value) return
   const parts = currentRelPath.value.split('/')
@@ -291,7 +438,7 @@ async function handleToggle(entry: ResourceEntry) {
   await doToggle(entry)
 }
 
-async function doToggle(entry: ResourceEntry) {
+async function doToggle(entry: ResourceEntry, refreshDependencies = true) {
   try {
     const newPath = await ipcClient.resourceToggle(props.instanceId, entry.path)
     if (newPath) {
@@ -305,6 +452,7 @@ async function doToggle(entry: ResourceEntry) {
       entry.fileName = `${entry.fileName}.disabled`
     }
     entry.enabled = !entry.enabled
+    if (refreshDependencies && props.kind === 'mod') void loadDependencies()
   } catch (err: unknown) {
     toast.danger(String(err))
   }
@@ -339,6 +487,7 @@ async function handleDelete(entry: ResourceEntry, permanent = false) {
     await ipcClient.resourcesDelete([entry.path], permanent)
     entries.value = entries.value.filter((e) => e.path !== entry.path)
     selectedPaths.value.delete(entry.path)
+    if (props.kind === 'mod') void loadDependencies()
     toast.success(t('resources.actions.delete'))
   } catch (err: unknown) {
     toast.danger(String(err))
@@ -462,8 +611,9 @@ async function applyCascade(action: 'disable' | 'delete', includeDependents: boo
 
   if (action === 'disable') {
     for (const entry of entriesToApply) {
-      if (entry.enabled) await doToggle(entry)
+      if (entry.enabled) await doToggle(entry, false)
     }
+    if (props.kind === 'mod') void loadDependencies()
     return
   }
 
@@ -481,6 +631,7 @@ async function applyCascade(action: 'disable' | 'delete', includeDependents: boo
     await ipcClient.resourcesDelete(paths, false)
     entries.value = entries.value.filter((e) => !paths.includes(e.path))
     for (const path of paths) selectedPaths.value.delete(path)
+    if (props.kind === 'mod') void loadDependencies()
     toast.success(t('resources.cascade.deletedBatch', { count: paths.length }))
   } catch (err: unknown) {
     toast.danger(String(err))
@@ -532,6 +683,7 @@ async function handleBatchDelete() {
     await ipcClient.resourcesDelete(paths, false)
     entries.value = entries.value.filter((e) => !selectedPaths.value.has(e.path))
     selectedPaths.value.clear()
+    if (props.kind === 'mod') void loadDependencies()
     toast.success(t('resources.actions.delete'))
   } catch (err: unknown) {
     toast.danger(String(err))
@@ -548,8 +700,11 @@ const TOGGLE_CONCURRENCY = 8
  */
 async function runToggleBatches(targets: ResourceEntry[]) {
   for (let i = 0; i < targets.length; i += TOGGLE_CONCURRENCY) {
-    await Promise.all(targets.slice(i, i + TOGGLE_CONCURRENCY).map((entry) => doToggle(entry)))
+    await Promise.all(
+      targets.slice(i, i + TOGGLE_CONCURRENCY).map((entry) => doToggle(entry, false)),
+    )
   }
+  if (props.kind === 'mod') void loadDependencies()
 }
 
 async function handleBatchToggle(enable: boolean) {
@@ -745,7 +900,8 @@ function handleKeyDown(ev: KeyboardEvent) {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown)
-  await loadResources()
+  await Promise.all([loadDisplaySettings(), loadResources()])
+  if (props.kind === 'mod') void loadDependencies()
 
   // Entering the list is exactly when the user wants to know what is outdated, so the check
   // runs by itself instead of waiting for a button press.
@@ -790,6 +946,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
   if (unlistenPatch) unlistenPatch()
+  if (highlightTimer) clearTimeout(highlightTimer)
 })
 
 watch(
@@ -797,6 +954,7 @@ watch(
   async () => {
     currentRelPath.value = ''
     await loadResources()
+    if (props.kind === 'mod') void loadDependencies()
     // Switching instances inside the same mounted list must check that instance's mods, not
     // keep the previous instance's verdicts.
     if (props.kind === 'mod' && entries.value.length > 0) {
@@ -885,7 +1043,7 @@ watch(
       </div>
     </Transition>
     <!-- Content / Skeletons / List -->
-    <div class="min-w-0">
+    <div ref="listWrapRef" class="min-w-0">
       <div v-if="!initialized && loading" class="space-y-2">
         <div
           v-for="n in 5"
@@ -930,6 +1088,10 @@ watch(
               :entry="entry"
               :kind="kind"
               :selected="isSelected(entry.path)"
+              :show-zh-name="showZhName"
+              :local-name-style="localNameStyle"
+              :dep-warnings="warningCounts.get(entry.fileName) ?? 0"
+              :highlighted="highlightedPath === entry.path"
               @select="toggleSelect"
               @navigate-dir="handleNavigateDir"
               @inspect-schematic="handleSchematicInspect"
@@ -938,6 +1100,7 @@ watch(
               @update="handleUpdateClick"
               @delete="handleDelete"
               @toggle="handleToggle"
+              @analyze="openDependencyDrawer"
             />
           </template>
         </MVirtualList>
@@ -968,6 +1131,14 @@ watch(
       @cascade-confirm-all="handleCascadeConfirmAll"
       @single-update="doSingleUpdate"
       @batch-update="doBatchUpdate"
+    />
+
+    <ModDependencyDrawer
+      v-model:open="depDrawerOpen"
+      :entry="depDrawerEntry"
+      :report="depDrawerReport"
+      @jump="handleDependencyJump"
+      @enable="handleDependencyEnable"
     />
   </div>
 </template>

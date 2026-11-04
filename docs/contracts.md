@@ -28,8 +28,14 @@ This document is the definitive engineering specification for runtime invariants
   - `settings_get() -> Settings`
   - `settings_patch(patch: serde_json::Value)`: RFC 7386 JSON Merge Patch; deserializes into `Settings` to validate, rejects unknown fields with `AppError { code: "settings.invalid" }`.
   - **Broadcast**: Emits on Tauri channel `settings://changed` when configuration mutates.
-- **Modularity**: Sub-settings (`launch`, `java`, `net`, `ui`, `update`, `language`) reside in dedicated files under `mclr-core/src/settings/`.
-
+- **Modularity**: Sub-settings (`launch`, `java`, `net`, `ui`, `update`, `language`, `comp`) reside in dedicated files under `mclr-core/src/settings/`.
+- **Community & Presets Settings (`comp`)**:
+  - `comp.storeDir: String` (custom content-addressed store directory, empty string defaults to `<paths::cache_dir()>/store`).
+  - `comp.useHardlink: bool` (default `false`, experimental beta; whether to place immutable jar/zip files via NTFS hardlink with automatic fallback to copy).
+  - `comp.filenameFormat: u8` (default `1`; download filename format: 0 `【中文名】file`, 1 `[中文名] file`, 2 `中文名-stem.ext`, 3 `stem-中文名.ext`, other values raw filename).
+  - `comp.showZhName: bool` (default `true`; whether to display and use Chinese mod names from the dictionary).
+  - `comp.localNameStyle: u8` (default `0`; local mod list title style: 0 Chinese name as title / filename as detail; 1 reversed).
+  - `comp.favorites: Vec<CompFavoriteEntry>` (persisted community favorites).
 ### 2.2 System Tray & Background Residency (`src-tauri/src/tray.rs`)
 - **Tray Menu**: Built once during `setup` with window icon; actions: `显示主窗口` / `隐藏到托盘` / `退出 MCLR`. Left click restores window, right click opens context menu.
 - **Background Residency**: `system.keepInBackground` (default `false`) controls window close behavior:
@@ -216,3 +222,25 @@ The gate executes the following sequence:
 9. `node scripts/lint-i18n.mjs`
 10. `node scripts/lint-ui-contracts.mjs`
 11. `vite build`
+
+---
+
+## 11. Resource Presets & Dependency Analysis
+
+### 11.1 Content-Addressed Store (`mclr-comp::preset::store`)
+- **Object Layout**: Files are stored by SHA1 hash at `<store_dir>/objects/<sha1[0..2]>/<sha1>` with permissions scoped to the launcher.
+- **Index & Reference Tracking**: Atomic persistence at `<store_dir>/index.json` recording object metadata and active live references (`{sha1, gameDir, relPath, mode}`).
+- **Link Strategy**: When `use_hardlink` is true, `std::fs::hard_link` is attempted first. On cross-volume or filesystem errors, it falls back seamlessly to `std::fs::copy`. Extracted resources (worlds) always extract copies.
+- **Cache Protection**: The toolbox cache cleaner (`tools_cache_clear`) specifically excludes `cache/store` so manual toolbox cleans never purge preset objects.
+
+### 11.2 Preset Application & Resolution Engine
+- **Filtering**: Presets specify optional game versions and mod loaders (empty = all compatible). Loaders gate only Mod items; resource packs, shaders, datapacks, and worlds are filtered by game version only.
+- **Version Gating**: Presets with non-empty game version filters incompatible with the instance are gated (`GateReason::GameVersion`) and omitted from item application.
+- **Conflict & Overlap Resolution**: Multi-preset apply merges items across presets in selection order. Conflicting pins mark `version_conflict: true` (first non-empty pin wins). Duplicate hashes mark `overlap: true`.
+- **Ledger Tracking**: Applied files are tracked per-instance in `<game_dir>/mclr.presets.json`, dropping path-traversal relative paths on load.
+
+### 11.3 Mod Dependency Graph & Parity
+- **Dependency Analyzer (`depcheck`)**: Classifies dependencies into `Installed`, `Disabled`, `Bundled`, `VersionMismatch`, `Missing`, and `Conflict`.
+- **Lenient Version Checks (`versionrange`)**: Supports Maven intervals and Fabric/npm predicates. Unparsable ranges or placeholder expressions (`${...}`) always evaluate to `true` to prevent false mismatch warnings.
+- **Chinese Mod Name Dictionary (`modname`)**: Bundled protobuf-net dictionary (`mcmod.buf`) decoded via streaming Gzip reader into a fast 27k+ lowercase slug lookup index with direct mcmod.cn encyclopedia link resolution.
+- **Local Dictionary Maintenance (`scripts/update-mcmod-db.mjs`)**: Fetches latest upstream release asset from `LuLu-ling/mcmod-data` (with domestic mirror fallbacks), validates Gzip integrity and protobuf entry count (>20,000 entries), and atomically updates `crates/mclr-comp/data/mcmod.buf`. Automatically executed during local version bumps (`scripts/bump-version.mjs`) or on-demand via `pnpm update:mcmod`.

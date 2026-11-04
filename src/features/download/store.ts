@@ -7,7 +7,9 @@ import {
   type LoaderKind,
   type LoaderVersionEntry,
 } from '../../ipc/client'
-
+import { awaitTask } from '../tasks/awaitTask'
+import { useInstancesStore } from '../instances/store'
+import { usePresetsStore } from '../presets/store'
 export type VersionFilterType = 'all' | 'release' | 'snapshot' | 'old'
 export type SelectedLoader = 'none' | LoaderKind
 
@@ -68,6 +70,7 @@ export const useInstallStore = defineStore('install', () => {
   })
   const loading = ref(false)
   const searchQuery = ref('')
+  const pendingPresetIds = ref<string[]>([])
   const filterType = ref<VersionFilterType>('release')
   const selectedVersion = ref<VersionManifestEntry | null>(null)
   const instanceName = ref('')
@@ -197,6 +200,7 @@ export const useInstallStore = defineStore('install', () => {
     optifineComboVersions.value = []
     selectedOptifineVersion.value = ''
     installDialogOpen.value = true
+    pendingPresetIds.value = []
   }
 
   async function install() {
@@ -215,6 +219,27 @@ export const useInstallStore = defineStore('install', () => {
       )
     }
     installDialogOpen.value = false
+    if (pendingPresetIds.value.length > 0) {
+      const presetIdsToApply = [...pendingPresetIds.value]
+      const targetName = instanceName.value.trim()
+      awaitTask(taskId)
+        .then(async () => {
+          const instancesStore = useInstancesStore()
+          await instancesStore.fetchInstances()
+          const created = instancesStore.instances.find((i) => i.name === targetName)
+          if (created) {
+            const presetsStore = usePresetsStore()
+            await presetsStore.applyPresets({
+              instanceId: created.id,
+              presetIds: presetIdsToApply,
+              datapackWorld: null,
+              includeDependencies: true,
+              onOtherVersion: 'skip',
+            })
+          }
+        })
+        .catch(() => {})
+    }
     return taskId
   }
 
@@ -242,5 +267,6 @@ export const useInstallStore = defineStore('install', () => {
     selectLoader,
     openInstallDialog,
     install,
+    pendingPresetIds,
   }
 })

@@ -135,6 +135,26 @@ pub fn builder() -> Builder<tauri::Wry> {
             crate::ipc::update::launcher_logs_dir,
             crate::ipc::update::launcher_logs_prune,
             crate::ipc::update::launcher_logs_clear,
+            // [presets]
+            crate::ipc::presets::presets_list,
+            crate::ipc::presets::presets_save,
+            crate::ipc::presets::presets_delete,
+            crate::ipc::presets::presets_add_items,
+            crate::ipc::presets::presets_remove_item,
+            crate::ipc::presets::presets_pin,
+            crate::ipc::presets::presets_pin_rule,
+            crate::ipc::presets::presets_remove_pin_rule,
+            crate::ipc::presets::presets_apply,
+            crate::ipc::presets::presets_apply_report,
+            crate::ipc::presets::presets_cache,
+            crate::ipc::presets::presets_store_info,
+            crate::ipc::presets::presets_store_set_dir,
+            crate::ipc::presets::presets_store_prune,
+            crate::ipc::presets::presets_store_remove,
+            // [deps]
+            crate::ipc::localmods::local_mods_dependencies,
+            crate::ipc::comp::comp_dep_lookup,
+            crate::ipc::comp::comp_dep_projects,
         ])
         // `usize`/`u64` fields (sizes, timestamps) are within JS safe-integer range here, and the
         // exporter refuses BigInt-style numbers by default.

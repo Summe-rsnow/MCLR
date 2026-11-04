@@ -4,10 +4,19 @@ use mclr_core::{AppError, Settings, paths};
 use std::path::Path;
 use tauri::{AppHandle, Manager, Runtime};
 
-/// Allow the launcher data dir and every configured game folder.
+/// Allow the launcher data dir, every configured game folder, and the preset store.
 pub fn allow_defaults<R: Runtime>(app: &AppHandle<R>, settings: &Settings) {
     allow_dir(app, &paths::data_dir());
     allow_game_folders(app, settings);
+    allow_presets_store(app, &crate::ipc::presets::store_root(settings));
+}
+
+/// Allow the preset store root (it may live outside the launcher data dir).
+pub fn allow_presets_store<R: Runtime>(app: &AppHandle<R>, store: &Path) {
+    if store.as_os_str().is_empty() {
+        return;
+    }
+    allow_dir(app, store);
 }
 
 pub fn allow_game_folders<R: Runtime>(app: &AppHandle<R>, settings: &Settings) {
@@ -48,7 +57,7 @@ pub fn assets_allow(app: AppHandle, path: String) -> Result<(), AppError> {
 }
 
 /// Refuses whole drives and the Windows system directories.
-fn reject_dangerous_dir(dir: &Path) -> Result<(), AppError> {
+pub(crate) fn reject_dangerous_dir(dir: &Path) -> Result<(), AppError> {
     let resolved = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
     if resolved.parent().is_none() {
         return Err(AppError::new("core.pathDenied").with_detail(format!(

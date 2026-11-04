@@ -2,9 +2,11 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use mclr_comp::LocalModInfo;
 use mclr_comp::model::CompFile;
+use mclr_comp::modname;
 use mclr_comp::modrinth::ModrinthClient;
 use mclr_comp::resources::{
     ImportResourcesResult, OverwritePolicy, ResourceEntry, ResourceKind, ResourceState,
@@ -21,6 +23,10 @@ use tauri::{Emitter, State};
 pub struct ResourcePatch {
     pub file_name: String,
     pub title: Option<String>,
+    /// Chinese name resolved from the project; omitted (not null) when unknown so the
+    /// already-scanned entry keeps its dictionary-based name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zh_name: Option<String>,
     pub description: Option<String>,
     pub version: Option<String>,
     pub tags: Option<Vec<String>>,
@@ -68,6 +74,8 @@ pub async fn resources_list(
 ) -> Result<Vec<ResourceEntry>, AppError> {
     let mc_folder = super::current_mc_folder(&state).await;
     let g_dir = super::game_dir_for(&state, &instance_id).await;
+    let settings = state.snapshot().await;
+    let show_zh_name = settings.comp.show_zh_name;
     let r = rel.clone();
     let inst_id = instance_id.clone();
 
@@ -139,6 +147,15 @@ pub async fn resources_list(
             };
             entry.mod_id = Some(m.mod_id.clone());
             entry.project_id = m.project_id.clone();
+            // The dictionary is offline and instant, so the Chinese name is already there
+            // on the first paint instead of waiting for the network patches.
+            entry.zh_name = if show_zh_name {
+                modname::lookup_by_slug(&m.mod_id)
+                    .map(modname::display_zh)
+                    .map(str::to_string)
+            } else {
+                None
+            };
             // Jar artwork is instant; project artwork arrives with the background patches.
             entry.icon = m.icon.clone();
         }
@@ -150,7 +167,7 @@ pub async fn resources_list(
     {
         let inst_id = instance_id.clone();
         let app_handle = app.clone();
-        let settings = state.snapshot().await;
+        let settings = Arc::clone(&settings);
 
         tokio::spawn(async move {
             let batcher = crate::events::spawn_default(move |patches: Vec<ResourcePatch>| {
@@ -206,6 +223,7 @@ pub async fn resources_list(
                 .collect();
             metadata_request.sort_unstable();
             metadata_request.dedup();
+            let mut zh_names: HashMap<String, String> = HashMap::new();
             for chunk in metadata_request.chunks(mclr_comp::local::MODRINTH_LOOKUP_BATCH) {
                 let Ok(projects) = modrinth.get_projects_batch(chunk).await else {
                     break;
@@ -213,6 +231,9 @@ pub async fn resources_list(
                 for project in projects {
                     if let Some(url) = project.icon_url {
                         icon_urls.insert(project.id.clone(), url);
+                    }
+                    if show_zh_name && let Some(zh_name) = project.zh_name.clone() {
+                        zh_names.insert(project.id.clone(), zh_name);
                     }
                     if !project.categories.is_empty() {
                         project_categories.insert(project.id, project.categories);
@@ -246,6 +267,21 @@ pub async fn resources_list(
                 batcher.push(ResourcePatch {
                     file_name: m.file_name.clone(),
                     title: Some(m.name.clone()),
+                    // The project's own name wins over the dictionary: it is the same table
+                    // the project page shows, and slugs can differ from local mod ids.
+                    zh_name: if show_zh_name {
+                        project_id
+                            .as_ref()
+                            .and_then(|id| zh_names.get(id))
+                            .cloned()
+                            .or_else(|| {
+                                modname::lookup_by_slug(&m.mod_id)
+                                    .map(modname::display_zh)
+                                    .map(str::to_string)
+                            })
+                    } else {
+                        None
+                    },
                     description: m.description.clone(),
                     version: Some(m.version.clone()).filter(|v| !v.is_empty()),
                     tags: Some(tags),

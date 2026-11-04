@@ -467,6 +467,19 @@ impl ModrinthSearchHit {
                 categories.push(cat);
             }
         }
+        let (zh_name, wiki_id) = if comp_type == CompType::Mod {
+            match crate::modname::lookup_by_slug(&self.slug)
+                .or_else(|| crate::modname::lookup_by_slug(&self.project_id))
+            {
+                Some(entry) => (
+                    Some(crate::modname::display_zh(entry).to_string()),
+                    Some(entry.wiki_id),
+                ),
+                None => (None, None),
+            }
+        } else {
+            (None, None)
+        };
 
         CompProject {
             platform: CompPlatform::Modrinth,
@@ -485,6 +498,8 @@ impl ModrinthSearchHit {
             comp_type,
             updated_at: self.date_modified,
             website_url: Some(website_url),
+            zh_name,
+            wiki_id,
         }
     }
 }
@@ -526,6 +541,19 @@ impl ModrinthRawProject {
 
         let comp_type = parse_comp_type(&self.project_type, &all_cats);
         let website_url = format!("https://modrinth.com/{}/{}", self.project_type, self.slug);
+        let (zh_name, wiki_id) = if comp_type == CompType::Mod {
+            match crate::modname::lookup_by_slug(&self.slug)
+                .or_else(|| crate::modname::lookup_by_slug(&self.id))
+            {
+                Some(entry) => (
+                    Some(crate::modname::display_zh(entry).to_string()),
+                    Some(entry.wiki_id),
+                ),
+                None => (None, None),
+            }
+        } else {
+            (None, None)
+        };
 
         let mut loaders = self.loaders;
         let mut categories = Vec::new();
@@ -556,6 +584,8 @@ impl ModrinthRawProject {
             comp_type,
             updated_at: self.updated,
             website_url: Some(website_url),
+            zh_name,
+            wiki_id,
         }
     }
 }
@@ -799,6 +829,8 @@ mod tests {
             hit.website_url.as_deref(),
             Some("https://modrinth.com/mod/sodium")
         );
+        assert_eq!(hit.zh_name.as_deref(), Some("钠"));
+        assert_eq!(hit.wiki_id, Some(2785));
     }
 
     #[tokio::test]

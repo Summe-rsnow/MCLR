@@ -82,6 +82,14 @@ export function setupMockIpc(): void {
     states: {
       dismissedAnnouncements: [],
     },
+    comp: {
+      favorites: [],
+      storeDir: '',
+      useHardlink: false,
+      filenameFormat: 1,
+      showZhName: true,
+      localNameStyle: 0,
+    },
   }
   const handlers: MockHandlers = {
     // Keep in sync with package.json on release; a stale value hides version bugs.

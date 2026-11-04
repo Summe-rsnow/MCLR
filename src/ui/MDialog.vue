@@ -16,7 +16,7 @@ const props = withDefaults(
     confirmVariant?: 'primary' | 'danger' | 'tonal'
     confirmLoading?: boolean
     confirmDisabled?: boolean
-    maxWidth?: 'sm' | 'md' | 'lg' | 'xl'
+    maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'
   }>(),
   {
     title: undefined,
@@ -44,7 +44,8 @@ const maxWidthClass = computed(() => {
       return 'max-w-lg'
     case 'xl':
       return 'max-w-xl'
-    case 'md':
+    case '2xl':
+      return 'max-w-2xl'
     default:
       return 'max-w-md'
   }

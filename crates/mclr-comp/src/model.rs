@@ -109,6 +109,8 @@ pub struct CompProject {
     pub comp_type: CompType,
     pub updated_at: String,
     pub website_url: Option<String>,
+    pub zh_name: Option<String>,
+    pub wiki_id: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]

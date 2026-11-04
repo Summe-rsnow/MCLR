@@ -104,6 +104,7 @@ mod tests {
 
     #[test]
     fn test_secrets_status_with_isolated_dir() {
+        let _lock = crate::test_utils::ENV_MUTEX.lock().unwrap();
         let temp = tempfile::tempdir().unwrap();
         unsafe {
             std::env::set_var("MCLR_DATA_DIR", temp.path().to_str().unwrap());

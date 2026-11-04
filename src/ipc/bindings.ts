@@ -75,7 +75,7 @@ export const commands = {
 	compSearch: (query: CompSearchQuery_Deserialize) => typedError<CompSearchResult_Serialize, AppError_Serialize>(__TAURI_INVOKE("comp_search", { query })),
 	compProject: (platform: CompPlatform, projectId: string) => typedError<CompProject_Serialize, AppError_Serialize>(__TAURI_INVOKE("comp_project", { platform, projectId })),
 	compFiles: (platform: CompPlatform, projectId: string, mcVersion: string | null, loader: string | null) => typedError<CompFile_Serialize[], AppError_Serialize>(__TAURI_INVOKE("comp_files", { platform, projectId, mcVersion, loader })),
-	compDownload: (file: CompFile_Deserialize, targetInstance: string, kind: CompType) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("comp_download", { file, targetInstance, kind })),
+	compDownload: (file: CompFile_Deserialize, targetInstance: string, kind: CompType, projectSlug: string | null) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("comp_download", { file, targetInstance, kind, projectSlug })),
 	compPickTarget: (projectType: CompType, preferredInstanceId: string | null, mcVersions: string[], loaders: string[]) => typedError<CompPickTargetResult_Serialize, AppError_Serialize>(__TAURI_INVOKE("comp_pick_target", { projectType, preferredInstanceId, mcVersions, loaders })),
 	modpackInspect: (archivePath: string) => typedError<ModpackInspectResult_Serialize, AppError_Serialize>(__TAURI_INVOKE("modpack_inspect", { archivePath })),
 	modpackImportFile: (archivePath: string, instanceName: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("modpack_import_file", { archivePath, instanceName })),
@@ -148,6 +148,42 @@ export const commands = {
 	launcherLogsPrune: (retentionDays: number | null) => typedError<LauncherLogCleanup, AppError_Serialize>(__TAURI_INVOKE("launcher_logs_prune", { retentionDays })),
 	/**  Deletes every launcher log except the newest one, which the running appender owns. */
 	launcherLogsClear: () => typedError<LauncherLogCleanup, AppError_Serialize>(__TAURI_INVOKE("launcher_logs_clear")),
+	presetsList: () => typedError<ResourcePreset_Serialize[], AppError_Serialize>(__TAURI_INVOKE("presets_list")),
+	presetsSave: (preset: PresetSaveInput_Deserialize) => typedError<ResourcePreset_Serialize, AppError_Serialize>(__TAURI_INVOKE("presets_save", { preset })),
+	presetsDelete: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_delete", { id })),
+	presetsAddItems: (presetId: string, items: PresetItem_Deserialize[]) => typedError<AddItemOutcome_Serialize[], AppError_Serialize>(__TAURI_INVOKE("presets_add_items", { presetId, items })),
+	presetsRemoveItem: (presetId: string, platform: CompPlatform, projectId: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_remove_item", { presetId, platform, projectId })),
+	presetsPin: (presetId: string, platform: CompPlatform, projectId: string, fileId: string | null, fileName: string | null) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_pin", { presetId, platform, projectId, fileId, fileName })),
+	presetsPinRule: (presetId: string, platform: CompPlatform, projectId: string, rule: PresetPinRule_Deserialize) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_pin_rule", { presetId, platform, projectId, rule })),
+	presetsRemovePinRule: (presetId: string, platform: CompPlatform, projectId: string, fileId: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_remove_pin_rule", { presetId, platform, projectId, fileId })),
+	presetsApply: (request: ApplyRequest_Deserialize) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("presets_apply", { request })),
+	presetsApplyReport: (taskId: string) => typedError<ApplyReport_Serialize, AppError_Serialize>(__TAURI_INVOKE("presets_apply_report", { taskId })),
+	presetsCache: (presetId: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("presets_cache", { presetId })),
+	presetsStoreInfo: () => typedError<StoreInfo, AppError_Serialize>(__TAURI_INVOKE("presets_store_info")),
+	presetsStoreSetDir: (dir: string, migrate: boolean) => typedError<StoreInfo, AppError_Serialize>(__TAURI_INVOKE("presets_store_set_dir", { dir, migrate })),
+	presetsStorePrune: () => typedError<PruneResult, AppError_Serialize>(__TAURI_INVOKE("presets_store_prune")),
+	presetsStoreRemove: (sha1: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_store_remove", { sha1 })),
+	/**
+	 *  Dependency report for every jar of an instance.
+	 * 
+	 *  Statuses come from the instance itself (enabled/disabled, declared ranges) and from the
+	 *  Jar-in-Jar trees, so a mod shipped inside another jar is not reported as missing.
+	 */
+	localModsDependencies: (instanceId: string) => typedError<ModDependencyReport_Serialize[], AppError_Serialize>(__TAURI_INVOKE("local_mods_dependencies", { instanceId })),
+	/**
+	 *  Resolves a bare mod id (or Modrinth slug) to its Modrinth project.
+	 * 
+	 *  Used by the dependency drawer for a quick jump: a miss is an ordinary `None`, never an
+	 *  error, because a mod id simply does not have to exist on Modrinth.
+	 */
+	compDepLookup: (modId: string) => typedError<CompProject_Serialize | null, AppError_Serialize>(__TAURI_INVOKE("comp_dep_lookup", { modId })),
+	/**
+	 *  Fetches several projects of one platform for the dependency list.
+	 * 
+	 *  Missing or unreachable projects are dropped instead of failing the batch: a dependency
+	 *  list is still useful when one of its entries vanished from the platform.
+	 */
+	compDepProjects: (platform: CompPlatform, projectIds: string[]) => typedError<CompProject_Serialize[], AppError_Serialize>(__TAURI_INVOKE("comp_dep_projects", { platform, projectIds })),
 };
 
 /* Types */
@@ -180,6 +216,26 @@ export type AccountView_Serialize = {
 	capes: CapeView[],
 	defaultSkinModel: string,
 };
+
+export type AddItemOutcome = AddItemOutcome_Serialize | AddItemOutcome_Deserialize;
+
+export type AddItemOutcome_Deserialize = {
+	platform: CompPlatform,
+	projectId: string,
+	title: string,
+	status: AddStatus,
+	latestFileName?: string | null,
+};
+
+export type AddItemOutcome_Serialize = {
+	platform: CompPlatform,
+	projectId: string,
+	title: string,
+	status: AddStatus,
+	latestFileName: string | null,
+};
+
+export type AddStatus = "added" | "alreadyInPreset" | "alreadyInPresetOtherVersion" | "noGameVersion" | "noLoader" | "noFile" | "unsupported";
 
 /**  Optional action button for an announcement card. */
 export type AnnouncementButton = AnnouncementButton_Serialize | AnnouncementButton_Deserialize;
@@ -248,6 +304,78 @@ export type AppInfo = {
 	name: string,
 	version: string,
 };
+
+export type ApplyReport = ApplyReport_Serialize | ApplyReport_Deserialize;
+
+export type ApplyReport_Deserialize = {
+	instanceId: string,
+	gates: PresetGate_Deserialize[],
+	rows: ApplyRow_Deserialize[],
+};
+
+export type ApplyReport_Serialize = {
+	instanceId: string,
+	gates: PresetGate_Serialize[],
+	rows: ApplyRow_Serialize[],
+};
+
+export type ApplyRequest = ApplyRequest_Serialize | ApplyRequest_Deserialize;
+
+export type ApplyRequest_Deserialize = {
+	instanceId: string,
+	presetIds: string[],
+	datapackWorld?: string | null,
+	includeDependencies: boolean,
+	onOtherVersion: OtherVersionPolicy,
+};
+
+export type ApplyRequest_Serialize = {
+	instanceId: string,
+	presetIds: string[],
+	datapackWorld: string | null,
+	includeDependencies: boolean,
+	onOtherVersion: OtherVersionPolicy,
+};
+
+export type ApplyRow = ApplyRow_Serialize | ApplyRow_Deserialize;
+
+export type ApplyRow_Deserialize = {
+	platform: CompPlatform,
+	projectId: string,
+	kind: CompType,
+	title: string,
+	zhTitle?: string | null,
+	status: ApplyStatus,
+	fileId?: string | null,
+	fileName?: string | null,
+	installedFileName?: string | null,
+	linkMode?: LinkMode | null,
+	fromPresets: string[],
+	overlap: boolean,
+	versionConflict: boolean,
+	viaDependencyOf?: string | null,
+	messageCode?: string | null,
+};
+
+export type ApplyRow_Serialize = {
+	platform: CompPlatform,
+	projectId: string,
+	kind: CompType,
+	title: string,
+	zhTitle: string | null,
+	status: ApplyStatus,
+	fileId: string | null,
+	fileName: string | null,
+	installedFileName: string | null,
+	linkMode: LinkMode | null,
+	fromPresets: string[],
+	overlap: boolean,
+	versionConflict: boolean,
+	viaDependencyOf: string | null,
+	messageCode: string | null,
+};
+
+export type ApplyStatus = "installed" | "replaced" | "alreadySame" | "alreadyOtherVersion" | "noGameVersion" | "noLoader" | "noFile" | "distributionDisabled" | "needsWorld" | "failed";
 
 export type AuthlibLoginResponse = AuthlibLoginResponse_Serialize | AuthlibLoginResponse_Deserialize;
 
@@ -397,6 +525,8 @@ export type CompProject_Deserialize = {
 	compType: CompType,
 	updatedAt: string,
 	websiteUrl?: string | null,
+	zhName?: string | null,
+	wikiId?: number | null,
 };
 
 export type CompProject_Serialize = {
@@ -416,6 +546,8 @@ export type CompProject_Serialize = {
 	compType: CompType,
 	updatedAt: string,
 	websiteUrl: string | null,
+	zhName: string | null,
+	wikiId: number | null,
 };
 
 export type CompReleaseChannel = "release" | "beta" | "alpha";
@@ -466,10 +598,20 @@ export type CompSettings = CompSettings_Serialize | CompSettings_Deserialize;
 
 export type CompSettings_Deserialize = {
 	favorites?: CompFavoriteEntry_Deserialize[],
+	storeDir?: string,
+	useHardlink?: boolean,
+	filenameFormat?: number,
+	showZhName?: boolean,
+	localNameStyle?: number,
 };
 
 export type CompSettings_Serialize = {
 	favorites: CompFavoriteEntry_Serialize[],
+	storeDir: string,
+	useHardlink: boolean,
+	filenameFormat: number,
+	showZhName: boolean,
+	localNameStyle: number,
 };
 
 export type CompSort = "relevance" | "downloads" | "follows" | "newest" | "updated";
@@ -546,6 +688,28 @@ export type DefaultIsolation_Serialize = "off" | "modded" | "nonRelease" | "modd
 /**  Legacy `config.json` files stored `"on"`. */
 "all";
 
+export type DepItem = DepItem_Serialize | DepItem_Deserialize;
+
+export type DepItem_Deserialize = {
+	id: string,
+	kind: ModDepKind,
+	range?: string | null,
+	status: DepStatus,
+	providerFile?: string | null,
+	providerVersion?: string | null,
+};
+
+export type DepItem_Serialize = {
+	id: string,
+	kind: ModDepKind,
+	range: string | null,
+	status: DepStatus,
+	providerFile: string | null,
+	providerVersion: string | null,
+};
+
+export type DepStatus = "installed" | "disabled" | "bundled" | "versionMismatch" | "missing" | "conflict";
+
 /**  Candidate file or folder that can be selected for modpack export. */
 export type ExportCandidateEntry = {
 	relPath: string,
@@ -611,6 +775,8 @@ export type GameSettings_Serialize = {
 	defaultIsolation: DefaultIsolation_Serialize,
 	sortBy: string,
 };
+
+export type GateReason = "gameVersion";
 
 export type ImportResourcesResult = {
 	imported: string[],
@@ -917,6 +1083,8 @@ export type LauncherLogFile = {
 	modifiedAt: string,
 };
 
+export type LinkMode = "hardLink" | "copy" | "extracted";
+
 export type LoaderKind = LoaderKind_Serialize | LoaderKind_Deserialize;
 
 export type LoaderKind_Deserialize = "fabric" | "Fabric" | "legacyFabric" | "legacyfabric" | "legacy_fabric" | "LegacyFabric" | "liteLoader" | "liteloader" | "lite_loader" | "LiteLoader" | "labyMod" | "labymod" | "laby_mod" | "LabyMod" | "optiFine" | "optifine" | "opti_fine" | "OptiFine" | "forge" | "Forge" | "neoForge" | "neoforge" | "neo_forge" | "NeoForge" | "cleanroom" | "Cleanroom";
@@ -962,6 +1130,10 @@ export type LocalModInfo_Deserialize = {
 	updateFile?: CompFile_Deserialize | null,
 	/**  Path to the mod's own artwork, extracted from the jar and cached on disk. */
 	icon?: string | null,
+	/**  Declared dependencies (`depends` / `mods.toml` tables / `requiredMods`). */
+	dependencies?: ModDep_Deserialize[],
+	/**  Ids this jar declares to provide in addition to `mod_id`. */
+	provides?: string[],
 };
 
 /**  Information about a locally installed mod in the instance's `mods` folder. */
@@ -982,6 +1154,10 @@ export type LocalModInfo_Serialize = {
 	updateFile: CompFile_Serialize | null,
 	/**  Path to the mod's own artwork, extracted from the jar and cached on disk. */
 	icon: string | null,
+	/**  Declared dependencies (`depends` / `mods.toml` tables / `requiredMods`). */
+	dependencies: ModDep_Serialize[],
+	/**  Ids this jar declares to provide in addition to `mod_id`. */
+	provides: string[],
 };
 
 export type LocalModUpdateItem = LocalModUpdateItem_Serialize | LocalModUpdateItem_Deserialize;
@@ -1020,6 +1196,38 @@ export type LogLine = {
 };
 
 export type MaterialMode = "flat" | "glass";
+
+export type ModDep = ModDep_Serialize | ModDep_Deserialize;
+
+export type ModDepKind = "required" | "optional" | "incompatible";
+
+export type ModDep_Deserialize = {
+	id: string,
+	range?: string | null,
+	kind: ModDepKind,
+};
+
+export type ModDep_Serialize = {
+	id: string,
+	range: string | null,
+	kind: ModDepKind,
+};
+
+export type ModDependencyReport = ModDependencyReport_Serialize | ModDependencyReport_Deserialize;
+
+export type ModDependencyReport_Deserialize = {
+	fileName: string,
+	modId: string,
+	deps: DepItem_Deserialize[],
+	dependents: string[],
+};
+
+export type ModDependencyReport_Serialize = {
+	fileName: string,
+	modId: string,
+	deps: DepItem_Serialize[],
+	dependents: string[],
+};
 
 /**  Target export format. */
 export type ModpackExportFormat = "modrinth" | "curseforge";
@@ -1111,9 +1319,118 @@ export type NewsItem_Serialize = {
 	articleUrl: string,
 };
 
+export type OtherVersionPolicy = "skip" | "replace";
+
 export type OverwritePolicy = "ask" | "overwrite" | "skip";
 
+export type PresetGate = PresetGate_Serialize | PresetGate_Deserialize;
+
+export type PresetGate_Deserialize = {
+	presetId: string,
+	name: string,
+	ok: boolean,
+	reason?: GateReason | null,
+};
+
+export type PresetGate_Serialize = {
+	presetId: string,
+	name: string,
+	ok: boolean,
+	reason: GateReason | null,
+};
+
+export type PresetItem = PresetItem_Serialize | PresetItem_Deserialize;
+
+export type PresetItem_Deserialize = {
+	platform: CompPlatform,
+	projectId: string,
+	kind: CompType,
+	title: string,
+	slug?: string | null,
+	iconUrl?: string | null,
+	pinnedFileId?: string | null,
+	pinnedFileName?: string | null,
+	pinRules?: PresetPinRule_Deserialize[],
+};
+
+export type PresetItem_Serialize = {
+	platform: CompPlatform,
+	projectId: string,
+	kind: CompType,
+	title: string,
+	slug: string | null,
+	iconUrl: string | null,
+	pinnedFileId: string | null,
+	pinnedFileName: string | null,
+	pinRules: PresetPinRule_Serialize[],
+};
+
+export type PresetPinRule = PresetPinRule_Serialize | PresetPinRule_Deserialize;
+
+export type PresetPinRule_Deserialize = {
+	/**  Target game versions (empty = any version). */
+	gameVersions?: string[],
+	/**  Target loaders (empty = any loader). */
+	loaders?: string[],
+	/**  Pinned release file ID. */
+	fileId: string,
+	/**  Display name of the pinned file. */
+	fileName: string,
+};
+
+export type PresetPinRule_Serialize = {
+	/**  Target game versions (empty = any version). */
+	gameVersions: string[],
+	/**  Target loaders (empty = any loader). */
+	loaders: string[],
+	/**  Pinned release file ID. */
+	fileId: string,
+	/**  Display name of the pinned file. */
+	fileName: string,
+};
+
+/**
+ *  Partial preset payload: the UI creates a preset by name only, so every field is optional and
+ *  missing ones fall back to empty/zero. Timestamps and ids are always assigned by the repository.
+ */
+export type PresetSaveInput = PresetSaveInput_Serialize | PresetSaveInput_Deserialize;
+
+/**
+ *  Partial preset payload: the UI creates a preset by name only, so every field is optional and
+ *  missing ones fall back to empty/zero. Timestamps and ids are always assigned by the repository.
+ */
+export type PresetSaveInput_Deserialize = {
+	id?: string,
+	name?: string,
+	description?: string,
+	gameVersions?: string[],
+	loaders?: string[],
+	items?: PresetItem_Deserialize[],
+	createdAt?: number,
+	updatedAt?: number,
+};
+
+/**
+ *  Partial preset payload: the UI creates a preset by name only, so every field is optional and
+ *  missing ones fall back to empty/zero. Timestamps and ids are always assigned by the repository.
+ */
+export type PresetSaveInput_Serialize = {
+	id?: string,
+	name?: string,
+	description?: string,
+	gameVersions?: string[],
+	loaders?: string[],
+	items?: PresetItem_Serialize[],
+	createdAt?: number,
+	updatedAt?: number,
+};
+
 export type ProxyMode = "none" | "system" | "custom";
+
+export type PruneResult = {
+	removedCount: number,
+	freedBytes: number,
+};
 
 /**  A resolved dependency item containing project metadata, the chosen file, and whether it is already installed. */
 export type ResolvedDependencyItem = ResolvedDependencyItem_Serialize | ResolvedDependencyItem_Deserialize;
@@ -1145,6 +1462,7 @@ export type ResourceEntry_Deserialize = {
 	enabled: boolean,
 	state: ResourceState,
 	title?: string | null,
+	zhName?: string | null,
 	description?: string | null,
 	version?: string | null,
 	icon?: string | null,
@@ -1167,6 +1485,7 @@ export type ResourceEntry_Serialize = {
 	enabled: boolean,
 	state: ResourceState,
 	title: string | null,
+	zhName: string | null,
 	description: string | null,
 	version: string | null,
 	icon: string | null,
@@ -1179,6 +1498,30 @@ export type ResourceEntry_Serialize = {
 };
 
 export type ResourceKind = "mod" | "resourcePack" | "shader" | "schematic";
+
+export type ResourcePreset = ResourcePreset_Serialize | ResourcePreset_Deserialize;
+
+export type ResourcePreset_Deserialize = {
+	id: string,
+	name: string,
+	description: string,
+	gameVersions: string[],
+	loaders: string[],
+	items: PresetItem_Deserialize[],
+	createdAt: number,
+	updatedAt: number,
+};
+
+export type ResourcePreset_Serialize = {
+	id: string,
+	name: string,
+	description: string,
+	gameVersions: string[],
+	loaders: string[],
+	items: PresetItem_Serialize[],
+	createdAt: number,
+	updatedAt: number,
+};
 
 export type ResourceState = "ok" | "unavailable";
 
@@ -1361,6 +1704,28 @@ export type StatesSettings_Deserialize = {
 
 export type StatesSettings_Serialize = {
 	dismissedAnnouncements: string[],
+};
+
+export type StoreEntry = {
+	sha1: string,
+	platform: CompPlatform,
+	projectId: string,
+	fileId: string,
+	fileName: string,
+	kind: CompType,
+	size: number,
+	addedAt: number,
+	liveRefs: number,
+	pinned: boolean,
+};
+
+export type StoreInfo = {
+	dir: string,
+	defaultDir: string,
+	objectCount: number,
+	totalBytes: number,
+	savedBytes: number,
+	entries: StoreEntry[],
 };
 
 export type SystemSettings = SystemSettings_Serialize | SystemSettings_Deserialize;

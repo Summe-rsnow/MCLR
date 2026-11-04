@@ -1,0 +1,184 @@
+{
+  "nav": "资源预设",
+  "title": "资源预设",
+  "subtitle": "把常用资源整理成预设，一键应用到实例",
+  "actions": {
+    "create": "新建预设",
+    "store": "缓存管理"
+  },
+  "empty": {
+    "title": "还没有预设",
+    "description": "新建预设后，可以在社区资源页把项目加入预设，再一键应用到实例。"
+  },
+  "list": {
+    "items": "{count} 项资源",
+    "allVersions": "全部版本",
+    "allLoaders": "全部加载器",
+    "filters": "游戏版本: {versions} · 加载器: {loaders}",
+    "updated": "更新于 {date}"
+  },
+  "kinds": {
+    "mod": "模组",
+    "resourcepack": "材质包",
+    "shader": "光影",
+    "datapack": "数据包",
+    "world": "地图存档"
+  },
+  "loaders": {
+    "fabric": "Fabric",
+    "forge": "Forge",
+    "neoforge": "NeoForge",
+    "quilt": "Quilt"
+  },
+  "detail": {
+    "tabs": {
+      "items": "资源列表",
+      "settings": "预设设置"
+    },
+    "noItems": "这个预设还没有资源",
+    "noItemsHint": "在社区资源页打开项目，点击「加入预设」即可添加。"
+  },
+  "item": {
+    "pinned": "已固定 {name}",
+    "followingLatest": "跟随最新",
+    "cached": "已缓存",
+    "pin": "固定版本",
+    "unpin": "取消固定",
+    "unpinned": "已恢复跟随最新版本",
+    "remove": "移除",
+    "removed": "已从预设中移除"
+  },
+  "settings": {
+    "name": "预设名称",
+    "description": "描述",
+    "descriptionPlaceholder": "这个预设是做什么的？",
+    "gameVersions": "游戏版本",
+    "gameVersionsHint": "不选 = 全部兼容",
+    "loaders": "模组加载器",
+    "loadersHint": "仅对模组生效，不选 = 全部兼容",
+    "save": "保存设置",
+    "delete": "删除预设",
+    "saved": "预设已保存",
+    "deleted": "预设已删除"
+  },
+  "deleteConfirm": {
+    "title": "删除预设",
+    "content": "确定要删除预设「{name}」吗？只删除预设记录，不会删除实例中已安装的文件。"
+  },
+  "createDialog": {
+    "title": "新建预设",
+    "nameLabel": "预设名称",
+    "namePlaceholder": "例如：常用优化组合"
+  },
+  "pin": {
+    "title": "固定版本",
+    "hint": "可配置不同游戏版本与加载器的固定文件；不符合规则的将自动安装最新版。",
+    "followLatest": "跟随最新（清除所有规则）",
+    "followingLatest": "已恢复跟随最新版本",
+    "empty": "该项目没有可用文件",
+    "current": "当前固定",
+    "compatible": "符合预设筛选",
+    "incompatible": "不符合预设筛选",
+    "picked": "已固定版本",
+    "rulesTitle": "已配置的固定规则",
+    "rulesHint": "未匹配上述规则的游戏版本与加载器将自动安装最新版本",
+    "filterVersion": "游戏版本",
+    "filterLoader": "加载器",
+    "allVersions": "全部版本",
+    "allLoaders": "全部加载器",
+    "anyVersion": "任意版本",
+    "anyLoader": "任意加载器",
+    "deleteRule": "删除此规则",
+    "addRuleTitle": "点击下方文件添加或更新规则",
+    "ruleAdded": "已更新版本规则",
+    "ruleRemoved": "已移除版本规则"
+  },
+  "storeDialog": {
+    "title": "资源缓存",
+    "objectCount": "文件数",
+    "totalBytes": "存储占用",
+    "savedBytes": "硬链接已节省",
+    "dirLabel": "缓存目录",
+    "dirPlaceholder": "选择缓存目录",
+    "applyDir": "应用目录",
+    "resetDefault": "恢复默认",
+    "migrate": "迁移已有缓存到新目录",
+    "defaultHint": "默认位于应用缓存目录下；缓存通过硬链接在实例之间共享，不额外占用空间。",
+    "useHardlink": "使用硬链接节省空间",
+    "useHardlinkBeta": "Beta",
+    "useHardlinkHint": "同一磁盘内优先创建硬链接；跨盘或系统不支持时自动复制。试验性特性，默认关闭。",
+    "hardlinkTooltip": "硬链接原理：同一 NTFS 磁盘分区中，多个实例直接引用同一份磁盘物理数据块，不重复占用存储空间；重命名或删除实例内的模组文件不会影响全局缓存。如遇杀毒软件拦截或文件锁定等异常，可随时关闭。",
+    "prune": "清理未使用缓存",
+    "pruneConfirmTitle": "清理缓存",
+    "pruneConfirmContent": "将删除所有未被实例引用且未被预设固定的缓存文件，此操作不可撤销。",
+    "pruneDone": "已清理 {count} 个文件，释放 {size}",
+    "cachePreset": "缓存此预设",
+    "cacheStarted": "已开始缓存预设「{name}」",
+    "entries": "缓存文件",
+    "entriesEmpty": "缓存是空的",
+    "liveRefs": "{count} 处引用",
+    "pinned": "已固定",
+    "unreferenced": "未引用",
+    "deleteEntry": "删除缓存文件",
+    "removeConfirmTitle": "删除缓存文件",
+    "removeConfirmContent": "缓存文件将被删除；实例中已存在的副本或硬链接不受影响。",
+    "removed": "已删除缓存文件",
+    "dirUpdated": "缓存目录已更新"
+  },
+  "apply": {
+    "title": "应用资源预设",
+    "subtitle": "可多选预设；顺序即优先级，越靠前越优先。",
+    "empty": "没有可用的预设",
+    "itemCount": "共 {count} 项资源",
+    "order": "第 {index} 个",
+    "world": "数据包目标世界",
+    "worldPlaceholder": "选择世界",
+    "loadingSaves": "正在加载世界…",
+    "worldRequired": "所选预设包含数据包，必须先选择目标世界。",
+    "includeDependencies": "自动补全依赖",
+    "otherVersion": "已有其他版本时",
+    "skip": "跳过",
+    "replace": "替换",
+    "selected": "所选资源:",
+    "apply": "开始应用"
+  },
+  "report": {
+    "title": "应用结果",
+    "empty": "没有需要处理的资源",
+    "separator": "、",
+    "gateSkipped": "预设「{name}」不适用于此游戏版本，已跳过",
+    "overlap": "与 {presets} 重叠",
+    "versionConflict": "版本固定冲突，已采用 {preset}",
+    "viaDependency": "作为 {via} 的前置",
+    "existingFile": "现有: {name}",
+    "failedCode": "失败: {message}",
+    "summary": {
+      "installed": "安装",
+      "replaced": "替换",
+      "alreadySame": "已有相同",
+      "alreadyOtherVersion": "已有其他版本",
+      "noGameVersion": "无对应版本",
+      "noLoader": "无加载器",
+      "needsWorld": "需要世界",
+      "distributionDisabled": "分发限制",
+      "failed": "失败"
+    },
+    "status": {
+      "installed": "已安装",
+      "replaced": "已替换",
+      "alreadySame": "已有相同资源",
+      "alreadyOtherVersion": "已有不同版本资源",
+      "noGameVersion": "没有对应的游戏版本",
+      "noLoader": "没有对应的模组加载器",
+      "noFile": "没有可用文件",
+      "needsWorld": "数据包需要选择世界",
+      "distributionDisabled": "作者禁止第三方分发",
+      "failed": "安装失败"
+    },
+    "linkMode": {
+      "hardLink": "硬链接",
+      "copy": "复制",
+      "extracted": "解压"
+    }
+  }
+}

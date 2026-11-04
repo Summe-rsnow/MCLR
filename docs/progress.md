@@ -40,4 +40,22 @@
 | v0.0.33 | Public Microsoft OAuth client ID, device code flow & accounts refresh | done | ed0e919 | v0.0.33 | 2026-11-02 |
 
 | v0.0.34 | TypeScript 6.0.3, secrets via .env, shadow clipping & mod update race fix | done | a9d4d8d | v0.0.34 | 2026-11-02 |
+| v0.0.35 | 资源预设 + PCL 同款模组能力 | in_progress (unreleased) | — | — | — |
+
+## v0.0.35 — 资源预设 + PCL 同款模组能力 (Unreleased)
+
+| ID | slice | owner | status | acceptance |
+|---|---|---|---|---|
+| A | 中文模组名 + 命名格式 | Wave 1A | done | cargo test -p mclr-comp modname naming |
+| B | 模组依赖分析 + 版本范围 | Wave 1B | done | cargo test -p mclr-comp depcheck versionrange |
+| C | 内容寻址缓存 + 硬链接 | Wave 1C | done | cargo test -p mclr-comp store |
+| D | 预设模型/仓储/过滤/索引/账本/计划引擎 | Wave 1D | done | cargo test -p mclr-comp preset |
+| E1 | 预设 IPC 指令 + 任务编排 | Wave 2E1 | done | cargo test -p mclr-app |
+| E2 | 命名/中文名/依赖 IPC 集成 | Wave 2E2 | done | cargo test -p mclr-app -p mclr-comp |
+| F1 | 前端预设特性 + 弹窗 | Wave 2F1 | done | vitest run src/features/presets |
+| F2 | 前端社区资源/本地资源/系统设置联动 | Wave 2F2 | done | vitest run src/features/comp src/features/resources |
+| F3 | 实例详情预设 Tab + 安装流程联动 | Wave 3F3 | done | vitest run src/features/download src/features/instance-detail |
+
+### Notes
+- Release gate: version bumps, release notes finalization, and git tags strictly deferred until explicit user confirmation.
 

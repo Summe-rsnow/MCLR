@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCompStore } from './store'
 import { useInstancesStore } from '../instances/store'
 import { ipcClient, type CompFile, type CompProject, type CompPlatform } from '../../ipc/client'
-import { MCard, MIconButton, MSkeleton, MMarkdown, useToast } from '../../ui'
+import { MCard, MIconButton, MSkeleton, MMarkdown, getInstanceIconMeta, useToast } from '../../ui'
 import { awaitTask } from '../tasks/awaitTask'
 import { useErrorText } from '../../composables/useErrorText'
 import CompProjectHeader from './components/CompProjectHeader.vue'
 import CompVersionsTab, { type FileGroup } from './components/CompVersionsTab.vue'
 import CompDependencyDialogs, { type ResolvedDep } from './components/CompDependencyDialogs.vue'
+import AddToPresetDialog from './components/AddToPresetDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -44,6 +45,31 @@ const modpackInstallDialogOpen = ref(false)
 const modpackTargetFile = ref<CompFile | null>(null)
 const modpackInstanceName = ref('')
 const installingModpack = ref(false)
+
+// Add-to-preset dialog state; the pinned file is set when opened from a file row.
+const addToPresetOpen = ref(false)
+const addToPresetFile = ref<CompFile | null>(null)
+
+/** Presets hold community resources: a modpack is installed whole and Modrinth has no worlds. */
+const presetSupported = computed(() => {
+  const type = compStore.currentProject?.compType
+  if (!type || type === 'modpack') return false
+  return !(type === 'world' && platform.value === 'modrinth')
+})
+
+function openAddToPreset(file?: CompFile) {
+  addToPresetFile.value = file ?? null
+  addToPresetOpen.value = true
+}
+
+function openDependencyProject(project: CompProject) {
+  router
+    .push({
+      path: `/comp/project/${project.platform}/${project.id}`,
+      query: { ...route.query },
+    })
+    .catch(() => {})
+}
 
 function normalizeLoader(raw: string): string {
   const s = raw.trim().toLowerCase()
@@ -152,10 +178,16 @@ const loaderFilterOptions = computed(() => {
 })
 
 const instanceOptions = computed(() => {
-  return instancesStore.instances.map((i) => ({
-    label: `${i.name} (${i.mcVersion})`,
-    value: i.id,
-  }))
+  return instancesStore.instances.map((i) => {
+    const kind = i.kind || (i.loaders?.[0]?.toLowerCase() ?? 'vanilla')
+    const meta = getInstanceIconMeta(i.config?.icon, kind)
+    return {
+      label: `${i.name} (${i.mcVersion})`,
+      value: i.id,
+      image: meta.image,
+      icon: meta.icon,
+    }
+  })
 })
 
 function isPreReleaseOrSnapshot(v: string): boolean {
@@ -327,21 +359,24 @@ async function doDownloadFiles(withSelectedDeps = true) {
   sessionTargetByKind[kind] = selectedTargetInstance.value
 
   try {
-    const filesToDownload: CompFile[] = [selectedTargetFile.value]
+    const filesToDownload: Array<{ file: CompFile; slug: string | null }> = [
+      { file: selectedTargetFile.value, slug: compStore.currentProject?.slug ?? null },
+    ]
     if (withSelectedDeps) {
       for (const dep of dependencies.value) {
         if (!dep.installed && selectedDepFiles.value[dep.file.id]) {
-          filesToDownload.push(dep.file)
+          filesToDownload.push({ file: dep.file, slug: dep.project.slug })
         }
       }
     }
 
     const downloadedNames: string[] = []
-    for (const file of filesToDownload) {
+    for (const { file, slug } of filesToDownload) {
       await compStore.downloadFile(
         file,
         selectedTargetInstance.value,
         compStore.currentProject?.compType || 'mod',
+        slug,
       )
       downloadedNames.push(file.fileName)
     }
@@ -400,8 +435,15 @@ onMounted(async () => {
     await instancesStore.fetchInstances()
   }
   await compStore.loadFavorites()
+  await compStore.loadDisplaySettings()
   if (platform.value && projectId.value) {
     await compStore.openProject(platform.value, projectId.value)
+  }
+})
+
+watch([platform, projectId], async ([p, id]) => {
+  if (p && id) {
+    await compStore.openProject(p, id)
   }
 })
 </script>
@@ -487,16 +529,18 @@ onMounted(async () => {
     <div v-else-if="compStore.currentProject" class="space-y-6">
       <CompProjectHeader
         :project="compStore.currentProject"
+        :show-zh-name="compStore.showZhName"
         :is-favorite="
           compStore.isFavorite(compStore.currentProject.platform, compStore.currentProject.id)
         "
         @toggle-favorite="handleToggleFavorite"
         @open-website="openExternalUrl"
+        @add-to-preset="openAddToPreset()"
       />
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <!-- Description Column -->
-        <div class="lg:col-span-2 space-y-4">
+        <div class="lg:col-span-3 space-y-4">
           <h3 class="text-lg font-bold">{{ t('comp.project.description') }}</h3>
           <MCard class="p-6">
             <MMarkdown
@@ -511,17 +555,22 @@ onMounted(async () => {
         </div>
 
         <!-- Files Column -->
-        <CompVersionsTab
-          v-model:selected-mc-version="selectedMcVersion"
-          v-model:selected-loader="selectedLoader"
-          :files-loading="compStore.filesLoading"
-          :filtered-files-count="filteredFiles.length"
-          :file-groups="fileGroups"
-          :mc-version-filter-options="mcVersionFilterOptions"
-          :loader-filter-options="loaderFilterOptions"
-          @download="openDownloadDialog"
-          @open-website="openExternalUrl(compStore.currentProject?.websiteUrl)"
-        />
+        <div class="lg:col-span-2 space-y-4">
+          <CompVersionsTab
+            v-model:selected-mc-version="selectedMcVersion"
+            v-model:selected-loader="selectedLoader"
+            :files-loading="compStore.filesLoading"
+            :filtered-files-count="filteredFiles.length"
+            :file-groups="fileGroups"
+            :mc-version-filter-options="mcVersionFilterOptions"
+            :loader-filter-options="loaderFilterOptions"
+            :preset-supported="presetSupported"
+            @download="openDownloadDialog"
+            @open-website="openExternalUrl(compStore.currentProject?.websiteUrl)"
+            @add-to-preset="openAddToPreset"
+            @open-dependency="openDependencyProject"
+          />
+        </div>
       </div>
     </div>
 
@@ -545,6 +594,13 @@ onMounted(async () => {
       @start-download="startDownload"
       @start-modpack-install="startModpackInstall"
       @do-download-files="doDownloadFiles"
+    />
+
+    <AddToPresetDialog
+      v-model:open="addToPresetOpen"
+      :project="compStore.currentProject"
+      :pinned-file-id="addToPresetFile?.id ?? null"
+      :pinned-file-name="addToPresetFile?.fileName ?? null"
     />
   </div>
 </template>

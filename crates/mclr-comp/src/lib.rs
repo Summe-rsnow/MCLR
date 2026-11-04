@@ -1,17 +1,22 @@
 //! Community platforms (Modrinth, CurseForge), dependency resolution, local mods, JarInJar, and modpack import/export.
 
 pub mod curseforge;
+pub mod depcheck;
 pub mod error;
 pub mod export;
 pub mod jarinjar;
 pub mod local;
 pub mod model;
+pub mod modname;
 pub mod modpack;
 pub mod modrinth;
+pub mod naming;
+pub mod preset;
 pub mod resolver;
 pub mod resources;
-
+pub mod versionrange;
 pub use curseforge::CurseForgeClient;
+pub use depcheck::{DepItem, DepStatus, ModDep, ModDepKind, ModDependencyReport};
 pub use error::CompError;
 pub use export::{
     ExportCandidateEntry, ModpackExportFormat, ModpackExportOptions, ModpackExportParams,
@@ -31,6 +36,7 @@ pub use modpack::{
     ModpackInstallPlan, extract_modpack_overrides, import_modpack, inspect_modpack,
 };
 pub use modrinth::ModrinthClient;
+pub use preset::*;
 pub use resolver::{
     ResolvedDependencyItem, file_supports_any_loader, file_supports_loader, resolve_dependencies,
     select_best_file, select_best_file_for,

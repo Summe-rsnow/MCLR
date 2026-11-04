@@ -72,6 +72,22 @@ export const useCompStore = defineStore('comp', () => {
   const projectFiles = ref<CompFile[]>([])
   const filesLoading = ref(false)
 
+  // Display preferences from `settings.comp`; they gate every Chinese-name surface in this
+  // feature (cards, detail header) so one load serves the whole session.
+  const showZhName = ref(true)
+  const localNameStyle = ref(0)
+
+  async function loadDisplaySettings(): Promise<void> {
+    try {
+      const settings = await ipcClient.settingsGet()
+      showZhName.value = settings.comp?.showZhName ?? true
+      localNameStyle.value = settings.comp?.localNameStyle ?? 0
+    } catch (e) {
+      // Settings are additive here: the defaults above are the documented fallback.
+      console.error('Failed to load community display settings', e)
+    }
+  }
+
   async function loadFavorites(): Promise<void> {
     try {
       const settings = await ipcClient.settingsGet()
@@ -440,8 +456,9 @@ export const useCompStore = defineStore('comp', () => {
     file: CompFile,
     targetInstance: string,
     kind: CompType,
+    projectSlug?: string | null,
   ): Promise<string> {
-    return await ipcClient.compDownload(file, targetInstance, kind)
+    return await ipcClient.compDownload(file, targetInstance, kind, projectSlug ?? null)
   }
 
   return {
@@ -465,6 +482,9 @@ export const useCompStore = defineStore('comp', () => {
     currentProject,
     projectFiles,
     filesLoading,
+    showZhName,
+    localNameStyle,
+    loadDisplaySettings,
     loadFavorites,
     isFavorite,
     hasFavorite,

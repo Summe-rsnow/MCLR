@@ -10,6 +10,7 @@ import SettingsTab from '../tabs/SettingsTab.vue'
 import SavesTab from '../tabs/SavesTab.vue'
 import ServersTab from '../tabs/ServersTab.vue'
 import ExportTab from '../tabs/ExportTab.vue'
+import PresetsTab from '../tabs/PresetsTab.vue'
 import { lastExportedModpackOptions } from '../mock'
 import { setupMockIpc } from '../../../ipc/mock'
 import { resetMockInstances } from '../../instances/mock'
@@ -23,6 +24,7 @@ import zhCnInstances from '../../../locales/zh-CN/instances.json'
 import zhCnCommon from '../../../locales/zh-CN/common.json'
 import zhCnError from '../../../locales/zh-CN/error.json'
 import zhCnComp from '../../../locales/zh-CN/comp.json'
+import zhCnPresets from '../../../locales/zh-CN/presets.json'
 
 const i18n = createI18n({
   legacy: false,
@@ -34,6 +36,7 @@ const i18n = createI18n({
       common: zhCnCommon,
       error: zhCnError,
       comp: zhCnComp,
+      presets: zhCnPresets,
     },
   },
 })
@@ -68,7 +71,7 @@ describe('Instance Detail feature', () => {
   })
 
   it('glob tab registry loads all sub-tabs in order', () => {
-    expect(instanceDetailTabs.length).toBe(11)
+    expect(instanceDetailTabs.length).toBe(12)
     const keys = instanceDetailTabs.map((t) => t.key)
     expect(keys).toEqual([
       'overview',
@@ -76,6 +79,7 @@ describe('Instance Detail feature', () => {
       'settings',
       'export',
       'mods',
+      'presets',
       'saves',
       'screenshots',
       'resourcepacks',
@@ -85,6 +89,24 @@ describe('Instance Detail feature', () => {
     ])
   })
 
+  it('renders PresetsTab empty state and opens apply dialog on click', async () => {
+    const wrapper = mount(PresetsTab, {
+      props: { instanceId: 'inst-1' },
+      global: {
+        plugins: [i18n],
+      },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('资源预设')
+    expect(wrapper.text()).toContain('尚未应用预设')
+
+    const applyBtn = wrapper.findAll('button').find((b) => b.text().includes('应用预设'))
+    expect(applyBtn).toBeDefined()
+    await applyBtn!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('应用资源预设')
+  })
   it('renders ModsDisabledTab when instance is not modable on mods tab', async () => {
     const store = useInstancesStore()
     await store.fetchInstances()

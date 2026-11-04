@@ -90,7 +90,7 @@ function onError(ev: Event) {
       @load="onLoad"
       @error="onError"
     />
-    <div v-else class="w-full h-full flex items-center justify-center bg-sunken text-fg-subtle">
+    <div v-else class="w-full h-full flex items-center justify-center text-fg-subtle">
       <slot name="fallback">
         <span :class="[fallbackIcon, 'w-1/2 h-1/2 max-w-6 max-h-6 shrink-0']" />
       </slot>

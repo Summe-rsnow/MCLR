@@ -3,6 +3,7 @@ name = "mclr-crash"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 
 [dependencies]
 mclr-core.workspace = true

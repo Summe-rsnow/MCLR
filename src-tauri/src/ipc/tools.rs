@@ -257,6 +257,14 @@ pub async fn tools_generate_skin_avatar(skin_path: String, size: u32) -> Result<
 }
 
 fn compute_dir_size(dir: &Path) -> u64 {
+    compute_dir_size_excluding(dir, None)
+}
+
+/// Directory size, skipping `excluded` and everything below it.
+///
+/// The preset store lives under the cache dir by default but is user content, so it must not be
+/// reported (or cleared) as disposable cache.
+fn compute_dir_size_excluding(dir: &Path, excluded: Option<&Path>) -> u64 {
     if !dir.exists() {
         return 0;
     }
@@ -267,9 +275,12 @@ fn compute_dir_size(dir: &Path) -> u64 {
     };
     for entry in entries.flatten() {
         let path = entry.path();
+        if excluded.is_some_and(|skip| path.starts_with(skip)) {
+            continue;
+        }
         if let Ok(meta) = entry.metadata() {
             if meta.is_dir() {
-                total += compute_dir_size(&path);
+                total += compute_dir_size_excluding(&path, excluded);
             } else {
                 total += meta.len();
             }
@@ -383,15 +394,28 @@ fn collect_part_files(
     }
 }
 
-fn compute_cache_sizes(mc_folder: Option<&Path>) -> CacheSizeInfo {
-    let cache_p = paths::cache_dir();
-    let logs_p = paths::logs_dir();
+fn compute_cache_sizes(mc_folder: Option<&Path>, preset_store: Option<&Path>) -> CacheSizeInfo {
+    compute_cache_sizes_at(
+        &paths::cache_dir(),
+        &paths::logs_dir(),
+        mc_folder,
+        preset_store,
+    )
+}
+
+/// Same as [`compute_cache_sizes`] with the roots passed in, so tests never mutate global paths.
+fn compute_cache_sizes_at(
+    cache_p: &Path,
+    logs_p: &Path,
+    mc_folder: Option<&Path>,
+    preset_store: Option<&Path>,
+) -> CacheSizeInfo {
     let skin_p = cache_p.join("skin");
 
-    let cache_bytes = compute_dir_size(&cache_p);
-    let logs_bytes = compute_logs_size(&logs_p);
+    let cache_bytes = compute_dir_size_excluding(cache_p, preset_store);
+    let logs_bytes = compute_logs_size(logs_p);
     let skin_cache_bytes = compute_dir_size(&skin_p);
-    let failed_task_bytes = failed_task_leftovers(&cache_p, mc_folder)
+    let failed_task_bytes = failed_task_leftovers(cache_p, mc_folder)
         .iter()
         .filter_map(|p| fs::metadata(p).ok())
         .map(|m| m.len())
@@ -411,18 +435,28 @@ fn compute_cache_sizes(mc_folder: Option<&Path>) -> CacheSizeInfo {
 #[specta::specta]
 pub async fn tools_cache_info(state: State<'_, SettingsStore>) -> Result<CacheSizeInfo, AppError> {
     let mc_folder = super::current_mc_folder(&state).await;
-    tokio::task::spawn_blocking(move || compute_cache_sizes(Some(&mc_folder)))
+    let settings = state.snapshot().await;
+    let preset_store = crate::ipc::presets::store_root(&settings);
+    tokio::task::spawn_blocking(move || compute_cache_sizes(Some(&mc_folder), Some(&preset_store)))
         .await
         .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))
 }
 
 fn clear_dir_contents(dir: &Path) -> std::io::Result<()> {
+    clear_dir_contents_except(dir, None)
+}
+
+/// Removes every entry of `dir` except `excluded` and anything below it.
+fn clear_dir_contents_except(dir: &Path, excluded: Option<&Path>) -> std::io::Result<()> {
     if !dir.exists() {
         return Ok(());
     }
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
+        if excluded.is_some_and(|skip| path.starts_with(skip)) {
+            continue;
+        }
         if path.is_dir() {
             fs::remove_dir_all(&path)?;
         } else {
@@ -482,6 +516,8 @@ pub async fn tools_cache_clear(
     clear_skins: bool,
 ) -> Result<CacheSizeInfo, AppError> {
     let mc_folder = super::current_mc_folder(&state).await;
+    let settings = state.snapshot().await;
+    let preset_store = crate::ipc::presets::store_root(&settings);
     tokio::task::spawn_blocking(move || {
         let cache_p = paths::cache_dir();
         let logs_p = paths::logs_dir();
@@ -490,7 +526,13 @@ pub async fn tools_cache_clear(
         let mut failed: Vec<String> = Vec::new();
 
         if clear_cache {
-            collect_failures(clear_dir_contents(&cache_p), &cache_p, &mut failed);
+            // The preset store is user content that happens to live under the cache dir; the
+            // preset manager owns its cleanup, so the cache cleaner must never touch it.
+            collect_failures(
+                clear_dir_contents_except(&cache_p, Some(&preset_store)),
+                &cache_p,
+                &mut failed,
+            );
         } else if clear_skins {
             collect_failures(clear_dir_contents(&skin_p), &skin_p, &mut failed);
         }
@@ -505,7 +547,7 @@ pub async fn tools_cache_clear(
                 .with_detail(format!("failed to remove: {}", failed.join(", "))));
         }
 
-        Ok(compute_cache_sizes(Some(&mc_folder)))
+        Ok(compute_cache_sizes(Some(&mc_folder), Some(&preset_store)))
     })
     .await
     .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?
@@ -528,6 +570,8 @@ pub async fn tools_cleanup_failed_tasks(
         ));
     }
     let mc_folder = super::current_mc_folder(&state).await;
+    let settings = state.snapshot().await;
+    let preset_store = crate::ipc::presets::store_root(&settings);
     tokio::task::spawn_blocking(move || {
         let mut failed: Vec<String> = Vec::new();
         for path in failed_task_leftovers(&paths::cache_dir(), Some(&mc_folder)) {
@@ -537,7 +581,7 @@ pub async fn tools_cleanup_failed_tasks(
             return Err(AppError::new("core.io")
                 .with_detail(format!("failed to remove: {}", failed.join(", "))));
         }
-        Ok(compute_cache_sizes(Some(&mc_folder)))
+        Ok(compute_cache_sizes(Some(&mc_folder), Some(&preset_store)))
     })
     .await
     .map_err(|e| AppError::new("core.io").with_detail(e.to_string()))?
@@ -737,16 +781,9 @@ mod tests {
 
     #[test]
     fn test_cache_info_and_clear() {
-        let temp_path =
-            std::env::temp_dir().join(format!("mclr_tools_test_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&temp_path);
-        fs::create_dir_all(&temp_path).unwrap();
-        unsafe {
-            std::env::set_var("MCLR_DATA_DIR", temp_path.to_str().unwrap());
-        }
-
-        let cache_dir = paths::cache_dir();
-        let logs_dir = paths::logs_dir();
+        let temp_path = tempfile::tempdir().unwrap();
+        let cache_dir = temp_path.path().join("cache");
+        let logs_dir = temp_path.path().join("logs");
         let skin_dir = cache_dir.join("skin");
 
         fs::create_dir_all(&skin_dir).unwrap();
@@ -756,7 +793,7 @@ mod tests {
         fs::write(cache_dir.join("temp.dat"), b"cache_bytes").unwrap();
         fs::write(logs_dir.join("mclr.2026-10-26.log"), b"log_bytes").unwrap();
 
-        let info = compute_cache_sizes(None);
+        let mut info = compute_cache_sizes_at(&cache_dir, &logs_dir, None, None);
         assert!(info.skin_cache_bytes > 0);
         assert!(info.cache_bytes >= info.skin_cache_bytes);
         assert!(info.logs_bytes > 0);
@@ -764,22 +801,38 @@ mod tests {
 
         // Clear skins only
         let _ = clear_dir_contents(&skin_dir);
-        let info2 = compute_cache_sizes(None);
-        assert_eq!(info2.skin_cache_bytes, 0);
-        assert!(info2.cache_bytes > 0); // temp.dat remains
+        info = compute_cache_sizes_at(&cache_dir, &logs_dir, None, None);
+        assert_eq!(info.skin_cache_bytes, 0);
+        assert!(info.cache_bytes > 0); // temp.dat remains
 
         // Clear all cache and logs
         let _ = clear_dir_contents(&cache_dir);
         let _ = clear_dir_contents(&logs_dir);
-        let info3 = compute_cache_sizes(None);
-        assert_eq!(info3.cache_bytes, 0);
-        assert_eq!(info3.logs_bytes, 0);
-        assert_eq!(info3.total_bytes, 0);
+        let info = compute_cache_sizes_at(&cache_dir, &logs_dir, None, None);
+        assert_eq!(info.cache_bytes, 0);
+        assert_eq!(info.logs_bytes, 0);
+        assert_eq!(info.total_bytes, 0);
+    }
 
-        unsafe {
-            std::env::remove_var("MCLR_DATA_DIR");
-        }
-        let _ = fs::remove_dir_all(&temp_path);
+    #[test]
+    fn cache_cleanup_keeps_the_preset_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = tmp.path().join("cache");
+        let store = cache.join("store");
+        let object = store.join("objects").join("ab").join("deadbeef");
+        fs::create_dir_all(object.parent().unwrap()).unwrap();
+        fs::write(&object, vec![7u8; 64]).unwrap();
+        fs::write(cache.join("temp.dat"), b"cache_bytes").unwrap();
+
+        // The store's 64 bytes are not reported as disposable cache.
+        assert_eq!(
+            compute_dir_size_excluding(&cache, Some(&store)),
+            "cache_bytes".len() as u64
+        );
+
+        clear_dir_contents_except(&cache, Some(&store)).unwrap();
+        assert!(object.exists());
+        assert!(!cache.join("temp.dat").exists());
     }
     /// Writes `name` with an mtime `age` in the past.
     fn write_aged(path: &Path, age: Duration) {

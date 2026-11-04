@@ -79,7 +79,11 @@ const handlers = {
   assets_allow: () => null,
   resources_list: (args: Record<string, unknown>): ResourceEntry[] => {
     const kind = String(args.kind || 'mod') as ResourceKind
-    if (kind === 'mod') return [...mockModEntries]
+    const instanceId = String(args.instanceId || '')
+    if (kind === 'mod') {
+      if (!instanceId || instanceId === '1.20.4-fabric') return [...mockModEntries]
+      return []
+    }
     if (kind === 'resourcePack') return [...mockResourcePacks]
     return []
   },
@@ -106,6 +110,7 @@ const handlers = {
   local_mods_dependents: () => [],
   local_mods_update_many: () => 'task-mod-update-1',
   local_mod_jar_in_jar: (): JarInJarNode[] => [],
+  local_mods_dependencies: () => [],
 }
 
 export default handlers

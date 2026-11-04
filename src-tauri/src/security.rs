@@ -108,6 +108,10 @@ pub fn allowed_roots(settings: &Settings) -> Vec<PathBuf> {
         roots.push(PathBuf::from(&settings.game.current_folder));
     }
 
+    // The preset store may live outside the launcher data dir (user-chosen volume); instance
+    // files linked from it must stay reachable through the path-taking commands.
+    roots.push(crate::ipc::presets::store_root(settings));
+
     roots
 }
 

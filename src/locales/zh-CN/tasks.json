@@ -65,7 +65,9 @@
     "launch": "启动游戏",
     "auth.microsoft": "微软账号登录",
     "update.download": "下载更新",
-    "export.title": "导出资源列表"
+    "export.title": "导出资源列表",
+    "presetApply": "应用资源预设",
+    "presetCache": "缓存资源预设"
   },
   "stages": {
     "download": "下载整合包压缩包",

@@ -12,6 +12,7 @@ import {
   MSelect,
   MSlider,
   MSwitch,
+  MSegmented,
   MSection,
   MSettingRow,
   MHelpTooltip,
@@ -69,6 +70,11 @@ const closePromptDismissed = ref(false)
 const hardwareAccel = ref(true)
 const showRestartNotice = ref(false)
 
+// Community resource display state
+const filenameFormat = ref(1)
+const showZhName = ref(true)
+const localNameStyle = ref(0)
+
 // Language state
 const selectedLocale = ref<string>(String(i18n.global.locale.value))
 const formatCulture = ref('zh-CN')
@@ -89,6 +95,40 @@ const isolationOptions = computed(() => [
   },
   { label: t('settingsSystem.gameManage.isolation.all'), value: 'all' },
 ])
+
+const filenameFormatOptions = computed(() => [
+  { label: t('settingsSystem.community.filenameFormat0'), value: 0 },
+  { label: t('settingsSystem.community.filenameFormat1'), value: 1 },
+  { label: t('settingsSystem.community.filenameFormat2'), value: 2 },
+  { label: t('settingsSystem.community.filenameFormat3'), value: 3 },
+  { label: t('settingsSystem.community.filenameFormat4'), value: 4 },
+])
+
+const localNameStyleOptions = computed(() => [
+  { label: t('settingsSystem.community.localNameStyleZh'), value: '0' },
+  { label: t('settingsSystem.community.localNameStyleFile'), value: '1' },
+])
+
+/** Mirrors the backend formatter so the example names exactly what will be saved. */
+const filenameFormatPreview = computed(() => {
+  const zh = t('settingsSystem.community.exampleName')
+  const file = t('settingsSystem.community.exampleFile')
+  const dot = file.lastIndexOf('.')
+  const stem = dot > 0 ? file.slice(0, dot) : file
+  const ext = dot > 0 ? file.slice(dot) : ''
+  switch (filenameFormat.value) {
+    case 0:
+      return `【${zh}】${file}`
+    case 1:
+      return `[${zh}] ${file}`
+    case 2:
+      return `${zh}-${stem}${ext}`
+    case 3:
+      return `${stem}-${zh}${ext}`
+    default:
+      return file
+  }
+})
 
 // Update state
 const updateChannel = ref('stable')
@@ -131,6 +171,11 @@ async function loadSettings() {
       autoCheck.value = s.update.autoCheck
       announcementUrl.value = s.update.announcementUrl
     }
+    if (s.comp) {
+      filenameFormat.value = s.comp.filenameFormat ?? 1
+      showZhName.value = s.comp.showZhName ?? true
+      localNameStyle.value = s.comp.localNameStyle ?? 0
+    }
     const secrets = await ipcClient.secretsStatus()
     updaterConfigured.value = Boolean(secrets.updateEndpoint && secrets.updatePubkey)
   } catch {
@@ -163,6 +208,35 @@ async function saveMiscSettings() {
       disableGpu: !hardwareAccel.value,
     },
   })
+}
+
+async function saveCommunitySettings() {
+  try {
+    await ipcClient.settingsPatch({
+      comp: {
+        filenameFormat: filenameFormat.value,
+        showZhName: showZhName.value,
+        localNameStyle: localNameStyle.value,
+      },
+    })
+  } catch (err: unknown) {
+    toast.danger(formatError(err))
+  }
+}
+
+async function onFilenameFormatChange(value: string | number) {
+  filenameFormat.value = Number(value)
+  await saveCommunitySettings()
+}
+
+async function onShowZhNameChange(value: boolean) {
+  showZhName.value = value
+  await saveCommunitySettings()
+}
+
+async function onLocalNameStyleChange(value: string) {
+  localNameStyle.value = Number(value)
+  await saveCommunitySettings()
 }
 
 async function saveWindowSettings() {
@@ -343,6 +417,51 @@ onMounted(async () => {
         v-model:max-concurrent-files="maxConcurrentFiles"
         @change="saveMiscSettings"
       />
+
+      <MSection
+        :title="t('settingsSystem.community.title')"
+        :description="t('settingsSystem.community.desc')"
+        icon="i-lucide-package-check"
+      >
+        <div class="flex flex-col" data-testid="community-settings">
+          <MSettingRow :label="t('settingsSystem.community.filenameFormat')">
+            <template #hint>{{ t('settingsSystem.community.filenameFormatHint') }}</template>
+            <div class="flex flex-col items-end gap-1">
+              <MSelect
+                :model-value="filenameFormat"
+                :options="filenameFormatOptions"
+                size="sm"
+                class="w-64"
+                data-testid="select-filename-format"
+                @update:model-value="onFilenameFormatChange"
+              />
+              <span class="text-xs text-fg-muted font-mono">
+                {{ t('settingsSystem.community.preview', { name: filenameFormatPreview }) }}
+              </span>
+            </div>
+          </MSettingRow>
+
+          <MSettingRow :label="t('settingsSystem.community.showZhName')">
+            <template #hint>{{ t('settingsSystem.community.showZhNameHint') }}</template>
+            <MSwitch
+              :model-value="showZhName"
+              data-testid="toggle-show-zh-name"
+              @update:model-value="onShowZhNameChange"
+            />
+          </MSettingRow>
+
+          <MSettingRow :label="t('settingsSystem.community.localNameStyle')">
+            <template #hint>{{ t('settingsSystem.community.localNameStyleHint') }}</template>
+            <MSegmented
+              :model-value="String(localNameStyle)"
+              :options="localNameStyleOptions"
+              size="sm"
+              data-testid="select-local-name-style"
+              @update:model-value="onLocalNameStyleChange"
+            />
+          </MSettingRow>
+        </div>
+      </MSection>
     </div>
 
     <!-- 3. Diagnostics & logs -->

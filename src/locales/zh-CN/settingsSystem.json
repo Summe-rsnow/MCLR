@@ -69,6 +69,26 @@
     "closePromptDismissed": "关闭窗口时不再询问",
     "closePromptDismissedHint": "关闭时不再弹出「隐藏到托盘 / 退出启动器」的选择框，直接按上一项设置执行；关掉它会重新询问"
   },
+  "community": {
+    "title": "社区资源",
+    "desc": "控制社区资源下载后的文件命名，以及模组中文名的显示方式",
+    "filenameFormat": "保存名称格式",
+    "filenameFormatHint": "下载的资源文件按所选格式命名，格式中的「中文名」来自 MC 百科",
+    "filenameFormat0": "【中文名】文件名",
+    "filenameFormat1": "[中文名] 文件名",
+    "filenameFormat2": "中文名-文件名",
+    "filenameFormat3": "文件名-中文名",
+    "filenameFormat4": "原始文件名",
+    "preview": "示例：{name}",
+    "exampleName": "物品管理器",
+    "exampleFile": "jei-1.20.1.jar",
+    "showZhName": "显示模组中文名",
+    "showZhNameHint": "在社区资源列表、详情页与本地模组列表中显示 MC 百科中文名",
+    "localNameStyle": "本地模组名称样式",
+    "localNameStyleZh": "中文优先",
+    "localNameStyleFile": "文件名优先",
+    "localNameStyleHint": "中文优先：标题显示中文名，副标题显示文件名；文件名优先则相反"
+  },
   "language": {
     "localeTitle": "界面语言与区域偏好",
     "localeDesc": "选择 MCLR 启动器所使用的显示语言及数字日期格式标准",

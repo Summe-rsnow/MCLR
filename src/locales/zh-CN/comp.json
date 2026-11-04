@@ -146,6 +146,7 @@
     "noDescription": "暂无介绍内容",
     "noFiles": "暂无可用的文件",
     "mcmod": "MC 百科",
+    "addToPreset": "加入预设",
     "copyName": "复制名称",
     "copyLink": "复制链接",
     "copiedName": "已复制名称",
@@ -237,7 +238,15 @@
     "downloading": "下载中...",
     "download": "下载",
     "noFiles": "暂无匹配所选版本与加载器的文件",
-    "downloadSuccess": "已成功下载 {name} 到 {instance}"
+    "downloadSuccess": "已成功下载 {name} 到 {instance}",
+    "dependencies": "前置模组",
+    "missing": "未安装",
+    "confirmInstallDepsTitle": "安装模组前置确认",
+    "confirmInstallDepsMessage": "此模组版本需要以下必需前置模组，当前实例尚未安装：",
+    "downloadWithDeps": "下载并安装前置",
+    "downloadModOnly": "仅下载模组本体",
+    "backToPrevious": "返回「{name}」",
+    "clickToViewPrerequisite": "点击查看并下载前置模组"
   },
   "downloadForInstance": "为 {instance} 下载",
   "detail": {
@@ -251,5 +260,36 @@
     "cannotInstallTitle": "无法安装必需前置",
     "resolveFailedTitle": "前置解析失败",
     "continueDownload": "继续下载"
+  },
+  "addToPreset": {
+    "title": "加入资源预设",
+    "selectPreset": "目标预设",
+    "newPreset": "新建预设…",
+    "newPresetName": "新预设名称",
+    "newPresetPlaceholder": "输入预设名称，例如「性能优化」",
+    "pinHint": "将固定版本：{file}",
+    "confirm": "加入预设",
+    "close": "关闭",
+    "outcomeTitle": "加入结果",
+    "outcome": {
+      "added": "已加入预设",
+      "alreadyInPreset": "预设中已有该资源",
+      "alreadyInPresetOtherVersion": "预设中已有该资源的不同版本",
+      "noGameVersion": "该资源没有对应的游戏版本，未加入",
+      "noLoader": "该资源没有对应的模组加载器，未加入",
+      "noFile": "该资源暂无可下载文件，未加入",
+      "unsupported": "此类型的资源不支持加入预设"
+    }
+  },
+  "fileDependencies": {
+    "title": "依赖",
+    "loading": "正在解析依赖项目…",
+    "kind": {
+      "required": "必需",
+      "optional": "可选",
+      "incompatible": "不兼容",
+      "embedded": "内置"
+    },
+    "pinToPreset": "固定此版本加入预设"
   }
 }

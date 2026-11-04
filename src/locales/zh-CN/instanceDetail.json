@@ -12,6 +12,7 @@
     "settings": "配置",
     "install": "自动安装",
     "mods": "模组",
+    "presets": "资源预设",
     "resourcepacks": "材质包",
     "shaders": "光影包",
     "schematics": "投影建筑",
@@ -19,6 +20,13 @@
     "screenshots": "游戏截图",
     "servers": "多人服务器",
     "export": "导出"
+  },
+  "presets": {
+    "apply": "应用预设",
+    "empty": "尚未应用预设",
+    "emptyHint": "你可以一键应用资源预设到当前实例，批量安装模组、材质包、光影或世界。",
+    "lastReport": "最近一次应用报告",
+    "openReport": "查看完整报告"
   },
   "overview": {
     "title": "实例信息",

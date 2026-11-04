@@ -233,13 +233,20 @@ pub async fn collect_version_download_specs(
             if let Some(url_str) = &client_dl.url {
                 let mut urls = build_urls(url_str, SourceKind::Libraries, priority);
 
-                // Add BMCLAPI specific client jar mirror if we have an MC version
+                // Add BMCLAPI specific client jar mirror if we have an MC version and not testing locally
                 let mc_ver = extract_mc_version(version_json, instance_name);
-                if let Ok(bmclapi_client) = Url::parse(&format!(
-                    "https://bmclapi2.bangbang93.com/version/{mc_ver}/client"
-                )) {
+                let is_local = url_str.contains("127.0.0.1") || url_str.contains("localhost");
+                if !is_local
+                    && let Ok(bmclapi_client) = Url::parse(&format!(
+                        "https://bmclapi2.bangbang93.com/version/{mc_ver}/client"
+                    ))
+                {
                     if !urls.contains(&bmclapi_client) {
-                        urls.insert(0, bmclapi_client);
+                        if priority == SourcePriority::MirrorFirst {
+                            urls.insert(0, bmclapi_client);
+                        } else {
+                            urls.push(bmclapi_client);
+                        }
                     }
                 }
                 if !urls.is_empty() {

@@ -53,6 +53,8 @@ export interface CompProject {
   compType: CompType
   updatedAt: string
   websiteUrl?: string | null
+  zhName?: string | null
+  wikiId?: number | null
 }
 
 export type CompSort = 'relevance' | 'downloads' | 'follows' | 'newest' | 'updated'
@@ -87,6 +89,11 @@ export interface CompFavoriteEntry {
 
 export interface CompSettings {
   favorites: CompFavoriteEntry[]
+  storeDir?: string
+  useHardlink?: boolean
+  filenameFormat?: number
+  showZhName?: boolean
+  localNameStyle?: number
 }
 
 export type ModpackFormat =
@@ -178,8 +185,18 @@ export const compIpc = {
       mcVersion: mcVersion ?? null,
       loader: loader ?? null,
     }),
-  compDownload: (file: CompFile, targetInstance: string, kind: CompType): Promise<string> =>
-    invokeCommand<string>('comp_download', { file, targetInstance, kind }),
+  compDownload: (
+    file: CompFile,
+    targetInstance: string,
+    kind: CompType,
+    projectSlug?: string | null,
+  ): Promise<string> =>
+    invokeCommand<string>('comp_download', {
+      file,
+      targetInstance,
+      kind,
+      projectSlug: projectSlug ?? null,
+    }),
   modpackInspect: (archivePath: string): Promise<ModpackInspectResult> =>
     invokeCommand<ModpackInspectResult>('modpack_inspect', { archivePath }),
   modpackImportFile: (archivePath: string, instanceName: string): Promise<string> =>

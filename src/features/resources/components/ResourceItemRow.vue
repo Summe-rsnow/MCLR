@@ -9,6 +9,14 @@ const props = defineProps<{
   entry: ResourceEntry
   kind: ResourceKind
   selected: boolean
+  /** `settings.comp.showZhName`: use the Chinese mod name in the row. */
+  showZhName?: boolean
+  /** `settings.comp.localNameStyle`: 0 = Chinese title, 1 = file-name title. */
+  localNameStyle?: number
+  /** Dependency warning count (missing / mismatched / disabled / conflict). */
+  depWarnings?: number
+  /** Flashed for two seconds after a quick jump from the dependency drawer. */
+  highlighted?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -20,10 +28,31 @@ const emit = defineEmits<{
   (e: 'update', entry: ResourceEntry): void
   (e: 'delete', entry: ResourceEntry, permanent: boolean): void
   (e: 'toggle', entry: ResourceEntry): void
+  (e: 'analyze', entry: ResourceEntry): void
 }>()
 
 const { t, te } = useI18n()
 const menuOpen = ref(false)
+
+/**
+ * Primary/secondary labels for local mods.
+ *
+ * The Chinese name is the friendlier identifier, so it leads by default; users who organize
+ * by jar file name flip the order with `localNameStyle`.
+ */
+const primaryName = computed(() => {
+  if (props.kind === 'mod' && props.showZhName && props.entry.zhName) {
+    return props.localNameStyle === 1 ? props.entry.fileName : props.entry.zhName
+  }
+  return props.entry.title || props.entry.fileName
+})
+
+const secondaryName = computed(() => {
+  if (props.kind === 'mod' && props.showZhName && props.entry.zhName) {
+    return props.localNameStyle === 1 ? props.entry.zhName : props.entry.fileName
+  }
+  return null
+})
 
 /**
  * Cached jar artwork is a local file served through the asset protocol; a mod whose jar
@@ -72,6 +101,11 @@ function onMenuJarInJar() {
   emit('jarInJar', props.entry)
 }
 
+function onMenuAnalyze() {
+  menuOpen.value = false
+  emit('analyze', props.entry)
+}
+
 function onMenuDelete() {
   menuOpen.value = false
   emit('delete', props.entry, false)
@@ -80,10 +114,13 @@ function onMenuDelete() {
 <template>
   <div
     class="relative flex items-center justify-between p-3 rounded-xl border transition-all duration-150 group max-w-full overflow-hidden cursor-pointer select-none"
+    :data-resource-row="entry.path"
     :class="[
       selected
-        ? 'bg-primary-soft/50 border-primary ring-1 ring-primary/30 shadow-sm'
-        : 'bg-panel hover:bg-sunken/60 border-line',
+        ? 'bg-primary-soft/50 border-primary ring-1 ring-inset ring-primary/30 shadow-sm'
+        : highlighted
+          ? 'bg-primary-soft/30 border-primary ring-1 ring-inset ring-primary/50 shadow-sm'
+          : 'bg-panel hover:bg-sunken/60 border-line',
       !entry.enabled && kind === 'mod' ? 'opacity-70' : '',
     ]"
     @click="emit('select', entry.path)"
@@ -103,9 +140,8 @@ function onMenuDelete() {
         `absolute inset-0` class would lose to it and leave the art at its natural size.
       -->
       <div
-        class="relative w-10 h-10 rounded-lg overflow-hidden bg-sunken shrink-0 border border-line"
+        class="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-line flex items-center justify-center"
       >
-        <span :class="[fallbackIcon, 'absolute inset-0 m-auto w-5 h-5 text-primary']" />
         <MImage
           v-if="iconSrc"
           :src="iconSrc"
@@ -114,6 +150,7 @@ function onMenuDelete() {
           :fallback-icon="fallbackIcon"
           class="w-10 h-10"
         />
+        <span v-else :class="[fallbackIcon, 'w-5 h-5 text-primary']" />
       </div>
 
       <div
@@ -124,13 +161,24 @@ function onMenuDelete() {
           <span
             class="font-medium text-sm text-fg truncate shrink"
             :class="{ 'line-through': entry.state === 'unavailable' }"
+            data-testid="resource-row-title"
           >
-            {{ entry.title || entry.fileName }}
+            {{ primaryName }}
           </span>
 
           <span v-if="entry.version" class="text-xs text-fg-muted font-mono">
             v{{ entry.version }}
           </span>
+
+          <MBadge
+            v-if="kind === 'mod' && (depWarnings ?? 0) > 0"
+            variant="warning"
+            size="sm"
+            icon="i-lucide-triangle-alert"
+            data-testid="resource-dependency-warning"
+          >
+            {{ t('resources.dependencyWarning', { count: depWarnings }) }}
+          </MBadge>
 
           <MBadge v-if="entry.state === 'unavailable'" variant="danger" size="sm">
             {{ t('resources.status.unavailable') }}
@@ -156,7 +204,9 @@ function onMenuDelete() {
             {{ tagLabel(tag) }}
           </MBadge>
           <span v-if="entry.tags.length > 0" class="shrink-0">•</span>
-          <span class="truncate shrink max-w-[240px]">{{ entry.fileName }}</span>
+          <span class="truncate shrink max-w-[240px]" data-testid="resource-row-subtitle">{{
+            secondaryName || entry.fileName
+          }}</span>
           <span class="shrink-0">•</span>
           <span class="shrink-0">{{ formatBytes(entry.size) }}</span>
           <span v-if="entry.description" class="truncate min-w-0 flex-1"
@@ -218,6 +268,17 @@ function onMenuDelete() {
           >
             <span class="i-lucide-package text-primary w-4 h-4 shrink-0" />
             <span class="truncate">{{ t('resources.actions.jarInJar') }}</span>
+          </button>
+
+          <button
+            v-if="kind === 'mod'"
+            type="button"
+            class="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-sunken rounded-lg text-left transition cursor-pointer"
+            data-testid="resource-analyze-action"
+            @click="onMenuAnalyze"
+          >
+            <span class="i-lucide-git-branch text-primary w-4 h-4 shrink-0" />
+            <span class="truncate">{{ t('resources.actions.analyzeDependencies') }}</span>
           </button>
 
           <div class="h-px bg-line my-1" />

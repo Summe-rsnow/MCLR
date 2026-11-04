@@ -8,6 +8,8 @@ defineProps<{
   project: CompProject
   isFavorite: boolean
   activeTab: string
+  /** `settings.comp.showZhName`: prefer the Chinese mod-name database name when known. */
+  showZhName?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -40,12 +42,14 @@ function formatNumber(num: number): string {
         <MImage
           :src="project.iconUrl"
           :fallback-icon="compTypeMeta[activeTab as CompTypeKey]?.icon || 'i-lucide-box'"
-          class="w-14 h-14 rounded-xl bg-sunken shrink-0"
+          class="w-14 h-14 rounded-xl shrink-0"
         />
 
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between">
-            <h3 class="font-bold text-base text-fg truncate">{{ project.title }}</h3>
+            <h3 class="font-bold text-base text-fg truncate">
+              {{ showZhName && project.zhName ? project.zhName : project.title }}
+            </h3>
             <MIconButton
               :icon="
                 isFavorite
@@ -61,13 +65,31 @@ function formatNumber(num: number): string {
               @click.stop="emit('toggle-favorite', project)"
             />
           </div>
-          <div class="text-xs text-fg-muted mt-0.5 truncate flex items-center gap-1.5">
-            <MBrandIcon
-              v-if="project.platform === 'modrinth' || project.platform === 'curseforge'"
-              :name="project.platform"
-              class="w-3 h-3 text-fg-muted"
-            />
-            <span>{{ t('comp.project.author', { author: project.author }) }}</span>
+          <!-- Subtitle: English Name + Author combined on one line -->
+          <div class="text-xs text-fg-muted mt-1 truncate flex items-center gap-1.5">
+            <span
+              v-if="showZhName && project.zhName && project.zhName !== project.title"
+              class="truncate"
+              :title="project.title"
+            >
+              {{ project.title }}
+            </span>
+            <span
+              v-if="showZhName && project.zhName && project.zhName !== project.title"
+              class="text-fg-subtle shrink-0"
+            >
+              ·
+            </span>
+            <div class="flex items-center gap-1 shrink-0 truncate">
+              <MBrandIcon
+                v-if="project.platform === 'modrinth' || project.platform === 'curseforge'"
+                :name="project.platform"
+                class="w-3 h-3 text-fg-muted shrink-0"
+              />
+              <span class="truncate">{{
+                t('comp.project.author', { author: project.author })
+              }}</span>
+            </div>
           </div>
         </div>
       </div>

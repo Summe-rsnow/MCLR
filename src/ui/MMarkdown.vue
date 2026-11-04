@@ -71,6 +71,10 @@ if (purify && typeof purify.addHook === 'function') {
     if (n.tagName === 'IMG') {
       n.setAttribute('loading', 'lazy')
       n.setAttribute('referrerpolicy', 'no-referrer')
+      const src = n.getAttribute('src')
+      if (src && src.startsWith('http://')) {
+        n.setAttribute('src', src.replace(/^http:\/\//i, 'https://'))
+      }
     }
   })
 }

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import {
   ipcClient,
+  type ApplyReport,
   type CompFile,
   type ExtraMod,
   type InstallMode,
@@ -13,6 +14,9 @@ import {
   type LoaderVersionEntry,
   type VersionCompatInfo,
 } from '../../ipc/client'
+import { awaitTask } from '../tasks/awaitTask'
+import { usePresetsStore } from '../presets/store'
+import ApplyReportDialog from '../presets/components/ApplyReportDialog.vue'
 import { useToast } from '../../ui'
 import { useInstancesStore } from '../instances/store'
 import {
@@ -31,6 +35,10 @@ import ConfiguratorLoaderStep, {
 import ConfiguratorInstanceStep from './components/ConfiguratorInstanceStep.vue'
 
 const instancesStore = useInstancesStore()
+const presetsStore = usePresetsStore()
+const selectedPresetIds = ref<string[]>([])
+const postApplyReport = ref<ApplyReport | null>(null)
+const postApplyReportOpen = ref(false)
 
 const props = withDefaults(
   defineProps<{
@@ -549,6 +557,7 @@ async function handleInstall() {
       mode: modePayload,
     }
 
+    const presetIdsToApply = [...selectedPresetIds.value]
     const taskId = await ipcClient.installCreate(req)
     toast.success(
       props.mode === 'modify'
@@ -557,6 +566,27 @@ async function handleInstall() {
     )
 
     emit('success', taskId)
+
+    if (props.mode === 'create' && presetIdsToApply.length > 0) {
+      awaitTask(taskId)
+        .then(async () => {
+          await instancesStore.fetchInstances()
+          const created = instancesStore.instances.find((inst) => inst.name === targetName)
+          if (created) {
+            const report = await presetsStore.applyPresets({
+              instanceId: created.id,
+              presetIds: presetIdsToApply,
+              datapackWorld: null,
+              includeDependencies: true,
+              onOtherVersion: 'skip',
+            })
+            postApplyReport.value = report
+            postApplyReportOpen.value = true
+          }
+        })
+        .catch(() => {})
+    }
+
     router?.push?.('/tasks')
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : t('download.dialog.nameError')
@@ -621,9 +651,13 @@ async function handleInstall() {
       :is-modified="isModified"
       :loading-primary-versions="loadingPrimaryVersions"
       @input-name="handleNameInput"
+      :selected-preset-ids="selectedPresetIds"
+      @update:selected-preset-ids="(val) => (selectedPresetIds = val)"
       @reset-auto-name="resetToAutoName"
       @install="handleInstall"
     />
+
+    <ApplyReportDialog v-model:open="postApplyReportOpen" :report="postApplyReport" />
   </div>
 </template>
 

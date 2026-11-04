@@ -39,6 +39,7 @@
     "disableAll": "全部禁用",
     "deleteSelected": "删除选中",
     "conflictsAnalysis": "冲突与依赖分析",
+    "analyzeDependencies": "依赖分析",
     "info": "详细信息",
     "reveal": "打开所在位置",
     "favorite": "收藏",
@@ -122,5 +123,34 @@
     "title": "嵌套依赖 (Jar-in-Jar)",
     "subtitle": "模组「{name}」内置包含的 Jar 依赖库",
     "empty": "该模组没有包含嵌套依赖 (Jar-in-Jar)"
-  }
+  },
+  "dependencyDrawer": {
+    "title": "依赖分析",
+    "subtitle": "模组「{name}」的依赖关系",
+    "depsTitle": "依赖（前置）",
+    "dependentsTitle": "被依赖",
+    "empty": "该模组没有声明依赖",
+    "emptyDependents": "没有被其他模组依赖",
+    "range": "版本要求：{range}",
+    "anyRange": "任意版本",
+    "provider": "提供者：{file}",
+    "providerWithVersion": "提供者：{file} v{version}",
+    "enable": "启用",
+    "lookup": "在社区资源中查找",
+    "kind": {
+      "required": "必需",
+      "optional": "可选",
+      "incompatible": "不兼容"
+    },
+    "status": {
+      "installed": "成功",
+      "disabled": "已禁用",
+      "bundled": "内置",
+      "versionMismatch": "版本不符",
+      "missing": "缺失",
+      "optionalMissing": "未安装 (可选)",
+      "conflict": "冲突"
+    }
+  },
+  "dependencyWarning": "{count} 个依赖问题"
 }

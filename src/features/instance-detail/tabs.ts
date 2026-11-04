@@ -11,6 +11,7 @@ export interface InstanceDetailTab {
   component: Component
 }
 
+// Auto-discovered instance detail sub-tabs
 const tabModules = import.meta.glob<{ default: InstanceDetailTab }>('./tabs/*.tab.ts', {
   eager: true,
 })

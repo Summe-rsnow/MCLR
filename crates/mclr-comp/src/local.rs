@@ -14,6 +14,7 @@ use specta::Type;
 use zip::ZipArchive;
 
 use crate::curseforge::CurseForgeClient;
+use crate::depcheck::{ModDep, ModDepKind};
 use crate::error::CompError;
 use crate::model::CompFile;
 use crate::modrinth::ModrinthClient;
@@ -39,6 +40,12 @@ pub struct LocalModInfo {
     pub update_file: Option<CompFile>,
     /// Path to the mod's own artwork, extracted from the jar and cached on disk.
     pub icon: Option<String>,
+    /// Declared dependencies (`depends` / `mods.toml` tables / `requiredMods`).
+    #[serde(default)]
+    pub dependencies: Vec<ModDep>,
+    /// Ids this jar declares to provide in addition to `mod_id`.
+    #[serde(default)]
+    pub provides: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,6 +66,12 @@ struct LocalModCacheItem {
     /// Cached icon path inside the launcher cache dir.
     #[serde(default)]
     pub icon: Option<String>,
+    /// Declared dependencies, parsed once per jar.
+    #[serde(default)]
+    pub dependencies: Vec<ModDep>,
+    /// Extra ids this jar provides.
+    #[serde(default)]
+    pub provides: Vec<String>,
     /// Artwork-selection revision the cached icon was produced with; older entries are
     /// re-parsed so a rule change reaches jars that were never modified.
     #[serde(default)]
@@ -266,6 +279,10 @@ pub struct ModMetadata {
     pub loader: String,
     /// Raw PNG bytes of the mod's own artwork, when the jar ships one.
     pub icon: Option<Vec<u8>>,
+    /// Declared dependencies, in file order.
+    pub dependencies: Vec<ModDep>,
+    /// Extra ids the jar declares it provides.
+    pub provides: Vec<String>,
 }
 
 fn read_entry_text<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> Option<String> {
@@ -393,6 +410,158 @@ fn fallback_metadata(fallback_name: &str) -> ModMetadata {
         authors: Vec::new(),
         loader: "Unknown".to_string(),
         icon: None,
+        dependencies: Vec::new(),
+        provides: Vec::new(),
+    }
+}
+
+/// Records a dependency, skipping blank ids and repeated `(id, kind)` declarations.
+fn push_dep(deps: &mut Vec<ModDep>, id: &str, range: Option<String>, kind: ModDepKind) {
+    let id = id.trim();
+    if id.is_empty()
+        || deps
+            .iter()
+            .any(|d| d.kind == kind && d.id.eq_ignore_ascii_case(id))
+    {
+        return;
+    }
+    deps.push(ModDep {
+        id: id.to_string(),
+        range,
+        kind,
+    });
+}
+
+/// A constraint value: a string, or an array of strings (Fabric allows several alternatives).
+fn json_range(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(text) => {
+            let text = text.trim();
+            (!text.is_empty()).then(|| text.to_string())
+        }
+        serde_json::Value::Array(items) => {
+            let parts: Vec<&str> = items
+                .iter()
+                .filter_map(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .collect();
+            if parts.is_empty() {
+                None
+            } else {
+                // One `ModDep.range` carries the alternatives; the checker splits on `||`.
+                Some(parts.join(" || "))
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Collects a Fabric dependency object (`depends`, `recommends`, `suggests`, `breaks`, ...).
+fn parse_json_dep_map(value: Option<&serde_json::Value>, kind: ModDepKind, deps: &mut Vec<ModDep>) {
+    let Some(map) = value.and_then(|v| v.as_object()) else {
+        return;
+    };
+    for (id, spec) in map {
+        let range = json_range(spec);
+        push_dep(deps, id, range, kind);
+    }
+}
+
+/// Collects a string/`{id}` array of provided ids (`provides` in Fabric and Quilt).
+fn parse_provides(value: Option<&serde_json::Value>, provides: &mut Vec<String>) {
+    let Some(items) = value.and_then(|v| v.as_array()) else {
+        return;
+    };
+    for item in items {
+        let id = item
+            .as_str()
+            .or_else(|| item.get("id").and_then(|v| v.as_str()));
+        let Some(id) = id.map(str::trim).filter(|s| !s.is_empty()) else {
+            continue;
+        };
+        if !provides.iter().any(|p| p.eq_ignore_ascii_case(id)) {
+            provides.push(id.to_string());
+        }
+    }
+}
+
+/// Collects Quilt's `quilt_loader.depends`: strings (`"modid"`, `"modid >=1.0"`) or
+/// `{id, versions, optional}` objects.
+fn parse_quilt_depends(value: Option<&serde_json::Value>, deps: &mut Vec<ModDep>) {
+    let Some(items) = value.and_then(|v| v.as_array()) else {
+        return;
+    };
+    for item in items {
+        match item {
+            serde_json::Value::String(text) => {
+                let mut parts = text.splitn(2, char::is_whitespace);
+                let id = parts.next().unwrap_or("");
+                let range = parts
+                    .next()
+                    .map(str::trim)
+                    .filter(|r| !r.is_empty())
+                    .map(str::to_string);
+                push_dep(deps, id, range, ModDepKind::Required);
+            }
+            serde_json::Value::Object(obj) => {
+                let Some(id) = obj.get("id").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                let range = obj.get("versions").and_then(json_range);
+                let kind = if obj
+                    .get("optional")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                {
+                    ModDepKind::Optional
+                } else {
+                    ModDepKind::Required
+                };
+                push_dep(deps, id, range, kind);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Forge declares `mandatory`; NeoForge declares `type` (`required|optional|incompatible|
+/// discouraged`). `type` wins when both are present.
+fn forge_dep_kind(entry: &toml::Value) -> ModDepKind {
+    if let Some(kind) = entry.get("type").and_then(|v| v.as_str()) {
+        return match kind.trim().to_ascii_lowercase().as_str() {
+            "incompatible" => ModDepKind::Incompatible,
+            "optional" | "discouraged" => ModDepKind::Optional,
+            _ => ModDepKind::Required,
+        };
+    }
+    match entry.get("mandatory").and_then(|v| v.as_bool()) {
+        Some(false) => ModDepKind::Optional,
+        _ => ModDepKind::Required,
+    }
+}
+
+/// Collects every `[[dependencies.<modid>]]` table of a Forge/NeoForge `mods.toml`.
+fn parse_toml_dependencies(root: &toml::Value, deps: &mut Vec<ModDep>) {
+    let Some(tables) = root.get("dependencies").and_then(|v| v.as_table()) else {
+        return;
+    };
+    for entries in tables.values() {
+        let Some(entries) = entries.as_array() else {
+            continue;
+        };
+        for entry in entries {
+            let Some(id) = entry.get("modId").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let range = entry
+                .get("versionRange")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|r| !r.is_empty())
+                .map(str::to_string);
+            push_dep(deps, id, range, forge_dep_kind(entry));
+        }
     }
 }
 
@@ -437,6 +606,27 @@ fn parse_archive_metadata<R: Read + Seek>(
             }
         }
 
+        let mut dependencies = Vec::new();
+        parse_json_dep_map(val.get("depends"), ModDepKind::Required, &mut dependencies);
+        parse_json_dep_map(
+            val.get("recommends"),
+            ModDepKind::Optional,
+            &mut dependencies,
+        );
+        parse_json_dep_map(val.get("suggests"), ModDepKind::Optional, &mut dependencies);
+        parse_json_dep_map(
+            val.get("breaks"),
+            ModDepKind::Incompatible,
+            &mut dependencies,
+        );
+        parse_json_dep_map(
+            val.get("conflicts"),
+            ModDepKind::Incompatible,
+            &mut dependencies,
+        );
+        let mut provides = Vec::new();
+        parse_provides(val.get("provides"), &mut provides);
+
         let icon_file = val.get("icon").and_then(|v| v.as_str());
         let icon = find_mod_icon(archive, &id, icon_file);
         return ModMetadata {
@@ -447,6 +637,8 @@ fn parse_archive_metadata<R: Read + Seek>(
             authors,
             loader: "Fabric".to_string(),
             icon,
+            dependencies,
+            provides,
         };
     }
 
@@ -491,6 +683,22 @@ fn parse_archive_metadata<R: Read + Seek>(
             }
         }
 
+        let mut dependencies = Vec::new();
+        parse_quilt_depends(ql.and_then(|q| q.get("depends")), &mut dependencies);
+        // `breaks` shares the string/object shape of `depends`.
+        let mut breaks = Vec::new();
+        parse_quilt_depends(ql.and_then(|q| q.get("breaks")), &mut breaks);
+        for dep in breaks {
+            push_dep(
+                &mut dependencies,
+                &dep.id,
+                dep.range,
+                ModDepKind::Incompatible,
+            );
+        }
+        let mut provides = Vec::new();
+        parse_provides(ql.and_then(|q| q.get("provides")), &mut provides);
+
         let icon_file = ql.and_then(|q| q.get("icon")).and_then(|v| v.as_str());
         let icon = find_mod_icon(archive, &id, icon_file);
         return ModMetadata {
@@ -501,6 +709,8 @@ fn parse_archive_metadata<R: Read + Seek>(
             authors,
             loader: "Quilt".to_string(),
             icon,
+            dependencies,
+            provides,
         };
     }
 
@@ -574,6 +784,9 @@ fn parse_archive_metadata<R: Read + Seek>(
             })
             .unwrap_or_default();
 
+        let mut dependencies = Vec::new();
+        parse_toml_dependencies(&toml_val, &mut dependencies);
+
         let icon = find_mod_icon(
             archive,
             &mod_id,
@@ -587,6 +800,8 @@ fn parse_archive_metadata<R: Read + Seek>(
             authors,
             loader: loader.to_string(),
             icon,
+            dependencies,
+            provides: Vec::new(),
         };
     }
 
@@ -636,6 +851,13 @@ fn parse_archive_metadata<R: Read + Seek>(
                 }
             }
 
+            let mut dependencies = Vec::new();
+            if let Some(required) = m.get("requiredMods").and_then(|v| v.as_array()) {
+                for id in required.iter().filter_map(|v| v.as_str()) {
+                    push_dep(&mut dependencies, id, None, ModDepKind::Required);
+                }
+            }
+
             let icon = find_mod_icon(archive, &mod_id, m.get("logoFile").and_then(|v| v.as_str()));
             return ModMetadata {
                 mod_id,
@@ -645,6 +867,8 @@ fn parse_archive_metadata<R: Read + Seek>(
                 authors,
                 loader: "Forge".to_string(),
                 icon,
+                dependencies,
+                provides: Vec::new(),
             };
         }
     }
@@ -670,6 +894,19 @@ fn current_timestamp_secs() -> u64 {
 
 /// Path-keyed cache map shared by every mods directory.
 type ModCacheMap = HashMap<String, LocalModCacheItem>;
+
+/// Bumped whenever the cached per-mod data gains a field. A file written by an older revision
+/// is discarded wholesale on load: keeping its entries would serve mods with silently empty
+/// dependencies until each jar happened to change.
+const CACHE_REVISION: u32 = 2;
+
+/// On-disk shape of `cache/localmods.json`.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ModCacheFile {
+    version: u32,
+    entries: ModCacheMap,
+}
 
 /// In-memory store: `cache file -> (file mtime, entries)`.
 type ModCacheStore = HashMap<PathBuf, (Option<SystemTime>, ModCacheMap)>;
@@ -711,10 +948,13 @@ fn load_cache_from(cache_file: &Path) -> ModCacheMap {
         }
     }
 
-    // Miss or external modification: read and parse with no lock held.
+    // Miss or external modification: read and parse with no lock held. A file from another
+    // revision (or any unreadable shape) is empty, never partially trusted.
     let map: ModCacheMap = fs::read_to_string(cache_file)
         .ok()
-        .and_then(|c| serde_json::from_str(&c).ok())
+        .and_then(|c| serde_json::from_str::<ModCacheFile>(&c).ok())
+        .filter(|file| file.version == CACHE_REVISION)
+        .map(|file| file.entries)
         .unwrap_or_default();
 
     lock_mod_cache().insert(cache_file.to_path_buf(), (disk_mtime, map.clone()));
@@ -725,7 +965,11 @@ fn save_cache_to(cache_file: &Path, cache: &ModCacheMap) {
     if let Some(parent) = cache_file.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    if let Ok(json) = serde_json::to_string(cache) {
+    let file = ModCacheFile {
+        version: CACHE_REVISION,
+        entries: cache.clone(),
+    };
+    if let Ok(json) = serde_json::to_string(&file) {
         let _ = fs::write(cache_file, json);
     }
     // Store the mtime produced by this write so the next `load_cache_from` stays in memory.
@@ -833,7 +1077,7 @@ pub fn record_project_ids(lookups: &HashMap<String, Option<String>>) {
 /// The second pass hits the OS page cache warmed by the first, and the only heap buffer in
 /// either pass is the 128 KiB [`HASH_CHUNK`] read buffer — a 500 MB jar costs the same
 /// memory as a 1 KB one.
-fn hash_file(path: &Path) -> std::io::Result<(String, u32)> {
+pub(crate) fn hash_file(path: &Path) -> std::io::Result<(String, u32)> {
     let mut file = fs::File::open(path)?;
     let mut hasher = Sha1::new();
     let mut buf = vec![0u8; HASH_CHUNK];
@@ -905,6 +1149,8 @@ fn scan_pending_mod(pending: &PendingMod) -> Option<(LocalModCacheItem, LocalMod
         mtime_secs: pending.mtime_secs,
         project_id: None,
         update_file: None,
+        dependencies: mod_meta.dependencies.clone(),
+        provides: mod_meta.provides.clone(),
         icon: icon.clone(),
         icon_rev: ICON_CACHE_REV,
         cached_at_secs: 0,
@@ -925,6 +1171,8 @@ fn scan_pending_mod(pending: &PendingMod) -> Option<(LocalModCacheItem, LocalMod
         size: pending.size,
         project_id: None,
         update_file: None,
+        dependencies: mod_meta.dependencies,
+        provides: mod_meta.provides,
         icon,
     };
 
@@ -1064,6 +1312,8 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
                 project_id: cached.project_id.clone(),
                 update_file: cached.update_file.clone(),
                 icon: cached.icon.clone(),
+                dependencies: cached.dependencies.clone(),
+                provides: cached.provides.clone(),
             });
             continue;
         }
@@ -1548,6 +1798,8 @@ mod tests {
                 mtime_secs: 0,
                 project_id: Some("p1".to_string()),
                 update_file: Some(make_comp_file("2024-06-01T00:00:00Z")),
+                dependencies: Vec::new(),
+                provides: Vec::new(),
                 icon: None,
                 icon_rev: ICON_CACHE_REV,
                 cached_at_secs: current_timestamp_secs(),
@@ -1979,6 +2231,8 @@ mod tests {
             mtime_secs: 7,
             project_id: None,
             update_file: None,
+            dependencies: Vec::new(),
+            provides: Vec::new(),
             icon: Some("icon.png".into()),
             icon_rev: ICON_CACHE_REV,
             cached_at_secs: 0,
@@ -2020,10 +2274,23 @@ mod tests {
         // An external write to the cache file invalidates the in-memory mirror.
         std::thread::sleep(std::time::Duration::from_millis(20));
         let external = HashMap::from([("external-key".to_string(), item)]);
-        fs::write(&cache_file, serde_json::to_string(&external).unwrap()).unwrap();
+        let external_file = ModCacheFile {
+            version: CACHE_REVISION,
+            entries: external,
+        };
+        fs::write(&cache_file, serde_json::to_string(&external_file).unwrap()).unwrap();
         let reloaded = load_cache_from(&cache_file);
         assert!(reloaded.contains_key("external-key"));
         assert!(!reloaded.contains_key(&target_key));
+
+        // A cache written by another revision is discarded instead of served half-empty.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let stale = serde_json::json!({
+            "version": CACHE_REVISION + 1,
+            "entries": { "stale-key": { "modId": "stale" } }
+        });
+        fs::write(&cache_file, serde_json::to_string(&stale).unwrap()).unwrap();
+        assert!(load_cache_from(&cache_file).is_empty());
 
         // The real toggle keeps the renamed jar's hash and flips its enabled flag.
         let jar_path = mods_dir.join("toggle_target.jar");

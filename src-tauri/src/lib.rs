@@ -83,6 +83,11 @@ pub fn run() {
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
+            // The preset repository is loaded once; a corrupt document degrades to "no presets"
+            // instead of blocking startup.
+            app.manage(Arc::new(ipc::presets::PresetState::new(
+                paths::data_dir().join("presets.json"),
+            )));
             // The tray outlives every window, so it is built once at startup.
             tray::setup(app.handle())?;
             ipc::assets::allow_defaults(app.handle(), &initial_settings);

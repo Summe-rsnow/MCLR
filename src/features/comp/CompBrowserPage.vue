@@ -27,6 +27,7 @@ import {
   compTypeMeta,
   type CompTypeKey,
   type SelectOption,
+  getInstanceIconMeta,
   useToast,
 } from '../../ui'
 import type { CompFavoriteEntry, CompProject } from '../../ipc/client'
@@ -64,8 +65,63 @@ function isForgeUnder114(mcVer: string): boolean {
 const isInstanceScopedTab = computed(() => compStore.activeTab !== 'modpack')
 
 function defaultInstanceId(): string {
-  if (launchStore.selectedInstance?.id) return launchStore.selectedInstance.id
+  const homeInstId = launchStore.selectedInstance?.id || launchStore.selectedInstanceId || ''
+  if (homeInstId) {
+    const inst = instancesStore.instances.find((i) => i.id === homeInstId)
+    if (inst) {
+      if (compStore.compType !== 'mod' || inst.modable) return inst.id
+    }
+  }
+  if (compStore.compType === 'mod') {
+    const firstModable = instancesStore.instances.find((i) => i.modable)
+    if (firstModable) return firstModable.id
+  }
   return instancesStore.instances[0]?.id ?? ''
+}
+
+function extractInstanceLoader(inst: { kind?: string; loaders?: string[] }): string | null {
+  const candidates: string[] = []
+  if (inst.kind) {
+    const k = inst.kind.toLowerCase()
+    if (k !== 'vanilla' && k !== 'moddedmultiple' && k !== 'unknown') {
+      candidates.push(k)
+    }
+  }
+  if (Array.isArray(inst.loaders)) {
+    for (const l of inst.loaders) {
+      if (l) candidates.push(l.toLowerCase())
+    }
+  }
+
+  // Priority search for primary mod loaders:
+  // CRITICAL: 'neoforge' MUST be checked before 'forge'!
+  // 'legacyfabric' MUST be checked before 'fabric'!
+  const loaderPriorities = [
+    'neoforge',
+    'legacyfabric',
+    'fabric',
+    'quilt',
+    'cleanroom',
+    'forge',
+    'liteloader',
+    'optifine',
+    'labymod',
+    'iris',
+  ]
+
+  for (const known of loaderPriorities) {
+    for (const candidate of candidates) {
+      if (candidate.includes(known)) {
+        if (known === 'legacyfabric') return 'fabric'
+        return known
+      }
+    }
+  }
+
+  if (candidates.length > 0) {
+    return candidates[0].split(/\s+/)[0] || null
+  }
+  return null
 }
 
 function applyTargetInstance(
@@ -75,21 +131,7 @@ function applyTargetInstance(
   if (!isInstanceScopedTab.value) return
   if (inst) {
     compStore.mcVersion = inst.mcVersion || null
-    let primaryLoader: string | null = null
-    const raw = (
-      inst.kind && inst.kind.toLowerCase() !== 'vanilla' ? inst.kind : inst.loaders?.[0]
-    )?.toLowerCase()
-    if (raw) {
-      for (const known of ['fabric', 'forge', 'neoforge', 'quilt', 'optifine', 'iris']) {
-        if (raw.includes(known)) {
-          primaryLoader = known
-          break
-        }
-      }
-      if (!primaryLoader) {
-        primaryLoader = raw.split(/\s+/)[0] || null
-      }
-    }
+    const primaryLoader = extractInstanceLoader(inst)
     // Only mods and modpacks are loadable artifacts: for every other tab the instance only
     // contributes its game version.
     if (compStore.compType !== 'mod' && compStore.compType !== 'modpack') {
@@ -137,11 +179,17 @@ const targetInstanceOptions = computed(() => {
     : instancesStore.instances
 
   return [
-    { label: t('comp.search.noTargetInstance'), value: '' },
-    ...availableInstances.map((i) => ({
-      label: `${i.name} (${i.mcVersion})`,
-      value: i.id,
-    })),
+    { label: t('comp.search.noTargetInstance'), value: '', icon: 'i-lucide-box-select' },
+    ...availableInstances.map((i) => {
+      const kind = i.kind || (i.loaders?.[0]?.toLowerCase() ?? 'vanilla')
+      const meta = getInstanceIconMeta(i.config?.icon, kind)
+      return {
+        label: `${i.name} (${i.mcVersion})`,
+        value: i.id,
+        image: meta.image,
+        icon: meta.icon,
+      }
+    }),
   ]
 })
 
@@ -385,6 +433,7 @@ onMounted(async () => {
   }
 
   await compStore.loadFavorites()
+  await compStore.loadDisplaySettings()
   const path = route?.path || ''
   const routeType =
     (route?.params?.type as string) ||
@@ -393,10 +442,17 @@ onMounted(async () => {
 
   // The sidebar links to `/comp` with no tab, so a bare path resumes whatever tab was being
   // browsed; only an explicit `/comp/<type>` overrides it.
+  //
+  // A dependency quick-jump arrives as `/comp?q=<mod id>`: that is always a mod search, even
+  // when the user last left the page on the favourites tab.
   const previousTab = compStore.activeTab
-  const nextTab: CompType | 'favorites' = routeFavorites
-    ? 'favorites'
-    : ((routeType as CompType | undefined) ?? previousTab)
+  const explicitType = routeType && routeType !== 'favorites' ? (routeType as CompType) : undefined
+  const hasSearchQuery = Boolean(route?.query?.q)
+  const nextTab: CompType | 'favorites' = hasSearchQuery
+    ? (explicitType ?? 'mod')
+    : routeFavorites
+      ? 'favorites'
+      : (explicitType ?? previousTab)
 
   compStore.activeTab = nextTab
   if (nextTab !== 'favorites') {
@@ -408,19 +464,24 @@ onMounted(async () => {
   let filtersChanged = false
   if (nextTab !== 'favorites' && isInstanceScopedTab.value) {
     const routeInstanceId = route?.query?.instance ? String(route.query.instance) : ''
-    const instanceIdToApply =
-      routeInstanceId || (compStore.targetInstanceChosen ? '' : defaultInstanceId())
-    if (instanceIdToApply) {
+    if (routeInstanceId) {
       const inst =
         instancesStore.instances.find(
-          (i) => i.id === instanceIdToApply || i.name === instanceIdToApply,
+          (i) => i.id === routeInstanceId || i.name === routeInstanceId,
         ) || null
-      const before = `${compStore.mcVersion ?? ''}|${compStore.loader ?? ''}`
-      targetInstanceId.value = instanceIdToApply
+      targetInstanceId.value = inst ? inst.id : ''
       applyTargetInstance(inst, false)
-      filtersChanged = before !== `${compStore.mcVersion ?? ''}|${compStore.loader ?? ''}`
+      compStore.targetInstanceChosen = true
+    } else if (!compStore.targetInstanceChosen) {
+      const defId = defaultInstanceId()
+      const inst = instancesStore.instances.find((i) => i.id === defId) || null
+      targetInstanceId.value = inst ? inst.id : ''
+      applyTargetInstance(inst, false)
+      compStore.targetInstanceChosen = true
+    } else if (targetInstanceId.value) {
+      const inst = instancesStore.instances.find((i) => i.id === targetInstanceId.value) || null
+      applyTargetInstance(inst, false)
     }
-    compStore.targetInstanceChosen = true
   }
 
   if (route?.query?.q) {
@@ -512,7 +573,7 @@ watch(
             <MImage
               :src="fav.iconUrl"
               :fallback-icon="compTypeMeta[fav.compType as CompTypeKey]?.icon || 'i-lucide-box'"
-              class="w-14 h-14 rounded-xl bg-sunken shrink-0"
+              class="w-14 h-14 rounded-xl shrink-0"
             />
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
@@ -571,6 +632,7 @@ watch(
             :project="project"
             :is-favorite="compStore.hasFavorite(project.platform, project.id)"
             :active-tab="compStore.activeTab"
+            :show-zh-name="compStore.showZhName"
             @click="onProjectCardClick"
             @toggle-favorite="handleToggleFavorite"
           />

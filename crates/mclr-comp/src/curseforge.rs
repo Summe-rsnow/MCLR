@@ -651,6 +651,17 @@ fn map_cf_mod(m: CfMod) -> CompProject {
     let icon_url = m.logo.and_then(|l| l.thumbnail_url.or(l.url));
     let categories = m.categories.into_iter().map(|c| c.name).collect();
     let website_url = m.links.and_then(|l| l.website_url);
+    let (zh_name, wiki_id) = if comp_type == CompType::Mod {
+        match crate::modname::lookup_by_slug(&m.slug) {
+            Some(entry) => (
+                Some(crate::modname::display_zh(entry).to_string()),
+                Some(entry.wiki_id),
+            ),
+            None => (None, None),
+        }
+    } else {
+        (None, None)
+    };
 
     CompProject {
         platform: CompPlatform::Curseforge,
@@ -669,6 +680,8 @@ fn map_cf_mod(m: CfMod) -> CompProject {
         comp_type,
         updated_at: m.date_modified,
         website_url,
+        zh_name,
+        wiki_id,
     }
 }
 

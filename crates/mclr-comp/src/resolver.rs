@@ -96,6 +96,113 @@ pub fn select_best_file_for(
     candidates.first().copied().cloned()
 }
 
+/// Why [`select_best_file_filtered`] could not pick a file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatchFailure {
+    /// No file declares any of the requested game versions.
+    NoGameVersion,
+    /// No file survives the loader filter.
+    NoLoader,
+    /// The file list was empty.
+    NoFile,
+}
+
+/// True when `file` explicitly declares support for `mc`.
+///
+/// Unlike the permissive filters used while picking updates, this is a strict predicate: a file
+/// with no declared game versions never matches, so preset pinning cannot silently install a
+/// file of unknown compatibility.
+pub fn file_supports_mc(file: &CompFile, mc: &str) -> bool {
+    let mc = mc.trim();
+    !mc.is_empty() && file.mc_versions.iter().any(|v| v.eq_ignore_ascii_case(mc))
+}
+
+/// Selects the best file for a preset that may accept several game versions and loaders.
+///
+/// Empty filter lists mean "no restriction"; a non-empty list that matches nothing is reported
+/// through the matching [`MatchFailure`] so the caller can render "no game version" separately
+/// from "no loader". Ordering is identical to [`select_best_file_for`]: `Release` > `Beta` >
+/// `Alpha`, then newest release date.
+pub fn select_best_file_filtered(
+    files: &[CompFile],
+    game_versions: &[String],
+    loaders: &[String],
+) -> Result<CompFile, MatchFailure> {
+    if files.is_empty() {
+        return Err(MatchFailure::NoFile);
+    }
+
+    let mut candidates: Vec<&CompFile> = files
+        .iter()
+        .filter(|f| {
+            game_versions.is_empty() || game_versions.iter().any(|v| file_supports_mc(f, v))
+        })
+        .collect();
+    if candidates.is_empty() {
+        return Err(MatchFailure::NoGameVersion);
+    }
+
+    if !loaders.is_empty() {
+        let instance_loaders: Vec<&str> = loaders.iter().map(|l| l.as_str()).collect();
+        candidates.retain(|f| file_supports_any_loader(&f.loaders, &instance_loaders));
+        if candidates.is_empty() {
+            return Err(MatchFailure::NoLoader);
+        }
+    }
+
+    candidates.sort_by(|a, b| {
+        let channel_order = |c: CompReleaseChannel| match c {
+            CompReleaseChannel::Release => 0,
+            CompReleaseChannel::Beta => 1,
+            CompReleaseChannel::Alpha => 2,
+        };
+        let c_cmp = channel_order(a.channel).cmp(&channel_order(b.channel));
+        if c_cmp != std::cmp::Ordering::Equal {
+            return c_cmp;
+        }
+        b.release_date.cmp(&a.release_date)
+    });
+
+    candidates
+        .first()
+        .map(|f| (*f).clone())
+        .ok_or(MatchFailure::NoFile)
+}
+
+/// Expands an instance's loader labels into the set of loader ids a mod build may target.
+///
+/// This mirrors the quick-download mapping: Quilt runs Fabric mods, Cleanroom runs Forge mods,
+/// Legacy Fabric runs Fabric mods, and NeoForge only accepted `forge`-tagged builds on 1.20.1.
+/// Unknown labels are passed through unchanged.
+pub fn expand_loaders(instance_loaders: &[String], mc: &str) -> Vec<String> {
+    let mc = mc.trim();
+    let mut out: Vec<String> = Vec::with_capacity(instance_loaders.len() + 1);
+    let mut push = |id: &str| {
+        let id = id.trim().to_ascii_lowercase();
+        if !id.is_empty() && !out.iter().any(|existing| existing == &id) {
+            out.push(id);
+        }
+    };
+    for loader in instance_loaders {
+        match loader.trim().to_ascii_lowercase().as_str() {
+            "neoforge" => {
+                push("neoforge");
+                if mc == "1.20.1" {
+                    push("forge");
+                }
+            }
+            "quilt" => {
+                push("quilt");
+                push("fabric");
+            }
+            "cleanroom" => push("forge"),
+            "legacyfabric" => push("fabric"),
+            other => push(other),
+        }
+    }
+    out
+}
+
 struct ResolverContext<'a> {
     platform: CompPlatform,
     mc_version: &'a str,

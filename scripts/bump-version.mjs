@@ -31,4 +31,14 @@ const tauriConf = JSON.parse(readFileSync(tauriConfPath, 'utf8'))
 tauriConf.version = version
 writeFileSync(tauriConfPath, JSON.stringify(tauriConf, null, 2) + '\n', 'utf8')
 
+// 4. Update Chinese mod dictionary from LuLu-ling/mcmod-data
+if (!process.argv.includes('--skip-mcmod')) {
+  try {
+    const { updateMcmodDatabase } = await import('./update-mcmod-db.mjs')
+    await updateMcmodDatabase()
+  } catch (err) {
+    console.warn(`[bump-version] Could not update mcmod database: ${err.message}`)
+  }
+}
+
 console.log(`Bumped version to ${version}`)

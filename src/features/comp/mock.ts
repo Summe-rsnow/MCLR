@@ -26,6 +26,8 @@ const mockProjects: CompProject[] = [
     compType: 'mod',
     updatedAt: '2024-06-15T12:00:00Z',
     websiteUrl: 'https://modrinth.com/mod/sodium',
+    zhName: '钠',
+    wikiId: 2785,
   },
   {
     platform: 'modrinth',
@@ -45,6 +47,8 @@ const mockProjects: CompProject[] = [
     compType: 'mod',
     updatedAt: '2024-06-10T10:00:00Z',
     websiteUrl: 'https://modrinth.com/mod/iris',
+    zhName: '虹彩光影',
+    wikiId: 3373,
   },
   {
     platform: 'curseforge',
@@ -64,6 +68,8 @@ const mockProjects: CompProject[] = [
     compType: 'mod',
     updatedAt: '2024-06-01T08:00:00Z',
     websiteUrl: 'https://www.curseforge.com/minecraft/mc-mods/jei',
+    zhName: 'JEI物品管理器',
+    wikiId: 459,
   },
   {
     platform: 'modrinth',
@@ -139,6 +145,40 @@ const mockFiles: Record<string, CompFile[]> = {
       downloadUrls: ['https://cdn.modrinth.com/data/AANobbMI/versions/file2.jar'],
       distributionDisabled: false,
       dependencies: [],
+    },
+  ],
+  YL57xq9U: [
+    {
+      id: 'file-iris-1',
+      projectId: 'YL57xq9U',
+      platform: 'modrinth',
+      name: '1.6.6-1.20.1 - Forge',
+      fileName: 'iris-1.6.6+mc1.20.1-forge.jar',
+      mcVersions: ['1.20.1'],
+      loaders: ['forge', 'neoforge'],
+      channel: 'release',
+      releaseDate: '2024-06-15T12:00:00Z',
+      size: 71168,
+      hashes: { sha1: '1234567890abcdef1234567890abcdef12345678' },
+      downloadUrls: ['https://cdn.modrinth.com/data/YL57xq9U/versions/file.jar'],
+      distributionDisabled: false,
+      dependencies: [{ projectId: 'AANobbMI', kind: 'required' }],
+    },
+    {
+      id: 'file-iris-2',
+      projectId: 'YL57xq9U',
+      platform: 'modrinth',
+      name: 'Iris 1.7.0 for 1.20.4',
+      fileName: 'iris-mc1.20.4-1.7.0.jar',
+      mcVersions: ['1.20.4'],
+      loaders: ['fabric', 'quilt'],
+      channel: 'release',
+      releaseDate: '2024-06-10T10:00:00Z',
+      size: 2097152,
+      hashes: { sha1: 'b2c3d4e5f60123456789abcdef0123456789abc1' },
+      downloadUrls: ['https://cdn.modrinth.com/data/YL57xq9U/versions/iris-1.7.0.jar'],
+      distributionDisabled: false,
+      dependencies: [{ projectId: 'AANobbMI', kind: 'required' }],
     },
   ],
   '238222': [
@@ -362,4 +402,15 @@ export default {
 
   modpack_install_remote: (_args: Record<string, unknown>) =>
     'task-modpack-install-' + Math.random().toString(36).substring(2, 9),
+  comp_dep_projects: (args: Record<string, unknown>) => {
+    const ids = (args.projectIds as string[]) || (args.project_ids as string[]) || []
+    return mockProjects.filter((p) => ids.includes(p.id) || ids.includes(p.slug))
+  },
+  comp_dep_lookup: (args: Record<string, unknown>) => {
+    const modId = String(args.modId || '').toLowerCase()
+    return (
+      mockProjects.find((p) => p.id.toLowerCase() === modId || p.slug.toLowerCase() === modId) ||
+      null
+    )
+  },
 }
