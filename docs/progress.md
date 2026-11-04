@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.34`
-- **Next Milestone**: `v0.0.35` (towards `v0.1.0`)
+- **Current Version**: `0.0.35`
+- **Next Milestone**: `v0.0.36` (towards `v0.1.0`)
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -40,9 +40,9 @@
 | v0.0.33 | Public Microsoft OAuth client ID, device code flow & accounts refresh | done | ed0e919 | v0.0.33 | 2026-11-02 |
 
 | v0.0.34 | TypeScript 6.0.3, secrets via .env, shadow clipping & mod update race fix | done | a9d4d8d | v0.0.34 | 2026-11-02 |
-| v0.0.35 | 资源预设 + PCL 同款模组能力 | in_progress (unreleased) | — | — | — |
+| v0.0.35 | Resource presets, content-addressed store, offline MCMod Chinese names & dependency analysis | done | 31f73f4 | v0.0.35 | 2026-11-04 |
 
-## v0.0.35 — 资源预设 + PCL 同款模组能力 (Unreleased)
+## v0.0.35 — 资源预设 + PCL 同款模组能力
 
 | ID | slice | owner | status | acceptance |
 |---|---|---|---|---|
