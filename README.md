@@ -23,6 +23,19 @@
 
 ---
 
+## 📥 下载与安装
+
+| 渠道 | 地址 | 提取码 |
+|---|---|---|
+| 夸克网盘 | <https://pan.quark.cn/s/1d49602108da> | `sier` |
+
+- **系统要求**：Windows 10 / 11 x64（需已安装 WebView2 运行时，Win11 与新版 Win10 已内置）。
+- **安装包**：下载后运行 `MCLR_x.y.z_x64-setup.exe`（NSIS，当前用户安装，无需管理员权限）。
+- **覆盖升级**：新版本安装包直接覆盖安装即可，配置、账号、实例与未完成任务均保留在 `%APPDATA%\MCLR`，不会丢失。
+- **校验**：如需自行构建，请参考下方 [开发与构建](#-开发与构建)；源码永远以本仓库为准。
+
+---
+
 ## ⚡ 特性亮点
 
 ### 🚀 极致性能与可靠网络 (`mclr-net`, `mclr-core`)
@@ -82,7 +95,7 @@
 - **操作系统**：Windows 10 / 11 x64（已安装 WebView2 运行时）
 - **Rust 工具链**：`1.99+`（MSVC `x86_64-pc-windows-msvc`）
 - **Node.js**：`22+`
-- **包管理器**：**pnpm** `10+` / `12+`
+- **包管理器**：**pnpm** `10+`
 
 ### 常用命令
 
@@ -90,10 +103,10 @@
 # 1. 安装项目依赖
 pnpm install
 
-# 2. 启动前端 Vite 调试服务（浏览器中带 Mock IPC 预览）
-pnpm dev
+# 2. 启动前端 Vite 调试服务（纯浏览器预览，需要 Mock IPC 时加环境变量）
+VITE_MOCK_IPC=1 pnpm dev
 
-# 3. 启动完整的 Tauri 桌面开发模式
+# 3. 启动完整的 Tauri 桌面开发模式（走真实 IPC，Mock 在此环境自动失效）
 pnpm tauri dev
 
 # 4. 从 Rust 类型重新生成前端 TypeScript 绑定 (tauri-specta)
@@ -103,11 +116,16 @@ pnpm gen:bindings
 pnpm lint
 pnpm fmt
 
-# 6. 运行全量发布门禁 (cargo fmt, clippy -D warnings, cargo test, vitest, i18n lint, vite build)
+# 6. 运行全量发布门禁
+#    cargo fmt --check → clippy -D warnings → cargo test → gen:bindings 幂等
+#    → oxfmt → oxlint → vue-tsc → vitest → lint-i18n → lint-ui-contracts → vite build
 pnpm check
 
 # 7. 构建 Windows 生产版安装包 (NSIS x64)
 pnpm tauri build
+
+# 8. 升级版本号（同步 package.json / Cargo.toml / tauri.conf.json）
+pnpm bump 0.1.0
 ```
 
 ### 独立无头命令行客户端 (`mclr-cli`)
