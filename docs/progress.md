@@ -41,7 +41,7 @@
 
 | v0.0.34 | TypeScript 6.0.3, secrets via .env, shadow clipping & mod update race fix | done | a9d4d8d | v0.0.34 | 2026-11-02 |
 | v0.0.35 | Resource presets, content-addressed store, offline MCMod Chinese names & dependency analysis | done | 31f73f4 | v0.0.35 | 2026-11-04 |
-| v0.1.0 | Persistent task engine, byte-level download resume, canonical version/loader model & selectable text | done | — | v0.1.0 | 2026-11-05 |
+| v0.1.0 | Persistent task engine, byte-level download resume, canonical version/loader model & selectable text | done | 23b3dbb | v0.1.0 | 2026-11-05 |
 
 ## v0.1.0 — 任务引擎持久化 + 断点续传 + 文本可选择
 
