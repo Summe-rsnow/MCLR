@@ -1,16 +1,14 @@
 //! Update and Launcher Logs IPC commands.
 
-use mclr_core::{AppError, SettingsStore, TaskCenter, is_launcher_log_file, paths};
+use mclr_core::{AppError, SettingsStore, is_launcher_log_file, paths};
 use mclr_update::{UpdateCheckResult, UpdateConfig, check_update_manifest};
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
-use tauri_plugin_updater::UpdaterExt;
 
 /// Information about a launcher log file.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -51,9 +49,8 @@ pub async fn update_check(
 #[tauri::command]
 #[specta::specta]
 pub async fn update_install(
-    app: AppHandle,
+    engine: State<'_, Arc<mclr_core::tasks::TaskEngine>>,
     settings_state: State<'_, SettingsStore>,
-    tasks_state: State<'_, Arc<TaskCenter>>,
     channel_override: Option<String>,
 ) -> Result<String, AppError> {
     let settings = settings_state.get().await;
@@ -61,85 +58,16 @@ pub async fn update_install(
         .filter(|c| !c.trim().is_empty())
         .unwrap_or(settings.update.channel);
 
-    let config = UpdateConfig::from_runtime(&channel)?;
+    let _config = UpdateConfig::from_runtime(&channel)?;
 
-    // Build the updater from runtime config
-    let updater = app
-        .updater_builder()
-        .endpoints(vec![config.endpoint.clone()])
-        .map_err(|e| AppError::new("update.invalidUrl").with_detail(e.to_string()))?
-        .pubkey(config.pubkey.clone())
-        .build()
-        .map_err(|e| AppError::new("update.http").with_detail(e.to_string()))?;
-
-    let mut params = HashMap::new();
-    params.insert("channel".to_string(), channel);
-    let (task_id, _token) = tasks_state
-        .create_task(None, "task.update.download", params)
-        .await;
-
-    let tc = Arc::clone(&tasks_state);
-    let task_id_clone = task_id.clone();
-
-    tauri::async_runtime::spawn(async move {
-        let _ = tc.start_task(&task_id_clone).await;
-
-        let check_res = match updater.check().await {
-            Ok(res) => res,
-            Err(e) => {
-                let _ = tc
-                    .fail_task(
-                        &task_id_clone,
-                        AppError::new("update.http").with_detail(e.to_string()),
-                    )
-                    .await;
-                return;
-            }
-        };
-
-        let Some(update) = check_res else {
-            let _ = tc.complete_task(&task_id_clone).await;
-            return;
-        };
-
-        let mut downloaded_bytes: u64 = 0;
-        let tc_progress = tc.clone();
-        let tid = task_id_clone.clone();
-
-        let download_res = update
-            .download_and_install(
-                move |chunk_length, content_length| {
-                    downloaded_bytes += chunk_length as u64;
-                    if let Some(total) = content_length
-                        && total > 0
-                    {
-                        let progress = (downloaded_bytes as f32 / total as f32).clamp(0.0, 1.0);
-                        let tc_clone = tc_progress.clone();
-                        let t = tid.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = tc_clone.update_progress(&t, progress, 0).await;
-                        });
-                    }
-                },
-                || {},
-            )
-            .await;
-
-        match download_res {
-            Ok(()) => {
-                let _ = tc.complete_task(&task_id_clone).await;
-            }
-            Err(e) => {
-                let _ = tc
-                    .fail_task(
-                        &task_id_clone,
-                        AppError::new("update.install").with_detail(e.to_string()),
-                    )
-                    .await;
-            }
-        }
-    });
-    Ok(task_id)
+    engine
+        .submit(
+            "update.download",
+            serde_json::to_value(crate::tasks::handlers::update::UpdateDownloadPayload {
+                channel,
+            })?,
+        )
+        .await
 }
 
 #[tauri::command]

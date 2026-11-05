@@ -28,6 +28,11 @@ pub fn config_file() -> PathBuf {
     data_dir().join("config.json")
 }
 
+/// Path to `tasks.redb` in the MCLR data directory.
+pub fn tasks_db_file() -> PathBuf {
+    data_dir().join("tasks.redb")
+}
+
 /// Path to `accounts.enc` in the MCLR data directory.
 pub fn accounts_file() -> PathBuf {
     data_dir().join("accounts.enc")

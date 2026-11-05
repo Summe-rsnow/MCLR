@@ -4,8 +4,7 @@
   "description": "查看游戏运行输出与启动器日志",
   "tabs": {
     "game": "游戏日志",
-    "launcher": "启动器日志",
-    "tasks": "任务列表"
+    "launcher": "启动器日志"
   },
   "launcher": {
     "title": "启动器运行日志",

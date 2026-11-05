@@ -26,7 +26,7 @@ const percentage = computed(() => {
 </script>
 
 <template>
-  <div class="flex items-center gap-2.5 w-full select-none">
+  <div class="flex items-center gap-2.5 w-full">
     <div
       class="relative w-full rounded-full bg-sunken overflow-hidden"
       :class="size === 'sm' ? 'h-1.5' : 'h-2.5'"

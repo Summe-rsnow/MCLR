@@ -13,40 +13,6 @@ use std::path::{Path, PathBuf};
 
 const CONFIG_FILE: &str = "mclr.instance.json";
 
-/// Loader name prefixes (as produced by `classify_instance`) that make an instance moddable.
-const MODABLE_LOADERS: &[&str] = &[
-    "Fabric",
-    "LegacyFabric",
-    "Quilt",
-    "Forge",
-    "NeoForge",
-    "Cleanroom",
-    "LiteLoader",
-];
-
-/// `true` when any detected loader accepts mods.
-pub fn is_modable_loaders(loaders: &[String]) -> bool {
-    loaders.iter().any(|l| {
-        let name = l.split_whitespace().next().unwrap_or("");
-        MODABLE_LOADERS.contains(&name)
-    })
-}
-
-/// `true` for plain release ids (`1.20.1`, `1.7`, `26.1`), `false` for snapshots/pre-releases/old versions.
-pub fn is_release_version(mc_version: &str) -> bool {
-    let mut parts = mc_version.split('.');
-    let (Some(a), Some(b)) = (parts.next(), parts.next()) else {
-        return false;
-    };
-    let rest = parts.next();
-    parts.next().is_none()
-        && !a.is_empty()
-        && a.bytes().all(|c| c.is_ascii_digit())
-        && !b.is_empty()
-        && b.bytes().all(|c| c.is_ascii_digit())
-        && rest.is_none_or(|c| !c.is_empty() && c.bytes().all(|d| d.is_ascii_digit()))
-}
-
 /// Pure decision from the isolation setting of an instance, never touching the disk.
 pub fn decide_default(default: DefaultIsolation, modable: bool, is_release: bool) -> bool {
     match default {
@@ -130,8 +96,8 @@ fn instance_profile(mc_folder: &Path, id: &str) -> (bool, bool) {
     let mc_version = extract_mc_version(&effective, id);
     let (_, loaders) = classify_instance(&effective, &mc_version);
     (
-        is_modable_loaders(&loaders),
-        is_release_version(&mc_version),
+        mclr_core::loader::is_modable_labels(&loaders),
+        mclr_core::mcver::is_release(&mc_version),
     )
 }
 
@@ -201,16 +167,6 @@ mod tests {
     const VANILLA: &str = r#"{"id":"1.20.1","type":"release","libraries":[]}"#;
     const SNAPSHOT: &str = r#"{"id":"24w14a","type":"snapshot","libraries":[]}"#;
     const FABRIC: &str = r#"{"id":"f","inheritsFrom":"1.20.1","libraries":[{"name":"net.fabricmc:fabric-loader:0.15.11"}]}"#;
-
-    #[test]
-    fn release_detection() {
-        assert!(is_release_version("1.20.1"));
-        assert!(is_release_version("1.7"));
-        assert!(is_release_version("26.1.2"));
-        assert!(!is_release_version("24w14a"));
-        assert!(!is_release_version("1.20-pre1"));
-        assert!(!is_release_version("b1.7.3"));
-    }
 
     #[test]
     fn explicit_on_off_ignore_defaults() {

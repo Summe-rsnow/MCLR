@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { modDisplayName, modSubtitle } from '@/shared/modName'
 import type { CompProject, CompPlatform } from '../../../ipc/client'
 import { useFormat } from '../../../composables/useFormat'
 import { MCard, MIconButton, MBrandIcon, MImage, compTypeMeta, type CompTypeKey } from '../../../ui'
@@ -48,7 +49,7 @@ function formatNumber(num: number): string {
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between">
             <h3 class="font-bold text-base text-fg truncate">
-              {{ showZhName && project.zhName ? project.zhName : project.title }}
+              {{ modDisplayName(project, Boolean(showZhName)) }}
             </h3>
             <MIconButton
               :icon="
@@ -68,16 +69,13 @@ function formatNumber(num: number): string {
           <!-- Subtitle: English Name + Author combined on one line -->
           <div class="text-xs text-fg-muted mt-1 truncate flex items-center gap-1.5">
             <span
-              v-if="showZhName && project.zhName && project.zhName !== project.title"
+              v-if="modSubtitle(project, Boolean(showZhName))"
               class="truncate"
               :title="project.title"
             >
-              {{ project.title }}
+              {{ modSubtitle(project, Boolean(showZhName)) }}
             </span>
-            <span
-              v-if="showZhName && project.zhName && project.zhName !== project.title"
-              class="text-fg-subtle shrink-0"
-            >
+            <span v-if="modSubtitle(project, Boolean(showZhName))" class="text-fg-subtle shrink-0">
               ·
             </span>
             <div class="flex items-center gap-1 shrink-0 truncate">

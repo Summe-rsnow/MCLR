@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { formatBytes } from '@/shared/format'
 import { useI18n } from 'vue-i18n'
 import type { StoreInfo } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
@@ -45,13 +46,6 @@ const busy = ref(false)
 const loading = ref(false)
 
 const entries = computed(() => info.value?.entries ?? [])
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${bytes} B`
-}
 
 function kindLabel(kind: string): string {
   switch (kind) {

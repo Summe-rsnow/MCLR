@@ -84,7 +84,7 @@ interface NavItem {
 const allNavItems = computed(() => {
   const items: NavItem[] = []
   for (const r of featureRoutes) {
-    if (r.meta && 'nav' in r.meta && r.meta.nav && r.path !== '/tasks') {
+    if (r.meta && 'nav' in r.meta && r.meta.nav) {
       const cleanPath = r.path.replace(/\/:\w+\??.*/, '') || '/'
       items.push({
         path: cleanPath,

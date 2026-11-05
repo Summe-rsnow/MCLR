@@ -1,5 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import {
+  compareVersionsDesc,
+  isRelease,
+  groupKeyOf,
+  MAJOR_SNAPSHOT,
+  MAJOR_OTHER,
+} from '@/shared/mcver'
+import { parseLoader, expandModLoaders } from '@/shared/loader'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCompStore } from './store'
@@ -71,35 +79,6 @@ function openDependencyProject(project: CompProject) {
     .catch(() => {})
 }
 
-function normalizeLoader(raw: string): string {
-  const s = raw.trim().toLowerCase()
-  if (s.includes('neoforge')) return 'neoforge'
-  if (s.includes('fabric')) return 'fabric'
-  if (s.includes('quilt')) return 'quilt'
-  if (s.includes('forge')) return 'forge'
-  if (s.includes('cleanroom')) return 'cleanroom'
-  if (s.includes('liteloader')) return 'liteloader'
-  if (s.includes('optifine')) return 'optifine'
-  if (s.includes('labymod')) return 'labymod'
-  return s
-}
-
-function getCompatibleLoaders(selectedLdr: string, mcVer: string): Set<string> {
-  const norm = normalizeLoader(selectedLdr)
-  const set = new Set<string>()
-  if (!norm) return set
-  set.add(norm)
-
-  // PCL Rule 1: 1.20.1 NeoForge runs Forge mods!
-  if (norm === 'neoforge' && (mcVer === '1.20.1' || mcVer.startsWith('1.20.1'))) {
-    set.add('forge')
-  }
-  if (norm === 'quilt') set.add('fabric')
-  if (norm === 'cleanroom') set.add('forge')
-  if (norm === 'legacyfabric') set.add('fabric')
-  return set
-}
-
 const filteredFiles = computed(() => {
   let files = compStore.projectFiles
   if (selectedMcVersion.value) {
@@ -114,45 +93,21 @@ const filteredFiles = computed(() => {
     )
   }
   if (selectedLoader.value) {
-    const allowed = getCompatibleLoaders(selectedLoader.value, selectedMcVersion.value)
+    const allowed = new Set(expandModLoaders([selectedLoader.value], selectedMcVersion.value))
     files = files.filter(
-      (f) => f.loaders.length === 0 || f.loaders.some((l) => allowed.has(normalizeLoader(l))),
+      (f) =>
+        f.loaders.length === 0 ||
+        f.loaders.some((l) => allowed.has(parseLoader(l) ?? l.trim().toLowerCase())),
     )
   }
   return files
 })
 
-function isCleanReleaseVersion(ver: string): boolean {
-  const lower = ver.toLowerCase().trim()
-  if (
-    lower.includes('w') ||
-    lower.includes('pre') ||
-    lower.includes('rc') ||
-    lower.includes('snapshot') ||
-    lower.includes('alpha') ||
-    lower.includes('beta')
-  ) {
-    return false
-  }
-  return /^(1\.\d+(\.\d+)?|\d{2}\.\d+(\.\d+)?)$/.test(lower)
-}
-
-function compareVersionsDesc(a: string, b: string): number {
-  const pa = a.split('.').map((n) => parseInt(n, 10) || 0)
-  const pb = b.split('.').map((n) => parseInt(n, 10) || 0)
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const na = pa[i] ?? 0
-    const nb = pb[i] ?? 0
-    if (na !== nb) return nb - na
-  }
-  return b.localeCompare(a)
-}
-
 const mcVersionFilterOptions = computed(() => {
   const versions = new Set<string>()
   for (const f of compStore.projectFiles) {
     for (const v of f.mcVersions) {
-      if (isCleanReleaseVersion(v)) {
+      if (isRelease(v)) {
         versions.add(v)
       }
     }
@@ -190,58 +145,28 @@ const instanceOptions = computed(() => {
   })
 })
 
-function isPreReleaseOrSnapshot(v: string): boolean {
-  const lower = v.toLowerCase()
-  return (
-    lower.includes('w') ||
-    lower.includes('pre') ||
-    lower.includes('rc') ||
-    lower.includes('snapshot') ||
-    lower.includes('alpha') ||
-    lower.includes('beta')
-  )
-}
-
-function getMajorGroupKey(v: string): string {
-  const clean = v.trim().toLowerCase()
-  if (isPreReleaseOrSnapshot(clean)) {
-    return '__snapshot__'
-  }
-  const parts = clean.split('.')
-  if (parts.length >= 2) {
-    return `${parts[0]}.${parts[1]}`
-  }
-  return clean || '__other__'
-}
-
-function getFileHighestVersion(mcVersions: string[]): string {
-  if (!mcVersions.length) return ''
-  const sorted = [...mcVersions].sort(compareVersionsDesc)
-  return sorted[0] || ''
-}
-
 const fileGroups = computed<FileGroup[]>(() => {
   const map: Record<string, CompFile[]> = {}
   for (const f of filteredFiles.value) {
-    const primaryVer = getFileHighestVersion(f.mcVersions)
-    const key = getMajorGroupKey(primaryVer)
+    const primaryVer = [...f.mcVersions].sort(compareVersionsDesc)[0] ?? ''
+    const key = groupKeyOf(primaryVer)
     if (!map[key]) map[key] = []
     map[key].push(f)
   }
 
   const keys = Object.keys(map)
-  const numericKeys = keys.filter((k) => k !== '__snapshot__' && k !== '__other__')
+  const numericKeys = keys.filter((k) => k !== MAJOR_SNAPSHOT && k !== MAJOR_OTHER)
   numericKeys.sort(compareVersionsDesc)
 
   const sortedKeys: string[] = [...numericKeys]
-  if (map['__snapshot__']) sortedKeys.push('__snapshot__')
-  if (map['__other__']) sortedKeys.push('__other__')
+  if (map[MAJOR_SNAPSHOT]) sortedKeys.push(MAJOR_SNAPSHOT)
+  if (map[MAJOR_OTHER]) sortedKeys.push(MAJOR_OTHER)
 
   return sortedKeys.map((k, index) => {
     let title = k
-    if (k === '__snapshot__') {
+    if (k === MAJOR_SNAPSHOT) {
       title = t('comp.files.snapshotGroup')
-    } else if (k === '__other__') {
+    } else if (k === MAJOR_OTHER) {
       title = t('comp.files.otherVersions')
     }
     const groupFiles = (map[k] || []).slice().sort((a, b) => {

@@ -498,12 +498,12 @@ pub fn toggle_datapack(
                             Value::Compound(d) => Some(d),
                             _ => None,
                         })
-                        .unwrap()
+                        .ok_or_else(|| SavesError::InvalidPath("Invalid NBT compound".into()))?
                 } else {
                     map
                 }
             }
-            _ => unreachable!(),
+            _ => return Err(SavesError::InvalidPath("Invalid NBT compound".into())),
         };
 
         if !data.contains_key("DataPacks") {

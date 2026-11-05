@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2026-11-05
+
+First minor release: a persistent task engine with crash recovery, byte-level download resumption, a dedicated Tasks page, one canonical version/loader model shared by Rust and TypeScript, and selectable text across the whole UI.
+
+### Added
+- **Persistent Task Engine (`redb` 4.4.0, `mclr-core::tasks`)**:
+  - `TaskCenter` rebuilt around a flat `TaskNode` + ordered `StepNode` timeline (per-step weight, `itemsDone/itemsTotal`, start/finish timestamps, per-step error). The old `parent_id` sub-task tree is gone.
+  - Transactional persistence at `<data_dir>/tasks.redb`: 500 ms batch flush on a dedicated writer thread, urgent flush on every state transition, pruning by `historyMax` / `historyDays`.
+  - Crash recovery: `waiting` / `running` / `paused` / `retrying` tasks return as `interrupted` with finished steps and progress intact, and become resumable. Tasks whose handler no longer exists are failed with `task.unknownKind`.
+  - Corrupt database quarantine (`tasks.redb.corrupt-<ts>`, newest three kept) and automatic fallback to a fresh database, surfaced to the UI as a reset notice.
+  - `TaskEngine` scheduler: configurable concurrency (1–8, default 3), FIFO queue with drag-and-drop reordering (`tasks_reorder`), exponential backoff (2 s → 4 s → 8 s …) for `net.*` errors, each retry gated on an injected `NetProbe` that polls Mojang/BMCLAPI reachability every 5 s.
+  - `TaskHandler` trait + registry (`kind`, `plan`, `run`, `resumable`) with a typed `TaskCtx` payload; all twelve task kinds migrated (`install.vanilla`, `install.create`, `install.repair`, `loader.install`, `modpack.import`, `modpack.install`, `export.modpack`, `presets.apply`, `presets.cache`, `comp.download`, `localmods.update`, `update.download`). `create_task_legacy` is deleted.
+  - New IPC surface: `task_restore`, `task_retry`, `task_remove`, `tasks_restore_all`, `tasks_reorder`, `tasks_store_status`, `tasks_ack_reset`, `tasks_leftovers_info`, `tasks_cleanup_leftovers`.
+- **Byte-level Download Resume (`mclr-net`)**:
+  - Sidecar ledger `<dest>.mclr-part.meta` (schema v1) recording total size, ETag/Last-Modified, per-chunk byte counts and the URL it belongs to.
+  - Single-stream resume via `Range: bytes=<len>-` with `If-Range`, pre-feeding the hash with the already-downloaded prefix so verification stays single-pass.
+  - Chunked (multi-connection) resume keeps finished chunks and only re-fetches the remainder; servers that answer `200` to a `Range` probe fall back to the stream path instead of corrupting the file.
+  - Skip-if-verified: an existing destination whose SHA-1/SHA-256/MD5 already matches completes instantly without a request.
+- **Dedicated Tasks Page (`/tasks`)**:
+  - New sidebar entry `系统 → 任务`; the task panel is removed from the logs page, which now only carries 游戏日志 / 启动器日志.
+  - Two-pane layout: searchable list with status filters, speed readout and drag-to-reorder; inspector with weighted step timeline, counters, durations, inline per-step errors and a live speed sparkline.
+  - Per-state actions: pause, resume, cancel (danger prompt), restore, retry, remove, move-to-front.
+  - Leftover scanner/cleanup dialog (`TaskCleanupDialog`) that purges abandoned `.mclr-part` / `.mclr-part.meta` files while skipping artifacts owned by live or resumable tasks.
+  - Desktop notifications (`@tauri-apps/plugin-notification` 2.8.0) when a task finishes or fails while the window is unfocused.
+  - Scheduler settings section (`设置 → 系统与诊断 → 任务`) for concurrency, retry count, notifications and history retention.
+- **Canonical Version & Loader Model**:
+  - `mclr-core::mcver`: one allocation-light ordering (`compare`, `compare_strict`, `is_newer`, `is_release`, `drop_of`, `major_key`, `known`) replacing the scattered copies in `mclr-game::compat`, `mclr-loaders::forge`, `mclr-comp::versionrange` and the update checker, pinned by `crates/mclr-core/tests/mcver.rs` and `mc_rules.rs`.
+  - `mclr-core::loader`: loader identity/alias parsing shared by instance classification, install pipelines and compatibility checks.
+  - Frontend mirrors in `src/shared/` (`mcver.ts`, `loader.ts`, `format.ts`, `modName.ts`) so the UI orders versions and derives names exactly like the backend.
+- **Launch Sponsorship Milestone**: `launch://sponsorMilestone` event plus `SponsorMilestoneDialog`, deferring "close launcher after launch" until the dialog is dismissed.
+
+### Changed
+- **Text Selection Contract**: content is selectable by default (`body { user-select: text }`), and only controls/chrome opt out (`button`, `label`, `[role=…]`, `[data-tauri-drag-region]`, sidebar, title bar, splash). Tooltips became hoverable so long help text can be copied; `MPathPicker` paths can be selected without opening the file dialog; a capture-phase guard stops a drag-selection inside a clickable card from also triggering its click.
+- **Streaming Internals**: jar inspection consolidated in `mclr-comp::jarfile` (bounded entry reads, 2 MiB icon cap) and file hashing in `mclr-net::hash` (64 KiB streaming SHA-1), removing duplicate readers across modpack import, mod scanning and export.
+- **Settings Schema v6**: adds the `tasks` sub-settings block (`maxConcurrent`, `autoRetry`, `notify`, `historyMax`, `historyDays`) and drops the vestigial `download` block.
+- **Settings → System split** into `SystemNetworkSection`, `SystemTasksSection` and `SystemUpdateSection` for readability.
+- **Toolbox cleanup** no longer owns failed-task leftovers (now the task center's job) and continues to protect the content-addressed preset store.
+- **Release profile** strips symbols instead of debuginfo for smaller binaries.
+- **Dev ergonomics**: `devtools` is enabled in the development window, `VITE_MOCK_IPC` is ignored inside the Tauri webview, and the check gate exempts `127.0.0.1` from developer/system proxies so WireMock-backed tests survive a configured HTTP proxy.
+
+### Fixed
+- **Blank dev window**: a `VITE_MOCK_IPC=1` value in `.env` used to hijack the real Tauri IPC inside `pnpm tauri dev`, aborting startup before mount.
+- **Proxy-poisoned test runs**: `HTTP_PROXY`/`ALL_PROXY` no longer route WireMock traffic (`accounts_tests`, modrinth/curseforge fixtures) to an external proxy.
+
+
 ## [0.0.35] - 2026-11-04
 
 Resource presets with multi-preset merge and planning engine, content-addressed store with NTFS hardlinking, 27k+ offline Chinese mod names, mod dependency pre-analysis, quick download navigation with toolbelt & instance avatar selector parity.

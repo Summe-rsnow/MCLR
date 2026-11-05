@@ -169,40 +169,6 @@ pub fn select_best_file_filtered(
         .ok_or(MatchFailure::NoFile)
 }
 
-/// Expands an instance's loader labels into the set of loader ids a mod build may target.
-///
-/// This mirrors the quick-download mapping: Quilt runs Fabric mods, Cleanroom runs Forge mods,
-/// Legacy Fabric runs Fabric mods, and NeoForge only accepted `forge`-tagged builds on 1.20.1.
-/// Unknown labels are passed through unchanged.
-pub fn expand_loaders(instance_loaders: &[String], mc: &str) -> Vec<String> {
-    let mc = mc.trim();
-    let mut out: Vec<String> = Vec::with_capacity(instance_loaders.len() + 1);
-    let mut push = |id: &str| {
-        let id = id.trim().to_ascii_lowercase();
-        if !id.is_empty() && !out.iter().any(|existing| existing == &id) {
-            out.push(id);
-        }
-    };
-    for loader in instance_loaders {
-        match loader.trim().to_ascii_lowercase().as_str() {
-            "neoforge" => {
-                push("neoforge");
-                if mc == "1.20.1" {
-                    push("forge");
-                }
-            }
-            "quilt" => {
-                push("quilt");
-                push("fabric");
-            }
-            "cleanroom" => push("forge"),
-            "legacyfabric" => push("fabric"),
-            other => push(other),
-        }
-    }
-    out
-}
-
 struct ResolverContext<'a> {
     platform: CompPlatform,
     mc_version: &'a str,

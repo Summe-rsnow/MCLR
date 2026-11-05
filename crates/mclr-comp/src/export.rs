@@ -389,7 +389,7 @@ pub async fn export_modpack(
     );
 
     if let Some((tc, tid)) = task_info {
-        let _ = tc.update_progress(tid, 0.05, 0).await;
+        let _ = tc.begin_step(tid, "collect").await;
     }
 
     // 1. Determine MC version and modloader
@@ -400,7 +400,7 @@ pub async fn export_modpack(
     let selected_files = collect_selected_files(instance_dir, &options.selected_paths)?;
 
     if let Some((tc, tid)) = task_info {
-        let _ = tc.update_progress(tid, 0.15, 0).await;
+        let _ = tc.finish_step(tid, "collect").await;
     }
 
     let out_path = PathBuf::from(&options.output_path);
@@ -477,7 +477,9 @@ async fn export_as_modrinth<W: Write + std::io::Seek>(
         size: u64,
         data: Vec<u8>,
     }
-
+    if let Some((tc, tid)) = task_info {
+        let _ = tc.begin_step(tid, "hash").await;
+    }
     let mut candidate_files = Vec::new();
     let mut other_files = Vec::new();
 
@@ -549,9 +551,9 @@ async fn export_as_modrinth<W: Write + std::io::Seek>(
     }
 
     if let Some((tc, tid)) = task_info {
-        let _ = tc.update_progress(tid, 0.5, 0).await;
+        let _ = tc.finish_step(tid, "hash").await;
+        let _ = tc.begin_step(tid, "write").await;
     }
-
     // Write all overrides
     let total_other = other_files.len().max(1);
     for (idx, (rel, data)) in other_files.iter().enumerate() {
@@ -594,7 +596,9 @@ async fn export_as_modrinth<W: Write + std::io::Seek>(
     zip.start_file("modrinth.index.json", zip_options)
         .map_err(CompError::Zip)?;
     zip.write_all(&index_bytes).map_err(CompError::Io)?;
-
+    if let Some((tc, tid)) = task_info {
+        let _ = tc.finish_step(tid, "write").await;
+    }
     Ok(())
 }
 
@@ -619,6 +623,9 @@ async fn export_as_curseforge<W: Write + std::io::Seek>(
         data: Vec<u8>,
     }
 
+    if let Some((tc, tid)) = task_info {
+        let _ = tc.begin_step(tid, "hash").await;
+    }
     let mut candidate_files = Vec::new();
     let mut other_files = Vec::new();
 
@@ -682,9 +689,9 @@ async fn export_as_curseforge<W: Write + std::io::Seek>(
     }
 
     if let Some((tc, tid)) = task_info {
-        let _ = tc.update_progress(tid, 0.5, 0).await;
+        let _ = tc.finish_step(tid, "hash").await;
+        let _ = tc.begin_step(tid, "write").await;
     }
-
     // Write overrides
     let total_other = other_files.len().max(1);
     for (idx, (rel, data)) in other_files.iter().enumerate() {
@@ -725,7 +732,9 @@ async fn export_as_curseforge<W: Write + std::io::Seek>(
     zip.start_file("manifest.json", zip_options)
         .map_err(CompError::Zip)?;
     zip.write_all(&manifest_bytes).map_err(CompError::Io)?;
-
+    if let Some((tc, tid)) = task_info {
+        let _ = tc.finish_step(tid, "write").await;
+    }
     Ok(())
 }
 

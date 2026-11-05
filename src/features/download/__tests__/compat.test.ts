@@ -1,36 +1,37 @@
 import { describe, expect, it } from 'vitest'
+import { isLoaderSupported } from '@/shared/loader'
 import {
   classifyVersion,
   defaultName,
   getMcFoolName,
   isAprilFools,
   loaderIncompatibilities,
-  loaderVisibility,
   validateInstanceNameLocal,
 } from '../compat'
 import { mockVersionManifest } from '../mock'
 
-describe('compat loaderVisibility', () => {
-  it('Forge hidden for 1.5.1, shown for 1.5.2', () => {
-    expect(loaderVisibility('1.5.1').forge).toBe(false)
-    expect(loaderVisibility('1.5.2').forge).toBe(true)
+describe('compat isLoaderSupported', () => {
+  it('Forge hidden for 1.0, shown for 1.1+', () => {
+    expect(isLoaderSupported('forge', '1.0')).toBe(false)
+    expect(isLoaderSupported('forge', '1.1')).toBe(true)
+    expect(isLoaderSupported('forge', '1.5.2')).toBe(true)
   })
 
   it('NeoForge hidden for 1.19.4, shown for 1.20.1', () => {
-    expect(loaderVisibility('1.19.4').neoforge).toBe(false)
-    expect(loaderVisibility('1.20.1').neoforge).toBe(true)
+    expect(isLoaderSupported('neoforge', '1.19.4')).toBe(false)
+    expect(isLoaderSupported('neoforge', '1.20.1')).toBe(true)
   })
 
   it('Cleanroom only for 1.12.2', () => {
-    expect(loaderVisibility('1.12.2').cleanroom).toBe(true)
-    expect(loaderVisibility('1.12.1').cleanroom).toBe(false)
-    expect(loaderVisibility('1.20.1').cleanroom).toBe(false)
+    expect(isLoaderSupported('cleanroom', '1.12.2')).toBe(true)
+    expect(isLoaderSupported('cleanroom', '1.12.1')).toBe(false)
+    expect(isLoaderSupported('cleanroom', '1.20.1')).toBe(false)
   })
 
   it('Fabric shown for 1.14, LegacyFabric for 1.8.9', () => {
-    expect(loaderVisibility('1.14').fabric).toBe(true)
-    expect(loaderVisibility('1.8.9').fabric).toBe(false)
-    expect(loaderVisibility('1.8.9').legacyFabric).toBe(true)
+    expect(isLoaderSupported('fabric', '1.14')).toBe(true)
+    expect(isLoaderSupported('fabric', '1.8.9')).toBe(false)
+    expect(isLoaderSupported('legacyfabric', '1.8.9')).toBe(true)
   })
 })
 

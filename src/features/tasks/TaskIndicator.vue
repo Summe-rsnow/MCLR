@@ -81,7 +81,7 @@ onUnmounted(() => {
 
 function navigateToTasks() {
   if (router?.push) {
-    router.push('/logs?tab=tasks')
+    router.push('/tasks')
   }
 }
 </script>

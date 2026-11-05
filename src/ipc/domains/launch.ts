@@ -23,6 +23,7 @@ export interface LaunchProcessInfo {
 export interface LaunchStartResult {
   taskId: string
   processId?: number | null
+  milestone?: number | null
 }
 
 export const launchIpc = {

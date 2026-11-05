@@ -23,6 +23,7 @@
     "appName": "MCLR (Minecraft Launcher Rewrite)",
     "description": "轻量、现代、高效的跨平台 Minecraft 启动器，基于 Tauri v2 与 Vue 3 构建。",
     "version": "版本 {version}",
+    "launchCount": "累计启动 {count} 次",
     "githubRepo": "GitHub 仓库",
     "feedbackIssues": "问题反馈与建议",
     "feedback": {

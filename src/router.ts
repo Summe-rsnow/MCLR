@@ -20,11 +20,7 @@ export const featureRoutes: RouteRecordRaw[] = Object.values(routeModules).flatM
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    ...featureRoutes.filter((r) => r.path !== '/tasks'),
-    {
-      path: '/tasks',
-      redirect: '/logs?tab=tasks',
-    },
+    ...featureRoutes,
     {
       path: '/',
       name: 'root',

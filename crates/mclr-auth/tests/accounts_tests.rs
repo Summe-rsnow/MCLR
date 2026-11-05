@@ -173,7 +173,7 @@ async fn test_microsoft_flow_wiremock() {
         mc_profile: format!("{}/mc/profile", server.uri()),
     };
 
-    let client = Client::new();
+    let client = Client::builder().no_proxy().build().expect("client");
     let service = MicrosoftAuthService::new(client, endpoints, Some("test-client-id".to_string()))
         .expect("service creation");
 
@@ -228,7 +228,7 @@ async fn test_xsts_xerr_error_mappings() {
             mc_profile: String::new(),
         };
 
-        let client = Client::new();
+        let client = Client::builder().no_proxy().build().expect("client");
         let service =
             MicrosoftAuthService::new(client, endpoints, Some("test-client-id".into())).unwrap();
 

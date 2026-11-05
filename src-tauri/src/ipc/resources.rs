@@ -347,15 +347,16 @@ pub async fn resources_import(
             instances
                 .iter()
                 .find(|i| i.id == instance_id || i.name == instance_id)
-                .map(|inst| inst.modable || mclr_game::gamedir::is_modable_loaders(&inst.loaders))
+                .map(|inst| inst.modable || mclr_core::loader::is_modable_labels(&inst.loaders))
                 .unwrap_or(true),
         )
     })
     .await?;
 
-    let settings = state.snapshot().await;
-    let p: Vec<PathBuf> = sources.into_iter().map(PathBuf::from).collect();
-    let validated = crate::security::ensure_all_allowed(&p, &settings)?;
+    let mut validated: Vec<PathBuf> = Vec::with_capacity(sources.len());
+    for s in &sources {
+        validated.push(crate::security::ensure_not_system_path(Path::new(s))?);
+    }
     super::run_blocking(move || import_resources(kind, &game_dir, modable, &validated, policy))
         .await
 }

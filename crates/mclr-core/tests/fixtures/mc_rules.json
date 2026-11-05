@@ -1,0 +1,107 @@
+{
+  "compare": [
+    ["1.20", "1.20.0", 0],
+    ["1.20.1", "1.20.10", -1],
+    ["1.9", "1.10", -1],
+    ["1.0-rc1", "1.0", -1],
+    ["1.20.1", "1.20", 1],
+    ["1.0", "1.0-rc1", 1]
+  ],
+  "isRelease": [
+    ["1.20.1", true],
+    ["24w14a", false],
+    ["1.20.1-pre1", false],
+    ["26.1", true],
+    ["1.7", true],
+    ["26.1.2", true],
+    ["b1.7.3", false]
+  ],
+  "dropOf": [
+    ["1.20.1", 200],
+    ["1.14", 140],
+    ["26.1", 260],
+    ["24w14a", 210],
+    ["15w14a", 90]
+  ],
+  "majorKey": [
+    ["1.20.1", "1.20"],
+    ["26.1.2", "26.1"],
+    ["1.20", "1.20"],
+    ["26.1", "26.1"],
+    ["24w14a", null],
+    ["1.20-pre1", null]
+  ],
+  "parseLoader": [
+    ["Fabric 0.15.11", "fabric"],
+    ["NeoForge 21.1.0", "neoforge"],
+    ["Forge", "forge"],
+    ["Legacy Fabric", "legacyfabric"],
+    ["Iris", null],
+    ["cleanroom", "cleanroom"],
+    ["LiteLoader 1.12.2", "liteloader"],
+    ["OptiFine HD U I6", "optifine"],
+    ["LabyMod 4", "labymod"]
+  ],
+  "expand": [
+    [["NeoForge"], "1.20.1", ["neoforge", "forge"]],
+    [["NeoForge"], "1.21", ["neoforge"]],
+    [["Quilt"], "1.20.1", ["quilt", "fabric"]],
+    [["Cleanroom"], "1.12.2", ["forge"]],
+    [["LegacyFabric"], "1.12.2", ["fabric"]]
+  ],
+  "supported": [
+    ["1.12.2", ["legacyfabric", "forge", "cleanroom", "liteloader", "optifine", "labymod"]],
+    ["1.20.1", ["fabric", "quilt", "forge", "neoforge", "optifine", "labymod"]],
+    ["1.20", ["fabric", "quilt", "forge", "optifine", "labymod"]],
+    ["1.21.4", ["fabric", "quilt", "forge", "neoforge", "optifine", "labymod"]],
+    ["26.1", ["fabric", "quilt", "forge", "neoforge", "optifine", "labymod"]]
+  ],
+  "incompatible": [
+    [
+      "1.13",
+      [
+        ["fabric", "forge"],
+        ["fabric", "neoforge"],
+        ["forge", "neoforge"],
+        ["cleanroom", "optifine"],
+        ["cleanroom", "liteloader"],
+        ["neoforge", "liteloader"],
+        ["labymod", "optifine"],
+        ["labymod", "liteloader"],
+        ["legacyfabric", "liteloader"],
+        ["forge", "optifine"]
+      ]
+    ],
+    [
+      "1.20.2",
+      [
+        ["fabric", "forge"],
+        ["fabric", "neoforge"],
+        ["forge", "neoforge"],
+        ["cleanroom", "optifine"],
+        ["cleanroom", "liteloader"],
+        ["neoforge", "liteloader"],
+        ["labymod", "optifine"],
+        ["labymod", "liteloader"],
+        ["legacyfabric", "liteloader"],
+        ["neoforge", "optifine"]
+      ]
+    ],
+    [
+      "1.20.5",
+      [
+        ["fabric", "forge"],
+        ["fabric", "neoforge"],
+        ["forge", "neoforge"],
+        ["cleanroom", "optifine"],
+        ["cleanroom", "liteloader"],
+        ["neoforge", "liteloader"],
+        ["labymod", "optifine"],
+        ["labymod", "liteloader"],
+        ["legacyfabric", "liteloader"],
+        ["fabric", "optifine"],
+        ["neoforge", "optifine"]
+      ]
+    ]
+  ]
+}

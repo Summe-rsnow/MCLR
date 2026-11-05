@@ -92,6 +92,8 @@ pub struct LaunchProcessInfo {
 pub struct LaunchStartResult {
     pub task_id: String,
     pub process_id: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub milestone: Option<u32>,
 }
 
 /// Event payload emitted on process exit or crash.

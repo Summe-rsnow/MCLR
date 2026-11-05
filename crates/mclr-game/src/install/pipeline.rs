@@ -35,6 +35,9 @@ pub async fn install_vanilla(
 
     // Resumable: if instance JSON already exists, overwrite/verify and download only missing files.
     // 1. Fetch manifest
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "manifest").await;
+    }
     let manifest = fetch_version_manifest(client, net_settings.source_priority, false).await?;
     let entry = manifest
         .versions
@@ -46,6 +49,9 @@ pub async fn install_vanilla(
         .map_err(|e| GameError::InstallFailed(format!("Invalid version JSON URL: {e}")))?;
 
     // 2. Fetch version JSON
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "metadata").await;
+    }
     let version_json_bytes = match race_get_bytes(
         client,
         &version_url,
@@ -112,7 +118,9 @@ pub async fn install_vanilla(
         instance_name,
         specs.len()
     );
-
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "verify").await;
+    }
     let unverified_specs = verify_specs_cached(specs).await;
     info!(
         "Files to download after checking cache: {}",
@@ -120,16 +128,22 @@ pub async fn install_vanilla(
     );
 
     // 4. Download files
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "download").await;
+    }
     if !unverified_specs.is_empty() {
         let downloader = Downloader::new(client.clone(), net_settings.clone());
         if let Err(e) = downloader.download_many(unverified_specs, task_ctx).await {
+            let _ = std::fs::remove_file(&installing_marker);
             error!("Batch downloading failed for instance {instance_name}: {e}");
             return Err(e.into());
         }
     }
 
     let _ = std::fs::remove_file(installing_marker);
-
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "finalize").await;
+    }
     // 5. Build and return InstanceInfo
     let (kind, loaders) = classify_instance(&version_json, mc_version);
     let state = crate::instance::InstanceState::Ok;
@@ -184,7 +198,9 @@ pub async fn repair_instance(
         info!("Repair: skipped (verified manifest)");
         return Ok(0);
     }
-
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "resolve").await;
+    }
     let specs = collect_version_download_specs(
         client,
         mc_folder,
@@ -193,12 +209,16 @@ pub async fn repair_instance(
         net_settings.source_priority,
     )
     .await?;
-
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "verify").await;
+    }
     let unverified_specs = verify_specs_cached(specs).await;
 
     let count = unverified_specs.len();
     info!("Repairing instance {instance_id}: {count} files missing or corrupted");
-
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "download").await;
+    }
     if count > 0 {
         let downloader = Downloader::new(client.clone(), net_settings.clone());
         if let Err(e) = downloader.download_many(unverified_specs, task_ctx).await {
@@ -225,7 +245,20 @@ pub async fn repair_instance(
 }
 
 /// A `.mclr-installing` marker older than this is treated as an abandoned install.
-const STALE_MARKER_AGE_SECS: u64 = 6 * 60 * 60;
+const STALE_MARKER_AGE_SECS: u64 = 60;
+
+/// Removes `<mc_folder>/versions/<name>` only if it contains `.mclr-installing`.
+pub fn remove_installing_dir(mc_folder: &Path, name: &str) {
+    let instance_dir = mc_folder.join("versions").join(name);
+    let marker = instance_dir.join(".mclr-installing");
+    if instance_dir.is_dir() && marker.exists() {
+        tracing::info!(
+            "Removing incomplete instance dir: {}",
+            instance_dir.display()
+        );
+        let _ = std::fs::remove_dir_all(&instance_dir);
+    }
+}
 
 /// Remove incomplete instance folders (containing `.mclr-installing`) and `.mclr-staging` dirs left behind by interrupted installs.
 pub fn cleanup_stale(mc_folder: &std::path::Path) {

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { formatBytes } from '@/shared/format'
+import { parseLoader, expandModLoaders } from '@/shared/loader'
+import { modDisplayName, modSubtitle } from '@/shared/modName'
 import { useI18n } from 'vue-i18n'
 import {
   ipcClient,
@@ -179,7 +182,7 @@ function getDepProject(projectId: string): CompProject | null {
 function getDepTitle(projectId: string): string {
   const p = getDepProject(projectId)
   if (p) {
-    return (compStore.showZhName && p.zhName) || p.title || p.slug || projectId
+    return modDisplayName(p, compStore.showZhName) || projectId
   }
   return projectId
 }
@@ -242,43 +245,6 @@ const availableLoaders = [
   { label: 'Quilt', value: 'quilt' },
 ]
 
-function normalizeLoader(raw: string): string {
-  const s = raw.trim().toLowerCase()
-  if (s.includes('neoforge')) return 'neoforge'
-  if (s.includes('fabric')) return 'fabric'
-  if (s.includes('quilt')) return 'quilt'
-  if (s.includes('forge')) return 'forge'
-  if (s.includes('cleanroom')) return 'cleanroom'
-  if (s.includes('liteloader')) return 'liteloader'
-  if (s.includes('optifine')) return 'optifine'
-  if (s.includes('labymod')) return 'labymod'
-  return s
-}
-
-function getCompatibleLoaders(selectedLdr: string, mcVer: string): Set<string> {
-  const norm = normalizeLoader(selectedLdr)
-  const set = new Set<string>()
-  if (!norm) return set
-  set.add(norm)
-
-  // PCL Rule 1: 1.20.1 NeoForge runs Forge mods!
-  if (norm === 'neoforge' && (mcVer === '1.20.1' || mcVer.startsWith('1.20.1'))) {
-    set.add('forge')
-  }
-  // PCL Rule 2: Quilt has native backward compatibility with Fabric mods across all versions
-  if (norm === 'quilt') {
-    set.add('fabric')
-  }
-  // PCL Rule 3: Cleanroom in 1.12.2 is Forge compatible
-  if (norm === 'cleanroom') {
-    set.add('forge')
-  }
-  // PCL Rule 4: LegacyFabric is Fabric compatible
-  if (norm === 'legacyfabric') {
-    set.add('fabric')
-  }
-  return set
-}
 const targetInstanceOptions = computed(() => {
   const isMod = activeProject.value?.compType === 'mod'
   const available = isMod
@@ -308,7 +274,7 @@ function applyInstanceFilter(inst: typeof selectedInstance.value) {
   if (!inst) return
   selectedMcVersion.value = inst.mcVersion || ''
   const ldr = inst.loaders?.[0] || inst.kind || ''
-  selectedLoader.value = normalizeLoader(ldr)
+  selectedLoader.value = parseLoader(ldr) ?? ''
 }
 
 watch(
@@ -381,8 +347,7 @@ const filteredFiles = computed(() => {
     props.project?.compType === 'world'
 
   const targetVer = selectedMcVersion.value.trim().toLowerCase()
-  const targetLdr = selectedLoader.value.trim().toLowerCase()
-  const allowedLoaders = getCompatibleLoaders(targetLdr, targetVer)
+  const allowedLoaders = new Set(expandModLoaders([selectedLoader.value], targetVer))
 
   const matched = files.value.filter((f) => {
     // 1. Version matching (PCL rules)
@@ -395,12 +360,11 @@ const filteredFiles = computed(() => {
       })
 
     // 2. Loader matching (PCL rules)
-    const fileLoaders = f.loaders.map(normalizeLoader)
     const loaderMatch =
       isNonModType ||
       allowedLoaders.size === 0 ||
       f.loaders.length === 0 ||
-      fileLoaders.some((fl) => allowedLoaders.has(fl))
+      f.loaders.some((l) => allowedLoaders.has(parseLoader(l) ?? l.trim().toLowerCase()))
 
     return verMatch && loaderMatch
   })
@@ -409,8 +373,7 @@ const filteredFiles = computed(() => {
 })
 
 function formatFileSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-  return (bytes / 1024).toFixed(1) + ' KB'
+  return formatBytes(bytes)
 }
 
 // Region-aware formatting: culture comes from the language settings.
@@ -661,8 +624,7 @@ function handleToggleFavorite() {
           <span class="i-lucide-arrow-left mr-1" />
           {{
             t('comp.quickDownload.backToPrevious', {
-              name:
-                (compStore.showZhName && previousProject?.zhName) || previousProject?.title || '',
+              name: previousProject ? modDisplayName(previousProject, compStore.showZhName) : '',
             })
           }}
         </MButton>
@@ -682,7 +644,7 @@ function handleToggleFavorite() {
             <div class="flex items-center justify-between gap-3">
               <div class="flex items-center gap-2 flex-wrap min-w-0">
                 <h3 class="font-bold text-base text-fg truncate">
-                  {{ (compStore.showZhName && activeProject.zhName) || activeProject.title }}
+                  {{ modDisplayName(activeProject, compStore.showZhName) }}
                 </h3>
                 <MBadge variant="neutral" size="sm">
                   <MBrandIcon
@@ -714,23 +676,14 @@ function handleToggleFavorite() {
               <!-- Left: English Name + Author combined -->
               <div class="text-xs text-fg-muted truncate flex items-center gap-1.5 min-w-0 flex-1">
                 <span
-                  v-if="
-                    compStore.showZhName &&
-                    activeProject.zhName &&
-                    activeProject.zhName !== activeProject.title
-                  "
+                  v-if="modSubtitle(activeProject, compStore.showZhName)"
                   class="truncate"
                   :title="activeProject.title"
                 >
-                  {{ activeProject.title }}
+                  {{ modSubtitle(activeProject, compStore.showZhName) }}
                 </span>
                 <span
-                  v-if="
-                    compStore.showZhName &&
-                    activeProject.zhName &&
-                    activeProject.zhName !== activeProject.title &&
-                    activeProject.author
-                  "
+                  v-if="modSubtitle(activeProject, compStore.showZhName) && activeProject.author"
                   class="text-fg-subtle shrink-0"
                 >
                   ·

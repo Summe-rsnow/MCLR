@@ -90,6 +90,15 @@ function onInput(e: Event) {
   const target = e.target as HTMLInputElement
   emit('update:modelValue', target.value)
 }
+
+/**
+ * The path is copyable, but a drag-select must not also open the picker dialog.
+ * A click that leaves a range selected inside the field is a selection gesture.
+ */
+function onPathClick(e: MouseEvent) {
+  const input = e.currentTarget as HTMLInputElement
+  if (input.selectionStart !== input.selectionEnd) e.stopPropagation()
+}
 </script>
 
 <template>
@@ -117,10 +126,11 @@ function onInput(e: Event) {
       tabindex="-1"
       :disabled="disabled"
       :title="modelValue || placeholder"
-      class="flex-1 min-w-0 bg-transparent text-fg placeholder:text-fg-subtle outline-none select-none cursor-pointer truncate font-mono"
+      class="flex-1 min-w-0 bg-transparent text-fg placeholder:text-fg-subtle outline-none cursor-text truncate font-mono select-text"
       :class="size === 'sm' ? 'text-xs' : 'text-sm'"
       @keydown.prevent
       @input="onInput"
+      @click="onPathClick"
     />
 
     <!-- Right Actions -->

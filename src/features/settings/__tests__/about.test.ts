@@ -22,15 +22,18 @@ describe('SettingsAboutPage & Help Center', () => {
     setActivePinia(createPinia())
   })
 
-  it('renders app version badge, license, and description', () => {
+  it('renders app version badge, license, launch count, and description', async () => {
     const wrapper = mount(SettingsAboutPage, {
       global: {
         plugins: [i18n],
       },
     })
 
+    await flushPromises()
     expect(wrapper.text()).toContain(`v${pkg.version}`)
     expect(wrapper.text()).toContain('MCLR')
+    expect(wrapper.find('[data-testid="about-launch-count"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('累计启动 0 次')
     expect(wrapper.text()).toContain('GitHub 仓库')
   })
 

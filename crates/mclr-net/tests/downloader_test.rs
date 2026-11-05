@@ -513,7 +513,17 @@ async fn paused_task_blocks_before_any_request_and_resumes() {
 
     let center = Arc::new(TaskCenter::new());
     let (task_id, _control) = center
-        .create_task(None, "task.test", Default::default())
+        .create_task(
+            "task.test",
+            mclr_core::tasks::TaskPlan {
+                title_key: "task.test".into(),
+                title_params: Default::default(),
+                steps: vec![mclr_core::tasks::StepPlan {
+                    key: "run",
+                    weight: 1.0,
+                }],
+            },
+        )
         .await;
     center.start_task(&task_id).await.unwrap();
     center.pause_task(&task_id).await.unwrap();

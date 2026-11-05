@@ -27,7 +27,7 @@ function onScaleCommit(val: number) {
 </script>
 
 <template>
-  <div class="space-y-6 pb-12 select-none">
+  <div class="space-y-6 pb-12">
     <!-- Header title/subtitle preserved for test text assertion -->
     <div class="sr-only">
       <h1>{{ t('settingsAppearance.title') }}</h1>

@@ -24,12 +24,11 @@ use mclr_comp::{
     CompError, CompFile, CompPlatform, CompType, CurseForgeClient, ModrinthClient,
     ResolvedDependencyItem, delete_resources, modname, naming,
     resolver::{
-        MatchFailure, expand_loaders, file_supports_any_loader, file_supports_mc,
-        resolve_dependencies, select_best_file_filtered,
+        MatchFailure, file_supports_any_loader, file_supports_mc, resolve_dependencies,
+        select_best_file_filtered,
     },
 };
-use mclr_core::tasks::TaskControl;
-use mclr_core::{AppError, Settings, SettingsStore, TaskCenter};
+use mclr_core::{AppError, Settings, SettingsStore};
 use mclr_net::Downloader;
 use tauri::{AppHandle, Emitter, State};
 
@@ -286,108 +285,16 @@ pub async fn presets_remove_pin_rule(
 
 #[tauri::command]
 #[specta::specta]
-#[allow(clippy::too_many_arguments)]
 pub async fn presets_apply(
-    http: State<'_, crate::http::HttpState>,
-    settings_state: State<'_, SettingsStore>,
-    tasks: State<'_, Arc<TaskCenter>>,
-    presets: State<'_, Arc<PresetState>>,
+    engine: State<'_, Arc<mclr_core::tasks::TaskEngine>>,
     request: ApplyRequest,
 ) -> Result<String, AppError> {
-    let requested: Vec<ResourcePreset> = {
-        let repo = presets.repo.lock().await;
-        let mut list = Vec::with_capacity(request.preset_ids.len());
-        for id in &request.preset_ids {
-            match repo.get(id) {
-                Some(preset) => list.push(preset),
-                None => {
-                    return Err(AppError::new("preset.notFound").with_param("id", id.clone()));
-                }
-            }
-        }
-        list
-    };
-
-    let settings = settings_state.get().await;
-    let game_dir = super::game_dir_for(&settings_state, &request.instance_id).await;
-    let mc_folder = super::current_mc_folder(&settings_state).await;
-    let scan_id = request.instance_id.clone();
-    let instance =
-        tokio::task::spawn_blocking(move || mclr_game::instance::scan_instances(&mc_folder))
-            .await
-            .ok()
-            .and_then(Result::ok)
-            .and_then(|instances| {
-                instances
-                    .into_iter()
-                    .find(|inst| inst.id == scan_id || inst.name == scan_id)
-            });
-
-    let mc_version = instance
-        .as_ref()
-        .map(|inst| normalize_mc_version(&inst.mc_version))
-        .unwrap_or_default();
-    let labels = instance.map(|inst| inst.loaders).unwrap_or_default();
-    let ctx = InstanceCtx {
-        loaders: expand_loaders(&normalize_loaders(&labels), &mc_version),
-        mc_version,
-    };
-
-    // A datapack needs a world that actually exists; anything else is reported as `NeedsWorld`.
-    let datapack_world = request
-        .datapack_world
-        .as_deref()
-        .map(str::trim)
-        .filter(|world| !world.is_empty())
-        .filter(|world| {
-            mclr_core::safe_path::safe_join(&game_dir, &format!("saves/{world}"))
-                .is_some_and(|path| path.is_dir())
-        })
-        .map(str::to_string);
-
-    let mut params = HashMap::new();
-    params.insert("instance".to_string(), request.instance_id.clone());
-    params.insert("count".to_string(), requested.len().to_string());
-    let (task_id, control) = tasks
-        .create_task(None, "tasks.titles.presetApply", params)
-        .await;
-
-    let tc = Arc::clone(&tasks);
-    let state = Arc::clone(&presets);
-    let downloader = Downloader::new(http.client(), settings.net.clone());
-    let tid = task_id.clone();
-    let instance_id = request.instance_id.clone();
-
-    tokio::spawn(async move {
-        let _ = tc.start_task(&tid).await;
-        // One flat stage: `finished / total` is the whole bar.
-        let _ = tc.set_progress_window(&tid, 0.0, 1.0).await;
-        let result = execute_apply(
-            &tid,
-            &tc,
-            &control,
-            &requested,
-            &request,
-            &settings,
-            &game_dir,
-            &ctx,
-            datapack_world.as_deref(),
-            &downloader,
+    engine
+        .submit(
+            "presets.apply",
+            serde_json::to_value(crate::tasks::handlers::presets::PresetsApplyPayload { request })?,
         )
-        .await;
-        match result {
-            Ok(report) => {
-                state.reports.lock().await.insert(tid.clone(), report);
-                let _ = tc.complete_task(&tid).await;
-            }
-            Err(err) => {
-                tracing::warn!(instance = %instance_id, error = %err, "preset apply failed");
-                let _ = tc.fail_task(&tid, err).await;
-            }
-        }
-    });
-
-    Ok(task_id)
+        .await
 }
 
 #[tauri::command]
@@ -407,80 +314,28 @@ pub async fn presets_apply_report(
 #[tauri::command]
 #[specta::specta]
 pub async fn presets_cache(
-    http: State<'_, crate::http::HttpState>,
-    state: State<'_, SettingsStore>,
-    tasks: State<'_, Arc<TaskCenter>>,
+    engine: State<'_, Arc<mclr_core::tasks::TaskEngine>>,
     presets: State<'_, Arc<PresetState>>,
     preset_id: String,
 ) -> Result<String, AppError> {
-    let preset = presets
-        .repo
-        .lock()
+    let (name, count) = {
+        let repo = presets.repo.lock().await;
+        let p = repo
+            .get(&preset_id)
+            .ok_or_else(|| AppError::new("preset.notFound").with_param("id", preset_id.clone()))?;
+        (p.name, p.items.len())
+    };
+
+    engine
+        .submit(
+            "presets.cache",
+            serde_json::to_value(crate::tasks::handlers::presets::PresetsCachePayload {
+                preset_id,
+                name,
+                count,
+            })?,
+        )
         .await
-        .get(&preset_id)
-        .ok_or_else(|| AppError::new("preset.notFound").with_param("id", preset_id))?;
-
-    let settings = state.get().await;
-    let downloader = Downloader::new(http.client(), settings.net.clone());
-    let store = Store::new(store_root(&settings));
-
-    let mut params = HashMap::new();
-    params.insert("name".to_string(), preset.name.clone());
-    params.insert("count".to_string(), preset.items.len().to_string());
-    let (task_id, control) = tasks
-        .create_task(None, "tasks.titles.presetCache", params)
-        .await;
-
-    let tc = Arc::clone(&tasks);
-    let tid = task_id.clone();
-
-    tokio::spawn(async move {
-        let _ = tc.start_task(&tid).await;
-        let modrinth = ModrinthClient::new(settings.net.source_priority);
-        let curseforge = CurseForgeClient::new(settings.net.source_priority);
-        let total = preset.items.len().max(1);
-
-        for (index, item) in preset.items.iter().enumerate() {
-            if control.checkpoint().await.is_err() {
-                break;
-            }
-            match fetch_files(item.platform, &item.project_id, &modrinth, &curseforge).await {
-                Ok(files) => {
-                    let loaders: Vec<String> = if item.kind == CompType::Mod {
-                        preset.loaders.clone()
-                    } else {
-                        Vec::new()
-                    };
-                    let resolved = match item.pinned_file_id.as_deref() {
-                        Some(pin) => files.into_iter().find(|file| file.id == pin),
-                        None => {
-                            select_best_file_filtered(&files, &preset.game_versions, &loaders).ok()
-                        }
-                    };
-                    match resolved {
-                        Some(file) => {
-                            if let Err(err) = store.ensure(&downloader, &file, item.kind).await {
-                                tracing::warn!(file = %file.file_name, error = %err, "preset cache download failed");
-                            }
-                        }
-                        None => {
-                            tracing::info!(project = %item.project_id, "no preset file matched; skipped caching");
-                        }
-                    }
-                }
-                Err(err) => {
-                    tracing::warn!(project = %item.project_id, error = %err, "preset cache file lookup failed");
-                }
-            }
-            let _ = tc
-                .update_progress(&tid, (index + 1) as f32 / total as f32, 0)
-                .await;
-        }
-
-        let _ = tc.complete_task(&tid).await;
-    });
-
-    Ok(task_id)
 }
 
 #[tauri::command]
@@ -567,19 +422,18 @@ pub async fn presets_store_remove(
 
 /// Runs a preset application and returns the report handed to the UI.
 #[allow(clippy::too_many_arguments)]
-async fn execute_apply(
-    task_id: &str,
-    tc: &TaskCenter,
-    control: &TaskControl,
+pub(crate) async fn execute_apply(
+    ctx: &mclr_core::tasks::TaskCtx,
     requested: &[ResourcePreset],
     request: &ApplyRequest,
     settings: &Settings,
     game_dir: &Path,
-    ctx: &InstanceCtx,
+    inst_ctx: &InstanceCtx,
     datapack_world: Option<&str>,
     downloader: &Downloader,
 ) -> Result<ApplyReport, AppError> {
-    let (gates, merged) = merge_presets(requested, ctx);
+    ctx.begin_step("resolve").await;
+    let (gates, merged) = merge_presets(requested, inst_ctx);
 
     let mut kinds: HashSet<CompType> = merged.iter().map(|item| item.item.kind).collect();
     if request.include_dependencies {
@@ -612,8 +466,13 @@ async fn execute_apply(
         .collect()
         .await;
     let files: FileResults = fetched.into_iter().collect();
+    ctx.finish_step("resolve").await;
 
+    ctx.begin_step("scan").await;
     let installed = build_installed_index(game_dir, &kinds, datapack_world, &modrinth).await;
+    ctx.finish_step("scan").await;
+
+    ctx.begin_step("plan").await;
 
     let name_to_id: HashMap<&str, &str> = requested
         .iter()
@@ -636,7 +495,7 @@ async fn execute_apply(
                 let decision = decide(
                     merged_item,
                     list,
-                    ctx,
+                    inst_ctx,
                     &installed,
                     request.on_other_version,
                     datapack_world.is_some(),
@@ -659,7 +518,7 @@ async fn execute_apply(
         append_dependency_rows(
             &mut planned,
             game_dir,
-            ctx,
+            inst_ctx,
             settings,
             &modrinth,
             &curseforge,
@@ -669,9 +528,12 @@ async fn execute_apply(
 
     mark_overlaps(&mut planned);
     record_already_same(&planned, game_dir).await;
+    ctx.finish_step("plan").await;
 
+    ctx.begin_step("install").await;
     // Rows that need no work are final as-is.
     let total = planned.iter().filter(|item| item.install).count();
+    ctx.set_items(0, total as u32).await;
     let done = Arc::new(AtomicUsize::new(0));
     let store = Store::new(store_root(settings));
 
@@ -690,8 +552,7 @@ async fn execute_apply(
             let store = store.clone();
             let game_dir = game_dir.to_path_buf();
             let world = datapack_world.map(str::to_string);
-            let control = control.clone();
-            let tid = task_id.to_string();
+            let control = ctx.control().clone();
             let done = Arc::clone(&done);
             async move {
                 if control.checkpoint().await.is_err() {
@@ -727,18 +588,16 @@ async fn execute_apply(
                         row
                     }
                 };
-                let processed = done.fetch_add(1, Ordering::Relaxed) + 1;
-                if total > 0 {
-                    let _ = tc
-                        .update_progress(&tid, (processed as f32 / total as f32).clamp(0.0, 1.0), 0)
-                        .await;
-                }
+                let _processed = done.fetch_add(1, Ordering::Relaxed) + 1;
                 Some((index, row))
             }
         }))
         .buffer_unordered(4)
         .collect()
         .await;
+
+    ctx.set_items(total as u32, total as u32).await;
+    ctx.finish_step("install").await;
 
     finished.extend(installed_rows.into_iter().flatten());
     finished.sort_by_key(|(index, _)| *index);
@@ -1178,7 +1037,7 @@ fn resolve_item_file(
     select_best_file_filtered(files, game_versions, &loaders).map(Some)
 }
 
-async fn fetch_files(
+pub(crate) async fn fetch_files(
     platform: CompPlatform,
     project_id: &str,
     modrinth: &ModrinthClient,
@@ -1188,35 +1047,6 @@ async fn fetch_files(
         CompPlatform::Modrinth => modrinth.get_versions(project_id, None, None).await,
         CompPlatform::Curseforge => curseforge.get_files(project_id, None, None).await,
     }
-}
-
-/// Instance metadata reports `Unknown` when detection failed; that must not gate every preset.
-fn normalize_mc_version(raw: &str) -> String {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("unknown") {
-        String::new()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-/// Maps instance loader labels to canonical ids while keeping flavours `canonical_loader_id`
-/// deliberately drops (Cleanroom, Legacy Fabric) so [`expand_loaders`] can map them later.
-fn normalize_loaders(labels: &[String]) -> Vec<String> {
-    labels
-        .iter()
-        .filter_map(|label| {
-            let lower = label.trim().to_ascii_lowercase();
-            if lower.is_empty() {
-                return None;
-            }
-            Some(
-                mclr_game::instance::canonical_loader_id(label)
-                    .map(str::to_string)
-                    .unwrap_or(lower),
-            )
-        })
-        .collect()
 }
 
 #[cfg(test)]

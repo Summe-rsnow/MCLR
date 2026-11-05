@@ -19,7 +19,7 @@ pub async fn launch_instance(
     http: State<'_, crate::http::HttpState>,
     app: AppHandle,
     settings_state: State<'_, SettingsStore>,
-    tasks_state: State<'_, Arc<TaskCenter>>,
+    _tasks_state: State<'_, Arc<TaskCenter>>,
     watcher_state: State<'_, Arc<LaunchWatcher>>,
     instance_id: String,
     account_id: String,
@@ -32,16 +32,37 @@ pub async fn launch_instance(
     // 1. Resolve account session
     let session = accounts_state.resolve_session(&account_id).await?;
 
-    // 2. Create long-running task
+    // 2. Tracked launch task
     let mut params = HashMap::new();
     params.insert("instanceId".to_string(), instance_id.clone());
     params.insert("username".to_string(), session.username.clone());
 
-    let (task_id, _token) = tasks_state.create_task(None, "task.launch", params).await;
+    let plan = mclr_core::tasks::TaskPlan {
+        title_key: "task.launch".into(),
+        title_params: params,
+        steps: vec![
+            mclr_core::tasks::StepPlan {
+                key: "java",
+                weight: 30.0,
+            },
+            mclr_core::tasks::StepPlan {
+                key: "repair",
+                weight: 30.0,
+            },
+            mclr_core::tasks::StepPlan {
+                key: "natives",
+                weight: 20.0,
+            },
+            mclr_core::tasks::StepPlan {
+                key: "spawn",
+                weight: 20.0,
+            },
+        ],
+    };
 
-    let _ = tasks_state.start_task(&task_id).await;
-
-    let tc = Arc::clone(&tasks_state);
+    let engine = app.state::<Arc<mclr_core::tasks::TaskEngine>>();
+    let ctx = engine.begin_tracked("game.launch", plan).await;
+    let tc = ctx.center();
     let watcher = Arc::clone(&watcher_state);
 
     // 3. Run launch preparation and spawn
@@ -51,13 +72,13 @@ pub async fn launch_instance(
         mc_folder: &mc_folder,
         instance_id: &instance_id,
         session: &session,
-        task_center: Some((&tc, &task_id)),
+        task_center: Some((&tc, &ctx.id)),
         watcher: &watcher,
     })
     .await;
 
     match launch_res {
-        Ok(result) => {
+        Ok(mut result) => {
             if result.process_id.is_some() {
                 // Feed the instance list sort "by last played": the launch actually happened.
                 let _ = mclr_game::instance::touch_instance_last_played(
@@ -65,6 +86,16 @@ pub async fn launch_instance(
                     &instance_id,
                     &chrono::Utc::now().to_rfc3339(),
                 );
+
+                if let Ok(Some(milestone)) =
+                    settings_state.record_launch_and_check_milestone().await
+                {
+                    result.milestone = Some(milestone);
+                    let _ = app.emit(
+                        "launch://sponsorMilestone",
+                        &serde_json::json!({ "milestone": milestone }),
+                    );
+                }
             }
             if let Some(pid) = result.process_id {
                 let mut rx = watcher.subscribe();
@@ -114,7 +145,7 @@ pub async fn launch_instance(
         }
         Err(e) => {
             let app_err = AppError::from(e);
-            let _ = tc.fail_task(&task_id, app_err.clone()).await;
+            ctx.finish(Err(app_err.clone())).await;
             Err(app_err)
         }
     }

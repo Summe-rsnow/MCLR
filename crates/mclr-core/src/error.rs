@@ -44,3 +44,9 @@ impl From<CoreError> for AppError {
         AppError::new(code).with_detail(detail)
     }
 }
+
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        CoreError::from(err).into()
+    }
+}

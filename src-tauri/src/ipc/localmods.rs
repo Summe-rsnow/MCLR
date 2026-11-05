@@ -1,20 +1,16 @@
 //! Local mods, Jar-in-Jar, and dependency resolution IPC commands.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
-use futures_util::stream::{self, StreamExt};
 use mclr_comp::resources::{ResourceEntry, ResourceKind};
 use mclr_comp::{
-    CompError, CompFile, CompType, CurseForgeClient, JarInJarNode, LocalModInfo,
-    ModDependencyReport, ModrinthClient, ResolvedDependencyItem, check_local_mods_updates,
-    delete_local_mod, resolve_dependencies, scan_jar_in_jar, scan_local_mods, toggle_local_mod,
+    CompError, CompFile, CurseForgeClient, JarInJarNode, LocalModInfo, ModDependencyReport,
+    ModrinthClient, ResolvedDependencyItem, check_local_mods_updates, delete_local_mod,
+    resolve_dependencies, scan_jar_in_jar, scan_local_mods, toggle_local_mod,
 };
-use mclr_comp::{modname, naming};
-use mclr_core::{AppError, SettingsStore, TaskCenter};
-use mclr_net::{DownloadSpec, Downloader};
+use mclr_core::{AppError, SettingsStore};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
@@ -120,9 +116,7 @@ pub async fn local_mods_check_updates(
 #[tauri::command]
 #[specta::specta]
 pub async fn local_mod_update(
-    http: State<'_, crate::http::HttpState>,
-    state: State<'_, SettingsStore>,
-    tasks_state: State<'_, Arc<TaskCenter>>,
+    engine: State<'_, Arc<mclr_core::tasks::TaskEngine>>,
     instance_id: String,
     current_file_name: String,
     new_file: CompFile,
@@ -147,83 +141,16 @@ pub async fn local_mod_update(
         );
     }
 
-    let mods_dir = instance_mods_dir(&state, &instance_id).await;
-    let settings = state.get().await;
-
-    // The instance's own jar names the mod id; the dictionary is keyed by slug, so the
-    // local id is the only reliable link from an update row to its Chinese name.
-    let mod_id = if settings.comp.show_zh_name && !current_file_name.is_empty() {
-        let jar_path = mods_dir.join(&current_file_name);
-        tokio::task::spawn_blocking(move || {
-            mclr_comp::local::parse_mod_metadata_path(&jar_path, "").map(|m| m.mod_id)
-        })
+    engine
+        .submit(
+            "localmods.update",
+            serde_json::to_value(crate::tasks::handlers::localmods::LocalModUpdatePayload {
+                instance_id,
+                new_file,
+                old_file_name: current_file_name,
+            })?,
+        )
         .await
-        .ok()
-        .flatten()
-    } else {
-        None
-    };
-    let zh_name = mod_id
-        .as_deref()
-        .and_then(modname::lookup_by_slug)
-        .map(modname::display_zh);
-    let dest_name = naming::format_download_name(
-        &new_file.file_name,
-        zh_name,
-        CompType::Mod,
-        settings.comp.filename_format,
-    );
-    let dest_path = mods_dir.join(&dest_name);
-
-    let mut params = HashMap::new();
-    params.insert("name".to_string(), new_file.name.clone());
-    params.insert("fileName".to_string(), new_file.file_name.clone());
-    params.insert("targetInstance".to_string(), instance_id);
-
-    let (task_id, _cancel_token) = tasks_state
-        .create_task(None, "tasks.titles.compDownload", params)
-        .await;
-
-    let spec = DownloadSpec {
-        urls,
-        dest: dest_path,
-        size: if new_file.size > 0 {
-            Some(new_file.size)
-        } else {
-            None
-        },
-        sha1: new_file.hashes.sha1,
-        sha256: None,
-        md5: None,
-    };
-
-    let client = http.client();
-    let downloader = Downloader::new(client, settings.net.clone());
-    let tc = Arc::clone(&tasks_state);
-    let tid = task_id.clone();
-    let old_file_name = current_file_name.clone();
-
-    tokio::spawn(async move {
-        let _ = tc.start_task(&tid).await;
-        match downloader.download(spec, Some((&tc, &tid))).await {
-            Ok(()) => {
-                // The formatted name can equal the old one (same mod, same version
-                // folder layout), in which case the fresh jar must stay on disk.
-                if !old_file_name.is_empty() && old_file_name != dest_name {
-                    let old_path = mods_dir.join(&old_file_name);
-                    if old_path.exists() {
-                        let _ = delete_local_mod(&mods_dir, &old_file_name);
-                    }
-                }
-                let _ = tc.complete_task(&tid).await;
-            }
-            Err(e) => {
-                let _ = tc.fail_task(&tid, AppError::from(e)).await;
-            }
-        }
-    });
-
-    Ok(task_id)
 }
 
 #[tauri::command]
@@ -345,146 +272,21 @@ pub async fn local_mods_dependents(
 #[tauri::command]
 #[specta::specta]
 pub async fn local_mods_update_many(
-    http: State<'_, crate::http::HttpState>,
-    state: State<'_, SettingsStore>,
-    tasks_state: State<'_, Arc<TaskCenter>>,
+    engine: State<'_, Arc<mclr_core::tasks::TaskEngine>>,
     instance_id: String,
     updates: Vec<LocalModUpdateItem>,
 ) -> Result<String, AppError> {
-    let mods_dir = instance_mods_dir(&state, &instance_id).await;
-    let mut params = HashMap::new();
-    params.insert("targetInstance".to_string(), instance_id.clone());
-    params.insert("count".to_string(), updates.len().to_string());
-
-    let (task_id, _cancel_token) = tasks_state
-        .create_task(None, "tasks.titles.compDownload", params)
-        .await;
-
-    let settings = state.get().await;
-    let concurrency = settings.net.max_concurrent_files.clamp(1, 16) as usize;
-    let client = http.client();
-    let downloader = Downloader::new(client, settings.net.clone());
-    let tc = Arc::clone(&tasks_state);
-    let tid = task_id.clone();
-
-    // Display names are resolved once, on the blocking pool, before the batch starts:
-    // every item would otherwise reopen its jar inside the download stream.
-    let filename_format = settings.comp.filename_format;
-    let zh_by_file: Arc<HashMap<String, String>> = if settings.comp.show_zh_name {
-        let names: Vec<String> = updates
-            .iter()
-            .map(|u| u.current_file_name.clone())
-            .filter(|n| !n.is_empty())
-            .collect();
-        let scan_dir = mods_dir.clone();
-        Arc::new(
-            super::run_blocking(move || {
-                let mut map = HashMap::new();
-                for name in names {
-                    let jar_path = scan_dir.join(&name);
-                    let Some(meta) = mclr_comp::local::parse_mod_metadata_path(&jar_path, "")
-                    else {
-                        continue;
-                    };
-                    if let Some(entry) = modname::lookup_by_slug(&meta.mod_id) {
-                        map.insert(name, modname::display_zh(entry).to_string());
-                    }
-                }
-                Ok::<_, AppError>(map)
-            })
-            .await
-            .unwrap_or_default(),
+    engine
+        .submit(
+            "localmods.updateMany",
+            serde_json::to_value(
+                crate::tasks::handlers::localmods::LocalModsUpdateManyPayload {
+                    instance_id,
+                    updates,
+                },
+            )?,
         )
-    } else {
-        Arc::new(HashMap::new())
-    };
-
-    tokio::spawn(async move {
-        let _ = tc.start_task(&tid).await;
-        let control = tc.control(&tid).await;
-        let total = updates.len().max(1);
-        let completed = Arc::new(AtomicUsize::new(0));
-
-        // Bounded concurrency: each mod owns its own jar, so one slow host no longer
-        // serialises the whole batch. Every superseded jar is deleted the moment its
-        // replacement is verified on disk, so a failure later in the batch can never
-        // leave a half-migrated instance behind.
-        let downloader = &downloader;
-
-        let results: Vec<Result<(), AppError>> = stream::iter(updates.into_iter().map(|item| {
-            let tc = Arc::clone(&tc);
-            let tid = tid.clone();
-            let completed = Arc::clone(&completed);
-            let control = control.clone();
-            let mods_dir = mods_dir.clone();
-            let zh_by_file = Arc::clone(&zh_by_file);
-            async move {
-                if let Some(ctrl) = &control
-                    && ctrl.checkpoint().await.is_err()
-                {
-                    return Err(AppError::from(mclr_net::error::NetError::Canceled));
-                }
-
-                let urls: Vec<Url> = item
-                    .new_file
-                    .download_urls
-                    .iter()
-                    .filter_map(|u| Url::parse(u).ok())
-                    .collect();
-                if !urls.is_empty() {
-                    let dest_name = naming::format_download_name(
-                        &item.new_file.file_name,
-                        zh_by_file.get(&item.current_file_name).map(String::as_str),
-                        CompType::Mod,
-                        filename_format,
-                    );
-                    let spec = DownloadSpec {
-                        urls,
-                        dest: mods_dir.join(&dest_name),
-                        size: if item.new_file.size > 0 {
-                            Some(item.new_file.size)
-                        } else {
-                            None
-                        },
-                        sha1: item.new_file.hashes.sha1.clone(),
-                        sha256: None,
-                        md5: None,
-                    };
-
-                    downloader.download(spec, Some((&tc, &tid))).await?;
-
-                    // Per-file atomic replacement: the old jar only disappears once its
-                    // successor is fully downloaded and hash-verified.
-                    if !item.current_file_name.is_empty() && item.current_file_name != dest_name {
-                        let old_path = mods_dir.join(&item.current_file_name);
-                        if old_path.exists() {
-                            let _ = delete_local_mod(&mods_dir, &item.current_file_name);
-                        }
-                    }
-                }
-
-                let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
-                let _ = tc
-                    .update_progress(&tid, done as f32 / total as f32, 0)
-                    .await;
-                Ok(())
-            }
-        }))
-        .buffer_unordered(concurrency)
-        .collect()
-        .await;
-
-        match results.into_iter().find_map(Result::err) {
-            Some(e) => {
-                let _ = tc.fail_task(&tid, e).await;
-            }
-            None => {
-                let _ = tc.complete_task(&tid).await;
-            }
-        }
-    });
-
-    Ok(task_id)
+        .await
 }
 
 /// Dependency report for every jar of an instance.

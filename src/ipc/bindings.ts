@@ -34,6 +34,15 @@ export const commands = {
 	taskCancel: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("task_cancel", { id })),
 	taskPause: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("task_pause", { id })),
 	taskResume: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("task_resume", { id })),
+	taskRestore: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("task_restore", { id })),
+	taskRetry: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("task_retry", { id })),
+	taskRemove: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("task_remove", { id })),
+	tasksRestoreAll: () => typedError<string[], AppError_Serialize>(__TAURI_INVOKE("tasks_restore_all")),
+	tasksReorder: (orderedIds: string[]) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("tasks_reorder", { orderedIds })),
+	tasksStoreStatus: () => typedError<TaskStoreStatus, AppError_Serialize>(__TAURI_INVOKE("tasks_store_status")),
+	tasksAckReset: () => typedError<null, AppError_Serialize>(__TAURI_INVOKE("tasks_ack_reset")),
+	tasksLeftoversInfo: () => typedError<TaskLeftovers, AppError_Serialize>(__TAURI_INVOKE("tasks_leftovers_info")),
+	tasksCleanupLeftovers: () => typedError<TaskLeftovers, AppError_Serialize>(__TAURI_INVOKE("tasks_cleanup_leftovers")),
 	instancesList: () => typedError<InstanceInfo_Serialize[], AppError_Serialize>(__TAURI_INVOKE("instances_list")),
 	instanceRename: (id: string, newName: string) => typedError<InstanceInfo_Serialize, AppError_Serialize>(__TAURI_INVOKE("instance_rename", { id, newName })),
 	instanceDuplicate: (id: string, newName: string) => typedError<InstanceInfo_Serialize, AppError_Serialize>(__TAURI_INVOKE("instance_duplicate", { id, newName })),
@@ -131,11 +140,6 @@ export const commands = {
 	toolsGenerateSkinAvatar: (skinPath: string, size: number) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("tools_generate_skin_avatar", { skinPath, size })),
 	toolsCacheInfo: () => typedError<CacheSizeInfo, AppError_Serialize>(__TAURI_INVOKE("tools_cache_info")),
 	toolsCacheClear: (clearCache: boolean, clearLogs: boolean, clearSkins: boolean) => typedError<CacheSizeInfo, AppError_Serialize>(__TAURI_INVOKE("tools_cache_clear", { clearCache, clearLogs, clearSkins })),
-	/**
-	 *  Removes only what incomplete tasks left behind: partial downloads and abandoned modpack
-	 *  archives. Nothing that a finished install or a working cache entry depends on is touched.
-	 */
-	toolsCleanupFailedTasks: () => typedError<CacheSizeInfo, AppError_Serialize>(__TAURI_INVOKE("tools_cleanup_failed_tasks")),
 	toolsCustomDownload: (url: string, destPath: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("tools_custom_download", { url, destPath })),
 	toolsCreateShortcut: (instanceId: string, shortcutName: string | null) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("tools_create_shortcut", { instanceId, shortcutName })),
 	updateCheck: (channelOverride: string | null) => typedError<UpdateCheckResult_Serialize, AppError_Serialize>(__TAURI_INVOKE("update_check", { channelOverride })),
@@ -400,8 +404,6 @@ export type CacheSizeInfo = {
 	cacheBytes: number,
 	logsBytes: number,
 	skinCacheBytes: number,
-	/**  Leftovers of tasks that never finished: partial downloads and cached modpack archives. */
-	failedTaskBytes: number,
 	totalBytes: number,
 };
 
@@ -1059,12 +1061,14 @@ export type LaunchStartResult = LaunchStartResult_Serialize | LaunchStartResult_
 export type LaunchStartResult_Deserialize = {
 	taskId: string,
 	processId?: number | null,
+	milestone?: number | null,
 };
 
 /**  Result returned to IPC callers immediately upon launching. */
 export type LaunchStartResult_Serialize = {
 	taskId: string,
 	processId: number | null,
+	milestone?: number,
 };
 
 /**  Outcome of a launcher log cleanup command. */
@@ -1668,6 +1672,7 @@ export type Settings_Deserialize = {
 	comp?: CompSettings_Deserialize,
 	update?: UpdateSettings_Deserialize,
 	states?: StatesSettings_Deserialize,
+	tasks?: TaskSettings_Deserialize,
 };
 
 /**  Complete MCLR user settings. */
@@ -1683,6 +1688,7 @@ export type Settings_Serialize = {
 	comp: CompSettings_Serialize,
 	update: UpdateSettings_Serialize,
 	states: StatesSettings_Serialize,
+	tasks: TaskSettings_Serialize,
 };
 
 export type SkinFetchResult = {
@@ -1700,11 +1706,45 @@ export type StatesSettings = StatesSettings_Serialize | StatesSettings_Deseriali
 
 export type StatesSettings_Deserialize = {
 	dismissedAnnouncements?: string[],
+	launchCount?: number,
+	promptedSponsorMilestones?: number[],
 };
 
 export type StatesSettings_Serialize = {
 	dismissedAnnouncements: string[],
+	launchCount: number,
+	promptedSponsorMilestones: number[],
 };
+
+/**  A step in the task timeline. */
+export type StepNode = StepNode_Serialize | StepNode_Deserialize;
+
+/**  A step in the task timeline. */
+export type StepNode_Deserialize = {
+	key: string,
+	state: StepState,
+	weight: number | null,
+	itemsDone: number,
+	itemsTotal: number,
+	startedAtMs?: number | null,
+	finishedAtMs?: number | null,
+	error?: AppError_Deserialize | null,
+};
+
+/**  A step in the task timeline. */
+export type StepNode_Serialize = {
+	key: string,
+	state: StepState,
+	weight: number | null,
+	itemsDone: number,
+	itemsTotal: number,
+	startedAtMs: number | null,
+	finishedAtMs: number | null,
+	error: AppError_Serialize | null,
+};
+
+/**  State of a single step within a task. */
+export type StepState = "pending" | "running" | "done" | "failed" | "skipped";
 
 export type StoreEntry = {
 	sha1: string,
@@ -1728,6 +1768,8 @@ export type StoreInfo = {
 	entries: StoreEntry[],
 };
 
+export type StoreMode = "persistent" | "memory";
+
 export type SystemSettings = SystemSettings_Serialize | SystemSettings_Deserialize;
 
 export type SystemSettings_Deserialize = {
@@ -1750,35 +1792,83 @@ export type SystemSettings_Serialize = {
 	closePromptDismissed: boolean,
 };
 
-/**  A node in the hierarchical task tree. */
+export type TaskLeftovers = {
+	bytes: number,
+	files: number,
+};
+
+/**  A top-level task node. */
 export type TaskNode = TaskNode_Serialize | TaskNode_Deserialize;
 
-/**  A node in the hierarchical task tree. */
+/**  A top-level task node. */
 export type TaskNode_Deserialize = {
 	id: string,
-	parentId?: string | null,
+	kind: string,
 	titleKey: string,
 	titleParams?: { [key in string]: string },
 	state: TaskState,
 	progress: number | null,
 	speedBps: number,
+	steps: StepNode_Deserialize[],
+	currentStep?: string | null,
+	attempt: number,
+	maxAttempts: number,
+	nextRetryAtMs?: number | null,
+	resumable: boolean,
+	queueSeq: number | null,
+	createdAtMs: number | null,
+	startedAtMs?: number | null,
+	finishedAtMs?: number | null,
 	error?: AppError_Deserialize | null,
 };
 
-/**  A node in the hierarchical task tree. */
+/**  A top-level task node. */
 export type TaskNode_Serialize = {
 	id: string,
-	parentId: string | null,
+	kind: string,
 	titleKey: string,
 	titleParams: { [key in string]: string },
 	state: TaskState,
 	progress: number | null,
 	speedBps: number,
+	steps: StepNode_Serialize[],
+	currentStep: string | null,
+	attempt: number,
+	maxAttempts: number,
+	nextRetryAtMs: number | null,
+	resumable: boolean,
+	queueSeq: number | null,
+	createdAtMs: number | null,
+	startedAtMs: number | null,
+	finishedAtMs: number | null,
 	error?: AppError_Serialize,
 };
 
+export type TaskSettings = TaskSettings_Serialize | TaskSettings_Deserialize;
+
+export type TaskSettings_Deserialize = {
+	maxConcurrent?: number,
+	autoRetry?: number,
+	notify?: boolean,
+	historyMax?: number,
+	historyDays?: number,
+};
+
+export type TaskSettings_Serialize = {
+	maxConcurrent: number,
+	autoRetry: number,
+	notify: boolean,
+	historyMax: number,
+	historyDays: number,
+};
+
 /**  State of an asynchronous background task. */
-export type TaskState = "waiting" | "running" | "paused" | "success" | "canceled" | "failed";
+export type TaskState = "waiting" | "running" | "paused" | "retrying" | "interrupted" | "success" | "canceled" | "failed";
+
+export type TaskStoreStatus = {
+	mode: StoreMode,
+	resetNotice: boolean,
+};
 
 export type ThemeMode = "light" | "dark" | "system";
 

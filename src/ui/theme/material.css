@@ -29,8 +29,32 @@ body {
     'Microsoft YaHei UI', system-ui, sans-serif;
   background-color: rgb(var(--c-canvas, 242 244 247));
   color: rgb(var(--c-fg, 19 25 36));
-  user-select: none;
+  /*
+   * Text is selectable by default: copying a path, an error code or a mod file
+   * name out of the launcher is part of the normal support workflow. Only real
+   * controls and window drag regions opt out, below.
+   */
+  user-select: text;
   overflow: hidden;
+}
+
+/*
+ * Interaction surfaces must not paint a selection range when clicked, dragged
+ * or double-clicked. Every other node keeps the default `text`, so prose,
+ * paths, identifiers, logs and error details stay copyable.
+ */
+button,
+label,
+summary,
+[role='button'],
+[role='tab'],
+[role='menuitem'],
+[role='option'],
+[role='switch'],
+[role='checkbox'],
+[role='combobox'],
+[data-tauri-drag-region] {
+  user-select: none;
 }
 
 ::selection {

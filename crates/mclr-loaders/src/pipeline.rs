@@ -270,6 +270,7 @@ pub async fn install_instance<'a>(
             Ok(info)
         }
         Err(err) => {
+            let _ = std::fs::remove_file(&marker_path);
             let _ = std::fs::remove_dir_all(&staging_dir);
             match req.mode {
                 InstallMode::Create => {
@@ -313,6 +314,9 @@ async fn run_pipeline_steps(
     instance_dir: &Path,
     task_ctx: Option<(&TaskCenter, &str)>,
 ) -> Result<InstanceInfo, LoaderError> {
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "staging").await;
+    }
     // 1. Vanilla
     let vanilla_json = prepare_vanilla_staging(
         &env.client,
@@ -398,6 +402,9 @@ async fn run_pipeline_steps(
         None
     };
 
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "merge").await;
+    }
     // 3. Merge order: Vanilla -> OptiFine(if merged) -> Forge -> NeoForge -> Cleanroom -> LiteLoader -> Fabric -> LegacyFabric -> LabyMod
     let mut merged = vanilla_json;
 
@@ -468,6 +475,9 @@ async fn run_pipeline_steps(
         final_json_str,
     )?;
 
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "libraries").await;
+    }
     // 4. Merge staging libraries into real mc_folder libraries (skip existing)
     copy_dir_recursive_skip_existing(
         &staging_dir.join("libraries"),
@@ -502,8 +512,10 @@ async fn run_pipeline_steps(
         }
     }
 
-    // Download extra_mods into staging mods
     if !req.extra_mods.is_empty() {
+        if let Some((tc, tid)) = task_ctx {
+            let _ = tc.begin_step(tid, "extraMods").await;
+        }
         let staging_mods = staging_dir.join("mods");
         std::fs::create_dir_all(&staging_mods)?;
         let mut specs = Vec::new();
@@ -535,6 +547,9 @@ async fn run_pipeline_steps(
         copy_dir_recursive(&staging_mods, &mods_dir)?;
     }
 
+    if let Some((tc, tid)) = task_ctx {
+        let _ = tc.begin_step(tid, "repair").await;
+    }
     // 6. Repair instance (download remaining libraries and assets)
     repair_instance(
         &env.client,
@@ -552,7 +567,7 @@ async fn run_pipeline_steps(
         return Ok(found);
     }
     let (kind, loaders) = classify_instance(&merged, &req.mc_version);
-    let modable = mclr_game::gamedir::is_modable_loaders(&loaders);
+    let modable = mclr_core::loader::is_modable_labels(&loaders);
     Ok(InstanceInfo {
         id: req.instance_name.clone(),
         name: req.instance_name.clone(),

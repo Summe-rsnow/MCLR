@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { formatBytes } from '@/shared/format'
 import { useI18n } from 'vue-i18n'
 import { ipcClient, type CacheSizeInfo } from '../../../ipc/client'
 import { useToast } from '../../../ui/useToast'
@@ -16,14 +17,12 @@ const cacheInfo = ref<CacheSizeInfo>({
   cacheBytes: 0,
   logsBytes: 0,
   skinCacheBytes: 0,
-  failedTaskBytes: 0,
   totalBytes: 0,
 })
 const cleanCacheChecked = ref(true)
 const cleanLogsChecked = ref(false)
 const cleanSkinsChecked = ref(false)
-// Leftovers of failed tasks are the one category that is always safe to delete.
-const cleanFailedTasksChecked = ref(true)
+
 const cacheCleaning = ref(false)
 const cacheCleanedNotice = ref(false)
 
@@ -33,14 +32,6 @@ async function loadCacheInfo() {
   } catch (err: unknown) {
     console.error('Failed to load cache info:', err)
   }
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`
 }
 
 async function cleanCache() {
@@ -57,13 +48,6 @@ async function cleanCache() {
   if (cleanSkinsChecked.value) {
     selectedCategories.push(t('tools.cache.itemSkins'))
     selectedBytes += cacheInfo.value.skinCacheBytes
-  }
-  if (cleanFailedTasksChecked.value) {
-    selectedCategories.push(t('tools.cache.failedTasks'))
-    // A full cache wipe already removes these files; counting them twice would overstate it.
-    if (!cleanCacheChecked.value) {
-      selectedBytes += cacheInfo.value.failedTaskBytes
-    }
   }
 
   if (selectedCategories.length === 0) {
@@ -86,16 +70,12 @@ async function cleanCache() {
 
   cacheCleaning.value = true
   try {
-    // A full cache wipe already removes the leftovers, so the narrow pass only runs on its own.
     if (cleanCacheChecked.value || cleanLogsChecked.value || cleanSkinsChecked.value) {
       cacheInfo.value = await ipcClient.toolsCacheClear(
         cleanCacheChecked.value,
         cleanLogsChecked.value,
         cleanSkinsChecked.value,
       )
-    }
-    if (cleanFailedTasksChecked.value && !cleanCacheChecked.value) {
-      cacheInfo.value = await ipcClient.toolsCleanupFailedTasks()
     }
     toast.success(t('tools.cache.cleaned'))
     cacheCleanedNotice.value = true
@@ -154,13 +134,6 @@ defineExpose({
           <MCheckbox v-model="cleanSkinsChecked" :label="t('tools.cache.itemSkins')" />
           <span class="text-xs font-mono font-semibold text-fg tabular-nums">
             {{ formatBytes(cacheInfo.skinCacheBytes) }}
-          </span>
-        </div>
-
-        <div class="flex items-center justify-between p-3 rounded-xl m-well">
-          <MCheckbox v-model="cleanFailedTasksChecked" :label="t('tools.cache.failedTasks')" />
-          <span class="text-xs font-mono font-semibold text-fg tabular-nums">
-            {{ formatBytes(cacheInfo.failedTaskBytes) }}
           </span>
         </div>
       </div>

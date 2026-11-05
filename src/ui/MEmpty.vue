@@ -22,7 +22,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center p-8 text-center select-none">
+  <div class="flex flex-col items-center justify-center p-8 text-center">
     <div
       class="w-12 h-12 rounded-2xl bg-sunken border border-line flex items-center justify-center text-fg-subtle mb-3"
     >

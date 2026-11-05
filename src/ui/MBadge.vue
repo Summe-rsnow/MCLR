@@ -17,7 +17,7 @@ withDefaults(
 
 <template>
   <span
-    class="inline-flex items-center gap-1 font-medium rounded-full select-none shrink-0"
+    class="inline-flex items-center gap-1 font-medium rounded-full shrink-0"
     :class="[
       size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-0.5 text-xs',
       {

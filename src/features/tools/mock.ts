@@ -14,7 +14,6 @@ export const mockCacheInfo: CacheSizeInfo = {
   cacheBytes: 154200000,
   logsBytes: 12500000,
   skinCacheBytes: 3200000,
-  failedTaskBytes: 48000000,
   totalBytes: 166700000,
 }
 
@@ -41,10 +40,6 @@ const handlers = {
     return null
   },
   tools_cache_info: (): CacheSizeInfo => {
-    return { ...currentCacheState }
-  },
-  tools_cleanup_failed_tasks: (): CacheSizeInfo => {
-    currentCacheState.failedTaskBytes = 0
     return { ...currentCacheState }
   },
   tools_cache_clear: (args: Record<string, unknown>): CacheSizeInfo => {

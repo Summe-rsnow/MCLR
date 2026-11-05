@@ -5,13 +5,14 @@ use mclr_core::{NetSettings, TaskCenter};
 use md5::Md5;
 use reqwest::header::{CONTENT_RANGE, RANGE};
 use reqwest::{Client, StatusCode};
+use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use sha2::Sha256;
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
@@ -50,6 +51,115 @@ pub struct StreamHashes {
     pub sha1: Option<String>,
     pub sha256: Option<String>,
     pub md5: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PartMeta {
+    pub v: u32,
+    pub url: String,
+    pub total: Option<u64>,
+    pub etag: Option<String>,
+    #[serde(rename = "lastModified")]
+    pub last_modified: Option<String>,
+    pub chunks: Vec<ChunkMeta>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkMeta {
+    pub start: u64,
+    pub end: u64,
+    pub downloaded: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct RangeProbe {
+    pub total: u64,
+    pub etag: Option<String>,
+    pub last_modified: Option<String>,
+}
+
+fn write_meta(meta_path: &Path, meta: &PartMeta) {
+    if let Ok(bytes) = serde_json::to_vec(meta) {
+        let _ = std::fs::write(meta_path, bytes);
+    }
+}
+
+fn prepare_part(
+    part_path: &Path,
+    meta_path: &Path,
+    url: &Url,
+    expected_total: Option<u64>,
+    chunked: bool,
+) -> Option<PartMeta> {
+    if !part_path.exists() || !meta_path.exists() {
+        let _ = std::fs::remove_file(part_path);
+        let _ = std::fs::remove_file(meta_path);
+        return None;
+    }
+
+    let meta_bytes = match std::fs::read(meta_path) {
+        Ok(b) => b,
+        Err(_) => {
+            let _ = std::fs::remove_file(part_path);
+            let _ = std::fs::remove_file(meta_path);
+            return None;
+        }
+    };
+
+    let meta: PartMeta = match serde_json::from_slice(&meta_bytes) {
+        Ok(m) => m,
+        Err(_) => {
+            let _ = std::fs::remove_file(part_path);
+            let _ = std::fs::remove_file(meta_path);
+            return None;
+        }
+    };
+
+    if meta.v != 1 || meta.url != url.as_str() {
+        let _ = std::fs::remove_file(part_path);
+        let _ = std::fs::remove_file(meta_path);
+        return None;
+    }
+
+    if let Some(exp) = expected_total
+        && let Some(tot) = meta.total
+        && exp != tot
+    {
+        let _ = std::fs::remove_file(part_path);
+        let _ = std::fs::remove_file(meta_path);
+        return None;
+    }
+
+    let file_len = match std::fs::metadata(part_path) {
+        Ok(m) => m.len(),
+        Err(_) => {
+            let _ = std::fs::remove_file(part_path);
+            let _ = std::fs::remove_file(meta_path);
+            return None;
+        }
+    };
+
+    if chunked {
+        if let Some(total) = meta.total {
+            if file_len != total {
+                let _ = std::fs::remove_file(part_path);
+                let _ = std::fs::remove_file(meta_path);
+                return None;
+            }
+        } else {
+            let _ = std::fs::remove_file(part_path);
+            let _ = std::fs::remove_file(meta_path);
+            return None;
+        }
+    } else if let Some(total) = meta.total
+        && file_len > total
+    {
+        let _ = std::fs::remove_file(part_path);
+        let _ = std::fs::remove_file(meta_path);
+        return None;
+    }
+
+    Some(meta)
 }
 
 /// How the body of a single file reached the part file.
@@ -153,8 +263,28 @@ impl Downloader {
         control: Option<&TaskControl>,
     ) -> Result<(), NetError> {
         let part_path = PathBuf::from(format!("{}.mclr-part", spec.dest.display()));
+        let meta_path = PathBuf::from(format!("{}.mclr-part.meta", spec.dest.display()));
         if let Some(parent) = spec.dest.parent() {
             tokio::fs::create_dir_all(parent).await?;
+        }
+
+        // Skip-if-verified
+        if spec.dest.exists()
+            && (spec.sha1.is_some() || spec.sha256.is_some() || spec.md5.is_some())
+            && self.verify_file(&spec.dest, &spec).await.is_ok()
+        {
+            let _ = tokio::fs::remove_file(&part_path).await;
+            let _ = tokio::fs::remove_file(&meta_path).await;
+            if let Some((tc, tid)) = task_center {
+                let _ = tc.update_progress(tid, 1.0, 0).await;
+            }
+            return Ok(());
+        }
+
+        // Register artifacts
+        if let Some((tc, tid)) = task_center {
+            tc.add_artifact(tid, &part_path).await;
+            tc.add_artifact(tid, &meta_path).await;
         }
 
         let max_whole_retries = 3;
@@ -174,9 +304,6 @@ impl Downloader {
             // Pick URL across attempts sequentially through all candidate URLs
             let url = &spec.urls[attempt % spec.urls.len()];
 
-            // Clean up any stale part file before attempting
-            let _ = tokio::fs::remove_file(&part_path).await;
-
             let download_result = self
                 .download_single_file(url, &spec, &part_path, task_center, control)
                 .await;
@@ -194,6 +321,7 @@ impl Downloader {
                         Ok(()) => {
                             // Atomic rename
                             tokio::fs::rename(&part_path, &spec.dest).await?;
+                            let _ = tokio::fs::remove_file(&meta_path).await;
                             return Ok(());
                         }
                         Err(verify_err) => {
@@ -204,6 +332,7 @@ impl Downloader {
                                 verify_err
                             );
                             let _ = tokio::fs::remove_file(&part_path).await;
+                            let _ = tokio::fs::remove_file(&meta_path).await;
                             last_err = verify_err;
                         }
                     }
@@ -215,7 +344,13 @@ impl Downloader {
                         url,
                         err
                     );
-                    let _ = tokio::fs::remove_file(&part_path).await;
+                    if matches!(
+                        err,
+                        NetError::HashMismatch { .. } | NetError::SizeMismatch { .. }
+                    ) {
+                        let _ = tokio::fs::remove_file(&part_path).await;
+                        let _ = tokio::fs::remove_file(&meta_path).await;
+                    }
                     last_err = err;
                 }
             }
@@ -247,15 +382,22 @@ impl Downloader {
 
         // Only an unknown size needs to probe range support
         match self.probe_range(url).await {
-            Ok(Some(total_size)) if total_size < SMALL_FILE_THRESHOLD => self
-                .download_stream(url, part_path, Some(total_size), task_center, spec, control)
+            Ok(Some(probe)) if probe.total < SMALL_FILE_THRESHOLD => self
+                .download_stream(
+                    url,
+                    part_path,
+                    Some(probe.total),
+                    task_center,
+                    spec,
+                    control,
+                )
                 .await
                 .map(FileOutcome::Streamed),
-            Ok(Some(total_size)) => {
+            Ok(Some(probe)) => {
                 self.download_chunked_or_stream(
                     url,
                     part_path,
-                    total_size,
+                    probe.total,
                     task_center,
                     spec,
                     control,
@@ -301,7 +443,7 @@ impl Downloader {
     }
 
     /// Range probe with Range: bytes=0-0
-    async fn probe_range(&self, url: &Url) -> Result<Option<u64>, NetError> {
+    async fn probe_range(&self, url: &Url) -> Result<Option<RangeProbe>, NetError> {
         let resp = self
             .client
             .get(url.clone())
@@ -316,7 +458,21 @@ impl Downloader {
         {
             let total_part = &range_str[pos + 1..];
             if let Ok(total) = total_part.trim().parse::<u64>() {
-                return Ok(Some(total));
+                let etag = resp
+                    .headers()
+                    .get(reqwest::header::ETAG)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string());
+                let last_modified = resp
+                    .headers()
+                    .get(reqwest::header::LAST_MODIFIED)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string());
+                return Ok(Some(RangeProbe {
+                    total,
+                    etag,
+                    last_modified,
+                }));
             }
         }
 
@@ -336,14 +492,111 @@ impl Downloader {
         spec: &DownloadSpec,
         control: Option<&TaskControl>,
     ) -> Result<StreamHashes, NetError> {
-        let resp = self.client.get(url.clone()).send().await?;
+        let meta_path = PathBuf::from(format!("{}.meta", part_path.display()));
+        let mut resumed_l = 0u64;
+        let resumed_meta = prepare_part(part_path, &meta_path, url, total_size, false);
+
+        if resumed_meta.is_some()
+            && let Ok(file_meta) = tokio::fs::metadata(part_path).await
+        {
+            resumed_l = file_meta.len();
+        }
+
+        let resp = if resumed_l > 0 {
+            let mut req = self
+                .client
+                .get(url.clone())
+                .header(RANGE, format!("bytes={}-", resumed_l));
+            if let Some(ref m) = resumed_meta {
+                if let Some(ref etag) = m.etag {
+                    req = req.header("If-Range", etag.as_str());
+                } else if let Some(ref lm) = m.last_modified {
+                    req = req.header("If-Range", lm.as_str());
+                }
+            }
+            let resp = req.send().await?;
+            if resp.status() == StatusCode::PARTIAL_CONTENT {
+                let valid_range = resp
+                    .headers()
+                    .get(CONTENT_RANGE)
+                    .and_then(|h| h.to_str().ok())
+                    .and_then(|s| s.strip_prefix("bytes "))
+                    .and_then(|s| s.split('-').next())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    == Some(resumed_l);
+
+                if valid_range {
+                    resp
+                } else {
+                    resumed_l = 0;
+                    self.client.get(url.clone()).send().await?
+                }
+            } else {
+                resumed_l = 0;
+                resp
+            }
+        } else {
+            self.client.get(url.clone()).send().await?
+        };
+
         if !resp.status().is_success() {
             return Err(NetError::Http(resp.error_for_status().unwrap_err()));
         }
 
+        let etag = resp
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        let last_modified = resp
+            .headers()
+            .get(reqwest::header::LAST_MODIFIED)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+
+        let part_meta = PartMeta {
+            v: 1,
+            url: url.as_str().to_string(),
+            total: total_size,
+            etag,
+            last_modified,
+            chunks: vec![ChunkMeta {
+                start: 0,
+                end: total_size.unwrap_or(0),
+                downloaded: resumed_l,
+            }],
+        };
+        write_meta(&meta_path, &part_meta);
+
         let mut sha1_hasher = required_hash(&spec.sha1).map(|_| Sha1::new());
         let mut sha256_hasher = required_hash(&spec.sha256).map(|_| Sha256::new());
         let mut md5_hasher = required_hash(&spec.md5).map(|_| Md5::new());
+
+        // Pre-feed hashers if resumed_l > 0
+        if resumed_l > 0
+            && let Ok(mut existing_file) = File::open(part_path).await
+        {
+            let mut buf = vec![0u8; 65536];
+            let mut remaining_to_hash = resumed_l;
+            while remaining_to_hash > 0 {
+                let to_read = (remaining_to_hash as usize).min(buf.len());
+                match existing_file.read_exact(&mut buf[..to_read]).await {
+                    Ok(_) => {
+                        if let Some(h) = sha1_hasher.as_mut() {
+                            h.update(&buf[..to_read]);
+                        }
+                        if let Some(h) = sha256_hasher.as_mut() {
+                            h.update(&buf[..to_read]);
+                        }
+                        if let Some(h) = md5_hasher.as_mut() {
+                            h.update(&buf[..to_read]);
+                        }
+                        remaining_to_hash -= to_read as u64;
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
 
         // Resolved once: the lock is not taken per chunk.
         let control = match control {
@@ -354,19 +607,30 @@ impl Downloader {
             },
         };
 
-        let mut file = File::create(part_path).await?;
+        let mut file = if resumed_l > 0 {
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(true)
+                .open(part_path)
+                .await?
+        } else {
+            File::create(part_path).await?
+        };
         let mut stream = resp.bytes_stream();
 
-        let mut downloaded: u64 = 0;
+        let mut downloaded: u64 = resumed_l;
         let start_time = Instant::now();
         let mut last_report = Instant::now();
+        let mut last_meta_save = Instant::now();
 
         while let Some(chunk_res) = stream.next().await {
-            // Pause/cancel are honoured between chunks so a single large file can be
-            // stopped instead of running to completion.
             if let Some(control) = &control
                 && control.checkpoint().await.is_err()
             {
+                let mut final_meta = part_meta.clone();
+                final_meta.chunks[0].downloaded = downloaded;
+                write_meta(&meta_path, &final_meta);
                 return Err(NetError::Canceled);
             }
             let chunk = chunk_res.map_err(NetError::Http)?;
@@ -382,12 +646,19 @@ impl Downloader {
             }
             downloaded += chunk.len() as u64;
 
+            if last_meta_save.elapsed() >= Duration::from_secs(1) {
+                let mut cur_meta = part_meta.clone();
+                cur_meta.chunks[0].downloaded = downloaded;
+                write_meta(&meta_path, &cur_meta);
+                last_meta_save = Instant::now();
+            }
+
             if let Some((tc, tid)) = task_center
                 && last_report.elapsed() >= Duration::from_millis(200)
             {
                 let elapsed = start_time.elapsed().as_secs_f64();
                 let speed = if elapsed > 0.001 {
-                    (downloaded as f64 / elapsed) as u64
+                    ((downloaded - resumed_l) as f64 / elapsed) as u64
                 } else {
                     0
                 };
@@ -402,6 +673,10 @@ impl Downloader {
         }
 
         file.flush().await?;
+        let mut final_meta = part_meta;
+        final_meta.chunks[0].downloaded = downloaded;
+        write_meta(&meta_path, &final_meta);
+
         Ok(StreamHashes {
             sha1: sha1_hasher.map(|hasher| hex::encode(hasher.finalize())),
             sha256: sha256_hasher.map(|hasher| hex::encode(hasher.finalize())),
@@ -427,48 +702,106 @@ impl Downloader {
             },
         };
 
-        // 1. Pre-allocate part file
-        let mut file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(part_path)
-            .await
-            .map_err(|e| ChunkedError::Fatal(NetError::Io(e)))?;
-        file.set_len(total_size)
-            .await
-            .map_err(|e| ChunkedError::Fatal(NetError::Io(e)))?;
-        file.flush()
-            .await
-            .map_err(|e| ChunkedError::Fatal(NetError::Io(e)))?;
-        drop(file);
+        let meta_path = PathBuf::from(format!("{}.meta", part_path.display()));
+        let resumed_meta = prepare_part(part_path, &meta_path, url, Some(total_size), true);
 
-        // 2. Initial chunks
-        let raw_count = total_size.div_ceil(TARGET_CHUNK_SIZE).clamp(1, 1024);
-        let chunk_size = total_size.div_ceil(raw_count);
+        let (chunks_queue, total_downloaded, next_id, ledger) = if let Some(meta) = resumed_meta {
+            let mut ledger_map = BTreeMap::new();
+            let mut queue = VecDeque::new();
+            let mut initial_downloaded = 0u64;
+            let mut max_id = 0usize;
 
-        let mut chunks_queue = VecDeque::new();
-        let mut start = 0;
-        let mut chunk_id = 0;
+            for (i, c) in meta.chunks.into_iter().enumerate() {
+                ledger_map.insert(i, (c.start, c.end, c.downloaded));
+                initial_downloaded += c.downloaded;
+                if i > max_id {
+                    max_id = i;
+                }
+                let remaining = if c.end < c.start + c.downloaded {
+                    0
+                } else {
+                    c.end - (c.start + c.downloaded) + 1
+                };
+                if remaining > 0 {
+                    queue.push_back(Chunk {
+                        _id: i,
+                        start: c.start,
+                        end: c.end,
+                        downloaded: c.downloaded,
+                        retries: 0,
+                    });
+                }
+            }
 
-        while start < total_size {
-            let end = (start + chunk_size - 1).min(total_size - 1);
-            chunks_queue.push_back(Chunk {
-                _id: chunk_id,
-                start,
-                end,
-                downloaded: 0,
-                retries: 0,
-            });
-            chunk_id += 1;
-            start = end + 1;
-        }
+            (
+                Arc::new(Mutex::new(queue)),
+                Arc::new(AtomicU64::new(initial_downloaded)),
+                Arc::new(AtomicU64::new((max_id + 1) as u64)),
+                Arc::new(std::sync::Mutex::new(ledger_map)),
+            )
+        } else {
+            let mut file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(part_path)
+                .await
+                .map_err(|e| ChunkedError::Fatal(NetError::Io(e)))?;
+            file.set_len(total_size)
+                .await
+                .map_err(|e| ChunkedError::Fatal(NetError::Io(e)))?;
+            file.flush()
+                .await
+                .map_err(|e| ChunkedError::Fatal(NetError::Io(e)))?;
+            drop(file);
 
-        let total_downloaded = Arc::new(AtomicU64::new(0));
-        let chunks_queue = Arc::new(Mutex::new(chunks_queue));
-        let next_id = Arc::new(AtomicU64::new(chunk_id as u64));
+            let raw_count = total_size.div_ceil(TARGET_CHUNK_SIZE).clamp(1, 1024);
+            let chunk_size = total_size.div_ceil(raw_count);
 
+            let mut queue = VecDeque::new();
+            let mut ledger_map = BTreeMap::new();
+            let mut start = 0;
+            let mut chunk_id = 0;
+
+            while start < total_size {
+                let end = (start + chunk_size - 1).min(total_size - 1);
+                queue.push_back(Chunk {
+                    _id: chunk_id,
+                    start,
+                    end,
+                    downloaded: 0,
+                    retries: 0,
+                });
+                ledger_map.insert(chunk_id, (start, end, 0));
+                chunk_id += 1;
+                start = end + 1;
+            }
+
+            let initial_meta = PartMeta {
+                v: 1,
+                url: url.as_str().to_string(),
+                total: Some(total_size),
+                etag: None,
+                last_modified: None,
+                chunks: ledger_map
+                    .values()
+                    .map(|&(start, end, downloaded)| ChunkMeta {
+                        start,
+                        end,
+                        downloaded,
+                    })
+                    .collect(),
+            };
+            write_meta(&meta_path, &initial_meta);
+
+            (
+                Arc::new(Mutex::new(queue)),
+                Arc::new(AtomicU64::new(0)),
+                Arc::new(AtomicU64::new(chunk_id as u64)),
+                Arc::new(std::sync::Mutex::new(ledger_map)),
+            )
+        };
         let conn_limit = (self.settings.connections_per_file as usize).clamp(1, 64);
         let worker_count = conn_limit.min(chunks_queue.lock().await.len());
 
@@ -484,6 +817,7 @@ impl Downloader {
             let slow_check_duration = self.slow_check_duration;
             let slow_speed_threshold = self.slow_speed_threshold;
             let control = chunk_control.clone();
+            let ledger_clone = Arc::clone(&ledger);
 
             let handle = tokio::spawn(async move {
                 loop {
@@ -505,6 +839,7 @@ impl Downloader {
                             slow_check_duration,
                             slow_speed_threshold,
                             control: control.as_ref(),
+                            ledger: &ledger_clone,
                         },
                         &mut chunk,
                     )
@@ -537,12 +872,14 @@ impl Downloader {
                                     retries: 0,
                                 };
 
+                                if let Ok(mut l) = ledger_clone.lock() {
+                                    l.insert(chunk._id, (chunk.start, chunk.end, chunk.downloaded));
+                                    l.insert(new_chunk._id, (new_chunk.start, new_chunk.end, 0));
+                                }
+
                                 lock.push_back(chunk);
                                 lock.push_back(new_chunk);
                             } else {
-                                // Requeueing re-requests the remaining bytes from
-                                // `current_offset()`, so every round still makes progress and a
-                                // connection the server has quietly abandoned is replaced.
                                 lock.push_back(chunk);
                             }
                         }
@@ -584,6 +921,7 @@ impl Downloader {
         // Progress reporter loop
         let start_time = Instant::now();
         let mut last_report = Instant::now();
+        let mut last_meta_save = Instant::now();
 
         // Wait for workers while periodically reporting progress
         let mut all_workers_done = false;
@@ -594,6 +932,29 @@ impl Downloader {
                     all_workers_done = false;
                     break;
                 }
+            }
+
+            if last_meta_save.elapsed() >= Duration::from_secs(1) {
+                if let Ok(l) = ledger.lock() {
+                    let chunk_metas: Vec<ChunkMeta> = l
+                        .values()
+                        .map(|&(start, end, downloaded)| ChunkMeta {
+                            start,
+                            end,
+                            downloaded,
+                        })
+                        .collect();
+                    let current_meta = PartMeta {
+                        v: 1,
+                        url: url.as_str().to_string(),
+                        total: Some(total_size),
+                        etag: None,
+                        last_modified: None,
+                        chunks: chunk_metas,
+                    };
+                    write_meta(&meta_path, &current_meta);
+                }
+                last_meta_save = Instant::now();
             }
 
             if let Some((tc, tid)) = task_center
@@ -615,7 +976,6 @@ impl Downloader {
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
         }
-
         let mut first_error: Option<NetError> = None;
         let mut range_unsupported = false;
         for h in worker_handles {
@@ -655,10 +1015,28 @@ impl Downloader {
         if let Some((tc, tid)) = task_center {
             let _ = tc.update_progress(tid, 1.0, 0).await;
         }
+        if let Ok(l) = ledger.lock() {
+            let chunk_metas: Vec<ChunkMeta> = l
+                .values()
+                .map(|&(start, end, downloaded)| ChunkMeta {
+                    start,
+                    end,
+                    downloaded,
+                })
+                .collect();
+            let current_meta = PartMeta {
+                v: 1,
+                url: url.as_str().to_string(),
+                total: Some(total_size),
+                etag: None,
+                last_modified: None,
+                chunks: chunk_metas,
+            };
+            write_meta(&meta_path, &current_meta);
+        }
 
         Ok(())
     }
-
     async fn verify_file(&self, path: &Path, spec: &DownloadSpec) -> Result<(), NetError> {
         let mut file = File::open(path).await?;
         let metadata = file.metadata().await?;
@@ -784,10 +1162,14 @@ impl Downloader {
             return Ok(());
         }
 
+        let total_files = specs.len() as u32;
+        let completed_files = Arc::new(AtomicU32::new(0));
+
         if let Some((tc, tid)) = task_center {
             let mut count_map = std::collections::HashMap::new();
             count_map.insert("count".to_string(), specs.len().to_string());
             let _ = tc.update_title_params(tid, count_map).await;
+            let _ = tc.set_current_items(tid, 0, total_files).await;
         }
         // Resolved once for the whole batch; each worker polls it between files.
         let control = match task_center {
@@ -811,6 +1193,7 @@ impl Downloader {
         for _ in 0..worker_count {
             let queue = Arc::clone(&queue);
             let completed_bytes = Arc::clone(&completed_bytes);
+            let completed_files = Arc::clone(&completed_files);
             let client = self.client.clone();
             let settings = self.settings.clone();
             let slow_check_duration = self.slow_check_duration;
@@ -844,6 +1227,7 @@ impl Downloader {
                     let result = dl.download_with_control(spec, None, control.as_ref()).await;
                     if result.is_ok() {
                         completed_bytes.fetch_add(spec_size, Ordering::Relaxed);
+                        completed_files.fetch_add(1, Ordering::Relaxed);
                     }
                     results.push((index, result));
                 }
@@ -877,23 +1261,25 @@ impl Downloader {
                 _ = ticker.tick() => {}
             }
 
-            if let Some((tc, tid)) = task_center
-                && last_report.elapsed() >= Duration::from_millis(250)
-            {
-                let done = completed_bytes.load(Ordering::Relaxed);
-                let elapsed = start_time.elapsed().as_secs_f64();
-                let speed = if elapsed > 0.001 {
-                    (done as f64 / elapsed) as u64
-                } else {
-                    0
-                };
-                let prog = if total_bytes > 0 {
-                    (done as f32 / total_bytes as f32).clamp(0.0, 1.0)
-                } else {
-                    0.5
-                };
-                let _ = tc.update_progress(tid, prog, speed).await;
-                last_report = Instant::now();
+            if let Some((tc, tid)) = task_center {
+                let files_done = completed_files.load(Ordering::Relaxed);
+                let _ = tc.set_current_items(tid, files_done, total_files).await;
+                if last_report.elapsed() >= Duration::from_millis(250) {
+                    let done = completed_bytes.load(Ordering::Relaxed);
+                    let elapsed = start_time.elapsed().as_secs_f64();
+                    let speed = if elapsed > 0.001 {
+                        (done as f64 / elapsed) as u64
+                    } else {
+                        0
+                    };
+                    let prog = if total_bytes > 0 {
+                        (done as f32 / total_bytes as f32).clamp(0.0, 1.0)
+                    } else {
+                        0.5
+                    };
+                    let _ = tc.update_progress(tid, prog, speed).await;
+                    last_report = Instant::now();
+                }
             }
         }
 
@@ -908,6 +1294,7 @@ impl Downloader {
         }
 
         if let Some((tc, tid)) = task_center {
+            let _ = tc.set_current_items(tid, total_files, total_files).await;
             let _ = tc.update_progress(tid, 1.0, 0).await;
         }
 
@@ -935,6 +1322,7 @@ struct ChunkJob<'a> {
     slow_check_duration: Duration,
     slow_speed_threshold: u64,
     control: Option<&'a TaskControl>,
+    ledger: &'a std::sync::Mutex<BTreeMap<usize, (u64, u64, u64)>>,
 }
 
 async fn download_single_chunk(job: ChunkJob<'_>, chunk: &mut Chunk) -> Result<(), ChunkError> {
@@ -946,6 +1334,7 @@ async fn download_single_chunk(job: ChunkJob<'_>, chunk: &mut Chunk) -> Result<(
         slow_check_duration,
         slow_speed_threshold,
         control,
+        ledger,
     } = job;
     let mut file = OpenOptions::new()
         .write(true)
@@ -990,7 +1379,7 @@ async fn download_single_chunk(job: ChunkJob<'_>, chunk: &mut Chunk) -> Result<(
             // Cheap atomic probes: only pay for a flush when the chunk is about to
             // block (paused) or stop (cancelled), so buffering is preserved otherwise.
             if control.is_paused() || control.is_cancelled() {
-                flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded).await?;
+                flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded, ledger).await?;
             }
             if control.checkpoint().await.is_err() {
                 return Err(ChunkError::Canceled);
@@ -1006,7 +1395,8 @@ async fn download_single_chunk(job: ChunkJob<'_>, chunk: &mut Chunk) -> Result<(
                 attempt_bytes += to_write as u64;
 
                 if write_buf.len() >= WRITE_BUFFER_SIZE {
-                    flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded).await?;
+                    flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded, ledger)
+                        .await?;
                 }
 
                 // Speed check after elapsed check duration
@@ -1017,7 +1407,8 @@ async fn download_single_chunk(job: ChunkJob<'_>, chunk: &mut Chunk) -> Result<(
                     if speed < slow_speed_threshold && outstanding >= SLOW_SPLIT_THRESHOLD {
                         // Persist the buffer first: the caller splits the range from
                         // `current_offset()`, which must match the bytes on disk.
-                        flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded).await?;
+                        flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded, ledger)
+                            .await?;
                         return Err(ChunkError::SlowChunk);
                     }
                 }
@@ -1026,7 +1417,7 @@ async fn download_single_chunk(job: ChunkJob<'_>, chunk: &mut Chunk) -> Result<(
             None => {
                 // Buffered bytes are received bytes: persist them before judging
                 // whether the body was truncated.
-                flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded).await?;
+                flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded, ledger).await?;
                 if chunk.remaining() > 0 {
                     return Err(ChunkError::PrematureEof);
                 }
@@ -1035,7 +1426,7 @@ async fn download_single_chunk(job: ChunkJob<'_>, chunk: &mut Chunk) -> Result<(
         }
     }
 
-    flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded).await?;
+    flush_write_buf(&mut file, &mut write_buf, chunk, total_downloaded, ledger).await?;
     file.flush().await.map_err(ChunkError::Io)?;
     Ok(())
 }
@@ -1047,6 +1438,7 @@ async fn flush_write_buf(
     write_buf: &mut Vec<u8>,
     chunk: &mut Chunk,
     total_downloaded: &AtomicU64,
+    ledger: &std::sync::Mutex<BTreeMap<usize, (u64, u64, u64)>>,
 ) -> Result<(), ChunkError> {
     if write_buf.is_empty() {
         return Ok(());
@@ -1057,6 +1449,10 @@ async fn flush_write_buf(
     chunk.downloaded += write_buf.len() as u64;
     total_downloaded.fetch_add(write_buf.len() as u64, Ordering::Relaxed);
     write_buf.clear();
+
+    if let Ok(mut l) = ledger.lock() {
+        l.insert(chunk._id, (chunk.start, chunk.end, chunk.downloaded));
+    }
     Ok(())
 }
 

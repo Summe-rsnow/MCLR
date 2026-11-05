@@ -4,6 +4,7 @@ pub mod curseforge;
 pub mod depcheck;
 pub mod error;
 pub mod export;
+mod jarfile;
 pub mod jarinjar;
 pub mod local;
 pub mod model;

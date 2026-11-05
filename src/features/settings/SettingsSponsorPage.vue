@@ -25,7 +25,7 @@ const channels = [
 </script>
 
 <template>
-  <div class="space-y-6 pb-12 select-none" data-testid="settings-sponsor-page">
+  <div class="space-y-6 pb-12" data-testid="settings-sponsor-page">
     <MSection :title="t('settings.sponsor.title')" icon="i-lucide-heart">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <MCard

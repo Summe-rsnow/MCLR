@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { isLoaderSupported, fromLoaderKind } from '@/shared/loader'
 import {
   ipcClient,
   type VersionManifestList,
@@ -16,50 +17,6 @@ export type SelectedLoader = 'none' | LoaderKind
 export interface LoaderOption {
   kind: SelectedLoader
   labelKey: string
-}
-
-export function compareMcVersions(a: string, b: string): number {
-  const pa = a.split('.').map((p) => parseInt(p, 10) || 0)
-  const pb = b.split('.').map((p) => parseInt(p, 10) || 0)
-  const len = Math.max(pa.length, pb.length)
-  for (let i = 0; i < len; i++) {
-    const na = pa[i] ?? 0
-    const nb = pb[i] ?? 0
-    if (na !== nb) return na - nb
-  }
-  return 0
-}
-
-export function isLoaderCompatible(loader: SelectedLoader, mcVersion: string): boolean {
-  if (loader === 'none') return true
-  if (!mcVersion) return true
-
-  switch (loader) {
-    case 'cleanroom':
-      // Cleanroom is strictly for 1.12.2
-      return mcVersion === '1.12.2'
-    case 'neoForge':
-      // NeoForge started from 1.20.1 (>= 1.20.1)
-      return compareMcVersions(mcVersion, '1.20.1') >= 0
-    case 'legacyFabric':
-      // LegacyFabric is for <= 1.13.2
-      return compareMcVersions(mcVersion, '1.13.2') <= 0
-    case 'liteLoader':
-      // LiteLoader ended around 1.12.2 (<= 1.12.2)
-      return compareMcVersions(mcVersion, '1.12.2') <= 0
-    case 'fabric':
-      // Fabric is >= 1.14
-      return compareMcVersions(mcVersion, '1.14') >= 0
-    case 'forge':
-      // Forge exists up to ~1.20.x, not restricted here
-      return true
-    case 'optiFine':
-      return true
-    case 'labyMod':
-      return compareMcVersions(mcVersion, '1.8') >= 0
-    default:
-      return true
-  }
 }
 
 export const useInstallStore = defineStore('install', () => {
@@ -126,7 +83,9 @@ export const useInstallStore = defineStore('install', () => {
       'labyMod',
       'cleanroom',
     ]
-    return allLoaders.filter((loader) => isLoaderCompatible(loader, mc))
+    return allLoaders.filter(
+      (loader) => loader === 'none' || isLoaderSupported(fromLoaderKind(loader), mc),
+    )
   })
 
   async function fetchLoaderVersions(loader: SelectedLoader, mcVersion: string) {

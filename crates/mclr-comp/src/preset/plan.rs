@@ -19,7 +19,7 @@ use crate::resolver::{
 pub struct InstanceCtx {
     /// Minecraft version of the instance (`""` when unknown).
     pub mc_version: String,
-    /// Canonical loader ids after [`crate::resolver::expand_loaders`].
+    /// Canonical loader ids after [`mclr_core::loader::expand_mod_loaders`].
     pub loaders: Vec<String>,
 }
 

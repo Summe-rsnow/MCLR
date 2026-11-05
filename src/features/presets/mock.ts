@@ -397,12 +397,18 @@ const handlers = {
     if (!mockTasks.some((t) => t.id === id)) {
       mockTasks.push({
         id,
-        parentId: null,
+        kind: 'presets.apply',
         titleKey: 'tasks.titles.presetApply',
         titleParams: {},
         state: 'success',
         progress: 1.0,
         speedBps: 0,
+        steps: [],
+        attempt: 0,
+        maxAttempts: 1,
+        resumable: true,
+        queueSeq: 100,
+        createdAtMs: Date.now(),
       })
     }
     return id
@@ -413,12 +419,18 @@ const handlers = {
     if (!mockTasks.some((t) => t.id === id)) {
       mockTasks.push({
         id,
-        parentId: null,
+        kind: 'presets.cache',
         titleKey: 'tasks.titles.presetCache',
         titleParams: {},
         state: 'success',
         progress: 1.0,
         speedBps: 0,
+        steps: [],
+        attempt: 0,
+        maxAttempts: 1,
+        resumable: true,
+        queueSeq: 101,
+        createdAtMs: Date.now(),
       })
     }
     return id

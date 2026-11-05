@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { formatBytes } from '@/shared/format'
 import { useI18n } from 'vue-i18n'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import type { ScreenshotMeta } from '../../../ipc/client'
@@ -149,13 +150,6 @@ async function handleDelete(item: ScreenshotMeta) {
   } catch (e: unknown) {
     toast.danger(String(e))
   }
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
 }
 
 onMounted(async () => {

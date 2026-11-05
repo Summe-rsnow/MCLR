@@ -11,9 +11,8 @@ use mclr_comp::preset::model::{
 };
 use mclr_comp::preset::plan::{InstanceCtx, decide, merge_presets};
 use mclr_comp::preset::repo::PresetRepo;
-use mclr_comp::resolver::{
-    MatchFailure, expand_loaders, file_supports_mc, select_best_file_filtered,
-};
+use mclr_comp::resolver::{MatchFailure, file_supports_mc, select_best_file_filtered};
+use mclr_core::loader::expand_mod_loaders;
 use tempfile::tempdir;
 
 // ---------------------------------------------------------------- fixtures
@@ -236,27 +235,27 @@ fn select_best_file_filtered_orders_by_channel_then_date() {
 #[test]
 fn expand_loaders_maps_known_aliases() {
     assert_eq!(
-        expand_loaders(&["neoforge".into()], "1.20.1"),
+        expand_mod_loaders(&["neoforge".into()], "1.20.1"),
         vec!["neoforge".to_string(), "forge".to_string()]
     );
     assert_eq!(
-        expand_loaders(&["neoforge".into()], "1.20.4"),
+        expand_mod_loaders(&["neoforge".into()], "1.20.4"),
         vec!["neoforge".to_string()]
     );
     assert_eq!(
-        expand_loaders(&["quilt".into()], "1.20.1"),
+        expand_mod_loaders(&["quilt".into()], "1.20.1"),
         vec!["quilt".to_string(), "fabric".to_string()]
     );
     assert_eq!(
-        expand_loaders(&["cleanroom".into()], "1.12.2"),
+        expand_mod_loaders(&["cleanroom".into()], "1.12.2"),
         vec!["forge".to_string()]
     );
     assert_eq!(
-        expand_loaders(&["legacyfabric".into()], "1.8.9"),
+        expand_mod_loaders(&["legacyfabric".into()], "1.8.9"),
         vec!["fabric".to_string()]
     );
     assert_eq!(
-        expand_loaders(&["Fabric".into(), "fabric".into()], "1.20.1"),
+        expand_mod_loaders(&["Fabric".into(), "fabric".into()], "1.20.1"),
         vec!["fabric".to_string()]
     );
 }

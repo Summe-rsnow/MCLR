@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { parseLoader } from '@/shared/loader'
 import { useI18n } from 'vue-i18n'
 import type { CompType, PresetItem, ResourcePreset } from '../../ipc/client'
 import {
@@ -26,7 +27,7 @@ import { usePresetsStore } from './store'
 import PresetPinDrawer from './components/PresetPinDrawer.vue'
 import PresetStoreDialog from './components/PresetStoreDialog.vue'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const toast = useToast()
 const { formatError } = useErrorText()
 const { formatDate } = useFormat()
@@ -131,18 +132,12 @@ function kindLabel(kind: CompType): string {
 }
 
 function loaderLabel(loader: string): string {
-  switch (loader) {
-    case 'fabric':
-      return t('presets.loaders.fabric')
-    case 'forge':
-      return t('presets.loaders.forge')
-    case 'neoforge':
-      return t('presets.loaders.neoforge')
-    case 'quilt':
-      return t('presets.loaders.quilt')
-    default:
-      return loader
+  const parsed = parseLoader(loader)
+  if (parsed) {
+    const key = `presets.loaders.${parsed}`
+    if (te(key)) return t(key)
   }
+  return loader
 }
 
 function presetSubtitle(preset: ResourcePreset): string {

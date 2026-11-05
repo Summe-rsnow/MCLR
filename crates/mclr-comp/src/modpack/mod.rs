@@ -368,7 +368,17 @@ mod tests {
 
         let center = mclr_core::TaskCenter::new();
         let (tid, _) = center
-            .create_task(None, "tasks.titles.modpackInstall", Default::default())
+            .create_task(
+                "modpack.import",
+                mclr_core::tasks::TaskPlan {
+                    title_key: "tasks.titles.modpackInstall".into(),
+                    title_params: Default::default(),
+                    steps: vec![mclr_core::tasks::StepPlan {
+                        key: "run",
+                        weight: 1.0,
+                    }],
+                },
+            )
             .await;
         center.start_task(&tid).await.unwrap();
         let mut rx = center.subscribe();

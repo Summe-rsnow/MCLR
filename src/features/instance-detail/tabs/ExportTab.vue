@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { formatBytes } from '@/shared/format'
 import { useI18n } from 'vue-i18n'
 import type {
   InstanceInfo,
@@ -111,13 +112,6 @@ function togglePath(relPath: string, checked: boolean) {
   } else {
     selectedPaths.value = selectedPaths.value.filter((p) => p !== relPath)
   }
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
 }
 
 async function handleStartExport() {

@@ -1,4 +1,6 @@
 import { i18n } from '@/i18n'
+import { compareVersions } from '@/shared/mcver'
+import { parseLoader } from '@/shared/loader'
 
 /**
  * PCL-CE parity rules for Minecraft version detection, compatibility, add-ons, and instance naming.
@@ -30,61 +32,6 @@ const RESERVED_DOS_NAMES: Record<string, true> = {
   LPT7: true,
   LPT8: true,
   LPT9: true,
-}
-
-export function compareVersions(v1: string, v2: string): number {
-  const p1 = v1.split(/[-_.]/).map((p) => {
-    const n = parseInt(p, 10)
-    return isNaN(n) ? p : n
-  })
-  const p2 = v2.split(/[-_.]/).map((p) => {
-    const n = parseInt(p, 10)
-    return isNaN(n) ? p : n
-  })
-  const len = Math.max(p1.length, p2.length)
-  for (let i = 0; i < len; i++) {
-    const a = p1[i] ?? 0
-    const b = p2[i] ?? 0
-    if (typeof a === 'number' && typeof b === 'number') {
-      if (a !== b) return a - b
-    } else {
-      const sa = String(a)
-      const sb = String(b)
-      if (sa !== sb) return sa.localeCompare(sb)
-    }
-  }
-  return 0
-}
-
-export function dropOf(mcVersion: string): number {
-  if (mcVersion.startsWith('1.')) {
-    const parts = mcVersion.split('.')
-    const minor = parseInt(parts[1], 10)
-    return isNaN(minor) ? 0 : minor * 10
-  }
-  const match2Digit = mcVersion.match(/^(\d{2})\.\d+/)
-  if (match2Digit) {
-    return parseInt(match2Digit[1], 10) * 10
-  }
-  const matchSnap = mcVersion.match(/^(\d{2})w/)
-  if (matchSnap) {
-    const yr = parseInt(matchSnap[1], 10)
-    if (yr >= 24) return 210
-    if (yr === 23) return 200
-    if (yr === 22) return 190
-    if (yr === 21) return 180
-    if (yr === 20) return 160
-    if (yr === 19) return 150
-    if (yr === 18) return 130
-    if (yr === 17) return 120
-    if (yr === 16) return 110
-    if (yr === 15) return 90
-  }
-  return 0
-}
-
-export function isFormatFit(id: string): boolean {
-  return /^(1\.\d+(\.\d+)?|\d{2}\.\d+(\.\d+)?)$/.test(id)
 }
 
 const APRIL_FOOLS_IDS: Record<string, true> = {
@@ -212,43 +159,6 @@ export function classifyVersion(
   return 'old'
 }
 
-export interface LoaderVisibility {
-  forge: boolean
-  neoforge: boolean
-  cleanroom: boolean
-  fabric: boolean
-  legacyFabric: boolean
-  labymod: boolean
-  optifine: boolean
-  liteloader: boolean
-}
-
-export function loaderVisibility(mcVersion: string): LoaderVisibility {
-  const drop = dropOf(mcVersion)
-  const fit = isFormatFit(mcVersion)
-
-  const forge = fit && compareVersions(mcVersion, '1.5.2') >= 0
-  const neoforge = fit && compareVersions(mcVersion, '1.20.1') >= 0
-  const cleanroom = mcVersion === '1.12.2'
-  const fabric = drop >= 130
-  const legacyFabric = drop >= 30 && drop <= 130
-  const labymod = fit && compareVersions(mcVersion, '1.8.9') >= 0
-  const optifine = compareVersions(mcVersion, '1.7.2') >= 0
-  const liteloader =
-    fit && compareVersions(mcVersion, '1.5.2') >= 0 && compareVersions(mcVersion, '1.12.2') <= 0
-
-  return {
-    forge,
-    neoforge,
-    cleanroom,
-    fabric,
-    legacyFabric,
-    labymod,
-    optifine,
-    liteloader,
-  }
-}
-
 export interface LoaderIncompatibilities {
   optifineDisabledReason?: string
   liteloaderDisabledReason?: string
@@ -318,6 +228,10 @@ export const LOADER_DISPLAY_NAME: Record<string, string> = {
 
 export function loaderDisplayName(id?: string | null): string {
   if (!id) return LOADER_DISPLAY_NAME.none
+  const parsed = parseLoader(id)
+  if (parsed && LOADER_DISPLAY_NAME[parsed]) {
+    return LOADER_DISPLAY_NAME[parsed]
+  }
   return LOADER_DISPLAY_NAME[id] ?? LOADER_DISPLAY_NAME[id.toLowerCase()] ?? id
 }
 

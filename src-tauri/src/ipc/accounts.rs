@@ -12,7 +12,7 @@ use mclr_core::{AppError, TaskCenter};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 #[specta::specta]
@@ -80,7 +80,7 @@ pub async fn accounts_add_microsoft(
     http: State<'_, crate::http::HttpState>,
     app: AppHandle,
     state: State<'_, Arc<AccountStore>>,
-    tasks_state: State<'_, Arc<TaskCenter>>,
+    _tasks_state: State<'_, Arc<TaskCenter>>,
 ) -> Result<String, AppError> {
     let client = http.client();
     let service = MicrosoftAuthService::new(client, MsAuthEndpoints::default(), None)
@@ -88,25 +88,43 @@ pub async fn accounts_add_microsoft(
 
     let mut params = HashMap::new();
     params.insert("type".to_string(), "microsoft".to_string());
-    let (task_id, _cancel_token) = tasks_state
-        .create_task(None, "task.auth.microsoft", params)
-        .await;
 
-    let tc = Arc::clone(&tasks_state);
+    let plan = mclr_core::tasks::TaskPlan {
+        title_key: "task.auth.microsoft".into(),
+        title_params: params,
+        steps: vec![
+            mclr_core::tasks::StepPlan {
+                key: "deviceCode",
+                weight: 10.0,
+            },
+            mclr_core::tasks::StepPlan {
+                key: "authorize",
+                weight: 60.0,
+            },
+            mclr_core::tasks::StepPlan {
+                key: "profile",
+                weight: 30.0,
+            },
+        ],
+    };
+
+    let engine = app.state::<Arc<mclr_core::tasks::TaskEngine>>();
+    let ctx = engine.begin_tracked("auth.microsoft", plan).await;
+    let task_id = ctx.id.clone();
     let store = Arc::clone(&state);
-    let tid = task_id.clone();
     let app_handle = app.clone();
 
     tokio::spawn(async move {
-        let _ = tc.start_task(&tid).await;
+        ctx.begin_step("deviceCode").await;
 
         let device = match service.get_device_code().await {
             Ok(d) => d,
             Err(e) => {
-                let _ = tc.fail_task(&tid, e.into()).await;
+                ctx.finish(Err(e.into())).await;
                 return;
             }
         };
+        ctx.finish_step("deviceCode").await;
 
         let _ = app_handle.emit(
             "accounts://deviceCode",
@@ -117,35 +135,38 @@ pub async fn accounts_add_microsoft(
             },
         );
 
-        let control = tc.control(&tid).await;
+        ctx.begin_step("authorize").await;
         let (ms_access_token, refresh_token) = match service
-            .poll_token(&device.device_code, device.interval, control.as_ref())
+            .poll_token(&device.device_code, device.interval, Some(ctx.control()))
             .await
         {
             Ok(tokens) => tokens,
             Err(e) => {
-                let _ = tc.fail_task(&tid, e.into()).await;
+                ctx.finish(Err(e.into())).await;
                 return;
             }
         };
+        ctx.finish_step("authorize").await;
 
+        ctx.begin_step("profile").await;
         let login_result = match service
             .complete_flow(&ms_access_token, &refresh_token)
             .await
         {
             Ok(res) => res,
             Err(e) => {
-                let _ = tc.fail_task(&tid, e.into()).await;
+                ctx.finish(Err(e.into())).await;
                 return;
             }
         };
 
         match store.add_microsoft(login_result).await {
             Ok(_) => {
-                let _ = tc.complete_task(&tid).await;
+                ctx.finish_step("profile").await;
+                ctx.finish(Ok(())).await;
             }
             Err(e) => {
-                let _ = tc.fail_task(&tid, e.into()).await;
+                ctx.finish(Err(e.into())).await;
             }
         }
     });

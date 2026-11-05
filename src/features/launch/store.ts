@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { router } from '../../router'
 import {
   ipcClient,
   AppErrorEx,
@@ -64,7 +65,10 @@ export const useLaunchStore = defineStore('launch', () => {
   let unlistenStarted: UnlistenFn | null = null
   let unlistenExit: UnlistenFn | null = null
   let unlistenCrashed: UnlistenFn | null = null
+  let unlistenMilestone: UnlistenFn | null = null
 
+  const activeMilestone = ref<number | null>(null)
+  const pendingCloseAfterLaunch = ref(false)
   const selectedInstance = computed(() => {
     if (!selectedInstanceId.value) {
       return (
@@ -164,6 +168,12 @@ export const useLaunchStore = defineStore('launch', () => {
           launchProgress.value = 0
         },
       )
+      unlistenMilestone = await listen<{ milestone: number }>(
+        'launch://sponsorMilestone',
+        (event) => {
+          activeMilestone.value = event.payload.milestone
+        },
+      )
     } catch {
       // Mock / Vitest environment fallback
     }
@@ -181,6 +191,10 @@ export const useLaunchStore = defineStore('launch', () => {
     if (unlistenCrashed) {
       unlistenCrashed()
       unlistenCrashed = null
+    }
+    if (unlistenMilestone) {
+      unlistenMilestone()
+      unlistenMilestone = null
     }
   }
 
@@ -221,6 +235,9 @@ export const useLaunchStore = defineStore('launch', () => {
 
       currentStage.value = 'running'
       launchProgress.value = 1.0
+      if (result.milestone) {
+        activeMilestone.value = result.milestone
+      }
 
       if (result.processId) {
         const proc: LaunchProcessInfo = {
@@ -264,6 +281,10 @@ export const useLaunchStore = defineStore('launch', () => {
    * Applied only after the game process actually spawned.
    */
   async function applyCloseAfterLaunch(): Promise<void> {
+    if (activeMilestone.value !== null) {
+      pendingCloseAfterLaunch.value = true
+      return
+    }
     try {
       const settings = await ipcClient.settingsGet()
       const action = settings.launch?.closeLauncherOnStart ?? 'keep'
@@ -288,6 +309,16 @@ export const useLaunchStore = defineStore('launch', () => {
       proc.exitCode = -1
     }
   }
+  function dismissMilestone(toSponsor: boolean) {
+    activeMilestone.value = null
+    if (toSponsor) {
+      pendingCloseAfterLaunch.value = false
+      router.push('/settings/sponsor')
+    } else if (pendingCloseAfterLaunch.value) {
+      pendingCloseAfterLaunch.value = false
+      void applyCloseAfterLaunch()
+    }
+  }
 
   return {
     selectedInstanceId,
@@ -301,11 +332,14 @@ export const useLaunchStore = defineStore('launch', () => {
     runningProcesses,
     activeProcess,
     javaMissingMajor,
+    activeMilestone,
+    pendingCloseAfterLaunch,
     startListening,
     stopListening,
     fetchProcesses,
     selectInstance,
     startLaunch,
     killProcess,
+    dismissMilestone,
   }
 })

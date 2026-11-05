@@ -10,23 +10,71 @@
 
 ## Crate Graph
 
-- `mclr-core`: paths, settings store, `AppError`, daily rolling logging, `TaskCenter`, secrets, events, shared traits (`AccountSession`).
-- `mclr-net`: HTTP client, proxy/DoH (`hickory-resolver`), mirror rewrite, source racing ladder, chunked downloader with dynamic work-stealing.
+- `mclr-core`: paths, settings store, `AppError`, daily rolling logging, secrets, events, shared traits (`AccountSession`), canonical version ordering (`mcver`) and loader identity (`loader`), plus the persistent task engine (`tasks`: center, engine, handler registry, redb store).
+- `mclr-net`: HTTP client, proxy/DoH (`hickory-resolver`), mirror rewrite, source racing ladder, chunked downloader with dynamic work-stealing and byte-level resume, streaming file hashing (`hash`).
 - `mclr-game`: version JSON model, rules, libraries, assets, instances, Java manager, launch pipeline, process watch, install pipeline.
 - `mclr-auth`: offline, Microsoft OAuth 2.0 (device code flow with out-of-the-box public client ID), authlib-injector/Yggdrasil, Yggdrasil Connect, skin/cape, DPAPI+AES-256-GCM encrypted account store.
 - `mclr-loaders`: Fabric, LegacyFabric, Forge, NeoForge, Cleanroom, OptiFine, LiteLoader, LabyMod 4 installers and compatibility resolution.
-- `mclr-comp`: Modrinth, CurseForge, unified metadata model, dependency resolver, local mod scan, Jar-in-Jar inspector, modpack import/export (`.mrpack`, CurseForge `.zip`).
+- `mclr-comp`: Modrinth, CurseForge, unified metadata model, dependency resolver, local mod scan, Jar-in-Jar inspector, shared jar reader (`jarfile`), modpack import/export (`.mrpack`, CurseForge `.zip`).
 - `mclr-saves`: NBT (`fastnbt`), saves, datapacks, `servers.dat`, SLP ping/SRV (Happy Eyeballs RFC 8305).
 - `mclr-crash`: crash analysis (heuristic classifier covering 45 failure causes) + diagnostic `.zip` report export.
 - `mclr-update`: self-update wrapper around `tauri-plugin-updater`.
 - `mclr-cli`: headless smoke CLI (`clap`).
-- `mclr-app` (`src-tauri`): Tauri shell, window vibrancy/mica, command registry.
+- `mclr-app` (`src-tauri`): Tauri shell, window vibrancy/mica, command registry, `tasks/handlers/*` task definitions.
+
+---
+
+## Task Engine & Handler Registry (`mclr-core::tasks` + `src-tauri::tasks`)
+
+Every long-running operation (install, loader setup, modpack import/export, preset apply, downloads, updates) runs through one engine. There is no ad-hoc `TaskCenter` plumbing in feature code: a feature registers a `TaskHandler` and submits a payload.
+
+```text
+feature (IPC command)
+        │  engine.submit(kind, payload)
+        ▼
+┌──────────────────────────────────────────────────────────┐
+│ TaskEngine (mclr-core::tasks::engine)                    │
+│  · FIFO queue, max_concurrent 1–8 (default 3)            │
+│  · exponential backoff on net.* errors (1s << attempt)   │
+│  · retry gate: NetProbe.online() polled every 5 s        │
+│  · startup recovery: in-flight → interrupted             │
+└───────────────┬──────────────────────────────────────────┘
+                │ TaskCtx { id, payload, center, control, attempt, resumed }
+                ▼
+        TaskHandler::run(ctx)   (src-tauri::tasks::handlers/*)
+                │ begin_step / set_current_items / progress
+                ▼
+┌──────────────────────────────────────────────────────────┐
+│ TaskCenter (center.rs)                                   │
+│  · TaskNode + ordered StepNode timeline (weight-based)    │
+│  · progress window mapping, monotonic, never rewinds      │
+│  · pause / cancel via TaskControl checkpoints             │
+└───────────────┬──────────────────────────────────────────┘
+                │ upsert(record, urgent)
+                ▼
+     TaskStore (store.rs, redb `tasks.redb`)
+```
+
+- **Model** (`model.rs`): `TaskState` = `waiting | running | paused | retrying | interrupted | success | canceled | failed`; `StepState` = `pending | running | done | failed | skipped`; each step carries `weight`, `itemsDone/itemsTotal`, timestamps and its own `AppError`. Tasks are flat — history, ordering and grouping live in the list, not in a `parent_id` tree.
+- **Persistence** (`store.rs`): single writer thread, 500 ms batch flush, urgent flush on state transitions, `historyMax`/`historyDays` pruning, corrupt database quarantined as `tasks.redb.corrupt-<ts>` (newest three kept) with a `StoreMode::Memory` fallback surfaced as a reset notice.
+- **Handlers** (`src-tauri/src/tasks/handlers/`): `install`, `loaders`, `modpack`, `comp`, `export`, `presets`, `localmods`, `tools`, `update`. Adding a feature means adding a handler, not another `#[tauri::command]` that spawns work.
+
 
 ---
 
 ## Backend Submodule Decomposition
 
 To ensure long-term maintainability, backend crates avoid oversized single-file implementations (>800 lines) by structuring domains into dedicated submodules:
+
+- **`mclr-core::tasks`**:
+  - `tasks/model.rs`: `TaskState` / `StepState` / `StepNode` / `TaskNode` / `TaskPlan` and the weight-based step timeline.
+  - `tasks/center.rs`: in-memory task map, progress-window mapping (`0.0..=1.0` per step, monotonic), `TaskControl` pause/cancel checkpoints, event broadcast channels.
+  - `tasks/engine.rs`: concurrency queue, reorder, retry/backoff with `NetProbe`, startup recovery, history pruning.
+  - `tasks/handler.rs`: `TaskHandler` trait, `TaskCtx` payload accessor, `NetProbe` injection point.
+  - `tasks/store.rs`: redb-backed `TaskStore` (writer thread, batch/urgent flush, corrupt-database quarantine).
+- **`mclr-core::mcver` / `mclr-core::loader`**: the only version ordering and loader identity implementations in the workspace; `mclr-game`, `mclr-loaders`, `mclr-comp` and `mclr-update` all delegate here. Golden tests live in `crates/mclr-core/tests/mcver.rs` and `mc_rules.rs`.
+- **`mclr-net::hash`**: 64 KiB streaming SHA-1/SHA-256/MD5; callers pass a `Read` so an in-flight download can pre-feed a prefix instead of re-reading the file.
+- **`mclr-comp::jarfile`**: shared `ZipArchive` helpers (entry text, bounded entry bytes with a 2 MiB icon cap) used by local mod scanning, Jar-in-Jar inspection and modpack import.
 
 - **`mclr-game::launch`**:
   - `launch/ram.rs`: Windows physical memory detection via `GlobalMemoryStatusEx` and auto-allocation calculations.
@@ -90,12 +138,15 @@ src/ipc/
     ├── saves.ts         # World saves, datapacks, backups & screenshots
     ├── servers.ts       # Server list, SLP ping & quick-play
     ├── settings.ts      # Settings store get & JSON merge-patch
-    ├── tasks.ts         # Task list, cancel, pause and resume
+    ├── tasks.ts         # Task list, submit, pause/resume/cancel, retry, restore, reorder, leftovers
     ├── tools.ts         # Cache cleaning, desktop shortcuts, skin tools
     └── update.ts        # Self-updater checks & launcher logs
 ```
 
 - **Frontend-to-Rust Offload (`installVersionCompat`)**: Complex version metadata validation (such as April Fools lore detection, loader incompatibility rules, and recommended Java runtime selection) is offloaded to pure Rust routines exposed via `ipcClient.installVersionCompat`.
+- **Shared Pure Logic (`src/shared/`)**: `mcver.ts`, `loader.ts`, `format.ts` and `modName.ts` mirror the Rust `mcver`/`loader` semantics so sorting, grouping and naming decisions made in the UI match the backend byte for byte. They stay dependency-free so both features and tests import them directly.
+- **First-Class Task UI (`src/features/tasks/`)**: `TasksPage` (`/tasks`, sidebar `系统 → 任务`) owns the list + inspector, `store.ts` subscribes to `tasks://update` / `tasks://removed` / `tasks://store`, `notify.ts` maps terminal transitions to desktop notifications, and `components/TaskCleanupDialog.vue` drives the leftover scan.
+
 
 ---
 

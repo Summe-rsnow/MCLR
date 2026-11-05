@@ -15,14 +15,12 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
-use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use mclr_net::{DownloadSpec, Downloader};
 use serde::{Deserialize, Serialize};
-use sha1::{Digest, Sha1};
 use url::Url;
 use uuid::Uuid;
 
@@ -32,7 +30,6 @@ use crate::preset::model::{LinkMode, PruneResult, StoreEntry, StoreInfo};
 
 const INDEX_VERSION: u32 = 1;
 const INDEX_FILE: &str = "index.json";
-const HASH_CHUNK: usize = 64 * 1024;
 
 /// Why a single object may be considered pinned and therefore never pruned.
 fn is_pinned(pinned_file_ids: &HashSet<String>, sha1: &str, file_id: &str) -> bool {
@@ -623,17 +620,7 @@ fn normalize_path(path: &Path) -> PathBuf {
 }
 
 fn hash_sha1(path: &Path) -> Result<String, CompError> {
-    let mut file = fs::File::open(path)?;
-    let mut hasher = Sha1::new();
-    let mut buffer = vec![0u8; HASH_CHUNK];
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(hex::encode(hasher.finalize()))
+    mclr_net::hash::sha1_file(path).map_err(CompError::Io)
 }
 
 #[cfg(test)]

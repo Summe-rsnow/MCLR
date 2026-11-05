@@ -7,4 +7,6 @@ use specta::Type;
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct StatesSettings {
     pub dismissed_announcements: Vec<String>,
+    pub launch_count: u32,
+    pub prompted_sponsor_milestones: Vec<u32>,
 }

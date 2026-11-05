@@ -141,7 +141,7 @@ pub async fn launch(params: LaunchPipelineParams<'_>) -> Result<LaunchStartResul
     check_login_requirement(&instance_config.login_requirement, session.kind)?;
 
     if let Some((tc, tid)) = task_center {
-        let _ = tc.update_progress(tid, 0.1, 0).await;
+        let _ = tc.begin_step(tid, "java").await;
     }
 
     // 2. Load resolved version JSON & Java resolution
@@ -192,7 +192,7 @@ pub async fn launch(params: LaunchPipelineParams<'_>) -> Result<LaunchStartResul
         .map_err(|e| GameError::LaunchProcessFailed(e.to_string()))??
     };
     if let Some((tc, tid)) = task_center {
-        let _ = tc.update_progress(tid, 0.3, 0).await;
+        let _ = tc.begin_step(tid, "repair").await;
     }
 
     // 3. Instance repair
@@ -207,7 +207,7 @@ pub async fn launch(params: LaunchPipelineParams<'_>) -> Result<LaunchStartResul
     .await?;
 
     if let Some((tc, tid)) = task_center {
-        let _ = tc.update_progress(tid, 0.6, 0).await;
+        let _ = tc.begin_step(tid, "natives").await;
     }
 
     // 4. Extract natives
@@ -228,7 +228,7 @@ pub async fn launch(params: LaunchPipelineParams<'_>) -> Result<LaunchStartResul
     };
 
     if let Some((tc, tid)) = task_center {
-        let _ = tc.update_progress(tid, 0.8, 0).await;
+        let _ = tc.begin_step(tid, "spawn").await;
     }
 
     // 6. Build command line
@@ -403,5 +403,6 @@ pub async fn launch(params: LaunchPipelineParams<'_>) -> Result<LaunchStartResul
     Ok(LaunchStartResult {
         task_id,
         process_id: Some(process_id),
+        milestone: None,
     })
 }

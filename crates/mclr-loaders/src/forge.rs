@@ -14,43 +14,10 @@ use mclr_game::version::{Library, VersionJson};
 use mclr_game::{scan_java, select_java};
 use mclr_net::{DownloadSpec, Downloader, SourceKind, SourceOrigin, rewrite_url};
 use serde::Deserialize;
-use sha1::Digest;
-use std::cmp::Ordering;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
 use url::Url;
-
-/// Compares two loader version strings descending (e.g. "47.3.0" > "47.0.1", "20.4.237" > "20.4.5").
-pub fn compare_loader_versions(a: &str, b: &str) -> Ordering {
-    let parts_a: Vec<&str> = a.split(['.', '-', '_']).collect();
-    let parts_b: Vec<&str> = b.split(['.', '-', '_']).collect();
-
-    let max_len = parts_a.len().max(parts_b.len());
-    for i in 0..max_len {
-        let seg_a = parts_a.get(i).copied().unwrap_or("");
-        let seg_b = parts_b.get(i).copied().unwrap_or("");
-
-        let num_a = seg_a.parse::<u64>().ok();
-        let num_b = seg_b.parse::<u64>().ok();
-
-        match (num_a, num_b) {
-            (Some(na), Some(nb)) => {
-                if na != nb {
-                    return na.cmp(&nb);
-                }
-            }
-            (Some(_), None) => return Ordering::Greater,
-            (None, Some(_)) => return Ordering::Less,
-            (None, None) => {
-                if seg_a != seg_b {
-                    return seg_a.cmp(seg_b);
-                }
-            }
-        }
-    }
-    Ordering::Equal
-}
 
 fn is_file_valid(path: &Path, expected_size: Option<u64>, expected_sha1: Option<&str>) -> bool {
     if !path.exists() {
@@ -66,8 +33,7 @@ fn is_file_valid(path: &Path, expected_size: Option<u64>, expected_sha1: Option<
         }
     }
     if let Some(expected_hash) = expected_sha1 {
-        if let Ok(bytes) = std::fs::read(path) {
-            let actual_hash = hex::encode(sha1::Sha1::digest(&bytes));
+        if let Ok(actual_hash) = mclr_net::hash::sha1_file(path) {
             if !actual_hash.eq_ignore_ascii_case(expected_hash) {
                 return false;
             }
@@ -650,7 +616,7 @@ impl LoaderInstaller for ForgeInstaller {
             })
             .collect();
 
-        entries.sort_by(|a, b| compare_loader_versions(&b.version, &a.version));
+        entries.sort_by(|a, b| mclr_core::mcver::compare(&b.version, &a.version));
         Ok(entries)
     }
 
@@ -824,7 +790,7 @@ impl LoaderInstaller for NeoForgeInstaller {
             })
             .collect();
 
-        entries.sort_by(|a, b| compare_loader_versions(&b.version, &a.version));
+        entries.sort_by(|a, b| mclr_core::mcver::compare(&b.version, &a.version));
         Ok(entries)
     }
 
@@ -991,7 +957,7 @@ impl LoaderInstaller for CleanroomInstaller {
             }
         }
 
-        entries.sort_by(|a, b| compare_loader_versions(&b.version, &a.version));
+        entries.sort_by(|a, b| mclr_core::mcver::compare(&b.version, &a.version));
         Ok(entries)
     }
 
@@ -1009,20 +975,6 @@ mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::tempdir;
-
-    #[test]
-    fn test_compare_loader_versions() {
-        assert_eq!(
-            compare_loader_versions("47.3.0", "47.0.1"),
-            Ordering::Greater
-        );
-        assert_eq!(compare_loader_versions("47.0.1", "47.0.1"), Ordering::Equal);
-        assert_eq!(compare_loader_versions("47.0.0", "47.0.1"), Ordering::Less);
-        assert_eq!(
-            compare_loader_versions("20.4.237-beta", "20.4.5-beta"),
-            Ordering::Greater
-        );
-    }
 
     #[test]
     fn test_legacy_forge_install_profile_extraction_and_merging() {

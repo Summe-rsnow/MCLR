@@ -90,10 +90,17 @@ export function setupMockIpc(): void {
       showZhName: true,
       localNameStyle: 0,
     },
+    tasks: {
+      maxConcurrent: 3,
+      autoRetry: 3,
+      notify: true,
+      historyMax: 200,
+      historyDays: 30,
+    },
   }
   const handlers: MockHandlers = {
     // Keep in sync with package.json on release; a stale value hides version bugs.
-    app_info: () => ({ name: 'MCLR', version: '0.0.26' }),
+    app_info: () => ({ name: 'MCLR', version: '0.1.0' }),
     secrets_status: () => ({
       msClientId: false,
       curseforgeApiKey: false,

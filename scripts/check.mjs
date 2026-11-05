@@ -2,6 +2,10 @@
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 
+// Prevent local WireMock test servers (127.0.0.1) from routing through developer/system HTTP proxies.
+process.env.NO_PROXY = process.env.NO_PROXY ? `${process.env.NO_PROXY},127.0.0.1,localhost` : '127.0.0.1,localhost';
+process.env.no_proxy = process.env.NO_PROXY;
+
 function run(cmd) {
   console.log(`\n> ${cmd}`)
   execSync(cmd, { stdio: 'inherit' })

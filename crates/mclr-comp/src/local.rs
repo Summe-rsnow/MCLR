@@ -16,6 +16,9 @@ use zip::ZipArchive;
 use crate::curseforge::CurseForgeClient;
 use crate::depcheck::{ModDep, ModDepKind};
 use crate::error::CompError;
+use crate::jarfile::{
+    is_disabled_jar, is_jar, jar_stem, read_entry_bytes, read_entry_text, toggled_name,
+};
 use crate::model::CompFile;
 use crate::modrinth::ModrinthClient;
 use crate::resolver::select_best_file_for;
@@ -283,26 +286,6 @@ pub struct ModMetadata {
     pub dependencies: Vec<ModDep>,
     /// Extra ids the jar declares it provides.
     pub provides: Vec<String>,
-}
-
-fn read_entry_text<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> Option<String> {
-    let mut entry = archive.by_name(name).ok()?;
-    let mut text = String::new();
-    entry.read_to_string(&mut text).ok()?;
-    Some(text)
-}
-
-/// Reads a small archive entry fully. Icons are capped at 2 MiB so a crafted jar cannot
-/// force a large allocation.
-fn read_entry_bytes<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> Option<Vec<u8>> {
-    const MAX_ICON_BYTES: u64 = 2 * 1024 * 1024;
-    let mut entry = archive.by_name(name).ok()?;
-    if entry.size() > MAX_ICON_BYTES {
-        return None;
-    }
-    let mut bytes = Vec::with_capacity(entry.size() as usize);
-    entry.read_to_end(&mut bytes).ok()?;
-    Some(bytes)
 }
 
 /// Bumped whenever the artwork selection changes, so caches written by an older rule (for
@@ -1119,13 +1102,7 @@ struct PendingMod {
 fn scan_pending_mod(pending: &PendingMod) -> Option<(LocalModCacheItem, LocalModInfo)> {
     let (sha1, murmur2) = hash_file(&pending.path).ok()?;
 
-    let fallback_name = if let Some(stem) = pending.file_name.strip_suffix(".jar.disabled") {
-        stem
-    } else if let Some(stem) = pending.file_name.strip_suffix(".jar") {
-        stem
-    } else {
-        pending.file_name.as_str()
-    };
+    let fallback_name = jar_stem(&pending.file_name);
 
     let mod_meta = parse_mod_metadata_path(&pending.path, fallback_name)
         .unwrap_or_else(|| fallback_metadata(fallback_name));
@@ -1264,13 +1241,13 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
             None => continue,
         };
 
-        let is_jar = file_name.ends_with(".jar");
-        let is_disabled = file_name.ends_with(".jar.disabled");
-        if !is_jar && !is_disabled {
+        let is_jar_file = is_jar(&file_name);
+        let is_disabled = is_disabled_jar(&file_name);
+        if !is_jar_file && !is_disabled {
             continue;
         }
 
-        let enabled = is_jar;
+        let enabled = is_jar_file;
         let metadata = match entry.metadata() {
             Ok(m) if m.is_file() => m,
             // `entry.metadata()` never traverses a link, while the previous `fs::metadata(&path)`
@@ -1350,13 +1327,13 @@ pub fn toggle_local_mod(
 ) -> Result<LocalModInfo, CompError> {
     let current_path = mods_dir.join(file_name);
     let target_file_name = if enabled {
-        if file_name.ends_with(".jar.disabled") {
-            file_name.trim_end_matches(".disabled").to_string()
+        if is_disabled_jar(file_name) {
+            toggled_name(file_name).unwrap_or_else(|| file_name.to_string())
         } else {
             file_name.to_string()
         }
-    } else if file_name.ends_with(".jar") {
-        format!("{file_name}.disabled")
+    } else if is_jar(file_name) {
+        toggled_name(file_name).unwrap_or_else(|| file_name.to_string())
     } else {
         file_name.to_string()
     };
@@ -1525,7 +1502,8 @@ pub async fn check_local_mods_updates_at(
     // missing prompt.
     let mut update_loaders: Vec<&'static str> = Vec::new();
     for label in instance_loaders {
-        if let Some(id) = mclr_game::instance::canonical_loader_id(label)
+        if let Some(id) =
+            mclr_core::loader::Loader::parse(label).and_then(mclr_core::loader::Loader::platform_id)
             && !update_loaders.contains(&id)
         {
             update_loaders.push(id);

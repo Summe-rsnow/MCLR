@@ -1,9 +1,9 @@
 {
-  "nav": "任务管理",
-  "title": "任务列表",
-  "empty": "当前没有正在运行或排队的任务",
+  "nav": "任务",
+  "title": "任务中心",
+  "empty": "当前没有任务",
   "emptySubtitle": "下载、安装与维护任务将显示在这里",
-  "clearFinished": "清除已完成",
+  "clearFinished": "清除已结束",
   "cancelConfirmTitle": "取消任务",
   "cancelConfirmContent": "确定要取消正在进行的任务吗？已下载的临时文件可能需要重新下载。",
   "indicator": {
@@ -12,11 +12,21 @@
   },
   "state": {
     "waiting": "等待中",
-    "running": "运行中",
+    "running": "进行中",
     "paused": "已暂停",
+    "retrying": "重试中",
+    "interrupted": "已中断",
     "success": "已完成",
     "canceled": "已取消",
     "failed": "已失败"
+  },
+  "filter": {
+    "all": "全部",
+    "active": "进行中",
+    "interrupted": "已中断",
+    "success": "已完成",
+    "failed": "已失败",
+    "canceled": "已取消"
   },
   "actions": {
     "pause": "暂停",
@@ -24,7 +34,92 @@
     "cancel": "取消",
     "cancelConfirmTitle": "取消任务",
     "cancelConfirmContent": "确定要取消正在进行的任务吗？已下载的临时文件可能需要重新下载。",
-    "retry": "重试"
+    "restore": "恢复",
+    "restoreAll": "恢复全部",
+    "retry": "重试",
+    "remove": "移除",
+    "moveFirst": "置顶",
+    "cleanLeftovers": "清理残留"
+  },
+  "retry": {
+    "in": "将在 {seconds} 秒后重试",
+    "waitingNetwork": "等待网络恢复..."
+  },
+  "notify": {
+    "success": "任务已完成",
+    "failed": "任务失败"
+  },
+  "banner": {
+    "reset": "检测到任务数据库损坏，已自动备份并重置为全新数据库。",
+    "resetDismiss": "我知道了",
+    "memory": "当前运行在内存数据库模式，任务记录在启动器退出后不会持久化。"
+  },
+  "cleanup": {
+    "title": "任务残留清理",
+    "desc": "扫描并清理中断任务产生的临时文件 (.mclr-part 与 meta) 及未完成的下载",
+    "cleanNow": "立即清理",
+    "cleaned": "清理完成，已释放空间",
+    "confirmTitle": "清理任务残留确认",
+    "confirmContent": "确定要清理任务残留吗？将删除 {count} 个文件，释放 {size} 存储空间。",
+    "info": "扫描到 {count} 个残留文件，占用 {size}",
+    "empty": "没有检测到任何可清理的任务残留"
+  },
+  "settings": {
+    "title": "任务调度设置",
+    "desc": "配置后台任务的最大并发数、网络重试策略以及历史清理",
+    "maxConcurrent": "最大并发任务数",
+    "maxConcurrentDesc": "同时处于进行中状态的任务数量上限 (1 - 8)",
+    "autoRetry": "网络故障自动重试次数",
+    "autoRetryDesc": "下载或网络超时失败时，采用指数退避重试的最大次数 (0 - 10)",
+    "notify": "任务完成桌面通知",
+    "notifyDesc": "当窗口处于非前台状态时，任务完成或失败发送系统桌面通知",
+    "historyMax": "任务历史保留数量",
+    "historyMaxDesc": "最多保留的已结束任务数量上限 (20 - 2000)",
+    "historyDays": "任务历史保留天数",
+    "historyDaysDesc": "已结束任务的最长保留时间 (1 - 365 天)"
+  },
+  "detail": {
+    "elapsed": "已耗时",
+    "steps": "执行步骤",
+    "items": "项目进度",
+    "speed": "当前速度",
+    "errorTitle": "错误信息",
+    "errorDetail": "详细技术堆栈",
+    "attempt": "第 {attempt}/{max} 次尝试",
+    "resumable": "支持断点续传与恢复",
+    "nonResumable": "不可续传任务",
+    "noSteps": "该任务无子步骤"
+  },
+  "steps": {
+    "manifest": "获取版本清单",
+    "metadata": "下载版本元数据",
+    "verify": "校验本地依赖文件",
+    "download": "下载必要文件",
+    "finalize": "完成安装",
+    "staging": "准备暂存环境",
+    "merge": "合并加载器配置",
+    "libraries": "拷贝依赖库",
+    "extraMods": "下载附加模组",
+    "repair": "补全缺失文件",
+    "resolve": "解析依赖项",
+    "inspect": "解析整合包内容",
+    "baseGame": "安装核心与加载器",
+    "files": "下载整合包模组文件",
+    "overrides": "解压覆盖文件",
+    "scan": "扫描已安装内容",
+    "plan": "规划安装方案",
+    "install": "写入并安装资源",
+    "collect": "收集导出文件",
+    "hash": "计算文件哈希",
+    "write": "打包输出整合包",
+    "check": "检查新版本",
+    "java": "验证与配置 Java 运行时",
+    "natives": "解压运行环境动态库",
+    "spawn": "启动游戏进程",
+    "deviceCode": "获取微软设备登录码",
+    "authorize": "等待浏览器授权验证",
+    "profile": "获取玩家档案信息",
+    "run": "执行任务"
   },
   "item": {
     "download": {
@@ -68,12 +163,5 @@
     "export.title": "导出资源列表",
     "presetApply": "应用资源预设",
     "presetCache": "缓存资源预设"
-  },
-  "stages": {
-    "download": "下载整合包压缩包",
-    "inspect": "解析整合包内容",
-    "baseGame": "安装游戏与加载器",
-    "files": "下载模组与资源文件",
-    "overrides": "解压覆盖文件"
   }
 }

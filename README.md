@@ -6,7 +6,7 @@
 
 次世代 Windows 原生 Minecraft 启动器 · 基于 Tauri 2 + Rust 2024 + Vue 3.5
 
-[![Version](https://img.shields.io/badge/version-v0.0.33-blue.svg?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.1.0-blue.svg?style=flat-square)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/Rust-2024%20Edition-DEA584.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8DB.svg?style=flat-square&logo=tauri)](https://tauri.app/)
 [![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D.svg?style=flat-square&logo=vue.js)](https://vuejs.org/)
@@ -28,12 +28,20 @@
 ### 🚀 极致性能与可靠网络 (`mclr-net`, `mclr-core`)
 - **多源并发竞速下载**：聚合 Mojang 官方、Modrinth、CurseForge、BMCLAPI、MCIMirror 等镜像源，梯级回退与毫秒级延迟竞速。
 - **动态 HTTP Range 分片**：大文件自动切片（8 MiB 分片），支持动态慢速分片窃取与自动续传，慢速链路不再超时崩溃。
+- **字节级断点续传**：`.mclr-part.meta` 账本记录分片进度、ETag 与总量，重启后按 `Range`/`If-Range` 精确续传；哈希已校验的文件瞬间跳过，不再重复下载。
 - **全方位哈希校验**：流式 SHA1 / SHA256 / MD5 单遍计算，杜绝全文件二次重读 I/O 开销；支持 DNS-over-HTTPS (`hickory-resolver`)。
+
+### 📋 持久化任务中心 (`mclr-core::tasks`)
+- **崩溃恢复**：任务与步骤时间线持久化到 `tasks.redb`（redb 事务存储），未完成的任务在重启后标记为「已中断」并保留已完成步骤，可一键恢复或重试。
+- **有序步骤时间线**：每个步骤自带权重与条目计数（`done / total`），总进度严格单调、永不回退；失败步骤就地展示错误原因。
+- **并发队列与智能重试**：并发上限 1–8 可调、拖拽重排执行顺序；网络类错误按 2s → 4s → 8s 指数退避，并等待网络探测确认可达后再重试。
+- **独立任务页与桌面通知**：`系统 → 任务` 双栏界面（列表 + 详情）、孤立下载残留清理、后台完成/失败桌面通知。
 
 ### 🎨 Tonal Layers 现代设计语言
 - **OKLCH 动态取色引擎**：由单颗种子色实时派生出兼顾色彩连贯性与可读性感知的高保真色阶系统。
 - **双材质即时切换**：**全实色扁平 (Flat)** 与 **液态玻璃 (Liquid Glass)** 材质（Mica/Acrylic 原生模糊 + SVG 微折射特效），无缝贴合 Win10/11 审美。
 - **流式瀑布流与弹性虚拟滚动**：集成官方新闻瀑布流、分页悬浮定位槽 (`MPagination`) 以及自适应视口的虚拟长列表 (`MVirtualList`)。
+- **文本默认可选中**：正文、路径、错误码、版本号与日志均可直接划词复制；仅按钮、开关、侧边栏与窗口拖拽区禁用选择，拖选卡片文字也不会误触跳转。
 
 ### 🔑 完整多账号认证体系 (`mclr-auth`)
 - **微软正版设备代码流**：内置成熟公用 Client ID，免除配置 Azure 应用烦恼，开箱即用；完整的 Xbox Live / XSTS / Minecraft 6 步鉴权链，支持披风与皮肤即时切换。
@@ -50,7 +58,7 @@
 - **全加载器全自动部署**：一键安装 Vanilla、Fabric、NeoForge、Forge（Legacy & Modern）、Cleanroom、OptiFine、LiteLoader 与 LabyMod。
 - **独立 Java 运行时中心**：自动扫描注册表、PATH、常见安装路径，支持多架构版本自动匹配与目录一键直达。
 - **四阶段启发式崩溃分析**：覆盖 45 种经典崩溃根因，精准定位冲突模组与环境故障，支持一键导出排障报告。
-- **全能系统工具箱**：内置游戏与启动器双层滚动日志排查、一键清理失败任务与冗余缓存。
+- **全能系统工具箱**：内置游戏与启动器双层滚动日志排查、缓存与日志分类清理（保护内容寻址预设库），孤立下载残留由任务中心统一回收。
 
 ---
 

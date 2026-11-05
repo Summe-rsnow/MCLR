@@ -87,7 +87,7 @@ function onConfirmJump() {
           {{ homeStore.loadingNews ? t('launch.news.refreshing') : t('launch.news.refresh') }}
         </MButton>
         <div class="flex items-center gap-2">
-          <span class="text-xs text-fg-muted select-none">
+          <span class="text-xs text-fg-muted">
             {{ t('launch.news.toggleLabel') }}
           </span>
           <MSwitch

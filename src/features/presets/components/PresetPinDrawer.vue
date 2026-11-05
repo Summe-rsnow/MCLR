@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { compareVersionsDesc } from '@/shared/mcver'
+import { compareLoaders } from '@/shared/loader'
 import { useI18n } from 'vue-i18n'
 import type { CompFile, PresetItem, PresetPinRule, ResourcePreset } from '../../../ipc/client'
 import { ipcClient } from '../../../ipc/client'
@@ -96,53 +98,11 @@ watch(
 watch([selectedVersionFilter, selectedLoaderFilter], () => {
   if (props.open) void loadFiles()
 })
-function compareMcVersionsDesc(a: string, b: string): number {
-  const parseParts = (v: string) => {
-    const parts = v
-      .trim()
-      .split('.')
-      .map((p) => {
-        const n = parseInt(p, 10)
-        return isNaN(n) ? 0 : n
-      })
-    while (parts.length < 3 && parts[0] === 1) {
-      parts.push(0)
-    }
-    return parts
-  }
-
-  const pa = parseParts(a)
-  const pb = parseParts(b)
-  const maxLen = Math.max(pa.length, pb.length)
-
-  for (let i = 0; i < maxLen; i++) {
-    const na = pa[i] ?? 0
-    const nb = pb[i] ?? 0
-    if (na !== nb) {
-      return nb - na
-    }
-  }
-  return b.localeCompare(a)
-}
-
-const LOADER_ORDER: Record<string, number> = {
-  fabric: 1,
-  quilt: 2,
-  neoforge: 3,
-  forge: 4,
-}
-
-function compareLoaders(a: string, b: string): number {
-  const oa = LOADER_ORDER[a.toLowerCase()] ?? 99
-  const ob = LOADER_ORDER[b.toLowerCase()] ?? 99
-  if (oa !== ob) return oa - ob
-  return a.localeCompare(b)
-}
 
 const availableVersions = computed(() => {
   const preset = props.preset
   if (preset && preset.gameVersions.length > 0) {
-    return [...preset.gameVersions].sort(compareMcVersionsDesc)
+    return [...preset.gameVersions].sort(compareVersionsDesc)
   }
   const set = new Set<string>()
   for (const f of files.value) {
@@ -150,7 +110,7 @@ const availableVersions = computed(() => {
       if (v) set.add(v)
     }
   }
-  return Array.from(set).sort(compareMcVersionsDesc)
+  return Array.from(set).sort(compareVersionsDesc)
 })
 
 const availableLoaders = computed(() => {

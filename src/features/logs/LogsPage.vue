@@ -6,11 +6,9 @@ import { useLogsStore } from './store'
 import { useToast } from '../../ui/useToast'
 import { useDialog } from '../../ui/useDialog'
 import { useCrashStore } from '../crash/store'
-import { useTasksStore } from '../tasks/store'
 import { ipcClient } from '../../ipc/client'
 import LauncherLogsPanel from './LauncherLogsPanel.vue'
 import GameLogTerminal from './components/GameLogTerminal.vue'
-import TasksManagerPanel from './components/TasksManagerPanel.vue'
 import { MPageHeader, MTabs, MButton, MIconButton } from '../../ui'
 
 const { t } = useI18n()
@@ -18,13 +16,12 @@ const toast = useToast()
 const dialog = useDialog()
 const logsStore = useLogsStore()
 const crashStore = useCrashStore()
-const tasksStore = useTasksStore()
 
 const route = useRoute()
-type TabKey = 'game' | 'launcher' | 'tasks'
+type TabKey = 'game' | 'launcher'
 const initialTab = ((): TabKey => {
   const q = route?.query?.tab
-  if (q === 'launcher' || q === 'tasks') return q
+  if (q === 'launcher') return q
   return 'game'
 })()
 const activeTab = ref<TabKey>(initialTab)
@@ -32,7 +29,7 @@ const activeTab = ref<TabKey>(initialTab)
 watch(
   () => route?.query?.tab,
   (newTab) => {
-    if (newTab === 'launcher' || newTab === 'tasks' || newTab === 'game') {
+    if (newTab === 'launcher' || newTab === 'game') {
       activeTab.value = newTab
     }
   },
@@ -114,7 +111,6 @@ const tabs = computed(() => [
         : t('logs.tabs.launcher'),
     icon: 'i-lucide-file-text',
   },
-  { key: 'tasks', label: t('logs.tabs.tasks'), icon: 'i-lucide-list-checks' },
 ])
 
 async function onAnalyzeCrash() {
@@ -136,17 +132,13 @@ onMounted(async () => {
       await logsStore.fetchLogs()
       await logsStore.startListening()
     })(),
-    (async () => {
-      await tasksStore.fetchTasks()
-      await tasksStore.startListening()
-    })(),
+
     fetchLauncherLogsCount(),
   ])
 })
 
 onUnmounted(() => {
   logsStore.stopListening()
-  tasksStore.stopListening()
 })
 
 async function onCopyLogs() {
@@ -237,17 +229,9 @@ async function onKillClick() {
       :description="
         activeTab === 'game' && logsStore.activeProcess
           ? `${t('logs.status.running')} (PID: ${logsStore.activeProcess.processId})`
-          : activeTab === 'tasks'
-            ? t('tasks.indicator.activeTasks', { count: tasksStore.activeTasksCount })
-            : t('logs.description')
+          : t('logs.description')
       "
-      :icon="
-        activeTab === 'tasks'
-          ? 'i-lucide-list-checks'
-          : activeTab === 'launcher'
-            ? 'i-lucide-file-text'
-            : 'i-lucide-terminal'
-      "
+      :icon="activeTab === 'launcher' ? 'i-lucide-file-text' : 'i-lucide-terminal'"
     >
       <template v-if="activeTab === 'game'" #actions>
         <div class="flex flex-wrap items-center gap-2">
@@ -323,25 +307,6 @@ async function onKillClick() {
           />
         </div>
       </template>
-      <template v-else-if="activeTab === 'tasks'" #actions>
-        <div class="flex items-center gap-2">
-          <MButton
-            v-if="tasksStore.tasks.length > 0"
-            variant="tonal"
-            size="sm"
-            @click="tasksStore.clearFinished"
-          >
-            {{ t('tasks.clearFinished') }}
-          </MButton>
-          <MIconButton
-            icon="i-lucide-rotate-cw"
-            size="sm"
-            :title="t('common.refresh')"
-            :loading="tasksStore.loading"
-            @click="tasksStore.fetchTasks"
-          />
-        </div>
-      </template>
     </MPageHeader>
 
     <!-- Tabs navigation -->
@@ -358,11 +323,6 @@ async function onKillClick() {
         ref="launcherPanel"
         @files-loaded="(files) => (launcherLogsCount = files.length)"
       />
-    </div>
-
-    <!-- Tasks Tab -->
-    <div v-else-if="activeTab === 'tasks'" class="flex-1 overflow-y-auto px-2 py-3">
-      <TasksManagerPanel />
     </div>
   </div>
 </template>

@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.0.35`
-- **Next Milestone**: `v0.0.36` (towards `v0.1.0`)
+- **Current Version**: `0.1.0`
+- **Next Milestone**: `v0.1.1`
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -41,6 +41,22 @@
 
 | v0.0.34 | TypeScript 6.0.3, secrets via .env, shadow clipping & mod update race fix | done | a9d4d8d | v0.0.34 | 2026-11-02 |
 | v0.0.35 | Resource presets, content-addressed store, offline MCMod Chinese names & dependency analysis | done | 31f73f4 | v0.0.35 | 2026-11-04 |
+| v0.1.0 | Persistent task engine, byte-level download resume, canonical version/loader model & selectable text | done | — | v0.1.0 | 2026-11-05 |
+
+## v0.1.0 — 任务引擎持久化 + 断点续传 + 文本可选择
+
+| ID | slice | owner | status | acceptance |
+|---|---|---|---|---|
+| A | 依赖与路径（redb、notification、`paths::tasks_db_file`、`TaskSettings`） | integrator | done | cargo test -p mclr-core |
+| B | `TaskNode` / `StepNode` / `TaskPlan` 模型（移除 parent_id） | integrator | done | cargo test -p mclr-core tasks::center |
+| C | redb 持久化存储（批量刷盘、紧急刷盘、损坏隔离、历史修剪） | integrator | done | cargo test -p mclr-core tasks::engine |
+| D | `TaskHandler` / `TaskEngine`（并发队列、重排、退避重试、网络探测、启动恢复） | integrator | done | cargo test -p mclr-core tasks::engine |
+| E | 下载器字节级续传（`.mclr-part.meta`、Range/If-Range、分片账本、跳过已验证） | integrator | done | cargo test -p mclr-net resume |
+| F | 12 类任务迁移至 Handler 注册表并删除 `create_task_legacy` | integrator | done | cargo test --workspace |
+| G | `mcver` / `loader` / `jarfile` / `hash` 统一与 `src/shared` 前端镜像 | integrator | done | cargo test -p mclr-core -p mclr-comp -p mclr-net |
+| H | 任务中心页面、时间线、拖拽重排、通知、清理对话框、调度设置 | integrator | done | vitest run src/features/tasks |
+| I | 文本选择架构反转（默认可选、控件豁免、选择态点击守卫） | integrator | done | 浏览器选择态巡检 |
+| J | 文档（CHANGELOG / architecture / contracts / design-language / README） | integrator | done | pnpm check |
 
 ## v0.0.35 — 资源预设 + PCL 同款模组能力
 

@@ -1,5 +1,6 @@
 import type { VersionManifestList, LoaderKind, LoaderVersionEntry } from '../../ipc/client'
-import { validateInstanceNameLocal, isAprilFools, loaderVisibility, getMcFoolName } from './compat'
+import { validateInstanceNameLocal, isAprilFools, getMcFoolName } from './compat'
+import { supportedLoaders } from '@/shared/loader'
 
 function generateMockVersions() {
   const versions: VersionManifestList['versions'] = []
@@ -484,19 +485,11 @@ const handlers = {
     const mcVersion = String(args.mcVersion || '')
     const releaseTime = String(args.releaseTime || '')
     const fool = isAprilFools(mcVersion, releaseTime)
-    const vis = loaderVisibility(mcVersion)
-    const supportedLoaders: string[] = []
-    if (vis.fabric) supportedLoaders.push('fabric')
-    if (vis.forge) supportedLoaders.push('forge')
-    if (vis.neoforge) supportedLoaders.push('neoforge')
-    if (vis.cleanroom) supportedLoaders.push('cleanroom')
-    if (vis.legacyFabric) supportedLoaders.push('legacyfabric')
-    if (vis.liteloader) supportedLoaders.push('liteloader')
-    if (vis.labymod) supportedLoaders.push('labymod')
+    const supportedLoadersList = supportedLoaders(mcVersion)
     return {
       isAprilFools: fool,
       foolCode: fool ? getMcFoolName(mcVersion) : null,
-      supportedLoaders,
+      supportedLoaders: supportedLoadersList,
       incompatiblePairs: [],
       recommendedJava: 17,
     }

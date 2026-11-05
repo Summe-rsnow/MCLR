@@ -13,6 +13,7 @@ This document is the definitive engineering specification for runtime invariants
   - `master.key`: DPAPI-protected 32-byte master encryption key.
   - `cache/`: Download chunks, UVMC manifests, asset caches.
   - `logs/`: Daily rolling launcher logs (`mclr.YYYY-MM-DD.log`).
+  - `tasks.redb`: Persistent task records (redb). Quarantined corrupt copies sit beside it as `tasks.redb.corrupt-<ts>`.
   - `runtime/`: Managed Java runtime installations.
   - `tools/`: Downloaded utility helpers (e.g. `authlib-injector.jar`).
   - `.minecraft/`: Default game folder (when selected by user).
@@ -22,13 +23,16 @@ This document is the definitive engineering specification for runtime invariants
 ## 2. Configuration & State Management (`mclr_core::settings`)
 
 ### 2.1 Settings Store
-- **Unified Schema**: `Settings` struct with `#[serde(rename_all="camelCase", default)]` and `schemaVersion: u32 = 2` (v1 configurations migrate automatically on load).
+- **Unified Schema**: `Settings` struct with `#[serde(rename_all="camelCase", default)]` and `schemaVersion: u32 = 6` (older configurations migrate automatically on load).
 - **Persistence**: Atomic write (write to `.tmp` then rename), debounced 300 ms flush.
 - **IPC Interface**:
   - `settings_get() -> Settings`
   - `settings_patch(patch: serde_json::Value)`: RFC 7386 JSON Merge Patch; deserializes into `Settings` to validate, rejects unknown fields with `AppError { code: "settings.invalid" }`.
   - **Broadcast**: Emits on Tauri channel `settings://changed` when configuration mutates.
-- **Modularity**: Sub-settings (`launch`, `java`, `net`, `ui`, `update`, `language`, `comp`) reside in dedicated files under `mclr-core/src/settings/`.
+- **Schema History**: v2 recommended JVM head, v3 positive launch switches, v4 legacy flag rewrite, v5 dropped `java.select`, v6 adds the `tasks` block and removes the vestigial `download` block.
+- **Modularity**: Sub-settings (`launch`, `java`, `net`, `ui`, `update`, `language`, `comp`, `tasks`) reside in dedicated files under `mclr-core/src/settings/`.
+- **Task Scheduler Settings (`tasks`)**: `maxConcurrent` (clamped 1–8, default 3), `autoRetry` (clamped 0–10, default 3), `notify` (default `true`), `historyMax` (clamped 20–2000, default 200), `historyDays` (clamped 1–365, default 30). Every mutation re-applies the clamped values to the running `TaskEngine`.
+
 - **Community & Presets Settings (`comp`)**:
   - `comp.storeDir: String` (custom content-addressed store directory, empty string defaults to `<paths::cache_dir()>/store`).
   - `comp.useHardlink: bool` (default `false`, experimental beta; whether to place immutable jar/zip files via NTFS hardlink with automatic fallback to copy).
@@ -69,23 +73,39 @@ This document is the definitive engineering specification for runtime invariants
 
 ## 4. Background Tasks & Progress Windows (`mclr_core::tasks`)
 
-- **Task Hierarchy**: `TaskCenter` manages an in-memory tree of active and completed tasks:
+- **Task Model**: `TaskCenter` holds a flat map of task nodes. There is no `parent_id`: a task's structure lives in its ordered step timeline.
   ```rust
   pub struct TaskNode {
       pub id: String,
-      pub parent_id: Option<String>,
+      pub kind: String,              // handler key, e.g. "install.vanilla"
       pub title_key: String,
       pub title_params: HashMap<String, String>,
-      pub state: TaskState, // waiting | running | paused | success | canceled | failed
-      pub progress: f32,    // 0.0 ..= 1.0
+      pub state: TaskState,          // waiting | running | paused | retrying | interrupted | success | canceled | failed
+      pub progress: f32,             // 0.0 ..= 1.0, monotonic
       pub speed_bps: u64,
+      pub steps: Vec<StepNode>,
+      pub error: Option<AppError>,
+  }
+
+  pub struct StepNode {
+      pub key: String,
+      pub state: StepState,          // pending | running | done | failed | skipped
+      pub weight: f32,               // share of the parent progress window
+      pub items_done: u32,
+      pub items_total: u32,
+      pub started_at_ms: Option<u64>,
+      pub finished_at_ms: Option<u64>,
       pub error: Option<AppError>,
   }
   ```
-- **Progress Windows**: Multi-stage tasks utilize `TaskCenter::set_progress_window(id, base, span)` to map independent 0.0..=1.0 stage reports into monotonic slices (e.g. Modpack installation: 8% archive -> 62% base/loader -> 28% files -> 2% overrides). Progress never rewinds.
-- **Task Lifecycle**: Controlled via `TaskControl` checkpoints. Tasks pause and cancel cooperatively at safe boundaries.
-- **Task Cleansing**: `TaskCenter::clear_finished()` removes terminal tasks (`success`, `failed`, `canceled`). A finished child is kept while its parent task is still active.
-- **IPC Interface**: `tasks_list`, `tasks_clear_finished`, `task_cancel(id)`, `task_pause(id)`, `task_resume(id)`. Broadcasts stream on Tauri channel `tasks://update`.
+- **Progress Windows**: A completed step contributes its weight to the task total; an active step maps its own `0.0..=1.0` report into its weighted slice (`begin_step` / `set_current_items` / `progress`). Progress never rewinds and a step can only move forward.
+- **Handler Registry**: Every operation is a `TaskHandler` (`kind`, `resumable`, `plan`, `run`) registered at startup. `engine.submit(kind, payload)` replaces the deleted `create_task_legacy`; `TaskCtx` hands the handler its payload, attempt number and `resumed` flag.
+- **Scheduling**: FIFO queue with `tasks.maxConcurrent` slots (1–8) and explicit reordering. Retryable failures (`net.http`, `net.timeout`, `net.io`, `net.sourcesExhausted`, `net.racingFailed`) back off `1s << attempt` (2s, 4s, 8s …) up to `tasks.autoRetry`, then wait for `NetProbe::online()` to report reachability before the next attempt.
+- **Persistence & Recovery**: Records flush to `tasks.redb` through a writer thread (500 ms batches, urgent flush on transitions). At startup, `waiting`/`running`/`paused`/`retrying` tasks become `interrupted` with completed steps preserved; categories with no registered handler fail with `task.unknownKind`. History is pruned by `historyMax` / `historyDays`.
+- **Cooperative Stop**: `TaskControl` checkpoints pause and cancel at safe boundaries; a paused task holds its request before issuing the next HTTP call.
+- **Leftovers**: Download parts (`<dest>.mclr-part` + `.mclr-part.meta`) owned by live or resumable tasks are protected; `tasks_leftovers_info` reports only abandoned ones and `tasks_cleanup_leftovers` deletes them.
+- **IPC Interface**: `tasks_list`, `tasks_clear_finished`, `tasks_store_status`, `tasks_ack_reset`, `task_cancel(id)`, `task_pause(id)`, `task_resume(id)`, `task_restore(id)`, `task_retry(id)`, `task_remove(id)`, `tasks_restore_all`, `tasks_reorder(ids)`, `tasks_leftovers_info`, `tasks_cleanup_leftovers`. Broadcasts stream on `tasks://update`, `tasks://removed` and `tasks://store`.
+
 
 ---
 
@@ -168,6 +188,12 @@ Every component in `src/ui/` and all feature views must satisfy seven core desig
    - `full`: Complete spring and cubic-bezier transitions, transforms, staggered entrances, and displacement animations.
    - `reduced`: Disables translate, scale, and stagger transforms; disables skeleton shimmer; transforms rotating spinners into subtle opacity pulses (`m-pulse-reduced`).
    - `off`: Sets all animation and transition durations to `0s !important`; replaces animations with static indicators.
+8. **Text Selection** (inverted: content opts out, not in):
+   - `body` is `user-select: text`. Never re-add `select-none` to `body`, `#app`, `AppShell`, or a page root — it is inherited and silently freezes every path, error code and identifier in the app.
+   - Only interaction surfaces opt out, either through the global rule in `theme/material.css` (`button`, `label`, `summary`, `[role=button|tab|menuitem|option|switch|checkbox|combobox]`, `[data-tauri-drag-region]`) or an explicit `select-none` on bespoke click targets (sidebar, title bar, splash, pagination).
+   - Copyable-but-clickable text (e.g. `MPathPicker`) keeps a selectable field and guards its own click: a non-empty in-field range must not also open the picker.
+   - `installSelectionClickGuard()` in `src/main.ts` blocks a bubble-path click while a non-empty selection exists, unless the target is a real control, so drag-selecting a card's text never navigates away.
+
 
 ---
 
@@ -181,6 +207,10 @@ Load-bearing performance invariants guarded by automated regression tests:
 | Mod Cache (`localmods.json`) | Mutex guards only in-memory `HashMap` clone/insert. Parsing, hashing, and serialization happen outside the lock. Keyed by path and invalidated on mtime mismatch. | `test_cache_isolation_and_toggle_migration` |
 | Cache Miss Concurrency | Cold mod scans fan out over `std::thread::scope` bounded to `min(available_parallelism, 4)` workers to cap buffer allocations. | `test_scan_local_mods_streamed_hashes_match_pinned_values` |
 | Chunked Downloader (`mclr_net`) | `chunk.downloaded` advances strictly after `write_all` flushes to disk. Slowness never exhausts error retries; slow chunks split or resume without failing. | `test_slow_chunk_splitting`, `test_slow_chunk_never_fails_the_download` |
+| Download Resume (`mclr_net`) | A `.mclr-part.meta` ledger only resumes when its schema version, URL, total size and ETag/Last-Modified still match the response (`Range` → `206`); a `200` to a range probe abandons the part file instead of appending. | `test_stream_resume_and_tamper_and_skip`, `test_chunked_resume_12mib`, `test_tampering_forces_clean_restart` |
+| Task Persistence (`mclr_core::tasks`) | Records reach `tasks.redb` through a single writer thread; state transitions flush urgently, ordinary progress batches at 500 ms. Restart turns in-flight tasks into `interrupted` with steps preserved. | `test_persistence_restart_and_restore`, `test_corrupt_db_quarantined_and_fresh_db_created` |
+| Task Progress | Step contributions are weighted and monotonic; a task's reported progress never decreases and never exceeds `1.0`. | `test_step_progress_cumulative_weights_and_no_regression` |
+| Version Ordering (`mclr_core::mcver`) | Exactly one ordering implementation exists; every crate and the TypeScript mirror (`src/shared/mcver.ts`) must agree on separators, numeric ranking and missing-segment rules. | `crates/mclr-core/tests/mcver.rs`, `mc_rules.rs` |
 | Blocking Work | ZIP extraction, directory rescans, hashing, and instance scans never run on async runtime threads; they dispatch via `spawn_blocking`. | Verified by architecture rules |
 | Directory Scans | Inside `read_dir`, inspect `DirEntry::file_type()` / `metadata()`. Never call `path.is_file()` or `fs::metadata(&path)` redundantly (measured: 96 ms vs 0.7 ms over 1000 files). | Verified by architecture rules |
 | Safe Scroll Containers | Page and tab containers use `overflow-x: clip` rather than `hidden` to prevent CSS computed `overflow-y: auto` from spawning nested fake scrollports. | Verified in `material.css` & `InstanceDetailPage.vue` |
@@ -222,6 +252,8 @@ The gate executes the following sequence:
 9. `node scripts/lint-i18n.mjs`
 10. `node scripts/lint-ui-contracts.mjs`
 11. `vite build`
+
+`scripts/check.mjs` also appends `127.0.0.1,localhost` to `NO_PROXY`, so WireMock-backed tests keep their traffic direct when the developer machine (or CI) exports `HTTP_PROXY`/`ALL_PROXY`. Test fixtures that build their own client must opt out explicitly (`Client::builder().no_proxy()`), as `crates/mclr-auth/tests/accounts_tests.rs` does.
 
 ---
 

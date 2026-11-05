@@ -1,16 +1,11 @@
 <script setup lang="ts">
 import type { JarInJarNode } from '../../ipc/client'
+import { formatBytes } from '@/shared/format'
 
 defineProps<{
   node: JarInJarNode
   depth?: number
 }>()
-
-function formatSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB'
-  if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return bytes + ' B'
-}
 </script>
 
 <template>
@@ -29,7 +24,7 @@ function formatSize(bytes: number): string {
       <div class="flex items-center space-x-2 shrink-0 text-fg-muted">
         <span class="font-mono text-[11px]">{{ node.id }}</span>
         <span>•</span>
-        <span>{{ formatSize(node.size) }}</span>
+        <span>{{ formatBytes(node.size) }}</span>
       </div>
     </div>
 

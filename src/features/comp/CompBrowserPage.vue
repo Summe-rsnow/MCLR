@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { compareVersions } from '@/shared/mcver'
+import { primaryLoader, searchLoaderId } from '@/shared/loader'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCompStore } from './store'
@@ -49,14 +51,6 @@ const targetInstanceId = computed({
   },
 })
 
-function isForgeUnder114(mcVer: string): boolean {
-  const parts = mcVer.split('.').map((p) => parseInt(p, 10))
-  if (parts.length >= 2 && parts[0] === 1) {
-    return (parts[1] ?? 0) < 14
-  }
-  return false
-}
-
 /**
  * Modpacks become instances of their own, so their search must never be bound to an
  * existing instance's version/loader — that would filter out every modpack that does not
@@ -79,51 +73,6 @@ function defaultInstanceId(): string {
   return instancesStore.instances[0]?.id ?? ''
 }
 
-function extractInstanceLoader(inst: { kind?: string; loaders?: string[] }): string | null {
-  const candidates: string[] = []
-  if (inst.kind) {
-    const k = inst.kind.toLowerCase()
-    if (k !== 'vanilla' && k !== 'moddedmultiple' && k !== 'unknown') {
-      candidates.push(k)
-    }
-  }
-  if (Array.isArray(inst.loaders)) {
-    for (const l of inst.loaders) {
-      if (l) candidates.push(l.toLowerCase())
-    }
-  }
-
-  // Priority search for primary mod loaders:
-  // CRITICAL: 'neoforge' MUST be checked before 'forge'!
-  // 'legacyfabric' MUST be checked before 'fabric'!
-  const loaderPriorities = [
-    'neoforge',
-    'legacyfabric',
-    'fabric',
-    'quilt',
-    'cleanroom',
-    'forge',
-    'liteloader',
-    'optifine',
-    'labymod',
-    'iris',
-  ]
-
-  for (const known of loaderPriorities) {
-    for (const candidate of candidates) {
-      if (candidate.includes(known)) {
-        if (known === 'legacyfabric') return 'fabric'
-        return known
-      }
-    }
-  }
-
-  if (candidates.length > 0) {
-    return candidates[0].split(/\s+/)[0] || null
-  }
-  return null
-}
-
 function applyTargetInstance(
   inst: { kind?: string; mcVersion?: string; loaders?: string[] } | null,
   triggerSearch = true,
@@ -131,15 +80,24 @@ function applyTargetInstance(
   if (!isInstanceScopedTab.value) return
   if (inst) {
     compStore.mcVersion = inst.mcVersion || null
-    const primaryLoader = extractInstanceLoader(inst)
+    const kind = inst.kind?.toLowerCase()
+    const kindIfRealLoader =
+      kind && kind !== 'vanilla' && kind !== 'moddedmultiple' && kind !== 'unknown' ? kind : null
+    const primary = primaryLoader([kindIfRealLoader, ...(inst.loaders ?? [])])
+    const primaryLoaderId = searchLoaderId(primary)
+
     // Only mods and modpacks are loadable artifacts: for every other tab the instance only
     // contributes its game version.
     if (compStore.compType !== 'mod' && compStore.compType !== 'modpack') {
       compStore.loader = null
-    } else if (primaryLoader === 'forge' && inst.mcVersion && isForgeUnder114(inst.mcVersion)) {
+    } else if (
+      primaryLoaderId === 'forge' &&
+      inst.mcVersion &&
+      compareVersions(inst.mcVersion, '1.14') < 0
+    ) {
       compStore.loader = null
     } else {
-      compStore.loader = primaryLoader
+      compStore.loader = primaryLoaderId
     }
   }
   if (triggerSearch && compStore.activeTab !== 'favorites') {

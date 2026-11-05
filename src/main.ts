@@ -11,7 +11,8 @@ import { useThemeStore } from './stores/theme'
 
 // Demo data is dev-only: production bundles never contain mock IPC. A static import
 // cannot work here — the dynamic import is what lets Vite drop the mock graph from prod.
-if (import.meta.env.DEV && import.meta.env.VITE_MOCK_IPC?.trim() === '1') {
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+if (import.meta.env.DEV && !isTauri && import.meta.env.VITE_MOCK_IPC?.trim() === '1') {
   const { setupMockIpc } = await import('./ipc/mock')
   setupMockIpc()
 }
@@ -56,6 +57,34 @@ function installDesktopGuards() {
     { capture: true },
   )
 }
+
+/**
+ * Text is selectable by default (`user-select: text`), including inside cards
+ * that open on click. Without this guard, drag-selecting a card's description
+ * would also fire its click and navigate away mid-selection.
+ *
+ * Real controls are exempt, so clicking a button right after selecting text
+ * elsewhere still works.
+ */
+const CONTROL_SELECTOR =
+  'button, a, input, textarea, select, label, summary, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [contenteditable="true"]'
+
+function installSelectionClickGuard() {
+  document.addEventListener(
+    'click',
+    (e) => {
+      const selection = window.getSelection()
+      if (!selection || selection.isCollapsed || !selection.toString()) return
+      const target = e.target
+      if (!(target instanceof Element) || target.closest(CONTROL_SELECTOR)) return
+      e.preventDefault()
+      e.stopPropagation()
+    },
+    { capture: true },
+  )
+}
+
+installSelectionClickGuard()
 
 if (import.meta.env.PROD) {
   installDesktopGuards()

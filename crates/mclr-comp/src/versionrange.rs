@@ -8,6 +8,7 @@
 //! hand-edited jar — satisfies the range, so the worst case is a warning that could have been
 //! shown rather than a mod reported broken when it is not.
 
+use mclr_core::mcver::{SEPARATORS, compare_strict};
 use std::cmp::Ordering;
 
 /// True when `version` is allowed by `range`.
@@ -113,19 +114,19 @@ fn interval_satisfied(version: &str, interval: &str) -> Option<bool> {
             if only.is_empty() {
                 return Some(true);
             }
-            Some(compare_versions(version, only)? == Ordering::Equal)
+            Some(compare_strict(version, only)? == Ordering::Equal)
         }
         2 => {
             let lower = parts[0].trim();
             let upper = parts[1].trim();
             if !lower.is_empty() {
-                let ord = compare_versions(version, lower)?;
+                let ord = compare_strict(version, lower)?;
                 if ord == Ordering::Less || (ord == Ordering::Equal && !lower_inclusive) {
                     return Some(false);
                 }
             }
             if !upper.is_empty() {
-                let ord = compare_versions(version, upper)?;
+                let ord = compare_strict(version, upper)?;
                 if ord == Ordering::Greater || (ord == Ordering::Equal && !upper_inclusive) {
                     return Some(false);
                 }
@@ -158,7 +159,7 @@ fn token_satisfied(version: &str, token: &str) -> Option<bool> {
             if rest.is_empty() || rest == "*" {
                 return Some(true);
             }
-            let ord = compare_versions(version, rest)?;
+            let ord = compare_strict(version, rest)?;
             return Some(match op {
                 ">=" => ord != Ordering::Less,
                 "<=" => ord != Ordering::Greater,
@@ -180,24 +181,24 @@ fn token_satisfied(version: &str, token: &str) -> Option<bool> {
         return prefix_satisfied(version, token);
     }
 
-    Some(compare_versions(version, token)? == Ordering::Equal)
+    Some(compare_strict(version, token)? == Ordering::Equal)
 }
 
 /// `~1.2` → `>=1.2.0 <1.3.0`; `~1.2.3` → `>=1.2.3 <1.3.0`; `~1` → `>=1 <2`.
 fn tilde_satisfied(version: &str, pattern: &str) -> Option<bool> {
-    let lower: Vec<String> = segments(pattern)?;
+    let lower: Vec<String> = pattern_segments(pattern)?;
     let mut upper = lower.clone();
     let bump = if upper.len() > 1 { upper.len() - 1 } else { 0 };
     bump_numeric(&mut upper, bump)?;
 
-    let lower_ok = compare_versions(version, &lower.join("."))? != Ordering::Less;
-    let upper_ok = compare_versions(version, &upper.join("."))? == Ordering::Less;
+    let lower_ok = compare_strict(version, &lower.join("."))? != Ordering::Less;
+    let upper_ok = compare_strict(version, &upper.join("."))? == Ordering::Less;
     Some(lower_ok && upper_ok)
 }
 
 /// `^1.2.3` → `>=1.2.3 <2.0.0`; `^0.2.3` → `<0.3.0`; all-zero specs bump their last segment.
 fn caret_satisfied(version: &str, pattern: &str) -> Option<bool> {
-    let lower: Vec<String> = segments(pattern)?;
+    let lower: Vec<String> = pattern_segments(pattern)?;
     let numeric: Vec<Option<u64>> = lower.iter().map(|s| s.parse::<u64>().ok()).collect();
     let first_non_zero = numeric
         .iter()
@@ -207,15 +208,15 @@ fn caret_satisfied(version: &str, pattern: &str) -> Option<bool> {
     let mut upper = lower[..=first_non_zero].to_vec();
     bump_numeric(&mut upper, first_non_zero)?;
 
-    let lower_ok = compare_versions(version, &lower.join("."))? != Ordering::Less;
-    let upper_ok = compare_versions(version, &upper.join("."))? == Ordering::Less;
+    let lower_ok = compare_strict(version, &lower.join("."))? != Ordering::Less;
+    let upper_ok = compare_strict(version, &upper.join("."))? == Ordering::Less;
     Some(lower_ok && upper_ok)
 }
 
 /// `1.2.x` / `1.*` → every version starting with the fixed prefix.
 fn prefix_satisfied(version: &str, pattern: &str) -> Option<bool> {
-    let version_segments: Vec<String> = segments(version)?;
-    let pattern_segments: Vec<String> = segments(pattern)?;
+    let version_segments: Vec<String> = pattern_segments(version)?;
+    let pattern_segments: Vec<String> = pattern_segments(pattern)?;
     let fixed: Vec<&String> = pattern_segments
         .iter()
         .take_while(|s| !is_wildcard(s))
@@ -228,7 +229,7 @@ fn prefix_satisfied(version: &str, pattern: &str) -> Option<bool> {
         return Some(false);
     }
     for (a, b) in version_segments.iter().zip(fixed) {
-        if cmp_segment(a, b) != Ordering::Equal {
+        if mclr_core::mcver::compare(a, b) != Ordering::Equal {
             return Some(false);
         }
     }
@@ -250,65 +251,17 @@ fn is_wildcard(segment: &str) -> bool {
 
 fn has_wildcard(value: &str) -> bool {
     value
-        .split(['.', '-', '+'])
+        .split(SEPARATORS)
         .any(|segment| is_wildcard(segment.trim()))
 }
 
-/// Splits a version on `.`, `-` and `+`; empty input yields `None`.
-fn segments(value: &str) -> Option<Vec<String>> {
+/// Splits a version on separators; empty input yields `None`.
+fn pattern_segments(value: &str) -> Option<Vec<String>> {
     let parts: Vec<String> = value
         .trim()
-        .split(['.', '-', '+'])
+        .split(SEPARATORS)
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
     if parts.is_empty() { None } else { Some(parts) }
-}
-
-/// Compares two versions segment by segment, treating a missing segment as `0`.
-///
-/// Numeric segments compare numerically (leading zeros ignored, long values compared as
-/// decimal strings), non-numeric segments lexicographically, and a numeric segment ranks above
-/// a non-numeric one so `1.0-rc1` sorts before `1.0`.
-fn compare_versions(left: &str, right: &str) -> Option<Ordering> {
-    let left_segments = segments(left)?;
-    let right_segments = segments(right)?;
-    // A version that does not start with a number is not a version (a placeholder, a library
-    // coordinate, an `ANY` token). Refusing to compare keeps the answer "unparsable", which
-    // callers report as satisfied instead of inventing a mismatch.
-    numeric(&left_segments[0])?;
-    numeric(&right_segments[0])?;
-    let len = left_segments.len().max(right_segments.len());
-
-    for i in 0..len {
-        let a = left_segments.get(i).map(String::as_str).unwrap_or("0");
-        let b = right_segments.get(i).map(String::as_str).unwrap_or("0");
-        match cmp_segment(a, b) {
-            Ordering::Equal => continue,
-            other => return Some(other),
-        }
-    }
-    Some(Ordering::Equal)
-}
-
-fn cmp_segment(a: &str, b: &str) -> Ordering {
-    match (numeric(a), numeric(b)) {
-        (Some(x), Some(y)) => compare_numeric(x, y),
-        (Some(_), None) => Ordering::Greater,
-        (None, Some(_)) => Ordering::Less,
-        (None, None) => a.cmp(b),
-    }
-}
-
-/// The digit string of a purely numeric segment with leading zeros removed, else `None`.
-fn numeric(segment: &str) -> Option<&str> {
-    if segment.is_empty() || !segment.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    let trimmed = segment.trim_start_matches('0');
-    Some(if trimmed.is_empty() { "0" } else { trimmed })
-}
-
-fn compare_numeric(a: &str, b: &str) -> Ordering {
-    a.len().cmp(&b.len()).then_with(|| a.cmp(b))
 }

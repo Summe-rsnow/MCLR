@@ -10,7 +10,6 @@ import {
   type InstallMode,
   type InstallRequest,
   type InstanceInfo,
-  type LoaderKind,
   type LoaderVersionEntry,
   type VersionCompatInfo,
 } from '../../ipc/client'
@@ -18,13 +17,13 @@ import { awaitTask } from '../tasks/awaitTask'
 import { usePresetsStore } from '../presets/store'
 import ApplyReportDialog from '../presets/components/ApplyReportDialog.vue'
 import { useToast } from '../../ui'
+import { dropOf } from '@/shared/mcver'
+import { supportedLoaders, parseLoader, toLoaderKind, type LoaderId } from '@/shared/loader'
 import { useInstancesStore } from '../instances/store'
 import {
   defaultName,
-  dropOf,
   loaderDisplayName,
   loaderIncompatibilities,
-  loaderVisibility,
   validateInstanceNameLocal,
 } from './compat'
 import ConfiguratorVersionStep from './components/ConfiguratorVersionStep.vue'
@@ -91,20 +90,19 @@ const versionCompat = ref<VersionCompatInfo | null>(null)
 
 // Incompatibilities & Visibility
 const visibility = computed(() => {
-  if (versionCompat.value) {
-    const supported = versionCompat.value.supportedLoaders
-    return {
-      fabric: supported.includes('fabric'),
-      forge: supported.includes('forge'),
-      neoforge: supported.includes('neoforge'),
-      cleanroom: supported.includes('cleanroom'),
-      legacyFabric: supported.includes('legacyfabric'),
-      liteloader: supported.includes('liteloader'),
-      labymod: supported.includes('labymod'),
-      optifine: supported.includes('optifine'),
-    }
+  const supported = new Set(
+    versionCompat.value ? versionCompat.value.supportedLoaders : supportedLoaders(props.mcVersion),
+  )
+  return {
+    fabric: supported.has('fabric'),
+    forge: supported.has('forge'),
+    neoforge: supported.has('neoforge'),
+    cleanroom: supported.has('cleanroom'),
+    legacyFabric: supported.has('legacyfabric'),
+    liteloader: supported.has('liteloader'),
+    labymod: supported.has('labymod'),
+    optifine: supported.has('optifine'),
   }
-  return loaderVisibility(props.mcVersion)
 })
 
 const incomp = computed(() =>
@@ -128,7 +126,7 @@ const submitting = ref(false)
 const initialSummary = ref('')
 const installedModFiles = ref<string[]>([])
 const isQuiltInstance = computed(() => {
-  return props.instance?.loaders?.some((l) => l.toLowerCase().includes('quilt')) ?? false
+  return props.instance?.loaders?.some((l) => parseLoader(l) === 'quilt') ?? false
 })
 
 const primaryLoaderDefs = computed<LoaderDef[]>(() => [
@@ -239,19 +237,6 @@ function resetToAutoName() {
   updateAutoName()
 }
 
-function toLoaderKind(loader: PrimaryLoaderId): LoaderKind {
-  switch (loader) {
-    case 'neoforge':
-      return 'neoForge'
-    case 'labymod':
-      return 'labyMod'
-    case 'legacyFabric':
-      return 'legacyFabric'
-    default:
-      return loader as LoaderKind
-  }
-}
-
 async function loadPrimaryVersions(loader: PrimaryLoaderId) {
   if (loader === 'none') {
     primaryVersions.value = []
@@ -260,7 +245,7 @@ async function loadPrimaryVersions(loader: PrimaryLoaderId) {
   }
   loadingPrimaryVersions.value = true
   try {
-    const list = await ipcClient.loadersVersions(toLoaderKind(loader), props.mcVersion)
+    const list = await ipcClient.loadersVersions(toLoaderKind(loader as LoaderId), props.mcVersion)
     primaryVersions.value = list
     if (list.length > 0 && !selectedPrimaryVersion.value) {
       selectedPrimaryVersion.value = list[0].version
@@ -423,30 +408,26 @@ onMounted(async () => {
       if (info.extras.optifabric) installedModFiles.value.push(info.extras.optifabric)
 
       for (const loaderStr of info.loaders) {
-        const lower = loaderStr.toLowerCase()
-        if (lower.includes('fabric') && !lower.includes('legacy')) {
+        const parsed = parseLoader(loaderStr)
+        const parts = loaderStr.split(' ')
+        if (parsed === 'fabric') {
           selectedPrimary.value = 'fabric'
-          const parts = loaderStr.split(' ')
           if (parts.length > 1) selectedPrimaryVersion.value = parts[1]
-        } else if (lower.includes('legacyfabric')) {
+        } else if (parsed === 'legacyfabric') {
           selectedPrimary.value = 'legacyFabric'
-          const parts = loaderStr.split(' ')
           if (parts.length > 1) selectedPrimaryVersion.value = parts[1]
-        } else if (lower.includes('neoforge')) {
+        } else if (parsed === 'neoforge') {
           selectedPrimary.value = 'neoforge'
-          const parts = loaderStr.split(' ')
           if (parts.length > 1) selectedPrimaryVersion.value = parts[1]
-        } else if (lower.includes('forge')) {
+        } else if (parsed === 'forge') {
           selectedPrimary.value = 'forge'
-          const parts = loaderStr.split(' ')
           if (parts.length > 1) selectedPrimaryVersion.value = parts[1]
-        } else if (lower.includes('cleanroom')) {
+        } else if (parsed === 'cleanroom') {
           selectedPrimary.value = 'cleanroom'
-          const parts = loaderStr.split(' ')
           if (parts.length > 1) selectedPrimaryVersion.value = parts[1]
-        } else if (lower.includes('optifine')) {
+        } else if (parsed === 'optifine') {
           optifineEnabled.value = true
-        } else if (lower.includes('liteloader')) {
+        } else if (parsed === 'liteloader') {
           liteloaderEnabled.value = true
         }
       }

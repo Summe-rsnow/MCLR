@@ -1,3 +1,4 @@
+import { parseLoader } from '@/shared/loader'
 export type LoaderKindKey =
   | 'vanilla'
   | 'fabric'
@@ -79,6 +80,10 @@ export const loaderMeta: Record<LoaderKindKey, LoaderMetaItem> = {
 
 export function getLoaderMeta(kind?: string | null): LoaderMetaItem {
   if (!kind) return loaderMeta.vanilla
+  const parsed = parseLoader(kind)
+  if (parsed && parsed in loaderMeta) {
+    return loaderMeta[parsed as LoaderKindKey]
+  }
   const norm = kind.toLowerCase().replace(/[\s_-]/g, '')
   if (norm in loaderMeta) {
     return loaderMeta[norm as LoaderKindKey]

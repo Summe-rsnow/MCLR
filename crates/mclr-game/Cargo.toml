@@ -26,7 +26,6 @@ zip.workspace = true
 windows.workspace = true
 chrono.workspace = true
 tokio-util.workspace = true
-sha2.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

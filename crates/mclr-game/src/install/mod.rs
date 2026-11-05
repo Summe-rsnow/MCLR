@@ -8,7 +8,7 @@ pub mod verified_manifest;
 pub use manifest::{
     VersionManifestEntry, VersionManifestList, fetch_version_manifest, load_resolved_version_json,
 };
-pub use pipeline::{cleanup_stale, install_vanilla, repair_instance};
+pub use pipeline::{cleanup_stale, install_vanilla, remove_installing_dir, repair_instance};
 pub use specs::{collect_version_download_specs, maven_coordinate_to_path};
 pub use verified_manifest::VerifiedManifest;
 

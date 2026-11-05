@@ -65,6 +65,8 @@ export interface UpdateSettings {
 
 export interface StatesSettings {
   dismissedAnnouncements: string[]
+  launchCount?: number
+  promptedSponsorMilestones?: number[]
 }
 
 export type ProxyMode = 'none' | 'system' | 'custom'
@@ -77,6 +79,14 @@ export interface NetSettings {
   sourcePriority: SourcePriority
   connectionsPerFile: number
   maxConcurrentFiles: number
+}
+
+export interface TaskSettings {
+  maxConcurrent: number
+  autoRetry: number
+  notify: boolean
+  historyMax: number
+  historyDays: number
 }
 
 export interface Settings {
@@ -109,6 +119,7 @@ export interface Settings {
   comp?: CompSettings
   update?: UpdateSettings
   states?: StatesSettings
+  tasks?: TaskSettings
 }
 
 export const settingsIpc = {

@@ -83,20 +83,16 @@ pub fn extract_modpack_overrides(
     Ok(extracted_count)
 }
 
-/// Starts a stage: switches the task's progress window and tells the UI what is running.
-/// A missing task context (fixtures, offline import) is not an error.
-async fn begin_stage(task_ctx: Option<(&TaskCenter, &str)>, base: f32, span: f32, stage: &str) {
+/// Activates a named step for the task.
+async fn begin_stage(task_ctx: Option<(&TaskCenter, &str)>, step: &str) {
     if let Some((tc, tid)) = task_ctx {
-        let _ = tc.set_progress_window(tid, base, span).await;
-        let mut params = HashMap::new();
-        params.insert("stage".to_string(), stage.to_string());
-        let _ = tc.update_title_params(tid, params).await;
+        let _ = tc.begin_step(tid, step).await;
     }
 }
 
 fn cf_file_destination_folder(file_name: &str) -> &'static str {
     let lower = file_name.to_lowercase();
-    if lower.ends_with(".jar") {
+    if crate::jarfile::is_jar(&lower) {
         "mods"
     } else if lower.contains("shader") {
         "shaderpacks"
@@ -147,9 +143,7 @@ async fn import_modpack_inner(ctx: ModpackImportContext<'_>) -> Result<InstanceI
 
     validate_instance_name(instance_name).map_err(CompError::Game)?;
 
-    // Everything below reports its own 0.0..=1.0; `begin_stage` maps each stage into its slice
-    // of the bar, so the visible progress never jumps back to 0 between stages.
-    begin_stage(task_ctx, 0.0, 0.08, "inspect").await;
+    begin_stage(task_ctx, "inspect").await;
     let mut plan = inspect_modpack(archive_path)?;
 
     // If nested archive, extract it and work with the inner archive
@@ -197,7 +191,7 @@ async fn import_modpack_inner(ctx: ModpackImportContext<'_>) -> Result<InstanceI
             return Ok::<(), CompError>(());
         }
 
-        begin_stage(task_ctx, 0.08, 0.62, "baseGame").await;
+        begin_stage(task_ctx, "baseGame").await;
         match &plan.inspect.loader {
             Some(loader_name) => {
                 let loader_kind = match loader_name.to_lowercase().as_str() {
@@ -330,7 +324,7 @@ async fn import_modpack_inner(ctx: ModpackImportContext<'_>) -> Result<InstanceI
     }
 
     if !specs.is_empty() {
-        begin_stage(task_ctx, 0.70, 0.28, "files").await;
+        begin_stage(task_ctx, "files").await;
         info!(
             "Downloading {} modpack files into {}",
             specs.len(),
@@ -346,7 +340,7 @@ async fn import_modpack_inner(ctx: ModpackImportContext<'_>) -> Result<InstanceI
     // 5. Extract overrides into instance_dir
     // ZIP extraction is CPU/disk bound synchronous work: keep it off the async
     // runtime's worker threads so downloads and IPC stay responsive.
-    begin_stage(task_ctx, 0.98, 0.02, "overrides").await;
+    begin_stage(task_ctx, "overrides").await;
     let extract_archive = effective_archive_path;
     let extract_dir = instance_dir.clone();
     let extract_prefixes = std::mem::take(&mut plan.override_prefixes);

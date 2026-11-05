@@ -131,46 +131,6 @@ pub struct TauriUpdateManifest {
     pub platforms: HashMap<String, TauriUpdatePlatform>,
 }
 
-/// Compares version string `candidate` against `current` using semver rules.
-/// Returns true if `candidate` is newer than `current`.
-pub fn is_version_newer(candidate: &str, current: &str) -> bool {
-    let parse_tuple = |v: &str| -> (Vec<u64>, Option<String>) {
-        let cleaned = v.trim().trim_start_matches('v');
-        let (num_part, pre_part) = match cleaned.find('-') {
-            Some(idx) => (&cleaned[..idx], Some(cleaned[idx + 1..].to_string())),
-            None => (cleaned, None),
-        };
-        let nums: Vec<u64> = num_part
-            .split('.')
-            .map(|segment| segment.parse::<u64>().unwrap_or(0))
-            .collect();
-        (nums, pre_part)
-    };
-
-    let (c_nums, c_pre) = parse_tuple(candidate);
-    let (cur_nums, cur_pre) = parse_tuple(current);
-
-    let max_len = c_nums.len().max(cur_nums.len());
-    for i in 0..max_len {
-        let c_val = *c_nums.get(i).unwrap_or(&0);
-        let cur_val = *cur_nums.get(i).unwrap_or(&0);
-        if c_val > cur_val {
-            return true;
-        }
-        if c_val < cur_val {
-            return false;
-        }
-    }
-
-    // Numbers are equal: a version with pre-release is older than a release without pre-release
-    match (c_pre, cur_pre) {
-        (None, Some(_)) => true, // candidate is stable release, current is pre-release -> newer
-        (Some(_), None) => false, // candidate is pre-release, current is stable -> older
-        (Some(c_p), Some(cur_p)) => c_p > cur_p,
-        (None, None) => false,
-    }
-}
-
 /// Fetches the update manifest from the given `config.endpoint` and checks against `current_version`.
 pub async fn check_update_manifest(
     client: &reqwest::Client,
@@ -208,7 +168,7 @@ pub async fn check_update_manifest(
         .await
         .map_err(|e| UpdateError::Http(e.to_string()))?;
 
-    let newer = is_version_newer(&manifest.version, current_version);
+    let newer = mclr_core::mcver::is_newer(&manifest.version, current_version);
     // Find Windows x86_64 platform entry, or fallback to first available
     let platform = manifest
         .platforms
@@ -293,15 +253,5 @@ mod tests {
             Some(format!("{}/download/mclr_0.0.99_x64-setup.exe", server.uri()).as_str())
         );
         assert_eq!(result.signature.as_deref(), Some("test-signature-base64"));
-    }
-
-    #[test]
-    fn test_is_version_newer() {
-        assert!(is_version_newer("0.0.12", "0.0.11"));
-        assert!(is_version_newer("0.1.0", "0.0.11"));
-        assert!(is_version_newer("1.0.0", "0.9.9"));
-        assert!(!is_version_newer("0.0.11", "0.0.11"));
-        assert!(!is_version_newer("0.0.10", "0.0.11"));
-        assert!(!is_version_newer("0.0.11-beta", "0.0.11"));
     }
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { modDisplayName } from '@/shared/modName'
 import { useI18n } from 'vue-i18n'
 import type {
   AddItemOutcome,
@@ -162,7 +163,7 @@ async function submit() {
         />
         <div class="min-w-0">
           <div class="text-sm font-medium text-fg truncate">
-            {{ project.zhName || project.title }}
+            {{ modDisplayName(project, true) }}
           </div>
           <div class="text-xs text-fg-muted truncate">
             {{ project.platform }} · {{ project.compType }}

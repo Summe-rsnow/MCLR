@@ -23,6 +23,15 @@ pub fn builder() -> Builder<tauri::Wry> {
             crate::ipc::tasks::task_cancel,
             crate::ipc::tasks::task_pause,
             crate::ipc::tasks::task_resume,
+            crate::ipc::tasks::task_restore,
+            crate::ipc::tasks::task_retry,
+            crate::ipc::tasks::task_remove,
+            crate::ipc::tasks::tasks_restore_all,
+            crate::ipc::tasks::tasks_reorder,
+            crate::ipc::tasks::tasks_store_status,
+            crate::ipc::tasks::tasks_ack_reset,
+            crate::ipc::tasks::tasks_leftovers_info,
+            crate::ipc::tasks::tasks_cleanup_leftovers,
             // [instances]
             crate::ipc::instances::instances_list,
             crate::ipc::instances::instance_rename,
@@ -124,7 +133,6 @@ pub fn builder() -> Builder<tauri::Wry> {
             crate::ipc::tools::tools_generate_skin_avatar,
             crate::ipc::tools::tools_cache_info,
             crate::ipc::tools::tools_cache_clear,
-            crate::ipc::tools::tools_cleanup_failed_tasks,
             crate::ipc::tools::tools_custom_download,
             crate::ipc::tools::tools_create_shortcut,
             // [update]

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::SystemTime;
 
 use mclr_core::paths;
@@ -13,6 +13,7 @@ use specta::Type;
 use zip::ZipArchive;
 
 use crate::error::CompError;
+use crate::jarfile::read_entry_text;
 use crate::local::{parse_mod_metadata, unfold_manifest};
 
 pub const MAX_DEPTH: usize = 5;
@@ -50,7 +51,7 @@ struct NestedJarRef {
 type JarCacheMap = HashMap<String, JarInJarCacheEntry>;
 
 /// In-memory store: `cache file -> (file mtime, entries)`.
-type JarCacheStore = HashMap<PathBuf, (Option<SystemTime>, JarCacheMap)>;
+type JarCacheStore = HashMap<PathBuf, (Option<SystemTime>, Arc<JarCacheMap>)>;
 
 /// In-memory mirror of `jarinjar.json`: `cache file -> (file mtime, entries)`.
 ///
@@ -75,18 +76,17 @@ fn lock_cache() -> std::sync::MutexGuard<'static, JarCacheStore> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-fn load_cache() -> JarCacheMap {
+fn load_cache() -> Arc<JarCacheMap> {
     let cache_file = jar_cache_file();
     let disk_mtime = file_mtime(&cache_file);
 
-    // Fast path: disk unchanged since the last load/save, so serve the in-memory copy. The
-    // lock is held only for the lookup and the clone that follows it.
+    // Fast path: disk unchanged since the last load/save, so serve the in-memory copy.
     if disk_mtime.is_some() {
         let guard = lock_cache();
         if let Some((cached_mtime, map)) = guard.get(&cache_file)
             && *cached_mtime == disk_mtime
         {
-            return map.clone();
+            return Arc::clone(map);
         }
     }
 
@@ -96,27 +96,21 @@ fn load_cache() -> JarCacheMap {
         .and_then(|c| serde_json::from_str(&c).ok())
         .unwrap_or_default();
 
-    lock_cache().insert(cache_file, (disk_mtime, map.clone()));
-    map
+    let arc = Arc::new(map);
+    lock_cache().insert(cache_file, (disk_mtime, Arc::clone(&arc)));
+    arc
 }
 
-fn save_cache(cache: &JarCacheMap) {
+fn save_cache(cache: JarCacheMap) {
     let cache_file = jar_cache_file();
     if let Some(parent) = cache_file.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    if let Ok(json) = serde_json::to_string(cache) {
+    if let Ok(json) = serde_json::to_string(&cache) {
         let _ = fs::write(&cache_file, json);
     }
     let new_mtime = file_mtime(&cache_file);
-    lock_cache().insert(cache_file, (new_mtime, cache.clone()));
-}
-
-fn read_entry_text<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> Option<String> {
-    let mut entry = archive.by_name(name).ok()?;
-    let mut text = String::new();
-    entry.read_to_string(&mut text).ok()?;
-    Some(text)
+    lock_cache().insert(cache_file, (new_mtime, Arc::new(cache)));
 }
 
 /// Recursively discovers and resolves nested jar files inside a zip archive.
@@ -322,7 +316,7 @@ pub fn scan_jar_in_jar(jar_path: &Path) -> Result<Vec<JarInJarNode>, CompError> 
         .unwrap_or(0);
 
     let cache_key = format!("{}:{}:{}", jar_path.display(), mtime_secs, size);
-    let mut cache = load_cache();
+    let cache = load_cache();
     if let Some(cached) = cache.get(&cache_key)
         && cached.size == size
         && cached.mtime_secs == mtime_secs
@@ -341,6 +335,7 @@ pub fn scan_jar_in_jar(jar_path: &Path) -> Result<Vec<JarInJarNode>, CompError> 
 
     let nodes = resolve_nested_archive(&mut archive, file_name, 0, &mut budget)?;
 
+    let mut cache = Arc::unwrap_or_clone(cache);
     cache.insert(
         cache_key,
         JarInJarCacheEntry {
@@ -349,8 +344,7 @@ pub fn scan_jar_in_jar(jar_path: &Path) -> Result<Vec<JarInJarNode>, CompError> 
             nodes: nodes.clone(),
         },
     );
-    save_cache(&cache);
-
+    save_cache(cache);
     Ok(nodes)
 }
 

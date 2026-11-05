@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { formatBytes } from '@/shared/format'
+import { localEntryNames } from '@/shared/modName'
 import { useI18n } from 'vue-i18n'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import type { ResourceEntry, ResourceKind } from '../../../ipc/client'
@@ -40,19 +42,16 @@ const menuOpen = ref(false)
  * The Chinese name is the friendlier identifier, so it leads by default; users who organize
  * by jar file name flip the order with `localNameStyle`.
  */
-const primaryName = computed(() => {
-  if (props.kind === 'mod' && props.showZhName && props.entry.zhName) {
-    return props.localNameStyle === 1 ? props.entry.fileName : props.entry.zhName
-  }
-  return props.entry.title || props.entry.fileName
-})
-
-const secondaryName = computed(() => {
-  if (props.kind === 'mod' && props.showZhName && props.entry.zhName) {
-    return props.localNameStyle === 1 ? props.entry.zhName : props.entry.fileName
-  }
-  return null
-})
+const names = computed(() =>
+  localEntryNames(
+    props.entry,
+    props.kind,
+    Boolean(props.showZhName),
+    props.localNameStyle === 1 ? 1 : 0,
+  ),
+)
+const primaryName = computed(() => names.value.primary)
+const secondaryName = computed(() => names.value.secondary)
 
 /**
  * Cached jar artwork is a local file served through the asset protocol; a mod whose jar
@@ -84,13 +83,6 @@ function tagLabel(tag: string): string {
   return te(key) ? t(key) : tag
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
-}
-
 function onMenuReveal() {
   menuOpen.value = false
   emit('reveal', props.entry)
@@ -113,7 +105,7 @@ function onMenuDelete() {
 </script>
 <template>
   <div
-    class="relative flex items-center justify-between p-3 rounded-xl border transition-all duration-150 group max-w-full overflow-hidden cursor-pointer select-none"
+    class="relative flex items-center justify-between p-3 rounded-xl border transition-all duration-150 group max-w-full overflow-hidden cursor-pointer"
     :data-resource-row="entry.path"
     :class="[
       selected

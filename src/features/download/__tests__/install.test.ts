@@ -345,12 +345,18 @@ describe('Download / Install feature', () => {
     vi.spyOn(ipcClient, 'tasksList').mockResolvedValue([
       {
         id: 'task-install-1',
-        parentId: null,
+        kind: 'install.vanilla',
         titleKey: '',
         titleParams: {},
         state: 'success',
         progress: 1,
         speedBps: 0,
+        steps: [],
+        attempt: 0,
+        maxAttempts: 1,
+        resumable: true,
+        queueSeq: 1,
+        createdAtMs: Date.now(),
       },
     ])
     vi.spyOn(ipcClient, 'presetsApplyReport').mockResolvedValue({

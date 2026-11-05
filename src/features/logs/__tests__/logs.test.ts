@@ -91,7 +91,6 @@ describe('Logs feature', () => {
 
     expect(wrapper.text()).toContain('游戏日志')
     expect(wrapper.text()).toContain('启动器日志 (2)')
-    expect(wrapper.text()).toContain('任务列表')
     expect(wrapper.text()).toContain('Loading Minecraft 1.20.1')
   })
 
@@ -270,47 +269,6 @@ describe('Logs feature', () => {
 
     expect(dirSpy).toHaveBeenCalled()
     expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('logs'))
-  })
-
-  it('renders tasks tab when route has tab=tasks query', async () => {
-    await router.push('/logs?tab=tasks')
-    const wrapper = mount(LogsPage, {
-      global: {
-        plugins: [i18n, router],
-      },
-    })
-
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('批量下载')
-    expect(wrapper.text()).not.toContain('Loading Minecraft 1.20.1')
-    expect(wrapper.find('.overflow-y-auto.px-2.py-3').exists()).toBe(true)
-  })
-  it('formats download.group cleanly without empty parentheses when count is missing', async () => {
-    vi.spyOn(ipcClient, 'tasksList').mockResolvedValueOnce([
-      {
-        id: 'task-test-group',
-        parentId: null,
-        titleKey: 'tasks.item.download.group',
-        titleParams: {},
-        state: 'running',
-        progress: 0.5,
-        speedBps: 1000,
-      },
-    ])
-
-    await router.push('/logs?tab=tasks')
-    const wrapper = mount(LogsPage, {
-      global: {
-        plugins: [i18n, router],
-      },
-    })
-
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('批量下载')
-    expect(wrapper.text()).not.toContain('批量下载 (')
-    expect(wrapper.text()).not.toContain('个项目')
   })
 
   it('flushes 10000 queued lines in under 50ms', async () => {

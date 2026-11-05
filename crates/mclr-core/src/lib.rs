@@ -1,8 +1,11 @@
 //! Core runtime primitives, paths, settings, tasks, and error contract for MCLR.
+#![allow(unused_assignments, clippy::collapsible_if, clippy::needless_bool)]
 
 pub mod account_session;
 pub mod error;
+pub mod loader;
 pub mod logging;
+pub mod mcver;
 pub mod paths;
 pub mod safe_path;
 pub mod secrets;
@@ -24,7 +27,11 @@ pub use settings::{
     StatesSettings, SystemSettings, ThemeMode, UiSettings, UpdateSettings, apply_patch,
     merge_patch,
 };
-pub use tasks::{TaskCenter, TaskNode, TaskState};
+pub use tasks::{
+    NetProbe, StepNode, StepPlan, StepState, StoreMode, TaskAborted, TaskCenter, TaskControl,
+    TaskCtx, TaskEngine, TaskHandler, TaskNode, TaskPlan, TaskRecord, TaskState, TaskStore,
+    TaskStoreStatus, norm_path,
+};
 
 use serde::{Deserialize, Serialize};
 use specta::Type;

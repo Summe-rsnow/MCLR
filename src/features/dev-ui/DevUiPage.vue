@@ -347,7 +347,7 @@ async function triggerConfirmDialog() {
 </script>
 
 <template>
-  <div class="m-page pb-16 select-none space-y-6">
+  <div class="m-page pb-16 space-y-6">
     <MPageHeader
       :title="t('devUi.title')"
       :description="t('devUi.themeSettings')"

@@ -131,6 +131,21 @@ Selections that sit *on* a material surface must be styled per material, not wit
 
 The accent bar keeps `bg-primary` in both materials; in glass it additionally glows (`0 0 10px` primary @75%). Rule of thumb: **flat = opaque tonal block, glass = translucent accent wash that inherits the panel's refraction** — never a solid tint dropped onto glass, and never a blur inside flat.
 
+### 6c. Text Selection & Copyability
+
+Copying text out of a launcher is part of its support workflow (paths, error codes, mod file names, versions), so selection is **allowed by default and denied only where a click owns the surface**:
+
+| Surface | `user-select` | Notes |
+|---|---|---|
+| Body, pages, cards, prose, tables, badges, progress labels, log lines | `text` | Default. Never add `select-none` to a page root or `#app`. |
+| `MButton`, `MIconButton`, `MSwitch`, `MCheckbox`, `MRadioGroup`, `MSegmented`, `MTabs`, `MSelect`, `MPopover`, `MContextMenu`, `MPagination` | `none` | Enforced globally via `theme/material.css` for `button`/`label`/`[role=…]`. |
+| Sidebar (`SidebarNav`), title bar, splash, drag regions | `none` | Window chrome keeps a clean drag/click feel. |
+| `MPathPicker` field | `text` | A non-empty in-field selection swallows the click so the file dialog does not open mid-selection. |
+| `MTooltip` / `MHelpTooltip` bubble | `text` | The bubble is hoverable (140 ms hide delay) so long help text can be selected and copied. |
+
+Selection colours come from `::selection` (`--c-primary` @25% over the canvas); callers never style selection themselves. `MToast`, `MDialog`, `MDrawer`, `MMarkdown` and `MEmpty` already carry `select-text` and must keep it.
+
+
 ---
 
 ## 7. Icons

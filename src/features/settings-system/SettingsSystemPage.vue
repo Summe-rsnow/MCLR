@@ -20,6 +20,7 @@ import {
 } from '../../ui'
 import SystemNetworkSection from './components/SystemNetworkSection.vue'
 import SystemUpdateSection from './components/SystemUpdateSection.vue'
+import SystemTasksSection from './components/SystemTasksSection.vue'
 
 const { t } = useI18n()
 const { formatError } = useErrorText()
@@ -74,6 +75,12 @@ const showRestartNotice = ref(false)
 const filenameFormat = ref(1)
 const showZhName = ref(true)
 const localNameStyle = ref(0)
+
+const tasksMaxConcurrent = ref(3)
+const tasksAutoRetry = ref(3)
+const tasksNotify = ref(true)
+const tasksHistoryMax = ref(200)
+const tasksHistoryDays = ref(30)
 
 // Language state
 const selectedLocale = ref<string>(String(i18n.global.locale.value))
@@ -176,6 +183,13 @@ async function loadSettings() {
       showZhName.value = s.comp.showZhName ?? true
       localNameStyle.value = s.comp.localNameStyle ?? 0
     }
+    if (s.tasks) {
+      tasksMaxConcurrent.value = s.tasks.maxConcurrent ?? 3
+      tasksAutoRetry.value = s.tasks.autoRetry ?? 3
+      tasksNotify.value = s.tasks.notify ?? true
+      tasksHistoryMax.value = s.tasks.historyMax ?? 200
+      tasksHistoryDays.value = s.tasks.historyDays ?? 30
+    }
     const secrets = await ipcClient.secretsStatus()
     updaterConfigured.value = Boolean(secrets.updateEndpoint && secrets.updatePubkey)
   } catch {
@@ -208,6 +222,21 @@ async function saveMiscSettings() {
       disableGpu: !hardwareAccel.value,
     },
   })
+}
+async function saveTaskSettings() {
+  try {
+    await ipcClient.settingsPatch({
+      tasks: {
+        maxConcurrent: tasksMaxConcurrent.value,
+        autoRetry: tasksAutoRetry.value,
+        notify: tasksNotify.value,
+        historyMax: tasksHistoryMax.value,
+        historyDays: tasksHistoryDays.value,
+      },
+    })
+  } catch (err: unknown) {
+    toast.danger(formatError(err))
+  }
 }
 
 async function saveCommunitySettings() {
@@ -339,7 +368,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-6 pb-12 select-none">
+  <div class="space-y-6 pb-12">
     <!-- Header title preserved for test text assertion -->
     <div class="sr-only">
       <h1>{{ t('settingsSystem.title') }}</h1>
@@ -416,6 +445,14 @@ onMounted(async () => {
         v-model:connections-per-file="connectionsPerFile"
         v-model:max-concurrent-files="maxConcurrentFiles"
         @change="saveMiscSettings"
+      />
+      <SystemTasksSection
+        v-model:max-concurrent="tasksMaxConcurrent"
+        v-model:auto-retry="tasksAutoRetry"
+        v-model:notify="tasksNotify"
+        v-model:history-max="tasksHistoryMax"
+        v-model:history-days="tasksHistoryDays"
+        @change="saveTaskSettings"
       />
 
       <MSection

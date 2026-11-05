@@ -6,10 +6,12 @@ pub mod events;
 pub mod http;
 pub mod ipc;
 pub mod security;
+pub mod tasks;
 pub mod tray;
 
 use mclr_auth::AccountStore;
-use mclr_core::{SettingsStore, TaskCenter, TaskNode, init_logging, paths};
+use mclr_core::tasks::{TaskCenter, TaskEngine, TaskNode, TaskStore};
+use mclr_core::{SettingsStore, init_logging, paths};
 use mclr_game::LaunchWatcher;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
@@ -31,7 +33,10 @@ pub fn run() {
     let http_state =
         http::HttpState::new(&initial_settings.net).expect("failed to build HTTP client");
     let account_store = Arc::new(account_store);
-    let task_center = Arc::new(TaskCenter::new());
+    let (store, records, status) = TaskStore::open(&paths::tasks_db_file());
+    let task_center = Arc::new(TaskCenter::with_store(store, status));
+    let probe = Arc::new(tasks::HttpNetProbe::new(http_state.clone()));
+    let engine = TaskEngine::new(Arc::clone(&task_center), probe);
     let launch_watcher = Arc::new(LaunchWatcher::new());
 
     // Initialize logging according to settings
@@ -40,6 +45,7 @@ pub fn run() {
     let tc_for_events = Arc::clone(&task_center);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
@@ -55,7 +61,8 @@ pub fn run() {
         }))
         .manage(settings_store)
         .manage(http_state)
-        .manage(task_center)
+        .manage(Arc::clone(&task_center))
+        .manage(Arc::clone(&engine))
         .manage(account_store)
         .manage(launch_watcher)
         .manage({
@@ -83,6 +90,15 @@ pub fn run() {
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
+            let engine_init = Arc::clone(&engine);
+            let center_init = Arc::clone(&task_center);
+            let tasks_settings = initial_settings.tasks.clone();
+            tauri::async_runtime::block_on(async {
+                center_init.load_records(records).await;
+                tasks::register_all(&engine_init, app.handle()).await;
+                engine_init.apply_settings(tasks_settings).await;
+                engine_init.startup().await;
+            });
             // The preset repository is loaded once; a corrupt document degrades to "no presets"
             // instead of blocking startup.
             app.manage(Arc::new(ipc::presets::PresetState::new(
@@ -120,6 +136,20 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 while let Ok(diff) = task_rx.recv().await {
                     batcher.push(diff);
+                }
+            });
+            let app_handle_removed = app.handle().clone();
+            let mut removed_rx = tc_for_events.subscribe_removed();
+            tauri::async_runtime::spawn(async move {
+                while let Ok(ids) = removed_rx.recv().await {
+                    let _ = app_handle_removed.emit("tasks://removed", ids);
+                }
+            });
+            let app_handle_status = app.handle().clone();
+            let mut status_rx = tc_for_events.subscribe_status();
+            tauri::async_runtime::spawn(async move {
+                while let Ok(st) = status_rx.recv().await {
+                    let _ = app_handle_status.emit("tasks://store", st);
                 }
             });
             let startup_args: Vec<String> = std::env::args().collect();

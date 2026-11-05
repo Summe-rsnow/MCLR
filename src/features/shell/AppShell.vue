@@ -14,7 +14,10 @@ import {
 import { useI18n } from 'vue-i18n'
 import { ipcClient } from '../../ipc/client'
 import { useCrashStore } from '../crash/store'
+import { useTasksStore } from '../tasks/store'
+import { startTaskNotifications } from '../tasks/notify'
 import CrashDialog from '../crash/CrashDialog.vue'
+import SponsorMilestoneDialog from '../launch/components/SponsorMilestoneDialog.vue'
 import TitleBar from './TitleBar.vue'
 import SidebarNav from './SidebarNav.vue'
 import { useBackgroundMedia } from './useBackgroundMedia'
@@ -47,6 +50,8 @@ function onDialogCancel() {
 }
 
 const crashStore = useCrashStore()
+const tasksStore = useTasksStore()
+let stopNotifications: (() => void) | null = null
 
 // Background composable
 const { backgroundMediaSrc, cleanup: cleanupBackground } = useBackgroundMedia()
@@ -82,19 +87,22 @@ async function checkUpdatesOnStartup() {
 
 onMounted(() => {
   crashStore.startListening()
+  void tasksStore.fetchTasks()
+  void tasksStore.startListening()
+  stopNotifications = startTaskNotifications(tasksStore)
   void checkUpdatesOnStartup()
 })
 
 onUnmounted(() => {
   crashStore.stopListening()
+  tasksStore.stopListening()
+  stopNotifications?.()
   cleanupBackground()
 })
 </script>
 
 <template>
-  <div
-    class="relative w-screen h-screen flex flex-row bg-canvas text-fg select-none overflow-hidden"
-  >
+  <div class="relative w-screen h-screen flex flex-row bg-canvas text-fg overflow-hidden">
     <!-- SVG Refraction Filter for Liquid Glass -->
     <GlassDefs />
 
@@ -205,6 +213,9 @@ onUnmounted(() => {
 
     <!-- Global Crash Analysis Dialog -->
     <CrashDialog />
+
+    <!-- Milestone Sponsor Dialog -->
+    <SponsorMilestoneDialog />
   </div>
 </template>
 

@@ -3,17 +3,18 @@
 use mclr_core::AppError;
 use mclr_core::settings::NetSettings;
 use mclr_net::build_http_client;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
+#[derive(Clone)]
 pub struct HttpState {
-    inner: RwLock<(NetSettings, reqwest::Client)>,
+    inner: Arc<RwLock<(NetSettings, reqwest::Client)>>,
 }
 
 impl HttpState {
     pub fn new(net: &NetSettings) -> Result<Self, AppError> {
         let client = build_http_client(net).map_err(AppError::from)?;
         Ok(Self {
-            inner: RwLock::new((net.clone(), client)),
+            inner: Arc::new(RwLock::new((net.clone(), client))),
         })
     }
 

@@ -8,6 +8,7 @@ pub mod launch;
 pub mod net;
 pub mod states;
 pub mod system;
+pub mod tasks;
 pub mod ui;
 pub mod update;
 
@@ -27,6 +28,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 pub use system::SystemSettings;
+pub use tasks::TaskSettings;
 use tokio::sync::{Notify, RwLock};
 use tokio::time::{Duration, sleep};
 pub use ui::{MaterialMode, ThemeMode, UiSettings};
@@ -147,6 +149,7 @@ pub struct Settings {
     pub comp: CompSettings,
     pub update: UpdateSettings,
     pub states: StatesSettings,
+    pub tasks: TaskSettings,
 }
 
 impl Default for Settings {
@@ -163,6 +166,7 @@ impl Default for Settings {
             comp: CompSettings::default(),
             update: UpdateSettings::default(),
             states: StatesSettings::default(),
+            tasks: TaskSettings::default(),
         }
     }
 }
@@ -330,6 +334,36 @@ impl SettingsStore {
 
         self.dirty_notify.notify_one();
         Ok((*updated).clone())
+    }
+    /// Increments launch count, checks if a sponsor milestone (10, 20, 50, 100, 200, 500)
+    /// was hit and has not been prompted yet. Returns `Some(milestone)` if hit, else `None`.
+    pub async fn record_launch_and_check_milestone(&self) -> Result<Option<u32>, CoreError> {
+        const MILESTONES: &[u32] = &[10, 20, 50, 100, 200, 500];
+        let hit_milestone = {
+            let mut lock = self.settings.write().await;
+            let mut current = (**lock).clone();
+            current.states.launch_count = current.states.launch_count.saturating_add(1);
+
+            let count = current.states.launch_count;
+            let hit = MILESTONES.iter().copied().find(|&m| m == count);
+
+            let milestone_to_prompt = if let Some(m) = hit {
+                if !current.states.prompted_sponsor_milestones.contains(&m) {
+                    current.states.prompted_sponsor_milestones.push(m);
+                    Some(m)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            *lock = Arc::new(current);
+            milestone_to_prompt
+        };
+
+        self.dirty_notify.notify_one();
+        Ok(hit_milestone)
     }
 
     /// Writes settings immediately to disk atomically.
@@ -555,5 +589,32 @@ mod tests {
         let store2 = SettingsStore::open_path(&path).unwrap();
         let loaded = store2.get().await;
         assert_eq!(loaded.ui.seed, "#10b981");
+    }
+    #[tokio::test]
+    async fn test_launch_count_and_milestones() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("config.json");
+
+        let store = SettingsStore::open_path(&path).unwrap();
+        assert_eq!(store.get().await.states.launch_count, 0);
+
+        for i in 1..=9 {
+            let res = store.record_launch_and_check_milestone().await.unwrap();
+            assert_eq!(res, None, "launch {i} should not trigger milestone");
+        }
+
+        // 10th launch triggers milestone 10
+        let res10 = store.record_launch_and_check_milestone().await.unwrap();
+        assert_eq!(res10, Some(10));
+        assert_eq!(store.get().await.states.launch_count, 10);
+        assert_eq!(
+            store.get().await.states.prompted_sponsor_milestones,
+            vec![10]
+        );
+
+        // 11th launch does not trigger
+        let res11 = store.record_launch_and_check_milestone().await.unwrap();
+        assert_eq!(res11, None);
+        assert_eq!(store.get().await.states.launch_count, 11);
     }
 }

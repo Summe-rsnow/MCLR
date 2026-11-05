@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { parseLoader } from '@/shared/loader'
 import type { InstanceInfo } from '../../../ipc/client'
 import { MCard, MLoaderIcon, MBadge } from '../../../ui'
 
@@ -18,8 +19,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 function getLoaderBadgeVariant(kind?: string): 'primary' | 'warning' | 'neutral' {
-  switch (kind) {
+  switch (parseLoader(kind)) {
     case 'fabric':
+    case 'legacyfabric':
       return 'primary'
     case 'forge':
     case 'neoforge':

@@ -52,6 +52,7 @@ const updatePosition = () => {
 }
 
 const show = () => {
+  cancelHide()
   positioned.value = false
   visible.value = true
   void nextTick(() => updatePosition())
@@ -60,6 +61,29 @@ const show = () => {
 const hide = () => {
   visible.value = false
   positioned.value = false
+}
+
+/**
+ * The bubble is interactive so its text can be selected and copied, which means
+ * the pointer has to survive the gap between the trigger and the bubble. Hiding
+ * is therefore deferred slightly and cancelled when the bubble is hovered.
+ */
+let hideTimer: ReturnType<typeof setTimeout> | null = null
+const HIDE_DELAY_MS = 140
+
+function cancelHide() {
+  if (hideTimer !== null) {
+    clearTimeout(hideTimer)
+    hideTimer = null
+  }
+}
+
+function scheduleHide() {
+  cancelHide()
+  hideTimer = setTimeout(() => {
+    hideTimer = null
+    hide()
+  }, HIDE_DELAY_MS)
 }
 
 const onScrollOrResize = () => {
@@ -74,6 +98,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  cancelHide()
   window.removeEventListener('scroll', onScrollOrResize, true)
   window.removeEventListener('resize', onScrollOrResize)
 })
@@ -84,9 +109,9 @@ onUnmounted(() => {
     ref="triggerRef"
     class="relative inline-flex items-center"
     @mouseenter="show"
-    @mouseleave="hide"
+    @mouseleave="scheduleHide"
     @focusin="show"
-    @focusout="hide"
+    @focusout="scheduleHide"
   >
     <slot />
     <Teleport to="body">
@@ -94,7 +119,7 @@ onUnmounted(() => {
         <div
           v-if="visible"
           ref="bubbleRef"
-          class="m-overlay m-refract fixed px-3 py-2 text-xs rounded-xl text-fg pointer-events-none z-[9999] w-max max-w-[280px] min-w-[120px] whitespace-normal break-words leading-relaxed shadow-lg text-left -translate-x-1/2 select-text"
+          class="m-overlay m-refract fixed px-3 py-2 text-xs rounded-xl text-fg z-[9999] w-max max-w-[280px] min-w-[120px] whitespace-normal break-words leading-relaxed shadow-lg text-left -translate-x-1/2 select-text"
           :class="[
             coords.placement === 'top' ? '-translate-y-full' : '',
             positioned ? '' : 'opacity-0',
@@ -103,6 +128,8 @@ onUnmounted(() => {
             top: `${coords.top}px`,
             left: `${coords.left}px`,
           }"
+          @mouseenter="cancelHide"
+          @mouseleave="scheduleHide"
         >
           {{ text }}
         </div>

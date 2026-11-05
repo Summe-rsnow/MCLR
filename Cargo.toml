@@ -3,7 +3,7 @@ members = ["src-tauri", "crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.0.35"
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.99"
 license = "Apache-2.0"
@@ -68,6 +68,8 @@ tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
+tauri-plugin-notification = "2"
+redb = "4"
 image = { version = "0.25", default-features = false, features = ["png"] }
 trash = "5"
 arboard = "3"
@@ -81,4 +83,4 @@ chrono = { version = "0.4", features = ["serde"] }
 opt-level = 3
 lto = "thin"
 codegen-units = 1
-strip = "debuginfo"
+strip = "symbols"

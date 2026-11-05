@@ -3,18 +3,16 @@
 
 use mclr_comp::model::CompFile;
 use mclr_comp::modrinth::ModrinthClient;
-use mclr_core::{AppError, SettingsStore, TaskCenter};
+use mclr_core::{AppError, SettingsStore};
 use mclr_game::gamedir::resolve_game_dir;
 use mclr_game::instance::classify_instance;
 use mclr_game::{
-    RepairMode, VersionCompatInfo, VersionManifestList, compute_version_compat,
-    fetch_version_manifest, install_vanilla as game_install_vanilla, load_resolved_version_json,
-    repair_instance as game_repair_instance,
+    VersionCompatInfo, VersionManifestList, compute_version_compat, fetch_version_manifest,
+    load_resolved_version_json,
 };
-use mclr_loaders::{InstallEnv, InstallRequest};
+use mclr_loaders::InstallRequest;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::State;
 
@@ -73,52 +71,15 @@ pub async fn install_version_compat(
 #[tauri::command]
 #[specta::specta]
 pub async fn install_create(
-    http: State<'_, crate::http::HttpState>,
-    state: State<'_, SettingsStore>,
-    tasks_state: State<'_, Arc<TaskCenter>>,
+    engine: State<'_, Arc<mclr_core::tasks::TaskEngine>>,
     req: InstallRequest,
 ) -> Result<String, AppError> {
-    let settings = state.get().await;
-    let client = http.client();
-    let mc_folder = current_mc_folder(&state).await;
-
-    let mut params = HashMap::new();
-    params.insert("mcVersion".to_string(), req.mc_version.clone());
-    params.insert("name".to_string(), req.instance_name.clone());
-
-    let (task_id, _token) = tasks_state
-        .create_task(None, "tasks.item.install.create", params)
-        .await;
-
-    let tc = Arc::clone(&tasks_state);
-    let tid = task_id.clone();
-    let net_settings = settings.net.clone();
-    let java_settings = settings.java.clone();
-    let game_settings = settings.game.clone();
-
-    tokio::spawn(async move {
-        let _ = tc.start_task(&tid).await;
-        let env = InstallEnv {
-            client,
-            net_settings,
-            java_settings,
-            game_settings,
-            mc_folder,
-            task_ctx: Some((&tc, tid.as_str())),
-        };
-
-        match mclr_loaders::install_instance(req, env).await {
-            Ok(_) => {
-                let _ = tc.complete_task(&tid).await;
-            }
-            Err(e) => {
-                tracing::error!("Installation failed for {}: {:?}", tid, e);
-                let _ = tc.fail_task(&tid, AppError::from(e)).await;
-            }
-        }
-    });
-
-    Ok(task_id)
+    engine
+        .submit(
+            "install.create",
+            serde_json::to_value(crate::tasks::handlers::install::CreateInstallPayload { req })?,
+        )
+        .await
 }
 
 #[tauri::command]
@@ -236,97 +197,33 @@ pub async fn install_validate_name(
 #[tauri::command]
 #[specta::specta]
 pub async fn install_vanilla(
-    http: State<'_, crate::http::HttpState>,
-    state: State<'_, SettingsStore>,
-    tasks_state: State<'_, Arc<TaskCenter>>,
+    engine: State<'_, Arc<mclr_core::tasks::TaskEngine>>,
     version: String,
     name: String,
 ) -> Result<String, AppError> {
-    let settings = state.get().await;
-    let client = http.client();
-    let mc_folder = current_mc_folder(&state).await;
-    let net_settings = settings.net.clone();
-
-    let mut params = HashMap::new();
-    params.insert("version".to_string(), version.clone());
-    params.insert("name".to_string(), name.clone());
-
-    let (task_id, _token) = tasks_state
-        .create_task(None, "tasks.item.download.group", params)
-        .await;
-
-    let tc = Arc::clone(&tasks_state);
-    let tid = task_id.clone();
-
-    tokio::spawn(async move {
-        let _ = tc.start_task(&tid).await;
-        match game_install_vanilla(
-            &client,
-            &net_settings,
-            &mc_folder,
-            &version,
-            &name,
-            Some((&tc, &tid)),
+    engine
+        .submit(
+            "install.vanilla",
+            serde_json::to_value(crate::tasks::handlers::install::VanillaInstallPayload {
+                version,
+                name,
+            })?,
         )
         .await
-        {
-            Ok(_) => {
-                let _ = tc.complete_task(&tid).await;
-            }
-            Err(e) => {
-                tracing::error!("Installation failed for {}: {:?}", tid, e);
-                let _ = tc.fail_task(&tid, AppError::from(e)).await;
-            }
-        }
-    });
-
-    Ok(task_id)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn install_repair(
-    http: State<'_, crate::http::HttpState>,
-    state: State<'_, SettingsStore>,
-    tasks_state: State<'_, Arc<TaskCenter>>,
+    engine: State<'_, Arc<mclr_core::tasks::TaskEngine>>,
     instance_id: String,
 ) -> Result<String, AppError> {
-    let settings = state.get().await;
-    let client = http.client();
-    let mc_folder = current_mc_folder(&state).await;
-    let net_settings = settings.net.clone();
-
-    let mut params = HashMap::new();
-    params.insert("instanceId".to_string(), instance_id.clone());
-
-    let (task_id, _token) = tasks_state
-        .create_task(None, "tasks.item.download.group", params)
-        .await;
-
-    let tc = Arc::clone(&tasks_state);
-    let tid = task_id.clone();
-
-    tokio::spawn(async move {
-        let _ = tc.start_task(&tid).await;
-        match game_repair_instance(
-            &client,
-            &net_settings,
-            &mc_folder,
-            &instance_id,
-            Some((&tc, &tid)),
-            RepairMode::Full,
+    engine
+        .submit(
+            "install.repair",
+            serde_json::to_value(crate::tasks::handlers::install::RepairInstallPayload {
+                instance_id,
+            })?,
         )
         .await
-        {
-            Ok(_) => {
-                let _ = tc.complete_task(&tid).await;
-            }
-            Err(e) => {
-                tracing::error!("Installation failed for {}: {:?}", tid, e);
-                let _ = tc.fail_task(&tid, AppError::from(e)).await;
-            }
-        }
-    });
-
-    Ok(task_id)
 }

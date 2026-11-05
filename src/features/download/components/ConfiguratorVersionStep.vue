@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { MBadge, MButton } from '../../../ui'
-import { dropOf } from '../compat'
+import { dropOf } from '@/shared/mcver'
 
 defineProps<{
   mcVersion: string

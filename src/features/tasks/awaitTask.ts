@@ -2,7 +2,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { ipcClient, type TaskNode, type TaskState } from '../../ipc/client'
 
 /** Terminal states of a background task: nothing else will arrive for it. */
-const TERMINAL_STATES: readonly TaskState[] = ['success', 'failed', 'canceled']
+const TERMINAL_STATES: readonly TaskState[] = ['success', 'failed', 'canceled', 'interrupted']
 
 export interface TaskOutcome {
   /** `unknown` when the runtime has no task event stream (browser / tests). */

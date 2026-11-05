@@ -1,6 +1,6 @@
 //! Community platform (Modrinth / CurseForge) IPC commands.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -10,8 +10,7 @@ use mclr_comp::{
     CurseForgeClient, ModrinthClient,
 };
 use mclr_comp::{modname, naming};
-use mclr_core::{AppError, SettingsStore, TaskCenter};
-use mclr_net::{DownloadSpec, Downloader};
+use mclr_core::{AppError, SettingsStore};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
@@ -100,9 +99,8 @@ pub async fn comp_files(
 #[tauri::command]
 #[specta::specta]
 pub async fn comp_download(
-    http: State<'_, crate::http::HttpState>,
+    engine: State<'_, Arc<mclr_core::tasks::TaskEngine>>,
     state: State<'_, SettingsStore>,
-    tasks_state: State<'_, Arc<TaskCenter>>,
     file: CompFile,
     target_instance: String,
     kind: CompType,
@@ -129,14 +127,6 @@ pub async fn comp_download(
     }
 
     let settings = state.get().await;
-    let client = http.client();
-
-    let base_dir = super::game_dir_for(&state, &target_instance).await;
-
-    let target_dir = base_dir.join(kind.target_subfolder());
-    tokio::fs::create_dir_all(&target_dir)
-        .await
-        .map_err(CompError::Io)?;
     let zh_name = if settings.comp.show_zh_name {
         project_slug
             .as_deref()
@@ -151,43 +141,18 @@ pub async fn comp_download(
         kind,
         settings.comp.filename_format,
     );
-    let dest_path = target_dir.join(dest_name);
 
-    let mut params = HashMap::new();
-    params.insert("name".to_string(), file.name.clone());
-    params.insert("fileName".to_string(), file.file_name.clone());
-    params.insert("targetInstance".to_string(), target_instance);
-
-    let (task_id, _cancel_token) = tasks_state
-        .create_task(None, "tasks.titles.compDownload", params)
-        .await;
-
-    let spec = DownloadSpec {
-        urls,
-        dest: dest_path,
-        size: if file.size > 0 { Some(file.size) } else { None },
-        sha1: file.hashes.sha1,
-        sha256: None,
-        md5: None,
-    };
-
-    let downloader = Downloader::new(client, settings.net.clone());
-    let tc = Arc::clone(&tasks_state);
-    let tid = task_id.clone();
-
-    tokio::spawn(async move {
-        let _ = tc.start_task(&tid).await;
-        match downloader.download(spec, Some((&tc, &tid))).await {
-            Ok(()) => {
-                let _ = tc.complete_task(&tid).await;
-            }
-            Err(e) => {
-                let _ = tc.fail_task(&tid, AppError::from(e)).await;
-            }
-        }
-    });
-
-    Ok(task_id)
+    engine
+        .submit(
+            "comp.download",
+            serde_json::to_value(crate::tasks::handlers::comp::CompDownloadPayload {
+                file,
+                target_instance,
+                kind,
+                dest_name: Some(dest_name),
+            })?,
+        )
+        .await
 }
 
 #[tauri::command]

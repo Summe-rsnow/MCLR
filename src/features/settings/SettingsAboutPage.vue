@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ipcClient } from '../../ipc/client'
 import { MCard, MSection, MButton, MBadge, MCollapse } from '../../ui'
 
 const { t } = useI18n()
 
 import pkg from '../../../package.json'
 const appVersion = `v${pkg.version}`
+const launchCount = ref(0)
+
+onMounted(async () => {
+  try {
+    const settings = await ipcClient.settingsGet()
+    launchCount.value = settings.states?.launchCount ?? 0
+  } catch {
+    // fallback in mock / initial
+  }
+})
 
 // Collapsible FAQ states (account expanded by default)
 const openFaqs = ref<Record<string, boolean>>({
@@ -22,7 +33,7 @@ function toggleFaq(id: string) {
 </script>
 
 <template>
-  <div class="space-y-6 pb-12 select-none" data-testid="settings-about-page">
+  <div class="space-y-6 pb-12" data-testid="settings-about-page">
     <!-- App Overview Card -->
     <MCard variant="tinted" padding="lg" class="relative overflow-hidden">
       <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
@@ -33,9 +44,12 @@ function toggleFaq(id: string) {
             <span class="i-lucide-rocket w-8 h-8" />
           </div>
           <div class="space-y-1">
-            <div class="flex items-center gap-2.5 select-text">
+            <div class="flex items-center gap-2.5 flex-wrap select-text">
               <h2 class="text-xl font-bold text-fg">MCLR</h2>
               <MBadge variant="primary">{{ appVersion }}</MBadge>
+              <MBadge variant="neutral" icon="i-lucide-play" data-testid="about-launch-count">
+                {{ t('settings.about.launchCount', { count: launchCount }) }}
+              </MBadge>
             </div>
             <p class="text-xs text-fg-muted max-w-lg leading-relaxed">
               {{ t('settings.about.description') }}

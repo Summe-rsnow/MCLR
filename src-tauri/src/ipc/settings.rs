@@ -1,6 +1,7 @@
 //! Settings IPC commands.
 
 use mclr_core::{AppError, Settings, SettingsStore};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
@@ -21,6 +22,8 @@ pub async fn settings_patch(
     // The window close handler reads this atomic instead of awaiting the store.
     app.state::<crate::tray::BackgroundResidency>()
         .set(updated.system.keep_in_background);
+    let engine = app.state::<Arc<mclr_core::tasks::TaskEngine>>();
+    engine.apply_settings(updated.tasks.clone()).await;
     // A new retention window applies immediately; waiting for the next start would
     // leave the user looking at logs they just asked to be cleaned up.
     if patch.pointer("/system/logRetentionDays").is_some() {

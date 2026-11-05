@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { modDisplayName, modSubtitle } from '@/shared/modName'
 import { useI18n } from 'vue-i18n'
 import type { CompProject } from '../../../ipc/client'
 import {
@@ -8,6 +9,7 @@ import {
   MButton,
   MIconButton,
   MBrandIcon,
+  MImage,
   compTypeMeta,
   type CompTypeKey,
   useToast,
@@ -40,9 +42,7 @@ const canAddToPreset = computed(
     !(props.project.compType === 'world' && props.project.platform === 'modrinth'),
 )
 
-const displayTitle = computed(() =>
-  props.showZhName && props.project.zhName ? props.project.zhName : props.project.title,
-)
+const displayTitle = computed(() => modDisplayName(props.project, Boolean(props.showZhName)))
 
 function openMcMod() {
   // A known wiki id is a direct hit; otherwise fall back to searching by the English title.
@@ -94,11 +94,11 @@ const { formatDate } = useFormat()
             <MBadge variant="neutral" size="sm" class="shrink-0">{{ project.compType }}</MBadge>
           </div>
           <div
-            v-if="showZhName && project.zhName && project.zhName !== project.title"
+            v-if="modSubtitle(project, Boolean(showZhName))"
             class="text-sm text-fg-muted mt-0.5 select-text"
             data-testid="comp-project-english-title"
           >
-            {{ project.title }}
+            {{ modSubtitle(project, Boolean(showZhName)) }}
           </div>
 
           <div class="text-sm text-fg-muted mt-1 select-text">

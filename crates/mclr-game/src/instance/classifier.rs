@@ -478,41 +478,11 @@ pub fn extract_loader_versions(loaders: &[String]) -> BTreeMap<String, String> {
     map
 }
 
-/// Canonical loader id for a detected label, as the mod platforms index it.
-///
-/// Detection produces display labels (`"Fabric 0.15.11"`, `"NeoForge 21.1.0"`) and instance
-/// kinds (`"forge"`); Modrinth and CurseForge only understand `fabric`, `forge`, `neoforge`,
-/// `quilt` and `liteloader`. Filtering with a label silently hides or mislabels every update,
-/// so anything that is not indexed is reported as unknown instead of guessed.
-pub fn canonical_loader_id(label: &str) -> Option<&'static str> {
-    let lower = label.trim().to_lowercase();
-    if lower.is_empty() {
-        return None;
-    }
-    // Platforms do not index these flavours: a filter would hide every real update.
-    if lower.contains("legacyfabric") || lower.contains("cleanroom") || lower.contains("labymod") {
-        return None;
-    }
-    // `neoforge` before `forge`, because the longer name contains the shorter one.
-    ["neoforge", "quilt", "fabric", "forge", "liteloader"]
-        .into_iter()
-        .find(|id| lower.contains(id))
-}
-
 pub fn is_modable_instance(loaders: &[String], card_type: Option<CardKind>) -> bool {
     if card_type == Some(CardKind::Api) {
         return true;
     }
-    loaders.iter().any(|l| {
-        let lower = l.to_lowercase();
-        lower.starts_with("fabric")
-            || lower.starts_with("legacyfabric")
-            || lower.starts_with("quilt")
-            || lower.starts_with("forge")
-            || lower.starts_with("neoforge")
-            || lower.starts_with("cleanroom")
-            || lower.starts_with("liteloader")
-    })
+    mclr_core::loader::is_modable_labels(loaders)
 }
 
 pub fn is_april_fools(mc_version: &str, id: &str, release_time: Option<&str>) -> bool {
@@ -545,66 +515,18 @@ pub fn is_april_fools(mc_version: &str, id: &str, release_time: Option<&str>) ->
     false
 }
 
-pub(crate) fn loader_priority_score(loaders: &[String]) -> u32 {
-    let mut score = 99;
-    for l in loaders {
-        let lower = l.to_lowercase();
-        let s = if lower.starts_with("fabric") {
-            1
-        } else if lower.starts_with("quilt") {
-            2
-        } else if lower.starts_with("legacyfabric") {
-            3
-        } else if lower.starts_with("neoforge") {
-            4
-        } else if lower.starts_with("forge") {
-            5
-        } else if lower.starts_with("cleanroom") {
-            6
-        } else if lower.starts_with("labymod") {
-            7
-        } else if lower.starts_with("optifine") {
-            8
-        } else if lower.starts_with("liteloader") {
-            9
-        } else {
-            50
-        };
-        if s < score {
-            score = s;
-        }
-    }
-    score
-}
-
 pub(crate) fn top_loader_version(loaders: &[String]) -> String {
-    let best_score = loader_priority_score(loaders);
+    let best_score = mclr_core::loader::best_priority(loaders);
     for l in loaders {
-        let lower = l.to_lowercase();
-        let s = if lower.starts_with("fabric") {
-            1
-        } else if lower.starts_with("quilt") {
-            2
-        } else if lower.starts_with("legacyfabric") {
-            3
-        } else if lower.starts_with("neoforge") {
-            4
-        } else if lower.starts_with("forge") {
-            5
-        } else if lower.starts_with("cleanroom") {
-            6
-        } else if lower.starts_with("labymod") {
-            7
-        } else if lower.starts_with("optifine") {
-            8
-        } else if lower.starts_with("liteloader") {
-            9
-        } else {
-            50
-        };
+        let s = mclr_core::loader::Loader::parse(l)
+            .map(|x| x.priority())
+            .unwrap_or(50);
         if s == best_score {
-            let parts: Vec<&str> = l.split_whitespace().collect();
-            return parts.get(1).unwrap_or(&"").to_string();
+            let mut parts = l.split_whitespace();
+            let _ = parts.next();
+            if let Some(ver) = parts.next() {
+                return ver.to_string();
+            }
         }
     }
     String::new()
@@ -678,8 +600,8 @@ pub fn classify_cards(instances: &mut [InstanceInfo]) {
             (None, Some(_)) => return std::cmp::Ordering::Greater,
             _ => {}
         }
-        let lp_a = loader_priority_score(&a.loaders);
-        let lp_b = loader_priority_score(&b.loaders);
+        let lp_a = mclr_core::loader::best_priority(&a.loaders);
+        let lp_b = mclr_core::loader::best_priority(&b.loaders);
         if lp_a != lp_b {
             return lp_a.cmp(&lp_b);
         }
@@ -699,23 +621,26 @@ mod tests {
 
     #[test]
     fn canonical_loader_id_maps_detection_labels_to_platform_ids() {
+        let platform_id = |label: &str| {
+            mclr_core::loader::Loader::parse(label).and_then(mclr_core::loader::Loader::platform_id)
+        };
         // Detection labels carry a version suffix.
-        assert_eq!(canonical_loader_id("Fabric 0.15.11"), Some("fabric"));
-        assert_eq!(canonical_loader_id("NeoForge 21.1.0"), Some("neoforge"));
-        assert_eq!(canonical_loader_id("Forge 47.2.0"), Some("forge"));
-        assert_eq!(canonical_loader_id("Quilt 0.24.0"), Some("quilt"));
-        assert_eq!(canonical_loader_id("LiteLoader"), Some("liteloader"));
+        assert_eq!(platform_id("Fabric 0.15.11"), Some("fabric"));
+        assert_eq!(platform_id("NeoForge 21.1.0"), Some("neoforge"));
+        assert_eq!(platform_id("Forge 47.2.0"), Some("forge"));
+        assert_eq!(platform_id("Quilt 0.24.0"), Some("quilt"));
+        assert_eq!(platform_id("LiteLoader"), Some("liteloader"));
 
         // Instance kinds arrive bare and lowercased.
-        assert_eq!(canonical_loader_id("forge"), Some("forge"));
-        assert_eq!(canonical_loader_id("NEOFORGE"), Some("neoforge"));
+        assert_eq!(platform_id("forge"), Some("forge"));
+        assert_eq!(platform_id("NEOFORGE"), Some("neoforge"));
 
         // Flavours the platforms do not index must not filter: an id would hide every update.
-        assert_eq!(canonical_loader_id("LegacyFabric 0.14.5"), None);
-        assert_eq!(canonical_loader_id("Cleanroom 0.2.4"), None);
-        assert_eq!(canonical_loader_id("LabyMod"), None);
-        assert_eq!(canonical_loader_id("Vanilla"), None);
-        assert_eq!(canonical_loader_id(""), None);
+        assert_eq!(platform_id("LegacyFabric 0.14.5"), None);
+        assert_eq!(platform_id("Cleanroom 0.2.4"), None);
+        assert_eq!(platform_id("LabyMod"), None);
+        assert_eq!(platform_id("Vanilla"), None);
+        assert_eq!(platform_id(""), None);
     }
 
     fn vjson(id: &str, libs: &[&str], main: Option<&str>) -> VersionJson {
