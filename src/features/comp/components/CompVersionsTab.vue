@@ -370,7 +370,7 @@ function openDependency(file: CompFile, projectId: string) {
                           <MImage
                             :src="dependencyProject(file.id, dep.projectId)?.iconUrl"
                             fallback-icon="i-lucide-puzzle"
-                            class="w-6 h-6 rounded-md shrink-0"
+                            size="xs"
                           />
                           <span class="text-xs text-fg truncate flex-1 min-w-0">
                             {{ dependencyProject(file.id, dep.projectId)?.title || dep.projectId }}

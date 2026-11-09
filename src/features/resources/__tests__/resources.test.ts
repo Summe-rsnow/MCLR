@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { createPinia, setActivePinia } from 'pinia'
@@ -6,11 +6,18 @@ import ResourceToolbar from '../components/ResourceToolbar.vue'
 import ResourceItemRow from '../components/ResourceItemRow.vue'
 import ResourceModals from '../components/ResourceModals.vue'
 import ResourceList from '../ResourceList.vue'
+import SaveModsToPresetDialog from '../components/SaveModsToPresetDialog.vue'
 import { ipcClient } from '../../../ipc/client'
 import { awaitTask } from '../../tasks/awaitTask'
 import { useToast } from '../../../ui'
 import zhCnResources from '../../../locales/zh-CN/resources.json'
-import type { ResourceEntry, ResourcesPatchEvent } from '../../../ipc/client'
+import zhCnCommon from '../../../locales/zh-CN/common.json'
+import type {
+  AddItemOutcome,
+  ResourceEntry,
+  ResourcePreset,
+  ResourcesPatchEvent,
+} from '../../../ipc/client'
 
 // Local artwork is served through the asset protocol in the packaged app.
 vi.mock('@tauri-apps/api/core', () => ({
@@ -670,5 +677,143 @@ describe('Resources feature unit tests', () => {
 
     expect(toggleSpy).toHaveBeenCalledTimes(20)
     expect(maxInFlight).toBe(8)
+  })
+})
+
+describe('SaveModsToPresetDialog', () => {
+  const preset: ResourcePreset = {
+    id: 'preset-1',
+    name: '性能优化',
+    description: '',
+    gameVersions: [],
+    loaders: [],
+    items: [],
+    createdAt: 1,
+    updatedAt: 1,
+  }
+
+  const recognized: ResourceEntry = {
+    path: '/mods/sodium.jar',
+    relPath: 'sodium.jar',
+    fileName: 'sodium.jar',
+    isDir: false,
+    size: 1024,
+    createdMs: null,
+    modifiedMs: null,
+    enabled: true,
+    state: 'ok',
+    title: 'Sodium',
+    version: '0.5.8',
+    icon: null,
+    tags: ['Fabric'],
+    modId: 'sodium',
+    projectId: 'AANobbMI',
+    platform: 'modrinth',
+    fileId: 'file-a',
+    latestFile: null,
+    updateAvailable: false,
+    dependents: [],
+  }
+
+  // Identified, but the installed file was never resolved to a platform file id.
+  const noFileId: ResourceEntry = {
+    ...recognized,
+    path: '/mods/fabric-api.jar',
+    relPath: 'fabric-api.jar',
+    fileName: 'fabric-api.jar',
+    title: 'Fabric API',
+    modId: 'fabric-api',
+    projectId: 'P7dR8mSH',
+    fileId: null,
+  }
+
+  // A hand-built jar no platform knows: it cannot be restored by a preset.
+  const unrecognized: ResourceEntry = {
+    ...recognized,
+    path: '/mods/local-tweaks.jar',
+    relPath: 'local-tweaks.jar',
+    fileName: 'local-tweaks.jar',
+    title: 'Local Tweaks',
+    modId: 'local-tweaks',
+    projectId: null,
+    platform: null,
+    fileId: null,
+  }
+
+  async function mountSaveDialog() {
+    vi.spyOn(ipcClient, 'presetsList').mockResolvedValue([preset])
+    const addSpy = vi.spyOn(ipcClient, 'presetsAddItems').mockResolvedValue([
+      { platform: 'modrinth', projectId: 'AANobbMI', title: 'Sodium', status: 'added' },
+      { platform: 'modrinth', projectId: 'P7dR8mSH', title: 'Fabric API', status: 'added' },
+    ] satisfies AddItemOutcome[])
+
+    const i18n = createI18n({
+      legacy: false,
+      locale: 'zh-CN',
+      messages: { 'zh-CN': { resources: zhCnResources, common: zhCnCommon } },
+    })
+    mount(SaveModsToPresetDialog, {
+      props: { open: true, entries: [recognized, noFileId, unrecognized] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    return {
+      addSpy,
+      switches: () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="switch"]')),
+      confirm: () =>
+        document.body.querySelector<HTMLElement>('[data-testid="save-to-preset-confirm"]'),
+    }
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = ''
+    vi.restoreAllMocks()
+  })
+
+  it('lists recognized mods unlocked by default and never offers an unrecognized one', async () => {
+    const { switches } = await mountSaveDialog()
+
+    const rows = switches()
+    // One switch per recognized mod; the unrecognized jar is only reported as a count.
+    expect(rows).toHaveLength(2)
+    expect(rows.map((sw) => sw.getAttribute('aria-checked'))).toEqual(['false', 'false'])
+    // No file id to pin: locking is not offered.
+    expect((rows[1] as HTMLButtonElement).disabled).toBe(true)
+    expect(
+      document.body.querySelector('[data-testid="save-to-preset-unrecognized"]')?.textContent,
+    ).toContain('1')
+  })
+
+  it('sends pinnedFileId: null for unlocked mods and the installed file once a row is locked', async () => {
+    const { addSpy, switches, confirm } = await mountSaveDialog()
+
+    // Row 0 = Sodium (has a file id): lock its installed version, leave Fabric API unlocked.
+    switches()[0].click()
+    await flushPromises()
+
+    confirm()!.click()
+    await flushPromises()
+
+    expect(addSpy).toHaveBeenCalledTimes(1)
+    const [presetId, items] = addSpy.mock.calls[0]
+    expect(presetId).toBe('preset-1')
+    expect(items).toHaveLength(2)
+    expect(items[0]).toMatchObject({
+      platform: 'modrinth',
+      projectId: 'AANobbMI',
+      kind: 'mod',
+      title: 'Sodium',
+      slug: 'sodium',
+      pinnedFileId: 'file-a',
+      pinnedFileName: 'sodium.jar',
+    })
+    // Unlocked: follows the latest compatible file, so no file id is pinned.
+    expect(items[1].projectId).toBe('P7dR8mSH')
+    expect(items[1].pinnedFileId).toBeNull()
+    expect(items[1].pinnedFileName).toBeNull()
+
+    // The outcome badges from the backend are rendered in the dialog.
+    expect(document.body.querySelector('[data-testid="save-to-preset-outcomes"]')).not.toBeNull()
   })
 })

@@ -80,6 +80,8 @@ export const accountsIpc = {
     }),
   accountsRefresh: (id: string): Promise<AccountView> =>
     invokeCommand<AccountView>('accounts_refresh', { id }),
+  accountsGetSkinDataUrl: (id: string): Promise<string> =>
+    invokeCommand<string>('accounts_get_skin_data_url', { id }),
   accountsSkinUpload: (id: string, variant: string, pngPath: string): Promise<AccountView> =>
     invokeCommand<AccountView>('accounts_skin_upload', {
       id,

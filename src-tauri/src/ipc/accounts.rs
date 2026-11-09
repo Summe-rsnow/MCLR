@@ -5,8 +5,8 @@ pub use mclr_auth::{
     OfflineUuidMode,
 };
 use mclr_auth::{
-    MicrosoftAuthService, MsAuthEndpoints, StoredAccount, crop_skin_head, set_active_cape,
-    upload_authlib_skin, upload_skin,
+    AuthError, MicrosoftAuthService, MsAuthEndpoints, StoredAccount, crop_skin_head,
+    default_skin_data_url, png_data_url, set_active_cape, upload_authlib_skin, upload_skin,
 };
 use mclr_core::{AppError, TaskCenter};
 use std::collections::HashMap;
@@ -217,6 +217,44 @@ pub async fn accounts_refresh(
         .refresh_account(&client, &id)
         .await
         .map_err(AppError::from)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn accounts_get_skin_data_url(
+    http: State<'_, crate::http::HttpState>,
+    state: State<'_, Arc<AccountStore>>,
+    id: String,
+) -> Result<String, AppError> {
+    let account = state
+        .get_account(&id)
+        .await
+        .ok_or_else(|| AppError::new("auth.accountNotFound"))?;
+
+    let client = http.client();
+    match &account {
+        StoredAccount::Offline { uuid, .. } => Ok(default_skin_data_url(uuid)),
+        StoredAccount::Microsoft { uuid, .. } => {
+            let profile_url =
+                format!("https://sessionserver.mojang.com/session/minecraft/profile/{uuid}");
+            match mclr_auth::yggdrasil::fetch_skin_png_from_profile_url(&client, &profile_url).await
+            {
+                Ok(bytes) => Ok(png_data_url(&bytes)),
+                // Accounts without a custom skin still export the bundled default texture.
+                Err(AuthError::SkinNotFound) => Ok(default_skin_data_url(uuid)),
+                Err(e) => Err(AppError::from(e)),
+            }
+        }
+        StoredAccount::Authlib { server, uuid, .. } => {
+            let api_root = mclr_auth::yggdrasil::normalize_server_url(server);
+            match mclr_auth::yggdrasil::fetch_profile_skin_png(&client, &api_root, uuid).await {
+                Ok(bytes) => Ok(png_data_url(&bytes)),
+                Err(AuthError::SkinNotFound) => Ok(default_skin_data_url(uuid)),
+                Err(e) => Err(AppError::from(e)),
+            }
+        }
+        StoredAccount::YggdrasilConnect { uuid, .. } => Ok(default_skin_data_url(uuid)),
+    }
 }
 
 #[tauri::command]

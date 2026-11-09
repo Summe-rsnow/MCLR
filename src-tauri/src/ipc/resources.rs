@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use mclr_comp::LocalModInfo;
-use mclr_comp::model::CompFile;
+use mclr_comp::curseforge::CurseForgeClient;
+use mclr_comp::model::{CompFile, CompPlatform};
 use mclr_comp::modname;
 use mclr_comp::modrinth::ModrinthClient;
 use mclr_comp::resources::{
@@ -32,6 +33,12 @@ pub struct ResourcePatch {
     pub tags: Option<Vec<String>>,
     pub mod_id: Option<String>,
     pub project_id: Option<String>,
+    /// Platform + platform file id of the installed jar, once identified. Omitted when unknown
+    /// so the row keeps whatever Phase 1 already resolved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub platform: Option<CompPlatform>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_file: Option<CompFile>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -81,7 +88,7 @@ pub async fn resources_list(
 
     // Phase 1: a single blocking pass resolves the instance's Minecraft version, scans the
     // resource folder (legacy `mods/<mc_version>/` included) and loads the local-mod cache.
-    let (mut entries, local_mods) = super::run_blocking(move || {
+    let (mut entries, mut local_mods, ledger) = super::run_blocking(move || {
         // Only mods have a version-specific legacy folder, so no other kind pays for the
         // instance scan.
         let mc_version = if kind == ResourceKind::Mod {
@@ -98,6 +105,7 @@ pub async fn resources_list(
         let entries = scan_resources(&g_dir, mc_version.as_deref(), kind, r.as_deref())?;
 
         let mut local_mods: Vec<LocalModInfo> = Vec::new();
+        let mut ledger = Vec::new();
         if kind == ResourceKind::Mod {
             let mods_dir = g_dir.join("mods");
             local_mods = mclr_comp::local::scan_local_mods(&mods_dir).unwrap_or_default();
@@ -111,9 +119,13 @@ pub async fn resources_list(
                         .extend(mclr_comp::local::scan_local_mods(&legacy_dir).unwrap_or_default());
                 }
             }
+            // Mods applied by a preset (or installed from CurseForge) carry an identity that the
+            // jar alone cannot prove; the ledger is the only place that records it, and reading
+            // it here costs one small file instead of a network round trip on first paint.
+            ledger = mclr_comp::preset::ledger::load(&g_dir);
         }
 
-        Ok::<_, AppError>((entries, local_mods))
+        Ok::<_, AppError>((entries, local_mods, ledger))
     })
     .await?;
 
@@ -147,6 +159,8 @@ pub async fn resources_list(
             };
             entry.mod_id = Some(m.mod_id.clone());
             entry.project_id = m.project_id.clone();
+            entry.platform = m.platform;
+            entry.file_id = m.file_id.clone();
             // The dictionary is offline and instant, so the Chinese name is already there
             // on the first paint instead of waiting for the network patches.
             entry.zh_name = if show_zh_name {
@@ -158,6 +172,30 @@ pub async fn resources_list(
             };
             // Jar artwork is instant; project artwork arrives with the background patches.
             entry.icon = m.icon.clone();
+        }
+
+        // Ledger identities win over the jar-derived ones: they record which exact file a preset
+        // (or a CurseForge install) put on disk, including the `rel_path` inside the mods folder.
+        let by_rel: HashMap<String, &mclr_comp::preset::ledger::LedgerEntry> = ledger
+            .iter()
+            .map(|item| (item.rel_path.replace('\\', "/"), item))
+            .collect();
+        for entry in &mut entries {
+            let rel = format!("mods/{}", entry.rel_path.replace('\\', "/"));
+            let Some(item) = by_rel.get(&rel) else {
+                continue;
+            };
+            entry.platform = Some(item.platform);
+            entry.project_id = Some(item.project_id.clone());
+            entry.file_id = Some(item.file_id.clone());
+            // Carry the identity into the local-mod record too: Phase 2 then neither re-queries
+            // the platforms for this jar nor replaces the ledger's platform with another one
+            // that happens to know the same hash.
+            if let Some(m) = local_mods.iter_mut().find(|m| m.path == entry.path) {
+                m.platform = Some(item.platform);
+                m.project_id = Some(item.project_id.clone());
+                m.file_id = Some(item.file_id.clone());
+            }
         }
     }
 
@@ -183,31 +221,102 @@ pub async fn resources_list(
 
             let modrinth = ModrinthClient::new(settings.net.source_priority);
 
+            // `sha1 -> (platform, project_id, file_id)`: the full identity a preset needs to
+            // reproduce the exact installed jar. Mods the scan already knew keep their triple
+            // until a lookup replaces it.
+            let mut identities: HashMap<String, (CompPlatform, String, String)> = local_mods
+                .iter()
+                .filter_map(|m| {
+                    Some((
+                        m.sha1.clone(),
+                        (m.platform?, m.project_id.clone()?, m.file_id.clone()?),
+                    ))
+                })
+                .collect();
+
+            // `sha1 -> Modrinth project id`, used only for the metadata batch below: a
+            // CurseForge project id is not a valid Modrinth id and must never be requested.
+            let mut project_ids: HashMap<String, String> = local_mods
+                .iter()
+                .filter(|m| m.platform.unwrap_or(CompPlatform::Modrinth) == CompPlatform::Modrinth)
+                .filter_map(|m| m.project_id.clone().map(|p| (m.sha1.clone(), p)))
+                .collect();
+
             // One batched request per `MODRINTH_LOOKUP_BATCH` unresolved hashes instead of
             // one request per mod. Every hash we actually asked about is recorded so a miss
             // is not retried for six hours.
             let pending = mclr_comp::local::mods_needing_project_lookup(&local_mods);
-            let mut project_ids: HashMap<String, String> = local_mods
+            let mut attempted: HashMap<String, Option<(CompPlatform, String, String)>> =
+                HashMap::new();
+            // Hashes Modrinth answered without knowing; the CurseForge fingerprint fallback
+            // covers exactly those.
+            let mut modrinth_misses: Vec<&str> = Vec::new();
+            let murmur2_by_sha1: HashMap<&str, u32> = local_mods
                 .iter()
-                .filter_map(|m| m.project_id.clone().map(|p| (m.sha1.clone(), p)))
+                .map(|m| (m.sha1.as_str(), m.murmur2))
                 .collect();
-            let mut attempted: HashMap<String, Option<String>> = HashMap::new();
             for chunk in pending.chunks(mclr_comp::local::MODRINTH_LOOKUP_BATCH) {
                 let Ok(files) = modrinth.get_version_files_by_sha1(chunk).await else {
                     // Network failure: leave the hashes unrecorded so they are retried.
                     continue;
                 };
                 for sha1 in chunk {
-                    let resolved = files.get(sha1).map(|f| f.project_id.clone());
-                    if let Some(project_id) = &resolved {
-                        project_ids.insert(sha1.clone(), project_id.clone());
+                    match files.get(sha1) {
+                        Some(file) => {
+                            let identity = (
+                                CompPlatform::Modrinth,
+                                file.project_id.clone(),
+                                file.id.clone(),
+                            );
+                            project_ids.insert(sha1.clone(), file.project_id.clone());
+                            identities.insert(sha1.clone(), identity.clone());
+                            attempted.insert(sha1.clone(), Some(identity));
+                        }
+                        None => modrinth_misses.push(sha1.as_str()),
                     }
-                    attempted.insert(sha1.clone(), resolved);
                 }
+            }
+
+            // CurseForge fingerprints resolve the jars Modrinth has never seen. The lookup is
+            // batched the same way, and a missing API key simply means no fallback.
+            let mut cf_identities: HashMap<u32, (CompPlatform, String, String)> = HashMap::new();
+            if !modrinth_misses.is_empty() {
+                let fingerprints: Vec<u32> = modrinth_misses
+                    .iter()
+                    .filter_map(|sha1| murmur2_by_sha1.get(sha1).copied())
+                    .filter(|m2| *m2 > 0)
+                    .collect();
+                let curseforge = CurseForgeClient::new(settings.net.source_priority);
+                for chunk in fingerprints.chunks(mclr_comp::local::MODRINTH_LOOKUP_BATCH) {
+                    let Ok(files) = curseforge.match_fingerprints(chunk).await else {
+                        // Network failure: leave the hashes unrecorded so they are retried.
+                        continue;
+                    };
+                    for file in files {
+                        if let Some(murmur2) = file.hashes.murmur2 {
+                            cf_identities.insert(
+                                murmur2,
+                                (CompPlatform::Curseforge, file.project_id, file.id),
+                            );
+                        }
+                    }
+                }
+            }
+            for sha1 in modrinth_misses {
+                let identity = murmur2_by_sha1
+                    .get(sha1)
+                    .and_then(|murmur2| cf_identities.get(murmur2))
+                    .cloned();
+                if let Some(identity) = &identity {
+                    identities.insert(sha1.to_string(), identity.clone());
+                }
+                // Recording the miss (even after the fallback) is what keeps the six-hour
+                // retry window from firing on every visit.
+                attempted.insert(sha1.to_string(), identity);
             }
             if !attempted.is_empty() {
                 let _ = tokio::task::spawn_blocking(move || {
-                    mclr_comp::local::record_project_ids(&attempted);
+                    mclr_comp::local::record_mod_identities(&attempted);
                 })
                 .await;
             }
@@ -242,18 +351,24 @@ pub async fn resources_list(
             }
 
             for m in &local_mods {
-                let project_id = project_ids.get(&m.sha1).cloned();
-                let remote_icon = project_id
-                    .as_ref()
+                // The network result wins over what the scan cached; either way the three
+                // fields always describe the same file.
+                let identity = identities.get(&m.sha1);
+                let platform = identity.map(|i| i.0).or(m.platform);
+                let project_id = identity
+                    .map(|i| i.1.clone())
+                    .or_else(|| m.project_id.clone());
+                let file_id = identity.map(|i| i.2.clone()).or_else(|| m.file_id.clone());
+                // Artwork, categories and the Chinese name only exist on Modrinth here.
+                let metadata_project = project_ids.get(&m.sha1);
+                let remote_icon = metadata_project
                     .and_then(|id| icon_urls.get(id))
                     .map(String::as_str);
                 let mut tags: Vec<String> = Vec::new();
                 if !m.loader.is_empty() && m.loader != "Unknown" {
                     tags.push(m.loader.clone());
                 }
-                if let Some(categories) = project_id
-                    .as_ref()
-                    .and_then(|id| project_categories.get(id))
+                if let Some(categories) = metadata_project.and_then(|id| project_categories.get(id))
                 {
                     for category in categories {
                         if tags.len() >= 4 {
@@ -270,8 +385,7 @@ pub async fn resources_list(
                     // The project's own name wins over the dictionary: it is the same table
                     // the project page shows, and slugs can differ from local mod ids.
                     zh_name: if show_zh_name {
-                        project_id
-                            .as_ref()
+                        metadata_project
                             .and_then(|id| zh_names.get(id))
                             .cloned()
                             .or_else(|| {
@@ -286,7 +400,9 @@ pub async fn resources_list(
                     version: Some(m.version.clone()).filter(|v| !v.is_empty()),
                     tags: Some(tags),
                     mod_id: Some(m.mod_id.clone()),
-                    project_id: project_id.clone(),
+                    project_id,
+                    platform,
+                    file_id,
                     latest_file: None,
                     update_available: None,
                     dependents: None,

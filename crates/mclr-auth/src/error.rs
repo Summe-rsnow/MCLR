@@ -35,6 +35,9 @@ pub enum AuthError {
     #[error("Invalid skin image: {0}")]
     SkinInvalidImage(String),
 
+    #[error("Profile has no custom skin")]
+    SkinNotFound,
+
     #[error("Account store corrupted: {0}")]
     StoreCorrupted(String),
 
@@ -70,6 +73,7 @@ impl AuthError {
             AuthError::MsAccessDenied => "auth.ms.accessDenied",
             AuthError::YggdrasilInvalidCredentials => "auth.yggdrasil.invalidCredentials",
             AuthError::SkinInvalidImage(_) => "auth.skin.invalidImage",
+            AuthError::SkinNotFound => "auth.skin.notFound",
             AuthError::StoreCorrupted(_) => "auth.store.corrupted",
             AuthError::AccountNotFound(_) => "auth.accountNotFound",
             AuthError::Io(_) => "auth.io",

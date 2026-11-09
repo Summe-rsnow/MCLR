@@ -22,6 +22,8 @@
   "actions": {
     "addFiles": "添加文件",
     "import": "导入",
+    "applyPreset": "应用预设",
+    "saveToPreset": "保存到预设",
     "export": "导出列表",
     "exportTxt": "导出为 TXT",
     "exportCsv": "导出为 CSV",
@@ -152,5 +154,31 @@
       "conflict": "冲突"
     }
   },
-  "dependencyWarning": "{count} 个依赖问题"
+  "dependencyWarning": "{count} 个依赖问题",
+  "saveToPreset": {
+    "title": "保存模组到预设",
+    "selectPreset": "目标预设",
+    "newPreset": "新建预设…",
+    "newPresetLabel": "新预设名称",
+    "newPresetPlaceholder": "输入新预设名称",
+    "modsTitle": "将保存 {count} 个模组",
+    "locked": "锁定当前版本",
+    "unlocked": "跟随最新",
+    "lockAll": "全部锁定当前版本",
+    "unlockAll": "全部设为不锁定",
+    "noRecognised": "当前没有可保存的模组",
+    "unrecognisedHint": "另有 {count} 个模组未被社区平台识别，无法保存到预设",
+    "outcomeTitle": "添加结果",
+    "close": "关闭",
+    "submit": "保存到预设",
+    "outcome": {
+      "added": "已添加",
+      "alreadyInPreset": "已在预设中",
+      "alreadyInPresetOtherVersion": "预设中已有其他版本",
+      "noGameVersion": "没有适配的游戏版本",
+      "noLoader": "没有适配的加载器",
+      "noFile": "没有可用文件",
+      "unsupported": "不支持"
+    }
+  }
 }

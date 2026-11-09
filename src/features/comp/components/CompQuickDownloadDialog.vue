@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { formatBytes } from '@/shared/format'
+import { knownVersion } from '@/shared/mcver'
 import { parseLoader, expandModLoaders } from '@/shared/loader'
 import { modDisplayName, modSubtitle } from '@/shared/modName'
 import { useI18n } from 'vue-i18n'
@@ -272,7 +273,7 @@ const selectedInstance = computed(() => {
 
 function applyInstanceFilter(inst: typeof selectedInstance.value) {
   if (!inst) return
-  selectedMcVersion.value = inst.mcVersion || ''
+  selectedMcVersion.value = knownVersion(inst.mcVersion) ?? ''
   const ldr = inst.loaders?.[0] || inst.kind || ''
   selectedLoader.value = parseLoader(ldr) ?? ''
 }
@@ -633,11 +634,7 @@ function handleToggleFavorite() {
       <!-- Project Header -->
       <div class="p-3.5 rounded-xl bg-sunken/50 border border-line space-y-2.5">
         <div class="flex items-start gap-3">
-          <MImage
-            :src="activeProject.iconUrl"
-            fallback-icon="i-lucide-box"
-            class="w-12 h-12 rounded-xl shrink-0"
-          />
+          <MImage :src="activeProject.iconUrl" fallback-icon="i-lucide-box" size="md" />
 
           <div class="min-w-0 flex-1 space-y-1.5">
             <!-- Row 1: Title + Platform Badge on Left, View Details on Right -->
@@ -957,7 +954,7 @@ function handleToggleFavorite() {
                 <MImage
                   :src="getDepProject(dep.projectId)?.iconUrl"
                   fallback-icon="i-lucide-puzzle"
-                  class="w-3.5 h-3.5 rounded shrink-0"
+                  size="xs"
                 />
                 <span class="font-medium text-fg max-w-[140px] truncate">
                   {{ getDepTitle(dep.projectId) }}
@@ -1004,7 +1001,7 @@ function handleToggleFavorite() {
           <MImage
             :src="getDepProject(dep.projectId)?.iconUrl"
             fallback-icon="i-lucide-puzzle"
-            class="w-5 h-5 rounded shrink-0"
+            size="xs"
           />
           <span class="font-medium text-fg flex-1 min-w-0 truncate">
             {{ getDepTitle(dep.projectId) }}

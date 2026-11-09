@@ -12,9 +12,6 @@
   },
   "list": {
     "items": "{count} 项资源",
-    "allVersions": "全部版本",
-    "allLoaders": "全部加载器",
-    "filters": "游戏版本: {versions} · 加载器: {loaders}",
     "updated": "更新于 {date}"
   },
   "kinds": {
@@ -23,12 +20,6 @@
     "shader": "光影",
     "datapack": "数据包",
     "world": "地图存档"
-  },
-  "loaders": {
-    "fabric": "Fabric",
-    "forge": "Forge",
-    "neoforge": "NeoForge",
-    "quilt": "Quilt"
   },
   "detail": {
     "tabs": {
@@ -52,10 +43,6 @@
     "name": "预设名称",
     "description": "描述",
     "descriptionPlaceholder": "这个预设是做什么的？",
-    "gameVersions": "游戏版本",
-    "gameVersionsHint": "不选 = 全部兼容",
-    "loaders": "模组加载器",
-    "loadersHint": "仅对模组生效，不选 = 全部兼容",
     "save": "保存设置",
     "delete": "删除预设",
     "saved": "预设已保存",
@@ -72,26 +59,17 @@
   },
   "pin": {
     "title": "固定版本",
-    "hint": "可配置不同游戏版本与加载器的固定文件；不符合规则的将自动安装最新版。",
-    "followLatest": "跟随最新（清除所有规则）",
+    "hint": "点击文件即可固定该版本，所有实例都安装这个文件；再次点击已固定的文件（或点「取消固定」）恢复安装最新兼容版本。",
+    "pickFile": "点击文件固定版本",
+    "followLatest": "取消固定",
     "followingLatest": "已恢复跟随最新版本",
     "empty": "该项目没有可用文件",
     "current": "当前固定",
-    "compatible": "符合预设筛选",
-    "incompatible": "不符合预设筛选",
     "picked": "已固定版本",
-    "rulesTitle": "已配置的固定规则",
-    "rulesHint": "未匹配上述规则的游戏版本与加载器将自动安装最新版本",
     "filterVersion": "游戏版本",
     "filterLoader": "加载器",
     "allVersions": "全部版本",
-    "allLoaders": "全部加载器",
-    "anyVersion": "任意版本",
-    "anyLoader": "任意加载器",
-    "deleteRule": "删除此规则",
-    "addRuleTitle": "点击下方文件添加或更新规则",
-    "ruleAdded": "已更新版本规则",
-    "ruleRemoved": "已移除版本规则"
+    "allLoaders": "全部加载器"
   },
   "storeDialog": {
     "title": "资源缓存",
@@ -126,6 +104,7 @@
     "dirUpdated": "缓存目录已更新"
   },
   "apply": {
+    "entry": "应用预设",
     "title": "应用资源预设",
     "subtitle": "可多选预设；顺序即优先级，越靠前越优先。",
     "empty": "没有可用的预设",

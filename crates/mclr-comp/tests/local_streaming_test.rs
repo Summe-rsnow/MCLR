@@ -7,7 +7,7 @@ use std::io::{Cursor, Write};
 
 use mclr_comp::local::{
     compute_curseforge_murmur2, compute_curseforge_murmur2_reader, mods_needing_project_lookup,
-    parse_mod_metadata, parse_mod_metadata_path, record_project_ids, scan_local_mods,
+    parse_mod_metadata, parse_mod_metadata_path, record_mod_identities, scan_local_mods,
 };
 use tempfile::tempdir;
 use zip::write::SimpleFileOptions;
@@ -160,22 +160,31 @@ fn test_scan_local_mods_streamed_hashes_match_pinned_values() {
     let rescanned = scan_local_mods(&mods_dir).unwrap();
     assert_eq!(rescanned, scanned);
 
-    // Project-id backfill lands in the single cache and suppresses further lookups.
+    // Identity backfill lands in the single cache and suppresses further lookups.
     assert_eq!(scanned[0].project_id, None);
     assert!(mods_needing_project_lookup(&scanned).contains(&scanned[0].sha1));
 
     let mut lookups = std::collections::HashMap::new();
     lookups.insert(
         scanned[0].sha1.clone(),
-        Some("modrinth_project".to_string()),
+        Some((
+            mclr_comp::model::CompPlatform::Modrinth,
+            "modrinth_project".to_string(),
+            "modrinth_file".to_string(),
+        )),
     );
-    record_project_ids(&lookups);
+    record_mod_identities(&lookups);
 
     let backfilled = scan_local_mods(&mods_dir).unwrap();
     assert_eq!(
         backfilled[0].project_id.as_deref(),
         Some("modrinth_project")
     );
+    assert_eq!(
+        backfilled[0].platform,
+        Some(mclr_comp::model::CompPlatform::Modrinth)
+    );
+    assert_eq!(backfilled[0].file_id.as_deref(), Some("modrinth_file"));
     assert_eq!(backfilled[0].sha1, JAR_SHA1);
     assert!(mods_needing_project_lookup(&backfilled).is_empty());
 }

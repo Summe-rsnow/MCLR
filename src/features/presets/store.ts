@@ -7,7 +7,6 @@ import {
   type ApplyRequest,
   type CompPlatform,
   type PresetItem,
-  type PresetPinRule,
   type ResourcePreset,
   type StoreInfo,
 } from '../../ipc/client'
@@ -18,8 +17,6 @@ import { awaitTask } from '../tasks/awaitTask'
 export const usePresetsStore = defineStore('presets', () => {
   const presets = ref<ResourcePreset[]>([])
   const storeInfo = ref<StoreInfo | null>(null)
-  /** Last apply report per instance, kept so the instance tab can show it after the dialog closes. */
-  const lastReports = ref<Record<string, ApplyReport>>({})
   const loading = ref(false)
   const applying = ref(false)
 
@@ -83,25 +80,6 @@ export const usePresetsStore = defineStore('presets', () => {
     await loadPresets()
   }
 
-  async function pinRule(
-    presetId: string,
-    platform: CompPlatform,
-    projectId: string,
-    rule: PresetPinRule,
-  ): Promise<void> {
-    await ipcClient.presetsPinRule(presetId, platform, projectId, rule)
-    await loadPresets()
-  }
-
-  async function removePinRule(
-    presetId: string,
-    platform: CompPlatform,
-    projectId: string,
-    fileId: string,
-  ): Promise<void> {
-    await ipcClient.presetsRemovePinRule(presetId, platform, projectId, fileId)
-    await loadPresets()
-  }
   async function removeItem(
     presetId: string,
     platform: CompPlatform,
@@ -119,31 +97,22 @@ export const usePresetsStore = defineStore('presets', () => {
 
   /**
    * Runs an apply task end to end: schedule, wait for the background task, then collect the
-   * report the backend parks under the task id. The report is cached per instance.
+   * report the backend parks under the task id.
    */
   async function applyPresets(request: ApplyRequest): Promise<ApplyReport> {
     applying.value = true
     try {
       const taskId = await ipcClient.presetsApply(request)
       await awaitTask(taskId)
-      const report = await ipcClient.presetsApplyReport(taskId)
-      lastReports.value = { ...lastReports.value, [request.instanceId]: report }
-      return report
+      return await ipcClient.presetsApplyReport(taskId)
     } finally {
       applying.value = false
     }
   }
 
-  function lastReport(instanceId: string): ApplyReport | null {
-    return lastReports.value[instanceId] ?? null
-  }
-
   return {
     presets,
-    pinRule,
-    removePinRule,
     storeInfo,
-    lastReports,
     loading,
     applying,
     loadPresets,
@@ -154,6 +123,5 @@ export const usePresetsStore = defineStore('presets', () => {
     removeItem,
     addItems,
     applyPresets,
-    lastReport,
   }
 })

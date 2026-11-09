@@ -23,14 +23,14 @@ const sizeClasses = computed(() => {
   // detailed and unreadable at lucide-sized (16px) dimensions.
   switch (props.size) {
     case 24:
-      return { tile: 'w-6 h-6 rounded-md', icon: 'w-3.5 h-3.5', image: 'w-[18px] h-[18px]' }
+      return { tile: 'w-6 h-6 rounded-[5px]', icon: 'w-3.5 h-3.5', image: 'w-[18px] h-[18px]' }
     case 40:
-      return { tile: 'w-10 h-10 rounded-xl', icon: 'w-5 h-5', image: 'w-[30px] h-[30px]' }
+      return { tile: 'w-10 h-10 rounded-sm', icon: 'w-5 h-5', image: 'w-[30px] h-[30px]' }
     case 56:
-      return { tile: 'w-14 h-14 rounded-2xl', icon: 'w-7 h-7', image: 'w-[44px] h-[44px]' }
+      return { tile: 'w-14 h-14 rounded-md', icon: 'w-7 h-7', image: 'w-[44px] h-[44px]' }
     case 32:
     default:
-      return { tile: 'w-8 h-8 rounded-lg', icon: 'w-4 h-4', image: 'w-6 h-6' }
+      return { tile: 'w-8 h-8 rounded-[6px]', icon: 'w-4 h-4', image: 'w-6 h-6' }
   }
 })
 </script>
@@ -48,6 +48,7 @@ const sizeClasses = computed(() => {
       :alt="meta.label"
       pixelated
       fit="contain"
+      radius="none"
       :class="sizeClasses.image"
     >
       <template #fallback>

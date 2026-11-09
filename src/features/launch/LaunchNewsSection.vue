@@ -251,7 +251,8 @@ function onConfirmJump() {
                 :src="item.imageUrl"
                 alt="cover"
                 fallback-icon="i-lucide-newspaper"
-                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                size="full"
+                class="transition-transform duration-300 group-hover:scale-105"
               />
               <div class="absolute top-2 left-2">
                 <MBadge variant="primary">{{ item.category }}</MBadge>

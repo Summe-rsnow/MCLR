@@ -42,6 +42,26 @@
 | v0.0.34 | TypeScript 6.0.3, secrets via .env, shadow clipping & mod update race fix | done | a9d4d8d | v0.0.34 | 2026-11-02 |
 | v0.0.35 | Resource presets, content-addressed store, offline MCMod Chinese names & dependency analysis | done | 31f73f4 | v0.0.35 | 2026-11-04 |
 | v0.1.0 | Persistent task engine, byte-level download resume, canonical version/loader model & selectable text | done | 23b3dbb | v0.1.0 | 2026-11-05 |
+| v0.1.1 | Skin/avatar export, save instance mods to preset, preset unbind, image size tiers, search filters & settings tips | doing | — | — | 2026-11-09 |
+
+## v0.1.1 — 皮肤/头像导出 + 模组存预设 + 预设解绑 + 图像尺寸体系 + 区域格式提示
+
+| ID | slice | owner | status | acceptance |
+|---|---|---|---|---|
+| A | 图像尺寸分层与比例圆角（MImage/MAvatar/MLoaderIcon + 全量调用点迁移） | Wave 1A | done | vitest run src/ui src/features/comp src/features/resources src/features/accounts src/features/tools src/features/settings src/features/presets src/features/shell; vue-tsc --noEmit |
+| B | 社区搜索 unknown 版本过滤 + 筛选框收窄 | Wave 2B | done | vitest run src/features/comp src/shared |
+| C | 背景预览居中修复 + 区域格式文化提示 | Wave 2C | done | vitest run src/features/settings-appearance src/features/settings-system |
+| D | 账户保存皮肤/头像（微软 / Authlib / 离线） | Wave 2D | done | cargo test -p mclr-auth; cargo test -p mclr-app --lib; vitest run src/features/accounts |
+| E | 预设解绑版本/加载器 + 移除实例预设 Tab | Wave 2E | done | cargo test -p mclr-comp preset; cargo test -p mclr-app --lib; vitest run src/features/presets src/features/instance-detail |
+| F | 实例模组保存到预设（逐项锁定版本） | Wave 3F | doing | cargo test -p mclr-comp; cargo test -p mclr-app --lib; vitest run src/features/resources |
+| G | 绑定再生成、pnpm check、浏览器 Smoke、提交 | integrator | done | pnpm check prints `All check gates passed.` |
+
+### Notes
+- Wave order: A → {B, C, D, E} → F → G. A 独占 `MImage` API 与调用点（否则同文件冲突）；E → F 因共用 `ResourceToolbar.vue` / `ResourceList.vue`。
+- 子代理不提交、不改版本号、不写 `src/ipc/bindings.ts` / `docs/progress.md` / `CHANGELOG.md`，只跑各自验收命令，不跑 `pnpm check`。
+- `src/ipc/mock.ts` 每波唯一写者：wave 2 = D，wave 3 = F。
+- D 与 E 并行编译 Rust 时的 `Blocking waiting for file lock` 属正常排队。
+- Release gate: 版本号、CHANGELOG 定稿与 tag 等待用户显式确认。
 
 ## v0.1.0 — 任务引擎持久化 + 断点续传 + 文本可选择
 

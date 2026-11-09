@@ -2,6 +2,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { save as saveFileDialog } from '@tauri-apps/plugin-dialog'
+
+vi.mock('@tauri-apps/plugin-dialog', () => ({
+  save: vi.fn(),
+  open: vi.fn(),
+}))
+import { ipcClient } from '../../../ipc/client'
 import { useAccountsStore } from '../store'
 import AccountsPage from '../AccountsPage.vue'
 import { setupMockIpc } from '../../../ipc/mock'
@@ -163,5 +170,49 @@ describe('Accounts feature', () => {
     expect(addMsSpy).toHaveBeenCalledTimes(1)
 
     addMsSpy.mockRestore()
+  })
+
+  it('saves skin and avatar files through the toolbox save capability', async () => {
+    const saveDialog = vi.mocked(saveFileDialog)
+    saveDialog.mockResolvedValue('C:/mock/export.png')
+    const skinDataUrl = 'data:image/png;base64,AAAA'
+    const getSkinSpy = vi.spyOn(ipcClient, 'accountsGetSkinDataUrl').mockResolvedValue(skinDataUrl)
+    const saveSpy = vi.spyOn(ipcClient, 'toolsSaveSkin').mockResolvedValue()
+
+    const store = useAccountsStore()
+    await store.fetchAccounts()
+    const selected = store.selectedAccount!
+
+    const wrapper = mount(AccountsPage, {
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const skinBtn = wrapper.find('[data-testid="account-save-skin-btn"]')
+    const avatarBtn = wrapper.find('[data-testid="account-save-avatar-btn"]')
+    expect(skinBtn.exists()).toBe(true)
+    expect(avatarBtn.exists()).toBe(true)
+
+    await skinBtn.trigger('click')
+    await flushPromises()
+
+    expect(getSkinSpy).toHaveBeenCalledWith(selected.id)
+    expect(saveDialog).toHaveBeenCalledWith({
+      defaultPath: `${selected.username}_skin.png`,
+      filters: [{ name: 'PNG Image', extensions: ['png'] }],
+    })
+    expect(saveSpy).toHaveBeenCalledWith('C:/mock/export.png', skinDataUrl)
+
+    await avatarBtn.trigger('click')
+    await flushPromises()
+
+    expect(saveDialog).toHaveBeenLastCalledWith({
+      defaultPath: `${selected.username}_avatar.png`,
+      filters: [{ name: 'PNG Image', extensions: ['png'] }],
+    })
+    expect(saveSpy).toHaveBeenLastCalledWith('C:/mock/export.png', selected.skinHeadDataUrl)
+
+    getSkinSpy.mockRestore()
+    saveSpy.mockRestore()
   })
 })

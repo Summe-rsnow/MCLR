@@ -91,11 +91,11 @@
   },
   "language": {
     "localeTitle": "界面语言与区域偏好",
-    "localeDesc": "选择 MCLR 启动器所使用的显示语言及数字日期格式标准",
+    "localeDesc": "选择 MCLR 启动器所使用的显示语言及日期格式标准",
     "locale": "界面显示语言",
     "localeHint": "语言包将随当前选择即时刷新",
     "formatCulture": "区域格式文化",
-    "formatCultureDefault": "系统默认文化格式",
+    "formatCultureTip": "仅影响日期等区域格式的显示方式（如 2026/11/9 与 11/9/2026），与界面显示语言相互独立",
     "formatCultureZhCn": "中文 (中国) - zh-CN",
     "formatCultureEnUs": "英文 (美国) - en-US"
   },

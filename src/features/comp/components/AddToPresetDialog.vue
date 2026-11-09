@@ -156,11 +156,7 @@ async function submit() {
   >
     <div class="space-y-4 py-1">
       <div v-if="project" class="flex items-center gap-3 p-2 rounded-xl bg-sunken/50">
-        <MImage
-          :src="project.iconUrl"
-          fallback-icon="i-lucide-puzzle"
-          class="w-9 h-9 rounded-lg shrink-0"
-        />
+        <MImage :src="project.iconUrl" fallback-icon="i-lucide-puzzle" size="sm" />
         <div class="min-w-0">
           <div class="text-sm font-medium text-fg truncate">
             {{ modDisplayName(project, true) }}

@@ -17,7 +17,7 @@ use specta::Type;
 use zip::ZipArchive;
 
 use crate::error::CompError;
-use crate::model::CompFile;
+use crate::model::{CompFile, CompPlatform};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Hash)]
 #[serde(rename_all = "camelCase")]
@@ -55,6 +55,12 @@ pub struct ResourceEntry {
     pub tags: Vec<String>,
     pub mod_id: Option<String>,
     pub project_id: Option<String>,
+    /// Platform the file was identified on, when known.
+    #[serde(default)]
+    pub platform: Option<CompPlatform>,
+    /// Platform-specific id of the installed file, when known.
+    #[serde(default)]
+    pub file_id: Option<String>,
     pub latest_file: Option<CompFile>,
     pub update_available: bool,
     pub dependents: Vec<String>,
@@ -383,6 +389,8 @@ fn scan_dir_entries(
                     tags: Vec::new(),
                     mod_id: None,
                     project_id: None,
+                    platform: None,
+                    file_id: None,
                     latest_file: None,
                     update_available: false,
                     dependents: Vec::new(),
@@ -470,6 +478,8 @@ fn scan_dir_entries(
                     tags: Vec::new(),
                     mod_id: None,
                     project_id: None,
+                    platform: None,
+                    file_id: None,
                     latest_file: None,
                     update_available: false,
                     dependents: Vec::new(),
@@ -508,6 +518,8 @@ fn scan_dir_entries(
                     tags: Vec::new(),
                     mod_id: None,
                     project_id: None,
+                    platform: None,
+                    file_id: None,
                     latest_file: None,
                     update_available: false,
                     dependents: Vec::new(),
@@ -534,6 +546,8 @@ fn scan_dir_entries(
                         tags: vec!["folder".to_string()],
                         mod_id: None,
                         project_id: None,
+                        platform: None,
+                        file_id: None,
                         latest_file: None,
                         update_available: false,
                         dependents: Vec::new(),
@@ -578,6 +592,8 @@ fn scan_dir_entries(
                     tags: vec![ext.to_string()],
                     mod_id: None,
                     project_id: None,
+                    platform: None,
+                    file_id: None,
                     latest_file: None,
                     update_available: false,
                     dependents: Vec::new(),
@@ -1138,6 +1154,8 @@ mod tests {
             tags: vec!["Fabric".to_string()],
             mod_id: Some("mymod".to_string()),
             project_id: Some("proj123".to_string()),
+            platform: Some(CompPlatform::Modrinth),
+            file_id: Some("file123".to_string()),
             latest_file: None,
             update_available: false,
             dependents: Vec::new(),

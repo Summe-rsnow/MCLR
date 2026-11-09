@@ -33,6 +33,8 @@ pub struct PresetItem {
     pub pinned_file_id: Option<String>,
     #[serde(default)]
     pub pinned_file_name: Option<String>,
+    /// Legacy per-version/loader pin rules. Retained only so older `presets.json` documents keep
+    /// deserializing; the planner ignores them in favour of [`PresetItem::pinned_file_id`].
     #[serde(default)]
     pub pin_rules: Vec<PresetPinRule>,
 }
@@ -42,7 +44,12 @@ pub struct ResourcePreset {
     pub id: String,
     pub name: String,
     pub description: String,
+    /// Legacy field kept for `presets.json` compatibility. Presets are universal resource lists,
+    /// so this no longer gates anything.
+    #[serde(default)]
     pub game_versions: Vec<String>,
+    /// Legacy field kept for `presets.json` compatibility; ignored by the planner.
+    #[serde(default)]
     pub loaders: Vec<String>,
     pub items: Vec<PresetItem>,
     pub created_at: u64,

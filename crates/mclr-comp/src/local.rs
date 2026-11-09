@@ -19,7 +19,7 @@ use crate::error::CompError;
 use crate::jarfile::{
     is_disabled_jar, is_jar, jar_stem, read_entry_bytes, read_entry_text, toggled_name,
 };
-use crate::model::CompFile;
+use crate::model::{CompFile, CompPlatform};
 use crate::modrinth::ModrinthClient;
 use crate::resolver::select_best_file_for;
 
@@ -40,6 +40,13 @@ pub struct LocalModInfo {
     pub murmur2: u32,
     pub size: u64,
     pub project_id: Option<String>,
+    /// Platform the file was identified on. Together with `project_id` and `file_id` this is the
+    /// `(platform, project_id, file_id)` triple a preset needs to reproduce the exact jar.
+    #[serde(default)]
+    pub platform: Option<CompPlatform>,
+    /// Id of the *installed* file on that platform (Modrinth version id / CurseForge file id).
+    #[serde(default)]
+    pub file_id: Option<String>,
     pub update_file: Option<CompFile>,
     /// Path to the mod's own artwork, extracted from the jar and cached on disk.
     pub icon: Option<String>,
@@ -65,6 +72,10 @@ struct LocalModCacheItem {
     pub size: u64,
     pub mtime_secs: u64,
     pub project_id: Option<String>,
+    #[serde(default)]
+    pub platform: Option<CompPlatform>,
+    #[serde(default)]
+    pub file_id: Option<String>,
     pub update_file: Option<CompFile>,
     /// Cached icon path inside the launcher cache dir.
     #[serde(default)]
@@ -1002,9 +1013,12 @@ fn migrate_cache_entry(
     true
 }
 
-/// SHA1s of `mods` whose Modrinth project id should be resolved now: hashes never looked up,
-/// and hashes whose last lookup found nothing and is older than six hours. Already-resolved
-/// mods are skipped (a project id never changes for a given SHA1).
+/// SHA1s of `mods` whose identity on a community platform should be resolved now: hashes never
+/// looked up, and hashes whose last lookup found nothing and is older than six hours.
+///
+/// A mod is only skipped once the full `(platform, project_id, file_id)` triple is known — a
+/// project id alone cannot pin the installed jar, which is exactly what saving mods to a preset
+/// needs.
 pub fn mods_needing_project_lookup(mods: &[LocalModInfo]) -> Vec<String> {
     if mods.is_empty() {
         return Vec::new();
@@ -1014,7 +1028,10 @@ pub fn mods_needing_project_lookup(mods: &[LocalModInfo]) -> Vec<String> {
     let mut seen: HashSet<&str> = HashSet::new();
     let mut pending = Vec::new();
     for m in mods {
-        if m.project_id.is_some() || m.sha1.is_empty() || !seen.insert(m.sha1.as_str()) {
+        if (m.project_id.is_some() && m.file_id.is_some())
+            || m.sha1.is_empty()
+            || !seen.insert(m.sha1.as_str())
+        {
             continue;
         }
         let expired = match cache.get(&m.path) {
@@ -1028,9 +1045,12 @@ pub fn mods_needing_project_lookup(mods: &[LocalModInfo]) -> Vec<String> {
     pending
 }
 
-/// Records the outcome of the Modrinth lookups for `lookups` (`sha1 -> project id`, a `None`
-/// value meaning "looked up, not on Modrinth"), refreshing the six-hour retry window.
-pub fn record_project_ids(lookups: &HashMap<String, Option<String>>) {
+/// Records the outcome of the identity lookups for `lookups` (`sha1 -> (platform, project id,
+/// file id)`), refreshing the six-hour retry window.
+///
+/// A `None` value means "looked up, no platform knows this hash": the ids are cleared and the
+/// attempt is timestamped so the lookup is not repeated on every visit.
+pub fn record_mod_identities(lookups: &HashMap<String, Option<(CompPlatform, String, String)>>) {
     if lookups.is_empty() {
         return;
     }
@@ -1038,8 +1058,19 @@ pub fn record_project_ids(lookups: &HashMap<String, Option<String>>) {
     let now = current_timestamp_secs();
     let mut modified = false;
     for item in cache.values_mut() {
-        if let Some(project_id) = lookups.get(&item.sha1) {
-            item.project_id = project_id.clone();
+        if let Some(identity) = lookups.get(&item.sha1) {
+            match identity {
+                Some((platform, project_id, file_id)) => {
+                    item.platform = Some(*platform);
+                    item.project_id = Some(project_id.clone());
+                    item.file_id = Some(file_id.clone());
+                }
+                None => {
+                    item.platform = None;
+                    item.project_id = None;
+                    item.file_id = None;
+                }
+            }
             item.cached_at_secs = now;
             modified = true;
         }
@@ -1125,6 +1156,8 @@ fn scan_pending_mod(pending: &PendingMod) -> Option<(LocalModCacheItem, LocalMod
         size: pending.size,
         mtime_secs: pending.mtime_secs,
         project_id: None,
+        platform: None,
+        file_id: None,
         update_file: None,
         dependencies: mod_meta.dependencies.clone(),
         provides: mod_meta.provides.clone(),
@@ -1147,6 +1180,8 @@ fn scan_pending_mod(pending: &PendingMod) -> Option<(LocalModCacheItem, LocalMod
         murmur2,
         size: pending.size,
         project_id: None,
+        platform: None,
+        file_id: None,
         update_file: None,
         dependencies: mod_meta.dependencies,
         provides: mod_meta.provides,
@@ -1287,6 +1322,8 @@ pub fn scan_local_mods(mods_dir: &Path) -> Result<Vec<LocalModInfo>, CompError> 
                 murmur2: cached.murmur2,
                 size,
                 project_id: cached.project_id.clone(),
+                platform: cached.platform,
+                file_id: cached.file_id.clone(),
                 update_file: cached.update_file.clone(),
                 icon: cached.icon.clone(),
                 dependencies: cached.dependencies.clone(),
@@ -1486,6 +1523,8 @@ pub async fn check_local_mods_updates_at(
         for m in &mut mods {
             if let Some(entry) = cache.get(&m.path) {
                 m.project_id = entry.project_id.clone();
+                m.platform = entry.platform;
+                m.file_id = entry.file_id.clone();
                 m.update_file = entry.update_file.clone();
             }
         }
@@ -1531,7 +1570,9 @@ pub async fn check_local_mods_updates_at(
         // "is this actually newer" comparison needs.
         let installed = modrinth_files.get(&m.sha1);
         if let Some(installed) = installed {
+            m.platform = Some(CompPlatform::Modrinth);
             m.project_id = Some(installed.project_id.clone());
+            m.file_id = Some(installed.id.clone());
         }
         if let Some(update_file) = modrinth_updates.get(&m.sha1)
             && crate::resolver::file_supports_any_loader(&update_file.loaders, &update_loaders)
@@ -1545,9 +1586,12 @@ pub async fn check_local_mods_updates_at(
 
     // 3. Concurrently query CurseForge if configured and available
     if let Some(cf) = curseforge {
+        // Only jars still without a project identity are worth fingerprinting: one Modrinth
+        // already identified has its `(platform, project_id, file_id)` triple, and mixing in a
+        // CurseForge id on top would leave the three fields disagreeing.
         let fingerprints: Vec<u32> = mods
             .iter()
-            .filter(|m| m.update_file.is_none() && m.murmur2 > 0)
+            .filter(|m| m.update_file.is_none() && m.project_id.is_none() && m.murmur2 > 0)
             .map(|m| m.murmur2)
             .collect();
 
@@ -1557,9 +1601,11 @@ pub async fn check_local_mods_updates_at(
             let mut check_targets = Vec::new();
             for cf_file in cf_files {
                 if let Some(m2) = cf_file.hashes.murmur2
-                    && mods
-                        .iter()
-                        .any(|item| item.murmur2 == m2 && item.update_file.is_none())
+                    && mods.iter().any(|item| {
+                        item.murmur2 == m2
+                            && item.update_file.is_none()
+                            && item.project_id.is_none()
+                    })
                 {
                     check_targets.push((
                         cf_file.project_id.clone(),
@@ -1598,11 +1644,16 @@ pub async fn check_local_mods_updates_at(
 
                 while let Some(res) = join_set.join_next().await {
                     if let Ok((project_id, current_file_id, m2, installed_date, Ok(files))) = res
-                        && let Some(m) = mods
-                            .iter_mut()
-                            .find(|item| item.murmur2 == m2 && item.update_file.is_none())
+                        && let Some(m) = mods.iter_mut().find(|item| {
+                            item.murmur2 == m2
+                                && item.update_file.is_none()
+                                && item.project_id.is_none()
+                                && item.file_id.is_none()
+                        })
                     {
+                        m.platform = Some(CompPlatform::Curseforge);
                         m.project_id = Some(project_id);
+                        m.file_id = Some(current_file_id.clone());
                         if !update_loaders.is_empty()
                             && let Some(best_file) =
                                 select_best_file_for(&files, mc_version, &update_loaders)
@@ -1618,12 +1669,14 @@ pub async fn check_local_mods_updates_at(
         }
     }
 
-    // Update disk cache with identified project_id and update_file
+    // Update disk cache with the identified identity triple and update_file
     let mut cache = load_cache_from(cache_file);
     let now_secs = current_timestamp_secs();
     for m in &mods {
         if let Some(entry) = cache.get_mut(&m.path) {
             entry.project_id = m.project_id.clone();
+            entry.platform = m.platform;
+            entry.file_id = m.file_id.clone();
             entry.update_file = m.update_file.clone();
             entry.cached_at_secs = now_secs;
         }
@@ -1775,6 +1828,8 @@ mod tests {
                 size: 1024,
                 mtime_secs: 0,
                 project_id: Some("p1".to_string()),
+                platform: Some(crate::model::CompPlatform::Modrinth),
+                file_id: Some("f1".to_string()),
                 update_file: Some(make_comp_file("2024-06-01T00:00:00Z")),
                 dependencies: Vec::new(),
                 provides: Vec::new(),
@@ -1808,6 +1863,11 @@ mod tests {
             cached[0].update_file.is_some(),
             "the cached verdict is reported"
         );
+        // The identity triple is part of that verdict: a preset saved right after entering the
+        // page must be able to pin the installed file.
+        assert_eq!(cached[0].platform, Some(CompPlatform::Modrinth));
+        assert_eq!(cached[0].project_id.as_deref(), Some("p1"));
+        assert_eq!(cached[0].file_id.as_deref(), Some("f1"));
 
         // The explicit button bypasses the cache.
         check_local_mods_updates_at(
@@ -1839,6 +1899,69 @@ mod tests {
         // The detection label ("Fabric 0.15.11") must reach the API as the `fabric` facet.
         let file = update_check_for(&["fabric"], "2024-06-01T00:00:00Z").await;
         assert_eq!(file.map(|f| f.file_name), Some("new.jar".to_string()));
+    }
+
+    #[tokio::test]
+    async fn update_check_records_the_installed_file_identity() {
+        let server = wiremock::MockServer::start().await;
+        let mods_dir = tempdir().unwrap();
+        let jar = write_test_jar(mods_dir.path(), "example.jar");
+        let sha1 = {
+            use sha1::{Digest, Sha1};
+            let mut hasher = Sha1::new();
+            hasher.update(fs::read(&jar).unwrap());
+            hex::encode(hasher.finalize())
+        };
+
+        wiremock::Mock::given(wiremock::matchers::method("POST"))
+            .and(wiremock::matchers::path("/v2/version_files"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    sha1.clone(): version_file_json(&["fabric"], "2023-01-01T00:00:00Z", "old.jar"),
+                })),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(wiremock::matchers::method("POST"))
+            .and(wiremock::matchers::path("/v2/version_files/update"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(&server)
+            .await;
+
+        let client = ModrinthClient::default().with_base_url(server.uri());
+        let mods = check_local_mods_updates(
+            mods_dir.path(),
+            "1.20.1",
+            &["Fabric 0.15.11".to_string()],
+            true,
+            &client,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].platform, Some(CompPlatform::Modrinth));
+        assert_eq!(mods[0].project_id.as_deref(), Some("p1"));
+        // The *installed* version id, not the newer candidate's.
+        assert_eq!(mods[0].file_id.as_deref(), Some("id-old.jar"));
+    }
+
+    #[test]
+    fn identity_triple_is_required_before_a_lookup_is_skipped() {
+        let dir = tempdir().unwrap();
+        write_test_jar(dir.path(), "example.jar");
+        let mut mods = scan_local_mods(dir.path()).unwrap();
+        let sha1 = mods[0].sha1.clone();
+        assert!(mods_needing_project_lookup(&mods).contains(&sha1));
+
+        // A project id alone cannot pin the installed jar, so the file id is still looked up.
+        mods[0].project_id = Some("p1".to_string());
+        assert!(mods_needing_project_lookup(&mods).contains(&sha1));
+
+        mods[0].platform = Some(CompPlatform::Curseforge);
+        mods[0].file_id = Some("f1".to_string());
+        assert!(mods_needing_project_lookup(&mods).is_empty());
     }
 
     #[tokio::test]
@@ -2208,6 +2331,8 @@ mod tests {
             size,
             mtime_secs: 7,
             project_id: None,
+            platform: None,
+            file_id: None,
             update_file: None,
             dependencies: Vec::new(),
             provides: Vec::new(),

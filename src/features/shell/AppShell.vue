@@ -117,7 +117,8 @@ onUnmounted(() => {
     >
       <MImage
         data-testid="bg-img"
-        class="w-full h-full pointer-events-none"
+        size="full"
+        class="pointer-events-none"
         :src="backgroundMediaSrc"
         :style="{
           filter: `blur(${themeStore.backgroundBlur}px)`,

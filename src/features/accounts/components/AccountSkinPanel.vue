@@ -6,10 +6,14 @@ import { MCard, MButton, MAvatar, MEmpty, MImage } from '../../../ui'
 
 const props = defineProps<{
   selectedAccount: AccountView | null
+  savingSkin?: boolean
+  savingAvatar?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'upload-skin'): void
+  (e: 'save-skin'): void
+  (e: 'save-avatar'): void
   (e: 'open-closet', server: string): void
   (e: 'select-cape', capeId: string | null): void
 }>()
@@ -28,7 +32,7 @@ const hasActiveCape = computed(() => props.selectedAccount?.capes.some((c) => c.
       <!-- 2D Head Preview -->
       <div class="flex items-center gap-4 p-4 rounded-xl bg-sunken">
         <div
-          class="w-16 h-16 rounded-lg bg-raised flex items-center justify-center border border-line overflow-hidden"
+          class="w-16 h-16 rounded-md bg-raised flex items-center justify-center border border-line overflow-hidden"
         >
           <MImage
             v-if="selectedAccount.skinHeadDataUrl"
@@ -36,7 +40,7 @@ const hasActiveCape = computed(() => props.selectedAccount?.capes.some((c) => c.
             alt="Skin Head"
             pixelated
             fit="contain"
-            class="w-full h-full"
+            size="full"
           >
             <template #fallback>
               <MAvatar :name="selectedAccount.username" :size="64" />
@@ -57,6 +61,24 @@ const hasActiveCape = computed(() => props.selectedAccount?.capes.some((c) => c.
 
       <!-- Skin Actions -->
       <div class="flex flex-col gap-2">
+        <MButton
+          variant="tonal"
+          icon="i-lucide-download"
+          :loading="savingSkin"
+          data-testid="account-save-skin-btn"
+          @click="emit('save-skin')"
+        >
+          {{ t('accounts.skin.saveSkin') }}
+        </MButton>
+        <MButton
+          variant="tonal"
+          icon="i-lucide-image-down"
+          :loading="savingAvatar"
+          data-testid="account-save-avatar-btn"
+          @click="emit('save-avatar')"
+        >
+          {{ t('accounts.skin.saveAvatar') }}
+        </MButton>
         <MButton
           v-if="selectedAccount.kind !== 'offline'"
           variant="tonal"

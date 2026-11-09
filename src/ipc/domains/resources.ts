@@ -24,6 +24,10 @@ export interface ResourceEntry {
   tags: string[]
   modId?: string | null
   projectId?: string | null
+  /** Platform the file was identified on, when known. */
+  platform?: CompPlatform | null
+  /** Platform-specific id of the installed file, when known. */
+  fileId?: string | null
   latestFile?: CompFile | null
   updateAvailable: boolean
   dependents: string[]
@@ -38,6 +42,8 @@ export interface ResourcePatch {
   tags?: string[] | null
   modId?: string | null
   projectId?: string | null
+  platform?: CompPlatform | null
+  fileId?: string | null
   latestFile?: CompFile | null
   updateAvailable?: boolean | null
   dependents?: string[] | null

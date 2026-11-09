@@ -53,6 +53,7 @@ pub fn builder() -> Builder<tauri::Wry> {
             crate::ipc::accounts::accounts_add_authlib,
             crate::ipc::accounts::accounts_select_profile,
             crate::ipc::accounts::accounts_refresh,
+            crate::ipc::accounts::accounts_get_skin_data_url,
             crate::ipc::accounts::accounts_skin_upload,
             crate::ipc::accounts::accounts_cape_set,
             // [install]
@@ -150,8 +151,6 @@ pub fn builder() -> Builder<tauri::Wry> {
             crate::ipc::presets::presets_add_items,
             crate::ipc::presets::presets_remove_item,
             crate::ipc::presets::presets_pin,
-            crate::ipc::presets::presets_pin_rule,
-            crate::ipc::presets::presets_remove_pin_rule,
             crate::ipc::presets::presets_apply,
             crate::ipc::presets::presets_apply_report,
             crate::ipc::presets::presets_cache,

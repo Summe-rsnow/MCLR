@@ -279,14 +279,14 @@ onMounted(() => {
         <div class="flex items-start gap-4 min-w-0">
           <!-- Icon / Thumbnail -->
           <div
-            class="w-14 h-14 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 border border-line overflow-hidden text-primary"
+            class="w-14 h-14 rounded-md bg-sunken/60 flex items-center justify-center shrink-0 border border-line overflow-hidden text-primary"
           >
             <MImage
               v-if="save.iconPath"
               :src="convertFileSrc(save.iconPath)"
               alt="World Icon"
               fallback-icon="i-lucide-compass"
-              class="w-full h-full"
+              size="full"
             />
             <span v-else class="w-7 h-7 i-lucide-compass" />
           </div>

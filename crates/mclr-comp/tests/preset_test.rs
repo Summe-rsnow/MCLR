@@ -7,7 +7,7 @@ use mclr_comp::model::{CompFile, CompFileHashes, CompPlatform, CompReleaseChanne
 use mclr_comp::preset::installed::{InstalledHit, InstalledIndex};
 use mclr_comp::preset::ledger;
 use mclr_comp::preset::model::{
-    AddStatus, ApplyStatus, GateReason, LinkMode, OtherVersionPolicy, PresetItem, ResourcePreset,
+    AddStatus, ApplyStatus, LinkMode, OtherVersionPolicy, PresetItem, ResourcePreset,
 };
 use mclr_comp::preset::plan::{InstanceCtx, decide, merge_presets};
 use mclr_comp::preset::repo::PresetRepo;
@@ -97,12 +97,8 @@ fn hit(file_name: &str, rel_path: &str, sha1: &str) -> InstalledHit {
     }
 }
 
-fn merged_of(
-    presets: &[ResourcePreset],
-    context: &InstanceCtx,
-    project_id: &str,
-) -> mclr_comp::preset::plan::MergedItem {
-    let (_, items) = merge_presets(presets, context);
+fn merged_of(presets: &[ResourcePreset], project_id: &str) -> mclr_comp::preset::plan::MergedItem {
+    let (_, items) = merge_presets(presets);
     items
         .into_iter()
         .find(|m| m.item.project_id == project_id)
@@ -263,7 +259,7 @@ fn expand_loaders_maps_known_aliases() {
 // ---------------------------------------------------------------- merge
 
 #[test]
-fn merge_presets_gates_versions_and_merges_overlaps() {
+fn merge_presets_is_universal_and_merges_overlaps() {
     let project = item(CompPlatform::Modrinth, "sodium", CompType::Mod, None);
     let a = preset("a", "A", &["1.20.1"], &["fabric"], vec![project.clone()]);
     let b = preset("b", "B", &[], &[], vec![project]);
@@ -275,23 +271,21 @@ fn merge_presets_gates_versions_and_merges_overlaps() {
         vec![item(CompPlatform::Modrinth, "other", CompType::Mod, None)],
     );
 
-    let context = ctx("1.20.1", &["fabric"]);
-    let (gates, items) = merge_presets(&[a, c, b], &context);
+    let (gates, items) = merge_presets(&[a, c, b]);
 
+    // Legacy version/loader filters never gate a preset: every one is accepted.
     assert_eq!(gates.len(), 3);
-    assert!(gates[0].ok);
-    assert!(!gates[1].ok);
-    assert_eq!(gates[1].reason, Some(GateReason::GameVersion));
-    assert!(gates[2].ok);
+    assert!(gates.iter().all(|gate| gate.ok && gate.reason.is_none()));
 
-    assert_eq!(items.len(), 1, "gated preset contributes nothing");
+    assert_eq!(items.len(), 2, "every preset contributes its items");
+    assert_eq!(items[0].item.project_id, "sodium");
     assert_eq!(
         items[0].from_presets,
         vec!["A".to_string(), "B".to_string()]
     );
     assert!(!items[0].version_conflict);
-    // B has no loader filter, so the item is not restricted by presets.
-    assert_eq!(items[0].preset_loaders, None);
+    assert_eq!(items[1].item.project_id, "other");
+    assert_eq!(items[1].from_presets, vec!["C".to_string()]);
 }
 
 #[test]
@@ -320,8 +314,7 @@ fn merge_presets_first_pin_wins_and_flags_conflict() {
             Some("f2"),
         )],
     );
-    let context = ctx("1.20.1", &["fabric"]);
-    let (_, items) = merge_presets(&[a, b], &context);
+    let (_, items) = merge_presets(&[a, b]);
 
     assert_eq!(items.len(), 1);
     assert!(items[0].version_conflict);
@@ -353,8 +346,7 @@ fn merge_presets_later_pin_fills_missing_pin_without_conflict() {
             Some("f2"),
         )],
     );
-    let context = ctx("1.20.1", &["fabric"]);
-    let merged = merged_of(&[a, b], &context, "sodium");
+    let merged = merged_of(&[a, b], "sodium");
     assert!(!merged.version_conflict);
     assert_eq!(merged.item.pinned_file_id.as_deref(), Some("f2"));
 }
@@ -375,7 +367,7 @@ fn decide_installed_for_fresh_item() {
         vec![item(CompPlatform::Modrinth, "sodium", CompType::Mod, None)],
     );
     let context = ctx("1.20.1", &["fabric"]);
-    let merged = merged_of(&[p], &context, "sodium");
+    let merged = merged_of(&[p], "sodium");
     let files = vec![file(
         "f1",
         "sodium",
@@ -409,7 +401,7 @@ fn decide_already_same_by_hash() {
         vec![item(CompPlatform::Modrinth, "sodium", CompType::Mod, None)],
     );
     let context = ctx("1.20.1", &["fabric"]);
-    let merged = merged_of(&[p], &context, "sodium");
+    let merged = merged_of(&[p], "sodium");
     let files = vec![file(
         "f1",
         "sodium",
@@ -450,7 +442,7 @@ fn decide_other_version_follows_policy() {
         vec![item(CompPlatform::Modrinth, "sodium", CompType::Mod, None)],
     );
     let context = ctx("1.20.1", &["fabric"]);
-    let merged = merged_of(&[p], &context, "sodium");
+    let merged = merged_of(&[p], "sodium");
     let files = vec![file(
         "f1",
         "sodium",
@@ -503,7 +495,7 @@ fn decide_no_game_version_no_loader_no_file() {
         vec![item(CompPlatform::Modrinth, "sodium", CompType::Mod, None)],
     );
     let context = ctx("1.20.1", &["fabric"]);
-    let merged = merged_of(&[p], &context, "sodium");
+    let merged = merged_of(&[p], "sodium");
     let installed = empty_installed();
 
     let wrong_mc = vec![file(
@@ -557,13 +549,20 @@ fn decide_no_game_version_no_loader_no_file() {
 }
 
 #[test]
-fn decide_preset_loader_filter_uses_intersection_with_instance() {
+fn decide_ignores_legacy_preset_loader_filter() {
     let mod_item = item(CompPlatform::Modrinth, "sodium", CompType::Mod, None);
     let shader_item = item(CompPlatform::Modrinth, "bsl", CompType::Shader, None);
-    let p = preset("a", "A", &[], &["forge"], vec![mod_item, shader_item]);
+    // A legacy loader filter on the preset no longer restricts which instance it can serve.
+    let p = preset(
+        "a",
+        "A",
+        &["1.19.2"],
+        &["forge"],
+        vec![mod_item, shader_item],
+    );
     let context = ctx("1.20.1", &["fabric"]);
 
-    let (gates, items) = merge_presets(&[p], &context);
+    let (gates, items) = merge_presets(&[p]);
     assert!(gates[0].ok);
     assert_eq!(items.len(), 2);
 
@@ -584,9 +583,9 @@ fn decide_preset_loader_filter_uses_intersection_with_instance() {
         OtherVersionPolicy::Skip,
         false,
     );
-    assert_eq!(mod_decision.status, ApplyStatus::NoLoader);
+    assert_eq!(mod_decision.status, ApplyStatus::Installed);
+    assert_eq!(mod_decision.file.map(|f| f.id), Some("f1".to_string()));
 
-    // Shader items are not gated by preset loaders at all.
     let shader_files = vec![file(
         "f2",
         "bsl",
@@ -622,7 +621,7 @@ fn decide_distribution_disabled_and_needs_world() {
         )],
     );
     let context = ctx("1.20.1", &["fabric"]);
-    let merged = merged_of(&[shader], &context, "bsl");
+    let merged = merged_of(&[shader], "bsl");
     let mut blocked = file(
         "f1",
         "bsl",
@@ -652,7 +651,7 @@ fn decide_distribution_disabled_and_needs_world() {
         &[],
         vec![item(CompPlatform::Modrinth, "dp", CompType::Datapack, None)],
     );
-    let merged = merged_of(&[datapack], &context, "dp");
+    let merged = merged_of(&[datapack], "dp");
     let decision = decide(
         &merged,
         &[],
@@ -675,17 +674,7 @@ fn decide_distribution_disabled_and_needs_world() {
 }
 
 #[test]
-fn decide_pin_rules_and_unmatched_falls_back_to_latest() {
-    let mut i = item(CompPlatform::Modrinth, "sodium", CompType::Mod, None);
-    i.pin_rules.push(mclr_comp::preset::model::PresetPinRule {
-        game_versions: vec!["1.19.2".to_string()],
-        loaders: vec!["fabric".to_string()],
-        file_id: "old".to_string(),
-        file_name: "sodium-old.jar".to_string(),
-    });
-
-    let p = preset("a", "A", &[], &[], vec![i]);
-
+fn decide_honours_single_pin_and_ignores_pin_rules() {
     let files = vec![
         file(
             "old",
@@ -706,34 +695,98 @@ fn decide_pin_rules_and_unmatched_falls_back_to_latest() {
             Some("bb"),
         ),
     ];
-
-    // Case 1: 1.19.2 Fabric matches the rule -> installs pinned "old" file
-    let ctx_119 = ctx("1.19.2", &["fabric"]);
-    let merged_119 = merged_of(std::slice::from_ref(&p), &ctx_119, "sodium");
-    let decision_119 = decide(
-        &merged_119,
-        &files,
-        &ctx_119,
-        &empty_installed(),
-        OtherVersionPolicy::Skip,
-        false,
-    );
-    assert_eq!(decision_119.status, ApplyStatus::Installed);
-    assert_eq!(decision_119.file.map(|f| f.id), Some("old".to_string()));
-
-    // Case 2: 1.20.1 Fabric does not match any rule -> automatically falls back to latest version "new"
     let ctx_120 = ctx("1.20.1", &["fabric"]);
-    let merged_120 = merged_of(&[p], &ctx_120, "sodium");
-    let decision_120 = decide(
-        &merged_120,
+
+    // A pinned file wins even when it targets another game version.
+    let mut pinned = item(CompPlatform::Modrinth, "sodium", CompType::Mod, Some("old"));
+    pinned
+        .pin_rules
+        .push(mclr_comp::preset::model::PresetPinRule {
+            game_versions: vec!["1.20.1".to_string()],
+            loaders: vec!["fabric".to_string()],
+            file_id: "new".to_string(),
+            file_name: "sodium-new.jar".to_string(),
+        });
+    let mixed = merged_of(&[preset("a", "A", &[], &[], vec![pinned])], "sodium");
+    let decision = decide(
+        &mixed,
         &files,
         &ctx_120,
         &empty_installed(),
         OtherVersionPolicy::Skip,
         false,
     );
-    assert_eq!(decision_120.status, ApplyStatus::Installed);
-    assert_eq!(decision_120.file.map(|f| f.id), Some("new".to_string()));
+    assert_eq!(decision.status, ApplyStatus::Installed);
+    assert_eq!(decision.file.map(|f| f.id), Some("old".to_string()));
+
+    // Leftover pin rules are ignored: an unpinned item follows the latest compatible file.
+    let mut unpinned = item(CompPlatform::Modrinth, "sodium", CompType::Mod, None);
+    unpinned
+        .pin_rules
+        .push(mclr_comp::preset::model::PresetPinRule {
+            game_versions: vec!["1.19.2".to_string()],
+            loaders: vec!["fabric".to_string()],
+            file_id: "old".to_string(),
+            file_name: "sodium-old.jar".to_string(),
+        });
+    let plain = merged_of(&[preset("b", "B", &[], &[], vec![unpinned])], "sodium");
+    let decision = decide(
+        &plain,
+        &files,
+        &ctx_120,
+        &empty_installed(),
+        OtherVersionPolicy::Skip,
+        false,
+    );
+    assert_eq!(decision.status, ApplyStatus::Installed);
+    assert_eq!(decision.file.map(|f| f.id), Some("new".to_string()));
+}
+
+#[test]
+fn decide_rejects_pin_without_instance_loader() {
+    // The pinned build only exists for Forge, so a Fabric instance falls back to the latest
+    // Fabric-compatible file instead of installing a jar the loader cannot read.
+    let pinned = item(
+        CompPlatform::Modrinth,
+        "sodium",
+        CompType::Mod,
+        Some("forge-only"),
+    );
+    let merged = merged_of(&[preset("a", "A", &[], &[], vec![pinned])], "sodium");
+    let files = vec![
+        file(
+            "forge-only",
+            "sodium",
+            &["1.20.1"],
+            &["forge"],
+            CompReleaseChannel::Release,
+            "2024-03-01T00:00:00Z",
+            Some("aa"),
+        ),
+        file(
+            "fabric-latest",
+            "sodium",
+            &["1.20.1"],
+            &["fabric"],
+            CompReleaseChannel::Release,
+            "2024-01-01T00:00:00Z",
+            Some("bb"),
+        ),
+    ];
+
+    let decision = decide(
+        &merged,
+        &files,
+        &ctx("1.20.1", &["fabric"]),
+        &empty_installed(),
+        OtherVersionPolicy::Skip,
+        false,
+    );
+    assert_eq!(decision.status, ApplyStatus::Installed);
+    assert_eq!(
+        decision.file.map(|f| f.id),
+        Some("fabric-latest".to_string())
+    );
 }
 
 #[test]

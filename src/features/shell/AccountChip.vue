@@ -27,19 +27,25 @@ function navigateToAccounts() {
     @click="navigateToAccounts"
   >
     <!-- Avatar / Skin Head or Fallback Icon -->
-    <div
-      class="relative w-8 h-8 rounded-lg overflow-hidden bg-sunken flex items-center justify-center shrink-0 border border-line"
-    >
+    <div class="relative shrink-0">
       <MImage
         v-if="accountsStore.selectedAccount?.skinHeadDataUrl"
         :src="accountsStore.selectedAccount.skinHeadDataUrl"
         alt="Avatar"
         pixelated
+        size="sm"
         fallback-icon="i-lucide-user"
-        class="w-full h-full"
+        class="border border-line bg-sunken"
       />
-      <span v-else-if="accountsStore.selectedAccount" class="i-lucide-user text-fg-muted w-4 h-4" />
-      <span v-else class="i-lucide-user-plus text-fg-muted w-4 h-4" />
+      <div
+        v-else
+        class="w-8 h-8 rounded-[6px] bg-sunken border border-line flex items-center justify-center"
+      >
+        <span
+          :class="accountsStore.selectedAccount ? 'i-lucide-user' : 'i-lucide-user-plus'"
+          class="w-4 h-4 text-fg-muted"
+        />
+      </div>
 
       <!-- Kind Badge in Corner if selected -->
       <div

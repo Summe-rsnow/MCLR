@@ -327,7 +327,7 @@ describe('UI Components', () => {
     expect(inlineWrapper.classes()).toContain('w-auto')
     expect(inlineWrapper.classes()).toContain('max-w-[360px]')
     expect(inlineWrapper.find('button').classes()).toContain('w-auto')
-    expect(inlineWrapper.find('button').classes()).toContain('min-w-[140px]')
+    expect(inlineWrapper.find('button').classes()).toContain('min-w-[104px]')
   })
   it('MSwitch toggles value', async () => {
     const wrapper = mount(MSwitch, {

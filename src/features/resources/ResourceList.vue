@@ -20,6 +20,8 @@ import ResourceToolbar from './components/ResourceToolbar.vue'
 import ResourceItemRow from './components/ResourceItemRow.vue'
 import ResourceModals from './components/ResourceModals.vue'
 import ModDependencyDrawer from './components/ModDependencyDrawer.vue'
+import PresetApplyDialog from '../presets/components/PresetApplyDialog.vue'
+import SaveModsToPresetDialog from './components/SaveModsToPresetDialog.vue'
 const props = defineProps<{
   instanceId: string
   kind: ResourceKind
@@ -46,6 +48,17 @@ const selectedPaths = ref<Set<string>>(new Set())
 
 // Schematic directory navigation
 const currentRelPath = ref('')
+
+// One-shot preset apply (mods / resource packs / shaders): refreshes the list afterwards.
+const applyPresetOpen = ref(false)
+
+// Save installed mods to a preset (selection-aware, so it lives next to the batch bar too).
+const saveToPresetOpen = ref(false)
+const saveToPresetEntries = computed<ResourceEntry[]>(() =>
+  selectedPaths.value.size > 0
+    ? entries.value.filter((e) => selectedPaths.value.has(e.path))
+    : entries.value,
+)
 
 // Jar-in-Jar Drawer
 const jijDrawerOpen = ref(false)
@@ -926,6 +939,8 @@ onMounted(async () => {
         if (patch.tags !== undefined && patch.tags !== null) cur.tags = patch.tags
         if (patch.modId !== undefined) cur.modId = patch.modId
         if (patch.projectId !== undefined) cur.projectId = patch.projectId
+        if (patch.platform !== undefined) cur.platform = patch.platform
+        if (patch.fileId !== undefined) cur.fileId = patch.fileId
         if (patch.icon !== undefined) cur.icon = patch.icon
         if (patch.latestFile !== undefined && patch.latestFile !== null) {
           cur.latestFile = patch.latestFile
@@ -991,6 +1006,8 @@ watch(
       @check-updates="handleCheckUpdates"
       @toggle-select-all="selectAll"
       @add-files="handleAddFiles"
+      @apply-preset="applyPresetOpen = true"
+      @save-to-preset="saveToPresetOpen = true"
     />
     <!-- Batch selection actions (inline, below the select-all row) -->
     <Transition name="m-selection-bar">
@@ -1031,6 +1048,16 @@ watch(
               @click="handleBatchToggle(false)"
             >
               {{ t('resources.actions.disable') }}
+            </MButton>
+            <MButton
+              v-if="kind === 'mod'"
+              variant="tonal"
+              size="sm"
+              icon="i-lucide-bookmark-plus"
+              data-testid="resources-save-selected-to-preset"
+              @click="saveToPresetOpen = true"
+            >
+              {{ t('resources.actions.saveToPreset') }}
             </MButton>
             <MButton variant="danger" size="sm" icon="i-lucide-trash" @click="handleBatchDelete">
               {{ t('resources.actions.delete') }}
@@ -1140,6 +1167,14 @@ watch(
       @jump="handleDependencyJump"
       @enable="handleDependencyEnable"
     />
+
+    <PresetApplyDialog
+      v-model:open="applyPresetOpen"
+      :instance-id="instanceId"
+      @applied="loadResources"
+    />
+
+    <SaveModsToPresetDialog v-model:open="saveToPresetOpen" :entries="saveToPresetEntries" />
   </div>
 </template>
 

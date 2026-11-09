@@ -301,6 +301,8 @@ mod tests {
             murmur2: 0,
             size: 100,
             project_id: None,
+            platform: None,
+            file_id: None,
             update_file: None,
             icon: None,
             dependencies: deps,

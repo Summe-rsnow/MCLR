@@ -75,7 +75,7 @@ const { formatDate } = useFormat()
         <MImage
           :src="project.iconUrl"
           :fallback-icon="compTypeMeta[project.compType as CompTypeKey]?.icon || 'i-lucide-box'"
-          class="w-20 h-20 rounded-xl shrink-0"
+          size="xl"
         />
 
         <div class="min-w-0 flex-1">

@@ -43,6 +43,10 @@ const emit = defineEmits<{
   (e: 'export', format: 'txt' | 'csv'): void
   (e: 'checkUpdates'): void
   (e: 'toggleSelectAll'): void
+  /** Opens the one-shot preset apply dialog for this instance (no selection needed). */
+  (e: 'applyPreset'): void
+  /** Opens the "save installed mods to a preset" dialog. */
+  (e: 'saveToPreset'): void
 }>()
 
 const { t } = useI18n()
@@ -130,6 +134,28 @@ function pickBatch(action: 'batchEnableAll' | 'batchDisableAll') {
         <MButton variant="tonal" size="sm" @click="emit('downloadMore')">
           <span class="i-lucide-cloud-download mr-1 w-4 h-4" />
           {{ t('resources.downloadMore') }}
+        </MButton>
+
+        <MButton
+          v-if="kind !== 'schematic'"
+          variant="tonal"
+          size="sm"
+          icon="i-lucide-package-check"
+          data-testid="resources-apply-preset"
+          @click="emit('applyPreset')"
+        >
+          {{ t('resources.actions.applyPreset') }}
+        </MButton>
+
+        <MButton
+          v-if="kind === 'mod' && (totalCount ?? 0) > 0"
+          variant="tonal"
+          size="sm"
+          icon="i-lucide-bookmark-plus"
+          data-testid="resources-save-to-preset"
+          @click="emit('saveToPreset')"
+        >
+          {{ t('resources.actions.saveToPreset') }}
         </MButton>
 
         <!-- Collision-aware menu (MPopover flips/shifts inside the viewport). -->

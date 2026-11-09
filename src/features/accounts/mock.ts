@@ -58,6 +58,10 @@ export const mockAccounts: AccountView[] = [
 
 let accountsData: AccountView[] = JSON.parse(JSON.stringify(mockAccounts))
 
+// 1x1 PNG standing in for a full skin texture; the real command returns a 64x64 PNG.
+const mockSkinDataUrl =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
 export function resetMockAccounts(): void {
   accountsData = JSON.parse(JSON.stringify(mockAccounts))
 }
@@ -181,6 +185,13 @@ const handlers = {
     const acc = accountsData.find((a) => a.id === id)
     if (!acc) throw { code: 'auth.notFound', params: { id } }
     return { ...acc }
+  },
+
+  accounts_get_skin_data_url: (args: Record<string, unknown>) => {
+    const id = String(args.id)
+    const acc = accountsData.find((a) => a.id === id)
+    if (!acc) throw { code: 'auth.notFound', params: { id } }
+    return mockSkinDataUrl
   },
 
   accounts_skin_upload: (args: Record<string, unknown>) => {

@@ -39,7 +39,7 @@ const channels = [
             {{ t(channel.titleKey) }}
           </div>
           <div
-            class="w-48 h-48 rounded-xl bg-raised border border-line overflow-hidden p-2"
+            class="p-3 bg-raised rounded-xl border border-line shadow-xs"
             :data-testid="`sponsor-qr-${channel.key}`"
           >
             <MImage
@@ -47,7 +47,7 @@ const channels = [
               :alt="t(channel.titleKey)"
               fit="contain"
               loading="eager"
-              class="w-full h-full"
+              size="2xl"
             />
           </div>
           <p class="text-xs text-fg-muted text-center leading-relaxed">

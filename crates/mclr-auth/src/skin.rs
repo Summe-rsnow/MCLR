@@ -26,6 +26,10 @@ static ALEX_HEAD: LazyLock<String> = LazyLock::new(|| {
     let png = crop_head_png(ALEX_BYTES).expect("bundled alex skin is valid");
     format!("data:image/png;base64,{}", BASE64.encode(&png))
 });
+
+static STEVE_SKIN: LazyLock<String> = LazyLock::new(|| png_data_url(STEVE_BYTES));
+
+static ALEX_SKIN: LazyLock<String> = LazyLock::new(|| png_data_url(ALEX_BYTES));
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CapeView {
@@ -102,12 +106,29 @@ pub fn crop_head_png(skin_png_bytes: &[u8]) -> Result<Vec<u8>, AuthError> {
     Ok(buf.into_inner())
 }
 
+/// Wraps raw PNG bytes as a `data:image/png;base64,...` data URL.
+pub fn png_data_url(png_bytes: &[u8]) -> String {
+    format!("data:image/png;base64,{}", BASE64.encode(png_bytes))
+}
+
 /// Returns a base64 data URL for default Steve or Alex skin head.
 pub fn default_head_data_url(model: &str) -> String {
     if model == "slim" {
         ALEX_HEAD.clone()
     } else {
         STEVE_HEAD.clone()
+    }
+}
+
+/// Returns a base64 data URL of the full default Steve or Alex skin texture.
+///
+/// The model is picked from the UUID with the same even/odd nibble parity rule as
+/// [`default_skin_model`](crate::offline::default_skin_model).
+pub fn default_skin_data_url(uuid: &str) -> String {
+    if crate::offline::default_skin_model(uuid) == "slim" {
+        ALEX_SKIN.clone()
+    } else {
+        STEVE_SKIN.clone()
     }
 }
 
@@ -450,5 +471,39 @@ mod tests {
         assert!(classic.starts_with("data:image/png;base64,"));
         assert!(slim.starts_with("data:image/png;base64,"));
         assert_ne!(classic, slim);
+    }
+
+    #[test]
+    fn test_default_skin_data_url_follows_uuid_parity() {
+        // Slim UUID from `default_skin_model`'s parity test: odd nibble XOR.
+        let slim_uuid = "5627dd98e6be3c21b8a8e92344183641";
+        // All-zero UUID: even nibble XOR -> classic.
+        let classic_uuid = "00000000-0000-0000-0000-000000000000";
+
+        let slim = default_skin_data_url(slim_uuid);
+        let classic = default_skin_data_url(classic_uuid);
+
+        assert!(slim.starts_with("data:image/png;base64,"));
+        assert!(classic.starts_with("data:image/png;base64,"));
+        assert_ne!(slim, classic);
+
+        // Every UUID maps to the same model its parity dictates.
+        for uuid in [
+            slim_uuid,
+            classic_uuid,
+            "b50ad385-829d-3141-a216-7e7d7539ba7f",
+        ] {
+            let data_url = default_skin_data_url(uuid);
+            let model = crate::offline::default_skin_model(uuid);
+            assert_eq!(
+                data_url,
+                default_skin_data_url(if model == "slim" {
+                    slim_uuid
+                } else {
+                    classic_uuid
+                }),
+                "uuid {uuid} should use the {model} default skin"
+            );
+        }
     }
 }

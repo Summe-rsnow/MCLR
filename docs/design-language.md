@@ -50,7 +50,7 @@ Additional CSS variables set by `applyTheme`:
 ## 3. Spacing, Radius, Typography & Motion
 
 - **Grid & Spacing**: 4 px grid; page padding `pt-4 px-8 pb-6` (`16px` / `32px` / `24px`, matching `.m-page` in `material.css`), section gap `24px` (`gap-6`), card padding `20px` (`p-5`), setting row min-height `52px`.
-- **Radius**: `rounded-sm` (`8px`), `rounded`/`rounded-md` (`10px`), `rounded-lg` (`14px` — buttons/inputs), `rounded-xl` (`18px` — cards), `rounded-2xl` (`24px` — dialogs & drawers), `rounded-full` (badges/pills).
+- **Radius**: `rounded-sm` (`8px`), `rounded`/`rounded-md` (`10px`), `rounded-lg` (`14px` — buttons/inputs), `rounded-xl` (`18px` — cards), `rounded-2xl` (`24px` — dialogs & drawers), `rounded-full` (badges/pills). Images and avatars use a separate proportional scale (`<MImage>` `radius` prop, see §6): `xs` (`4px`), `sm` (`6px`), `md` (`rounded-sm`, `8px`), `lg` (`rounded-md`, `10px`), `xl` (`12px`), `full` (`rounded-full`) — never hand-write `rounded-lg`/`rounded-xl` on an image tile.
 - **Typography**: Bundled `'HarmonyOS Sans SC'` (Regular `400`, Medium `500 600`, Bold `700`) with `'Segoe UI Variable Text', 'Microsoft YaHei UI', system-ui, sans-serif` fallbacks. Monospace uses `'Cascadia Mono', Consolas, monospace`.
 - **Motion Constants**: `--dur-fast: 0.12s`, `--dur-base: 0.2s`, `--dur-slow: 0.32s`, `--ease: cubic-bezier(0.2, 0.8, 0.2, 1)`.
 
@@ -118,7 +118,23 @@ The application supports three distinct motion modes configured via `html[data-m
   - Folder/path subtitle and quick action buttons (open folder, manage instance).
 - **`<MListItem>`**: Enhanced list row supporting `dense`, `active`, and named slots (`#prefix`, `#title`, `#subtitle`, `#badges`, `#actions`).
 - **`<MEmpty>`**: Empty state illustration with description and action slot (`#action` or `:actionText`).
-- **`<MImage>`**: Universal image container replacing raw `<img>` tags across the application. Features built-in loading transitions, automatic error fallback (`fallbackSrc` or `fallbackIcon`), pixelated texture rendering support (`:pixelated="true"` for Minecraft blocks/skins), and compliant lazy decoding.
+- **`<MImage>`**: Universal image container replacing raw `<img>` tags across the application. Features built-in loading transitions, automatic error fallback (`fallbackSrc` or `fallbackIcon`), pixelated texture rendering support (`:pixelated="true"` for Minecraft blocks/skins), and compliant lazy decoding. Never paints a background of its own, so transparent artwork (block icons, loader logos, skins) stays transparent.
+  - `size` preset (default `auto` — caller keeps its own dimensions):
+
+    | `size` | Box | Default `radius` |
+    |---|---|---|
+    | `xs` | `w-5 h-5` (`20px`) | `xs` — `rounded-[4px]` |
+    | `sm` | `w-8 h-8` (`32px`) | `sm` — `rounded-[6px]` |
+    | `md` | `w-10 h-10` (`40px`) | `md` — `rounded-sm` (`8px`) |
+    | `lg` | `w-14 h-14` (`56px`) | `lg` — `rounded-md` (`10px`) |
+    | `xl` | `w-20 h-20` (`80px`) | `xl` — `rounded-[12px]` |
+    | `2xl` | `w-44 h-44` (`176px`) | `xl` — `rounded-[12px]` |
+    | `full` | `w-full h-full` (fills wrapper) | `none` — `rounded-none` |
+    | `auto` | caller-supplied | `sm` — `rounded-[6px]` |
+
+  - Explicit `radius` overrides the tier: `none` (`rounded-none`), `xs` (`4px`), `sm` (`6px`), `md` (`rounded-sm`, `8px`), `lg` (`rounded-md`, `10px`), `xl` (`12px`), `full` (`rounded-full`).
+  - Fixed-size wrappers (e.g. `w-14 h-14` tiles) keep their own radius and pass `size="full" radius="none"` so the artwork never rounds twice. `MImageSize` / `MImageRadius` are exported from `src/ui`.
+  - `<MAvatar>` derives its radius from `size` (`≤24px` → `4px`, `≤36px` → `6px`, `≤48px` → `8px`, else `10px`); `<MLoaderIcon>` scales its tile radius with the tile (`24px` → `5px`, `32px` → `6px`, `40px` → `8px`, `56px` → `10px`).
 
 ### 6b. Material-Aware Selected States
 

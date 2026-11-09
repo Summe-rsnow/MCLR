@@ -290,73 +290,10 @@ impl PresetRepo {
         self.persist()
     }
 
-    /// Adds or updates a specific pin rule for an item.
-    pub fn pin_rule(
-        &mut self,
-        preset_id: &str,
-        platform: CompPlatform,
-        project_id: &str,
-        rule: crate::preset::model::PresetPinRule,
-    ) -> Result<(), CompError> {
-        let preset = self
-            .presets
-            .iter_mut()
-            .find(|p| p.id == preset_id)
-            .ok_or(CompError::Preset("preset.notFound"))?;
-        let item = preset
-            .items
-            .iter_mut()
-            .find(|item| item.platform == platform && item.project_id == project_id)
-            .ok_or(CompError::Preset("preset.itemNotFound"))?;
-
-        let existing = item
-            .pin_rules
-            .iter_mut()
-            .find(|r| r.game_versions == rule.game_versions && r.loaders == rule.loaders);
-        if let Some(r) = existing {
-            r.file_id = rule.file_id.clone();
-            r.file_name = rule.file_name.clone();
-        } else {
-            item.pin_rules.push(rule.clone());
-        }
-        item.pinned_file_id = Some(rule.file_id);
-        item.pinned_file_name = Some(rule.file_name);
-        preset.updated_at = now_ms();
-        self.persist()
-    }
-
-    /// Removes a pin rule by pinned file id.
-    pub fn remove_pin_rule(
-        &mut self,
-        preset_id: &str,
-        platform: CompPlatform,
-        project_id: &str,
-        file_id: &str,
-    ) -> Result<(), CompError> {
-        let preset = self
-            .presets
-            .iter_mut()
-            .find(|p| p.id == preset_id)
-            .ok_or(CompError::Preset("preset.notFound"))?;
-        let item = preset
-            .items
-            .iter_mut()
-            .find(|item| item.platform == platform && item.project_id == project_id)
-            .ok_or(CompError::Preset("preset.itemNotFound"))?;
-
-        item.pin_rules.retain(|r| r.file_id != file_id);
-        if let Some(first) = item.pin_rules.first() {
-            item.pinned_file_id = Some(first.file_id.clone());
-            item.pinned_file_name = Some(first.file_name.clone());
-        } else {
-            item.pinned_file_id = None;
-            item.pinned_file_name = None;
-        }
-        preset.updated_at = now_ms();
-        self.persist()
-    }
-
     /// Returns every pinned file id across all presets (used to keep store objects alive).
+    ///
+    /// Legacy `pin_rules` are included so cache objects referenced only by an old
+    /// `presets.json` are not reported as unreferenced.
     pub fn pinned_file_ids(&self) -> std::collections::HashSet<String> {
         self.presets
             .iter()

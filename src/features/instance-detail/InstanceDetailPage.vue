@@ -6,6 +6,7 @@ import { useInstancesStore } from '../instances/store'
 import { useLaunchStore } from '../launch/store'
 import { instanceDetailTabs, type TabGroupKey } from './tabs'
 import ModsDisabledTab from './tabs/ModsDisabledTab.vue'
+import PresetApplyDialog from '../presets/components/PresetApplyDialog.vue'
 import {
   MPageHeader,
   MButton,
@@ -40,6 +41,7 @@ const DEFAULT_TAB_KEY = 'mods'
 
 const activeTab = ref(DEFAULT_TAB_KEY)
 const direction = ref<'forward' | 'back'>('forward')
+const applyPresetOpen = ref(false)
 
 const tabGroupMap = computed(() => {
   const map = new Map<string, TabGroupKey>()
@@ -247,6 +249,17 @@ function handleLaunch() {
           </div>
         </div>
       </div>
+      <div class="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+        <MButton
+          variant="tonal"
+          size="sm"
+          icon="i-lucide-package-check"
+          data-testid="instance-apply-preset-btn"
+          @click="applyPresetOpen = true"
+        >
+          {{ t('presets.apply.entry') }}
+        </MButton>
+      </div>
     </MCard>
     <!-- Navigation Tabs with Group Switcher -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -297,5 +310,7 @@ function handleLaunch() {
         </Transition>
       </div>
     </div>
+
+    <PresetApplyDialog v-model:open="applyPresetOpen" :instance-id="currentInstanceId" />
   </div>
 </template>

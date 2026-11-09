@@ -82,6 +82,86 @@ describe('Resource presets feature', () => {
     wrapper.unmount()
   })
 
+  it('shows the pinned file and unpins from the banner', async () => {
+    const pinSpy = vi.spyOn(ipcClient, 'presetsPin').mockResolvedValue(undefined)
+    const preset = mockPresets[0]
+    // Second item of the fixture is pinned to a concrete file.
+    const item = preset.items[1]
+
+    const wrapper = mount(PresetPinDrawer, {
+      props: { open: true, preset, item },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const status = document.body.querySelector('[data-testid="pin-status"]')
+    expect(status?.textContent).toContain(item.pinnedFileName!)
+
+    const unpin = document.body.querySelector<HTMLButtonElement>('[data-testid="unpin-btn"]')
+    expect(unpin).not.toBeNull()
+    unpin!.click()
+    await flushPromises()
+
+    // "Follow latest" clears the pin.
+    expect(pinSpy).toHaveBeenCalledTimes(1)
+    expect(pinSpy.mock.calls[0][3]).toBeNull()
+    expect(pinSpy.mock.calls[0][4]).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('unpins when clicking the already-pinned file row', async () => {
+    const pinSpy = vi.spyOn(ipcClient, 'presetsPin').mockResolvedValue(undefined)
+    // A pin that matches the first file returned by the comp mock so a row starts pinned.
+    const preset = mockPresets[0]
+    const item = {
+      ...preset.items[0],
+      pinnedFileId: 'sodium-file-1',
+      pinnedFileName: 'sodium-file-1.jar',
+    }
+
+    vi.spyOn(ipcClient, 'compFiles').mockResolvedValue([
+      {
+        id: 'sodium-file-1',
+        projectId: 'AANobbMI',
+        platform: 'modrinth',
+        name: 'sodium',
+        fileName: 'sodium-file-1.jar',
+        mcVersions: ['1.20.1'],
+        loaders: ['fabric'],
+        channel: 'release',
+        releaseDate: '2024-01-01',
+        size: 100,
+        hashes: {},
+        downloadUrls: [],
+        distributionDisabled: false,
+        dependencies: [],
+      },
+    ])
+
+    const pinnedPreset = {
+      ...preset,
+      items: [item],
+    }
+
+    const wrapper = mount(PresetPinDrawer, {
+      props: { open: true, preset: pinnedPreset, item },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const row = document.body.querySelector<HTMLElement>('[data-testid="pin-file-row"]')
+    expect(row).not.toBeNull()
+    row!.click()
+    await flushPromises()
+
+    expect(pinSpy).toHaveBeenCalledTimes(1)
+    expect(pinSpy.mock.calls[0][3]).toBeNull()
+    expect(pinSpy.mock.calls[0][4]).toBeNull()
+
+    wrapper.unmount()
+  })
+
   it('sorts versions so 1.x.1 comes before 1.x in the version filter chips', async () => {
     vi.spyOn(ipcClient, 'compFiles').mockResolvedValue([
       {
@@ -118,7 +198,7 @@ describe('Resource presets feature', () => {
       },
     ])
 
-    const preset = { ...mockPresets[0], gameVersions: [], loaders: [] }
+    const preset = mockPresets[0]
     const item = preset.items[0]
 
     const wrapper = mount(PresetPinDrawer, {

@@ -132,7 +132,7 @@ function onMenuDelete() {
         `absolute inset-0` class would lose to it and leave the art at its natural size.
       -->
       <div
-        class="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-line flex items-center justify-center"
+        class="relative w-10 h-10 rounded-sm overflow-hidden shrink-0 border border-line flex items-center justify-center"
       >
         <MImage
           v-if="iconSrc"
@@ -140,7 +140,7 @@ function onMenuDelete() {
           alt=""
           fit="cover"
           :fallback-icon="fallbackIcon"
-          class="w-10 h-10"
+          size="full"
         />
         <span v-else :class="[fallbackIcon, 'w-5 h-5 text-primary']" />
       </div>

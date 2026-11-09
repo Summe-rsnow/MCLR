@@ -154,7 +154,9 @@ pub async fn presets_add_items(
     preset_id: String,
     items: Vec<PresetItem>,
 ) -> Result<Vec<AddItemOutcome>, AppError> {
-    let preset = presets
+    // Presets are universal lists: an item only needs to exist, so the check below rejects an
+    // unknown preset before any file metadata is fetched.
+    presets
         .repo
         .lock()
         .await
@@ -210,7 +212,7 @@ pub async fn presets_add_items(
             let Some(list) = files.get(&(item.platform, item.project_id.clone())) else {
                 return Err(MatchFailure::NoFile);
             };
-            resolve_item_file(item, list, &preset.game_versions, &preset.loaders)
+            resolve_item_file(item, list, &[], &[])
         })?;
 
     Ok(outcomes)
@@ -249,40 +251,6 @@ pub async fn presets_pin(
         .pin(&preset_id, platform, &project_id, file_id, file_name)
         .map_err(AppError::from)
 }
-#[tauri::command]
-#[specta::specta]
-pub async fn presets_pin_rule(
-    state: State<'_, Arc<PresetState>>,
-    preset_id: String,
-    platform: CompPlatform,
-    project_id: String,
-    rule: mclr_comp::preset::model::PresetPinRule,
-) -> Result<(), AppError> {
-    state
-        .repo
-        .lock()
-        .await
-        .pin_rule(&preset_id, platform, &project_id, rule)
-        .map_err(AppError::from)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn presets_remove_pin_rule(
-    state: State<'_, Arc<PresetState>>,
-    preset_id: String,
-    platform: CompPlatform,
-    project_id: String,
-    file_id: String,
-) -> Result<(), AppError> {
-    state
-        .repo
-        .lock()
-        .await
-        .remove_pin_rule(&preset_id, platform, &project_id, &file_id)
-        .map_err(AppError::from)
-}
-
 #[tauri::command]
 #[specta::specta]
 pub async fn presets_apply(
@@ -433,7 +401,7 @@ pub(crate) async fn execute_apply(
     downloader: &Downloader,
 ) -> Result<ApplyReport, AppError> {
     ctx.begin_step("resolve").await;
-    let (gates, merged) = merge_presets(requested, inst_ctx);
+    let (gates, merged) = merge_presets(requested);
 
     let mut kinds: HashSet<CompType> = merged.iter().map(|item| item.item.kind).collect();
     if request.include_dependencies {
@@ -1001,7 +969,12 @@ fn kind_can_be_preset(platform: CompPlatform, kind: CompType) -> bool {
     kind != CompType::Modpack && !(kind == CompType::World && platform == CompPlatform::Modrinth)
 }
 
-/// Resolves one preset item against the preset filters, honouring an explicit pin.
+/// Resolves one preset item against the given game-version/loader filters, honouring an explicit
+/// pin.
+///
+/// `presets_add_items` passes empty filters (presets are universal lists), so adding an item only
+/// validates that the project has a downloadable file or that the pinned file still exists. The
+/// filters stay available for callers that need a concrete target context.
 fn resolve_item_file(
     item: &PresetItem,
     files: &[CompFile],
@@ -1093,7 +1066,6 @@ mod tests {
             },
             from_presets: vec!["A".to_string()],
             version_conflict: false,
-            preset_loaders: None,
         }
     }
 

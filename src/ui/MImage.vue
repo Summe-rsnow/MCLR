@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 
+export type MImageSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | 'auto'
+export type MImageRadius = 'none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'full' | 'auto'
+
 const props = withDefaults(
   defineProps<{
     src?: string | null
@@ -11,6 +14,10 @@ const props = withDefaults(
     decoding?: 'async' | 'sync' | 'auto'
     fit?: 'cover' | 'contain' | 'fill' | 'none' | 'scale-down'
     pixelated?: boolean
+    /** Preset box size. `auto` (default) keeps caller-supplied dimensions. */
+    size?: MImageSize
+    /** Corner radius. `auto` (default) follows the `size` tier. */
+    radius?: MImageRadius
   }>(),
   {
     src: null,
@@ -21,8 +28,51 @@ const props = withDefaults(
     decoding: 'async',
     fit: 'cover',
     pixelated: false,
+    size: 'auto',
+    radius: 'auto',
   },
 )
+
+const SIZE_CLASSES: Record<MImageSize, string> = {
+  xs: 'w-5 h-5',
+  sm: 'w-8 h-8',
+  md: 'w-10 h-10',
+  lg: 'w-14 h-14',
+  xl: 'w-20 h-20',
+  '2xl': 'w-44 h-44',
+  full: 'w-full h-full',
+  auto: '',
+}
+
+// Proportional corners: 20 px → 4 px, 32 px → 6 px, 40 px → 8 px,
+// 56 px → 10 px, 80 px+ → 12 px. A tile that fills its parent (`full`)
+// inherits the wrapper's shape instead of rounding twice.
+const DEFAULT_RADIUS: Record<MImageSize, Exclude<MImageRadius, 'auto'>> = {
+  xs: 'xs',
+  sm: 'sm',
+  md: 'md',
+  lg: 'lg',
+  xl: 'xl',
+  '2xl': 'xl',
+  full: 'none',
+  auto: 'sm',
+}
+
+const RADIUS_CLASSES: Record<Exclude<MImageRadius, 'auto'>, string> = {
+  none: 'rounded-none',
+  xs: 'rounded-[4px]',
+  sm: 'rounded-[6px]',
+  md: 'rounded-sm',
+  lg: 'rounded-md',
+  xl: 'rounded-[12px]',
+  full: 'rounded-full',
+}
+
+const sizeClass = computed(() => SIZE_CLASSES[props.size])
+const radius = computed<Exclude<MImageRadius, 'auto'>>(() =>
+  props.radius === 'auto' ? DEFAULT_RADIUS[props.size] : props.radius,
+)
+const radiusClass = computed(() => RADIUS_CLASSES[radius.value])
 
 const emit = defineEmits<{
   (e: 'load', ev: Event): void
@@ -77,7 +127,7 @@ function onError(ev: Event) {
 <template>
   <div
     class="relative inline-flex items-center justify-center overflow-hidden shrink-0 select-none"
-    :class="pixelated ? '[image-rendering:pixelated]' : ''"
+    :class="[sizeClass, radiusClass, pixelated ? '[image-rendering:pixelated]' : '']"
   >
     <img
       v-if="currentSrc"

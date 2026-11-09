@@ -618,7 +618,11 @@ onMounted(async () => {
           </MSettingRow>
 
           <MSettingRow :label="t('settingsSystem.language.formatCulture')">
-            <div class="w-64">
+            <template #label>
+              <span>{{ t('settingsSystem.language.formatCulture') }}</span>
+              <MHelpTooltip :text="t('settingsSystem.language.formatCultureTip')" />
+            </template>
+            <div class="w-64" data-testid="select-format-culture">
               <MSelect
                 :model-value="formatCulture"
                 :options="[

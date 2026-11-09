@@ -250,7 +250,7 @@ watch(
             :src="thumbs[item.path]"
             :alt="item.fileName"
             fallback-icon="i-lucide-image"
-            class="w-full h-full object-cover"
+            size="full"
           />
 
           <div

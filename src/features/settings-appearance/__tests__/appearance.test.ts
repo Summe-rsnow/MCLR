@@ -224,6 +224,48 @@ describe('Appearance and Personalisation feature', () => {
     expect(store.backgroundMode).toBe('none')
   })
 
+  it('isolates the background layer and keeps the contrast card dead-center', async () => {
+    const store = useThemeStore()
+    store.setBackgroundMode('image')
+    store.setBackgroundPath('C:/images/background.png')
+
+    const pageWrapper = mount(SettingsAppearancePage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+    await flushPromises()
+
+    const previewImg = pageWrapper.find('[data-testid="bg-preview-img"]')
+    expect(previewImg.exists()).toBe(true)
+
+    // The MImage root is `relative inline-flex ... shrink-0`, so the absolute
+    // placement must live on a wrapper instead of on the image itself.
+    const layer = previewImg.element.parentElement as HTMLElement
+    expect(layer).not.toBeNull()
+    expect(layer.className).toContain('absolute')
+    expect(layer.className).toContain('inset-0')
+    expect(layer.className).toContain('pointer-events-none')
+    expect(layer.className).toContain('overflow-hidden')
+    expect(previewImg.classes()).toContain('w-full')
+    expect(previewImg.classes()).toContain('h-full')
+
+    // The foreground sample card lives in a centered, clipped sibling layer.
+    const centered = layer.nextElementSibling as HTMLElement
+    expect(centered).not.toBeNull()
+    expect(centered.className).toContain('relative')
+    expect(centered.className).toContain('z-10')
+    expect(centered.className).toContain('items-center')
+    expect(centered.className).toContain('justify-center')
+    expect(centered.className).toContain('text-center')
+    expect(centered.className).toContain('max-w-[90%]')
+
+    const card = pageWrapper.findAll('p').find((p) => p.text() === 'MCLR Preview')
+    expect(card).toBeDefined()
+    expect(centered.contains(card!.element)).toBe(true)
+    expect(card!.classes()).toContain('truncate')
+  })
+
   it('renders empty state without contrast sample card when backgroundMode is none or no media path', async () => {
     const store = useThemeStore()
     store.setBackgroundMode('none')

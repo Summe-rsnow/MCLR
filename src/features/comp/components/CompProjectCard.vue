@@ -43,7 +43,7 @@ function formatNumber(num: number): string {
         <MImage
           :src="project.iconUrl"
           :fallback-icon="compTypeMeta[activeTab as CompTypeKey]?.icon || 'i-lucide-box'"
-          class="w-14 h-14 rounded-xl shrink-0"
+          size="lg"
         />
 
         <div class="flex-1 min-w-0">

@@ -45,7 +45,7 @@ const { t } = useI18n()
     <!-- Row 1: Filters -->
     <div class="flex flex-wrap items-center gap-2">
       <!-- Platform -->
-      <div class="w-32 shrink-0">
+      <div class="w-28 shrink-0">
         <MSelect
           :model-value="platform"
           :options="platformOptions"
@@ -55,7 +55,7 @@ const { t } = useI18n()
       </div>
 
       <!-- Category (options are scoped to the active tab) -->
-      <div class="w-36 shrink-0">
+      <div class="w-32 shrink-0">
         <MSelect
           :model-value="category || ''"
           :options="categoryOptions"
@@ -65,7 +65,7 @@ const { t } = useI18n()
       </div>
 
       <!-- Sort -->
-      <div class="w-36 shrink-0">
+      <div class="w-32 shrink-0">
         <MSelect
           :model-value="sort"
           :options="sortOptions"
@@ -75,7 +75,7 @@ const { t } = useI18n()
       </div>
 
       <!-- Target Instance (a modpack creates its own instance, so it never targets one) -->
-      <div v-if="compType !== 'modpack'" class="w-48 shrink-0">
+      <div v-if="compType !== 'modpack'" class="w-40 shrink-0">
         <MSelect
           :model-value="targetInstanceId"
           :options="targetInstanceOptions"
@@ -85,7 +85,7 @@ const { t } = useI18n()
       </div>
 
       <!-- MC Version -->
-      <div class="w-36 shrink-0">
+      <div class="w-28 shrink-0">
         <MSelect
           :model-value="mcVersion || ''"
           :options="mcVersionOptions"
@@ -95,7 +95,7 @@ const { t } = useI18n()
       </div>
 
       <!-- Loader -->
-      <div v-if="showLoader !== false" class="w-36 shrink-0">
+      <div v-if="showLoader !== false" class="w-28 shrink-0">
         <MSelect
           :model-value="loader || ''"
           :options="loaderOptions"

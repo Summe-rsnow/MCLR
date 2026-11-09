@@ -5,6 +5,8 @@ import { createI18n } from 'vue-i18n'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { useCompStore } from '../store'
+import { useInstancesStore } from '../../instances/store'
+import { compareVersionsDesc, knownVersion } from '../../../shared/mcver'
 import CompBrowserPage from '../CompBrowserPage.vue'
 import CompProjectCard from '../components/CompProjectCard.vue'
 import CompDetailPage from '../CompDetailPage.vue'
@@ -528,6 +530,63 @@ describe('Community platform feature (Comp)', () => {
     expect(options.indexOf('26.3')).toBeLessThan(options.indexOf('1.21.4'))
     expect(options.indexOf('1.21.4')).toBeLessThan(options.indexOf('1.20.1'))
     expect(options.indexOf('1.20.1')).toBeLessThan(options.indexOf('1.7.10'))
+  })
+
+  it('excludes unknown instance versions from mcVersionOptions and sorts them descending', async () => {
+    const instancesStore = useInstancesStore()
+    const wrapper = mount(CompBrowserPage, {
+      global: {
+        plugins: [i18n],
+        stubs: { RouterLink: true },
+      },
+    })
+    await flushPromises()
+
+    // Instances whose game version was never detected must not pollute the version filter.
+    const base = instancesStore.instances.find((i) => i.modable)
+    expect(base).toBeDefined()
+    instancesStore.instances = [
+      { ...base!, id: 'unknown-upper', name: 'Unknown Upper', mcVersion: 'Unknown' },
+      { ...base!, id: 'unknown-lower', name: 'Unknown Lower', mcVersion: 'unknown' },
+      { ...base!, id: 'unknown-padded', name: 'Unknown Padded', mcVersion: '  UNKNOWN  ' },
+      { ...base!, id: 'blank-version', name: 'Blank Version', mcVersion: '   ' },
+      { ...base!, id: 'legacy-1-9', name: 'Legacy 1.9', mcVersion: '1.9' },
+    ]
+    await flushPromises()
+
+    const toolbar = wrapper.findComponent({ name: 'CompSearchToolbar' })
+    const options = (toolbar.props('mcVersionOptions') as Array<{ label: string; value: string }>)
+      .map((option) => option.value)
+      .filter((value) => value !== '')
+
+    expect(options.map((value) => value.toLowerCase())).not.toContain('unknown')
+    expect(options).toContain('1.9')
+    expect(options).toContain('1.20.4')
+    // Shared comparator order: newest first, including the post-1.21 numbering.
+    expect(options).toEqual([...options].sort(compareVersionsDesc))
+    expect(options.indexOf('26.3')).toBeLessThan(options.indexOf('1.21.4'))
+    expect(options.indexOf('1.20.4')).toBeLessThan(options.indexOf('1.9'))
+    expect(options.indexOf('1.9')).toBeLessThan(options.indexOf('1.7.10'))
+
+    // The target instance label only appends a detected version, never "Unknown".
+    const targetOptions = toolbar.props('targetInstanceOptions') as Array<{
+      label: string
+      value: string
+    }>
+    expect(targetOptions.find((o) => o.value === 'unknown-upper')?.label).toBe('Unknown Upper')
+    expect(targetOptions.find((o) => o.value === 'blank-version')?.label).toBe('Blank Version')
+    expect(targetOptions.find((o) => o.value === 'legacy-1-9')?.label).toBe('Legacy 1.9 (1.9)')
+  })
+
+  it('normalises instance game versions through knownVersion', () => {
+    expect(knownVersion(' 1.20.1 ')).toBe('1.20.1')
+    expect(knownVersion('Unknown')).toBeNull()
+    expect(knownVersion('unknown')).toBeNull()
+    expect(knownVersion(' UNKNOWN ')).toBeNull()
+    expect(knownVersion('')).toBeNull()
+    expect(knownVersion('   ')).toBeNull()
+    expect(knownVersion(null)).toBeNull()
+    expect(knownVersion(undefined)).toBeNull()
   })
 
   it('pages by 24 items and prefetches the neighbouring page', async () => {

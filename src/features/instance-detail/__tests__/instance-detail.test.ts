@@ -10,7 +10,6 @@ import SettingsTab from '../tabs/SettingsTab.vue'
 import SavesTab from '../tabs/SavesTab.vue'
 import ServersTab from '../tabs/ServersTab.vue'
 import ExportTab from '../tabs/ExportTab.vue'
-import PresetsTab from '../tabs/PresetsTab.vue'
 import { lastExportedModpackOptions } from '../mock'
 import { setupMockIpc } from '../../../ipc/mock'
 import { resetMockInstances } from '../../instances/mock'
@@ -71,7 +70,7 @@ describe('Instance Detail feature', () => {
   })
 
   it('glob tab registry loads all sub-tabs in order', () => {
-    expect(instanceDetailTabs.length).toBe(12)
+    expect(instanceDetailTabs.length).toBe(11)
     const keys = instanceDetailTabs.map((t) => t.key)
     expect(keys).toEqual([
       'overview',
@@ -79,7 +78,6 @@ describe('Instance Detail feature', () => {
       'settings',
       'export',
       'mods',
-      'presets',
       'saves',
       'screenshots',
       'resourcepacks',
@@ -89,23 +87,27 @@ describe('Instance Detail feature', () => {
     ])
   })
 
-  it('renders PresetsTab empty state and opens apply dialog on click', async () => {
-    const wrapper = mount(PresetsTab, {
-      props: { instanceId: 'inst-1' },
+  it('opens the apply-preset dialog from the instance summary card', async () => {
+    const store = useInstancesStore()
+    await store.fetchInstances()
+
+    const wrapper = mount(InstanceDetailPage, {
+      props: { id: '1.20.1-vanilla' },
       global: {
-        plugins: [i18n],
+        plugins: [i18n, router],
       },
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('资源预设')
-    expect(wrapper.text()).toContain('尚未应用预设')
 
-    const applyBtn = wrapper.findAll('button').find((b) => b.text().includes('应用预设'))
-    expect(applyBtn).toBeDefined()
-    await applyBtn!.trigger('click')
+    const applyBtn = wrapper.find('[data-testid="instance-apply-preset-btn"]')
+    expect(applyBtn.exists()).toBe(true)
+    await applyBtn.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('应用资源预设')
+    expect(document.body.textContent).toContain('应用资源预设')
+
+    wrapper.unmount()
+    document.body.innerHTML = ''
   })
   it('renders ModsDisabledTab when instance is not modable on mods tab', async () => {
     const store = useInstancesStore()

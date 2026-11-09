@@ -309,12 +309,12 @@ onMounted(() => {
         <div class="flex items-start gap-4 min-w-0">
           <!-- Server Icon -->
           <div
-            class="w-14 h-14 rounded-xl bg-sunken/60 flex items-center justify-center shrink-0 border border-line overflow-hidden text-primary"
+            class="w-14 h-14 rounded-md bg-sunken/60 flex items-center justify-center shrink-0 border border-line overflow-hidden text-primary"
           >
             <MImage
               v-if="pingResults[server.ip]?.favicon || server.icon"
               :src="pingResults[server.ip]?.favicon || server.icon || ''"
-              class="w-full h-full"
+              size="full"
               alt="Server Favicon"
               fallback-icon="i-lucide-server"
             />

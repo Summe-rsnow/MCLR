@@ -3,6 +3,7 @@ import type { CompPlatform, CompType } from './comp'
 
 export type OtherVersionPolicy = 'skip' | 'replace'
 
+/** Legacy per-version/loader pin rule kept for `presets.json` compatibility; ignored by the app. */
 export interface PresetPinRule {
   gameVersions: string[]
   loaders: string[]
@@ -148,20 +149,6 @@ export const presetsIpc = {
     fileName?: string | null,
   ): Promise<void> =>
     invokeCommand<void>('presets_pin', { presetId, platform, projectId, fileId, fileName }),
-  presetsPinRule: (
-    presetId: string,
-    platform: CompPlatform,
-    projectId: string,
-    rule: PresetPinRule,
-  ): Promise<void> =>
-    invokeCommand<void>('presets_pin_rule', { presetId, platform, projectId, rule }),
-  presetsRemovePinRule: (
-    presetId: string,
-    platform: CompPlatform,
-    projectId: string,
-    fileId: string,
-  ): Promise<void> =>
-    invokeCommand<void>('presets_remove_pin_rule', { presetId, platform, projectId, fileId }),
   presetsApply: (request: ApplyRequest): Promise<string> =>
     invokeCommand<string>('presets_apply', { request }),
   presetsApplyReport: (taskId: string): Promise<ApplyReport> =>

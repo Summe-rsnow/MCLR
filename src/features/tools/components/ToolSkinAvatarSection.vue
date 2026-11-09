@@ -145,14 +145,14 @@ async function onSaveAvatar() {
       <div class="flex flex-col items-center gap-1.5">
         <span class="text-[11px] text-fg-muted">{{ t('tools.skinAvatar.sourceLabel') }}</span>
         <div
-          class="w-20 h-20 rounded-xl border border-line bg-sunken/40 flex items-center justify-center overflow-hidden"
+          class="w-20 h-20 rounded-[12px] border border-line bg-sunken/40 flex items-center justify-center overflow-hidden"
         >
           <MImage
             :src="sourcePreview"
             alt="skin"
             pixelated
             fit="contain"
-            class="w-full h-full"
+            size="full"
             fallback-icon="i-lucide-shirt"
           />
         </div>
@@ -163,7 +163,7 @@ async function onSaveAvatar() {
       <div class="flex flex-col items-center gap-1.5">
         <span class="text-[11px] text-fg-muted">{{ t('tools.skinAvatar.avatarLabel') }}</span>
         <div
-          class="avatar-checker w-20 h-20 rounded-xl border border-line flex items-center justify-center overflow-hidden"
+          class="avatar-checker w-20 h-20 rounded-[12px] border border-line flex items-center justify-center overflow-hidden"
         >
           <MSkeleton v-if="generating" class="w-full h-full" :rounded="false" />
           <MImage
@@ -172,7 +172,7 @@ async function onSaveAvatar() {
             alt="avatar"
             pixelated
             fit="contain"
-            class="w-full h-full"
+            size="full"
             fallback-icon="i-lucide-scan-face"
           />
         </div>

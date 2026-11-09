@@ -52,6 +52,8 @@ fn mod_info(file_name: &str, enabled: bool, bytes: &[u8]) -> LocalModInfo {
         murmur2: 0,
         size: bytes.len() as u64,
         project_id: None,
+        platform: None,
+        file_id: None,
         update_file: None,
         icon: None,
         dependencies: meta.dependencies,

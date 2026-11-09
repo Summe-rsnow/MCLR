@@ -290,29 +290,70 @@ struct SkinTexture {
     url: String,
 }
 
-/// Fetches skin textures from Yggdrasil/Authlib session server and crops the head.
-/// Returns `None` on any failure (best-effort).
-pub async fn fetch_profile_head(client: &Client, server_root: &str, uuid: &str) -> Option<String> {
+/// Fetches the raw skin PNG of a Yggdrasil/Authlib profile via its session server.
+///
+/// `server_root` is the Yggdrasil API root (e.g. `https://littleskin.cn/api/yggdrasil`);
+/// the profile is fetched from `{server_root}/sessionserver/session/minecraft/profile/{uuid}`.
+/// Returns [`AuthError::SkinNotFound`] when the profile carries no custom skin.
+pub async fn fetch_profile_skin_png(
+    client: &Client,
+    server_root: &str,
+    uuid: &str,
+) -> Result<Vec<u8>, AuthError> {
     let root = server_root.trim_end_matches('/');
-    let url = format!("{root}/sessionserver/session/minecraft/profile/{uuid}");
-    let resp = client.get(&url).send().await.ok()?;
+    let profile_url = format!("{root}/sessionserver/session/minecraft/profile/{uuid}");
+    fetch_skin_png_from_profile_url(client, &profile_url).await
+}
+
+/// Downloads the skin PNG referenced by a complete session-server profile URL.
+///
+/// This covers the Yggdrasil shape (`{root}/sessionserver/session/minecraft/profile/{uuid}`)
+/// as well as Mojang's `https://sessionserver.mojang.com/session/minecraft/profile/{uuid}`.
+pub async fn fetch_skin_png_from_profile_url(
+    client: &Client,
+    profile_url: &str,
+) -> Result<Vec<u8>, AuthError> {
+    let resp = client
+        .get(profile_url)
+        .send()
+        .await
+        .map_err(|e| AuthError::Http(format!("profile skin request failed: {e}")))?;
     if !resp.status().is_success() {
-        return None;
+        return Err(AuthError::Http(format!(
+            "profile skin request failed with status {}",
+            resp.status()
+        )));
     }
-    let profile: ProfileSessionResponse = resp.json().await.ok()?;
+    let profile: ProfileSessionResponse = resp
+        .json()
+        .await
+        .map_err(|e| AuthError::Http(format!("invalid profile response: {e}")))?;
     let textures_prop = profile
         .properties
         .into_iter()
-        .find(|p| p.name == "textures")?;
-    let decoded = BASE64.decode(textures_prop.value.as_bytes()).ok()?;
-    let payload: TexturesPayload = serde_json::from_slice(&decoded).ok()?;
-    let skin = payload.textures.skin?;
+        .find(|p| p.name == "textures")
+        .ok_or(AuthError::SkinNotFound)?;
+    let decoded = BASE64
+        .decode(textures_prop.value.as_bytes())
+        .map_err(|e| AuthError::Http(format!("invalid textures property: {e}")))?;
+    let payload: TexturesPayload = serde_json::from_slice(&decoded)
+        .map_err(|e| AuthError::Http(format!("invalid textures payload: {e}")))?;
+    let skin = payload.textures.skin.ok_or(AuthError::SkinNotFound)?;
     let skin_bytes = client
         .get(&skin.url)
         .send()
         .await
-        .ok()?
+        .map_err(|e| AuthError::Http(format!("skin download failed: {e}")))?
         .bytes()
+        .await
+        .map_err(|e| AuthError::Http(format!("skin download failed: {e}")))?;
+    Ok(skin_bytes.to_vec())
+}
+
+/// Fetches skin textures from Yggdrasil/Authlib session server and crops the head.
+/// Returns `None` on any failure (best-effort).
+pub async fn fetch_profile_head(client: &Client, server_root: &str, uuid: &str) -> Option<String> {
+    let skin_bytes = fetch_profile_skin_png(client, server_root, uuid)
         .await
         .ok()?;
     crop_skin_head(&skin_bytes, uuid).ok()

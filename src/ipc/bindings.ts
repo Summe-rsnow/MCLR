@@ -65,6 +65,7 @@ export const commands = {
 	accountsAddAuthlib: (server: string, username: string, password: string) => typedError<AuthlibLoginResponse_Serialize, AppError_Serialize>(__TAURI_INVOKE("accounts_add_authlib", { server, username, password })),
 	accountsSelectProfile: (pendingSessionId: string, profileId: string) => typedError<AccountView_Serialize, AppError_Serialize>(__TAURI_INVOKE("accounts_select_profile", { pendingSessionId, profileId })),
 	accountsRefresh: (id: string) => typedError<AccountView_Serialize, AppError_Serialize>(__TAURI_INVOKE("accounts_refresh", { id })),
+	accountsGetSkinDataUrl: (id: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("accounts_get_skin_data_url", { id })),
 	accountsSkinUpload: (id: string, variant: string, pngPath: string) => typedError<AccountView_Serialize, AppError_Serialize>(__TAURI_INVOKE("accounts_skin_upload", { id, variant, pngPath })),
 	accountsCapeSet: (id: string, capeId: string | null) => typedError<AccountView_Serialize, AppError_Serialize>(__TAURI_INVOKE("accounts_cape_set", { id, capeId })),
 	installManifest: (forceRefresh: boolean) => typedError<VersionManifestList, AppError_Serialize>(__TAURI_INVOKE("install_manifest", { forceRefresh })),
@@ -158,8 +159,6 @@ export const commands = {
 	presetsAddItems: (presetId: string, items: PresetItem_Deserialize[]) => typedError<AddItemOutcome_Serialize[], AppError_Serialize>(__TAURI_INVOKE("presets_add_items", { presetId, items })),
 	presetsRemoveItem: (presetId: string, platform: CompPlatform, projectId: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_remove_item", { presetId, platform, projectId })),
 	presetsPin: (presetId: string, platform: CompPlatform, projectId: string, fileId: string | null, fileName: string | null) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_pin", { presetId, platform, projectId, fileId, fileName })),
-	presetsPinRule: (presetId: string, platform: CompPlatform, projectId: string, rule: PresetPinRule_Deserialize) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_pin_rule", { presetId, platform, projectId, rule })),
-	presetsRemovePinRule: (presetId: string, platform: CompPlatform, projectId: string, fileId: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_remove_pin_rule", { presetId, platform, projectId, fileId })),
 	presetsApply: (request: ApplyRequest_Deserialize) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("presets_apply", { request })),
 	presetsApplyReport: (taskId: string) => typedError<ApplyReport_Serialize, AppError_Serialize>(__TAURI_INVOKE("presets_apply_report", { taskId })),
 	presetsCache: (presetId: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("presets_cache", { presetId })),
@@ -1131,6 +1130,13 @@ export type LocalModInfo_Deserialize = {
 	murmur2: number,
 	size: number,
 	projectId?: string | null,
+	/**
+	 *  Platform the file was identified on. Together with `project_id` and `file_id` this is the
+	 *  `(platform, project_id, file_id)` triple a preset needs to reproduce the exact jar.
+	 */
+	platform?: CompPlatform | null,
+	/**  Id of the *installed* file on that platform (Modrinth version id / CurseForge file id). */
+	fileId?: string | null,
 	updateFile?: CompFile_Deserialize | null,
 	/**  Path to the mod's own artwork, extracted from the jar and cached on disk. */
 	icon?: string | null,
@@ -1155,6 +1161,13 @@ export type LocalModInfo_Serialize = {
 	murmur2: number,
 	size: number,
 	projectId: string | null,
+	/**
+	 *  Platform the file was identified on. Together with `project_id` and `file_id` this is the
+	 *  `(platform, project_id, file_id)` triple a preset needs to reproduce the exact jar.
+	 */
+	platform: CompPlatform | null,
+	/**  Id of the *installed* file on that platform (Modrinth version id / CurseForge file id). */
+	fileId: string | null,
 	updateFile: CompFile_Serialize | null,
 	/**  Path to the mod's own artwork, extracted from the jar and cached on disk. */
 	icon: string | null,
@@ -1354,6 +1367,10 @@ export type PresetItem_Deserialize = {
 	iconUrl?: string | null,
 	pinnedFileId?: string | null,
 	pinnedFileName?: string | null,
+	/**
+	 *  Legacy per-version/loader pin rules. Retained only so older `presets.json` documents keep
+	 *  deserializing; the planner ignores them in favour of [`PresetItem::pinned_file_id`].
+	 */
 	pinRules?: PresetPinRule_Deserialize[],
 };
 
@@ -1366,6 +1383,10 @@ export type PresetItem_Serialize = {
 	iconUrl: string | null,
 	pinnedFileId: string | null,
 	pinnedFileName: string | null,
+	/**
+	 *  Legacy per-version/loader pin rules. Retained only so older `presets.json` documents keep
+	 *  deserializing; the planner ignores them in favour of [`PresetItem::pinned_file_id`].
+	 */
 	pinRules: PresetPinRule_Serialize[],
 };
 
@@ -1473,6 +1494,10 @@ export type ResourceEntry_Deserialize = {
 	tags: string[],
 	modId?: string | null,
 	projectId?: string | null,
+	/**  Platform the file was identified on, when known. */
+	platform?: CompPlatform | null,
+	/**  Platform-specific id of the installed file, when known. */
+	fileId?: string | null,
 	latestFile?: CompFile_Deserialize | null,
 	updateAvailable: boolean,
 	dependents: string[],
@@ -1496,6 +1521,10 @@ export type ResourceEntry_Serialize = {
 	tags: string[],
 	modId: string | null,
 	projectId: string | null,
+	/**  Platform the file was identified on, when known. */
+	platform: CompPlatform | null,
+	/**  Platform-specific id of the installed file, when known. */
+	fileId: string | null,
 	latestFile: CompFile_Serialize | null,
 	updateAvailable: boolean,
 	dependents: string[],
@@ -1509,8 +1538,13 @@ export type ResourcePreset_Deserialize = {
 	id: string,
 	name: string,
 	description: string,
-	gameVersions: string[],
-	loaders: string[],
+	/**
+	 *  Legacy field kept for `presets.json` compatibility. Presets are universal resource lists,
+	 *  so this no longer gates anything.
+	 */
+	gameVersions?: string[],
+	/**  Legacy field kept for `presets.json` compatibility; ignored by the planner. */
+	loaders?: string[],
 	items: PresetItem_Deserialize[],
 	createdAt: number,
 	updatedAt: number,
@@ -1520,7 +1554,12 @@ export type ResourcePreset_Serialize = {
 	id: string,
 	name: string,
 	description: string,
+	/**
+	 *  Legacy field kept for `presets.json` compatibility. Presets are universal resource lists,
+	 *  so this no longer gates anything.
+	 */
 	gameVersions: string[],
+	/**  Legacy field kept for `presets.json` compatibility; ignored by the planner. */
 	loaders: string[],
 	items: PresetItem_Serialize[],
 	createdAt: number,

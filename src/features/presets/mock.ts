@@ -1,6 +1,5 @@
 import type {
   ResourcePreset,
-  PresetPinRule,
   ApplyReport,
   StoreInfo,
   AddItemOutcome,
@@ -357,38 +356,6 @@ const handlers = {
       if (it) {
         it.pinnedFileId = (fileId as string) || null
         it.pinnedFileName = (fileName as string) || null
-      }
-    }
-  },
-  presets_pin_rule: (args: Record<string, unknown>): void => {
-    const { presetId, platform, projectId, rule } = args
-    const p = presets.find((x) => x.id === presetId)
-    if (p) {
-      const it = p.items.find((item) => item.platform === platform && item.projectId === projectId)
-      if (it) {
-        if (!it.pinRules) it.pinRules = []
-        const r = rule as PresetPinRule
-        it.pinRules = it.pinRules.filter((x) => x.fileId !== r.fileId)
-        it.pinRules.push(r)
-        it.pinnedFileId = r.fileId
-        it.pinnedFileName = r.fileName
-      }
-    }
-  },
-  presets_remove_pin_rule: (args: Record<string, unknown>): void => {
-    const { presetId, platform, projectId, fileId } = args
-    const p = presets.find((x) => x.id === presetId)
-    if (p) {
-      const it = p.items.find((item) => item.platform === platform && item.projectId === projectId)
-      if (it && it.pinRules) {
-        it.pinRules = it.pinRules.filter((r) => r.fileId !== fileId)
-        if (it.pinRules.length > 0) {
-          it.pinnedFileId = it.pinRules[0].fileId
-          it.pinnedFileName = it.pinRules[0].fileName
-        } else {
-          it.pinnedFileId = null
-          it.pinnedFileName = null
-        }
       }
     }
   },

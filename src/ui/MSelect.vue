@@ -69,7 +69,7 @@ function updatePopupPosition() {
     popupStyle.value = {
       left: '8px',
       top: `${el.getBoundingClientRect().bottom + 4}px`,
-      minWidth: `${Math.max(120, el.getBoundingClientRect().width)}px`,
+      minWidth: `${Math.max(104, el.getBoundingClientRect().width)}px`,
       maxWidth: '380px',
       width: 'max-content',
     }
@@ -82,7 +82,7 @@ function updatePopupPosition() {
   // clamp accounts for them.
   const naturalWidth = Math.min(
     MAX_POPUP_WIDTH,
-    Math.max(120, triggerRect.width, popup.scrollWidth, popup.offsetWidth),
+    Math.max(104, triggerRect.width, popup.scrollWidth, popup.offsetWidth),
   )
   const result = applyFloatingPosition(popup, el, {
     preferred: 'bottom',
@@ -96,7 +96,7 @@ function updatePopupPosition() {
   popupStyle.value = {
     left: `${result.left}px`,
     top: `${result.top}px`,
-    minWidth: `${Math.max(120, triggerRect.width)}px`,
+    minWidth: `${Math.max(104, triggerRect.width)}px`,
     maxWidth: `${result.maxWidth ?? MAX_POPUP_WIDTH}px`,
     width: 'max-content',
     ...(result.maxHeight !== undefined ? { maxHeight: `${result.maxHeight}px` } : {}),
@@ -221,7 +221,7 @@ onUnmounted(() => {
 <template>
   <div
     class="relative inline-flex items-center"
-    :class="block ? 'w-full max-w-full' : 'w-auto max-w-[360px] min-w-[140px]'"
+    :class="block ? 'w-full max-w-full' : 'w-auto max-w-[360px] min-w-[104px]'"
   >
     <button
       ref="triggerRef"
@@ -231,7 +231,7 @@ onUnmounted(() => {
       :disabled="disabled || loading || options.length === 0"
       class="px-3 inline-flex items-center justify-between gap-2 rounded-lg text-fg border outline-none select-none text-left transition-colors"
       :class="[
-        block ? 'w-full max-w-full' : 'w-auto min-w-[140px] max-w-[360px]',
+        block ? 'w-full max-w-full' : 'w-auto min-w-[104px] max-w-[360px]',
         size === 'sm' ? 'h-8 text-xs' : 'h-10 text-sm',
         disabled || options.length === 0
           ? 'opacity-60 bg-sunken/40 border-line text-fg-subtle cursor-not-allowed'
@@ -245,13 +245,16 @@ onUnmounted(() => {
           v-if="selectedOption?.avatar"
           :src="selectedOption.avatar"
           fallback-icon="i-lucide-user"
-          class="w-5 h-5 rounded-full object-cover shrink-0"
+          size="xs"
+          radius="full"
         />
         <MImage
           v-else-if="selectedOption?.image"
           :src="selectedOption.image"
           :alt="selectedOption.label"
-          class="w-5 h-5 rounded object-contain shrink-0"
+          size="xs"
+          radius="xs"
+          fit="contain"
         />
         <span
           v-else-if="selectedOption?.icon"
@@ -336,13 +339,16 @@ onUnmounted(() => {
                   v-if="opt.avatar"
                   :src="opt.avatar"
                   fallback-icon="i-lucide-user"
-                  class="w-5 h-5 rounded-full object-cover shrink-0"
+                  size="xs"
+                  radius="full"
                 />
                 <MImage
                   v-else-if="opt.image"
                   :src="opt.image"
                   :alt="opt.label"
-                  class="w-5 h-5 rounded object-contain shrink-0"
+                  size="xs"
+                  radius="xs"
+                  fit="contain"
                 />
                 <span v-else-if="opt.icon" :class="opt.icon" class="w-4 h-4 shrink-0" />
                 <span class="truncate">{{ opt.label }}</span>

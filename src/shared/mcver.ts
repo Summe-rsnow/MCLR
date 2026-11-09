@@ -70,6 +70,16 @@ export function compareVersions(a: string, b: string): number {
 
 export const compareVersionsDesc = (a: string, b: string): number => compareVersions(b, a)
 
+/**
+ * Normalised game version, or `null` when the instance does not report a real one.
+ * Mirrors `mclr_core::mcver::known`: blank and `unknown` (any case) mean "not detected".
+ */
+export function knownVersion(raw?: string | null): string | null {
+  const trimmed = (raw ?? '').trim()
+  if (!trimmed || trimmed.toLowerCase() === 'unknown') return null
+  return trimmed
+}
+
 const RELEASE_REGEX = /^\d+\.\d+(\.\d+)?$/
 
 /**

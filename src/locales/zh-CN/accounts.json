@@ -85,6 +85,10 @@
       "slim": "纤细 (Slim / 3px 细手臂)"
     },
     "upload": "上传新皮肤",
+    "saveSkin": "保存皮肤",
+    "saveAvatar": "保存头像",
+    "saveSkinSuccess": "皮肤文件已保存",
+    "saveAvatarSuccess": "头像已保存",
     "uploadPathPrompt": "请输入 PNG 皮肤文件绝对路径",
     "uploadSuccess": "皮肤上传成功",
     "capes": "披风选择",

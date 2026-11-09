@@ -74,6 +74,31 @@ describe('SettingsSystemPage (v0.0.12)', () => {
     i18n.global.locale.value = 'zh-CN'
   })
 
+  it('renders a help tip on the region format culture row of the language tab', async () => {
+    const wrapper = mount(SettingsSystemPage, {
+      global: {
+        plugins: [createPinia(), i18n, router],
+      },
+    })
+    await flushPromises()
+
+    const langTab = wrapper.findAll('button').find((b) => b.text().includes('语言偏好'))
+    expect(langTab).toBeDefined()
+    await langTab!.trigger('click')
+    await flushPromises()
+
+    const control = wrapper.find('[data-testid="select-format-culture"]')
+    expect(control.exists()).toBe(true)
+
+    const row = control.element.closest('.m-setting-row') as HTMLElement | null
+    expect(row).not.toBeNull()
+
+    const help = row!.querySelector('button.cursor-help')
+    expect(help).not.toBeNull()
+    expect(help!.getAttribute('aria-label')).toBe(zhCnSettingsSystem.language.formatCultureTip)
+    expect(zhCnSettingsSystem.language.formatCultureTip).toContain('日期')
+  })
+
   it('handles Update tab both when notConfigured and when staged update is available', async () => {
     const wrapper = mount(SettingsSystemPage, {
       global: {

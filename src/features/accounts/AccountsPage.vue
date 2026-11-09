@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useAccountsStore } from './store'
 import { ipcClient, type AccountView, type AuthlibProfileView } from '../../ipc/client'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import { save as saveFileDialog } from '@tauri-apps/plugin-dialog'
 import { MButton, MCard, MEmpty, MPageHeader, MSkeleton, useDialog, useToast } from '../../ui'
 import { awaitTask } from '../tasks/awaitTask'
 import { useErrorText } from '../../composables/useErrorText'
@@ -56,6 +57,10 @@ const showSkinUploadDialog = ref(false)
 const skinVariant = ref<'classic' | 'slim'>('classic')
 const skinPngPath = ref('')
 const skinUploadLoading = ref(false)
+
+// Skin export state
+const savingSkin = ref(false)
+const savingAvatar = ref(false)
 
 function openAddDialog() {
   showAddTypeDialog.value = true
@@ -297,6 +302,47 @@ async function handleSkinUpload() {
   }
 }
 
+async function handleSaveSkin() {
+  const account = accountsStore.selectedAccount
+  if (!account || savingSkin.value) return
+  savingSkin.value = true
+  try {
+    const dataUrl = await ipcClient.accountsGetSkinDataUrl(account.id)
+    const path = await saveFileDialog({
+      defaultPath: `${account.username}_skin.png`,
+      filters: [{ name: 'PNG Image', extensions: ['png'] }],
+    })
+    if (!path || typeof path !== 'string') return
+    await ipcClient.toolsSaveSkin(path, dataUrl)
+    toast.success(t('accounts.skin.saveSkinSuccess'))
+  } catch (err: unknown) {
+    toast.danger(formatError(err))
+  } finally {
+    savingSkin.value = false
+  }
+}
+
+async function handleSaveAvatar() {
+  const account = accountsStore.selectedAccount
+  if (!account || savingAvatar.value) return
+  const dataUrl = account.skinHeadDataUrl
+  if (!dataUrl) return
+  savingAvatar.value = true
+  try {
+    const path = await saveFileDialog({
+      defaultPath: `${account.username}_avatar.png`,
+      filters: [{ name: 'PNG Image', extensions: ['png'] }],
+    })
+    if (!path || typeof path !== 'string') return
+    await ipcClient.toolsSaveSkin(path, dataUrl)
+    toast.success(t('accounts.skin.saveAvatarSuccess'))
+  } catch (err: unknown) {
+    toast.danger(formatError(err))
+  } finally {
+    savingAvatar.value = false
+  }
+}
+
 async function handleSelectCape(capeId: string | null) {
   try {
     if (!accountsStore.selectedAccount) return
@@ -406,7 +452,11 @@ async function openCloset(serverUrl: string) {
       <div class="lg:col-span-5 flex flex-col gap-4">
         <AccountSkinPanel
           :selected-account="accountsStore.selectedAccount"
+          :saving-skin="savingSkin"
+          :saving-avatar="savingAvatar"
           @upload-skin="openSkinUpload"
+          @save-skin="handleSaveSkin"
+          @save-avatar="handleSaveAvatar"
           @open-closet="openCloset"
           @select-cape="handleSelectCape"
         />

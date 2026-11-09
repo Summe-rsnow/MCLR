@@ -169,10 +169,18 @@ function clearBackground() {
         <div
           class="relative w-full h-44 rounded-xl border border-line bg-sunken/30 overflow-hidden flex items-center justify-center"
         >
-          <template v-if="themeStore.backgroundMode === 'image' && previewMediaSrc">
+          <!-- Background layer: the wrapper carries the absolute placement so the
+               MImage root's `.relative` never turns it into a flex item that
+               pushes the centered content out of the box. -->
+          <div
+            v-if="themeStore.backgroundMode === 'image' && previewMediaSrc"
+            class="absolute inset-0 pointer-events-none overflow-hidden"
+          >
             <MImage
               data-testid="bg-preview-img"
-              class="absolute inset-0 w-full h-full pointer-events-none"
+              size="full"
+              fit="cover"
+              class="w-full h-full"
               :src="previewMediaSrc"
               :style="{
                 filter: `blur(${themeStore.backgroundBlur}px)`,
@@ -181,19 +189,28 @@ function clearBackground() {
               alt="Background preview"
               fallback-icon="i-lucide-image-off"
             />
-          </template>
-          <div v-else class="text-xs text-fg-muted flex items-center gap-1.5 z-10">
-            <span class="i-lucide-image-off w-4 h-4" />
-            <span>{{ t('settingsAppearance.background.previewEmpty') }}</span>
           </div>
 
-          <!-- Foreground Card Sample for Contrast (Only show when background media is loaded) -->
+          <!-- Centered layer: contrast card or empty state, dead-center and clipped. -->
           <div
-            v-if="previewMediaSrc && themeStore.backgroundMode !== 'none'"
-            class="relative z-10 px-4 py-2.5 rounded-lg border border-line bg-raised/80 backdrop-blur-md shadow-md text-center"
+            class="relative z-10 flex flex-col items-center justify-center text-center max-w-[90%] px-3"
           >
-            <p class="text-xs font-semibold text-fg">MCLR Preview</p>
-            <p class="text-[11px] text-fg-muted">Sample UI Foreground Content</p>
+            <!-- Foreground Card Sample for Contrast (Only show when background media is loaded) -->
+            <div
+              v-if="previewMediaSrc && themeStore.backgroundMode !== 'none'"
+              class="max-w-full px-4 py-2.5 rounded-lg border border-line bg-raised/80 backdrop-blur-md shadow-md text-center"
+            >
+              <p class="text-xs font-semibold text-fg truncate max-w-full">MCLR Preview</p>
+              <p class="text-[11px] text-fg-muted truncate max-w-full">
+                Sample UI Foreground Content
+              </p>
+            </div>
+            <div v-else class="text-xs text-fg-muted flex items-center gap-1.5 max-w-full">
+              <span class="i-lucide-image-off w-4 h-4 shrink-0" />
+              <span class="truncate max-w-full">{{
+                t('settingsAppearance.background.previewEmpty')
+              }}</span>
+            </div>
           </div>
         </div>
       </div>

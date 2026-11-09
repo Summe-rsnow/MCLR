@@ -235,7 +235,7 @@ function openProject(row: ApplyRow): void {
                   :src="null"
                   :alt="row.title"
                   :fallback-icon="compTypeMeta[row.kind]?.icon"
-                  class="w-7 h-7 rounded-md shrink-0"
+                  size="sm"
                 />
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-1.5 min-w-0">

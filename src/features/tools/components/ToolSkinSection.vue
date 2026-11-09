@@ -107,7 +107,8 @@ async function downloadSkinPng() {
               :alt="skinResult.username"
               pixelated
               fallback-icon="i-lucide-user"
-              class="w-16 h-16 rounded-lg border border-line bg-raised"
+              size="lg"
+              class="border border-line bg-raised"
             />
           </div>
 
@@ -134,6 +135,8 @@ async function downloadSkinPng() {
               pixelated
               fit="contain"
               fallback-icon="i-lucide-shirt"
+              size="auto"
+              radius="none"
               class="max-h-24 w-auto"
             />
           </div>

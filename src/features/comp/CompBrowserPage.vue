@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { compareVersions } from '@/shared/mcver'
+import { compareVersions, compareVersionsDesc, knownVersion } from '@/shared/mcver'
 import { primaryLoader, searchLoaderId } from '@/shared/loader'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -79,7 +79,7 @@ function applyTargetInstance(
 ) {
   if (!isInstanceScopedTab.value) return
   if (inst) {
-    compStore.mcVersion = inst.mcVersion || null
+    compStore.mcVersion = knownVersion(inst.mcVersion)
     const kind = inst.kind?.toLowerCase()
     const kindIfRealLoader =
       kind && kind !== 'vanilla' && kind !== 'moddedmultiple' && kind !== 'unknown' ? kind : null
@@ -141,8 +141,9 @@ const targetInstanceOptions = computed(() => {
     ...availableInstances.map((i) => {
       const kind = i.kind || (i.loaders?.[0]?.toLowerCase() ?? 'vanilla')
       const meta = getInstanceIconMeta(i.config?.icon, kind)
+      const mcVersion = knownVersion(i.mcVersion)
       return {
-        label: `${i.name} (${i.mcVersion})`,
+        label: mcVersion ? `${i.name} (${mcVersion})` : i.name,
         value: i.id,
         image: meta.image,
         icon: meta.icon,
@@ -220,24 +221,14 @@ const standardMcVersions = [
 const mcVersionOptions = computed(() => {
   const versions = new Set<string>()
   for (const inst of instancesStore.instances) {
-    if (inst.mcVersion?.trim()) {
-      versions.add(inst.mcVersion.trim())
-    }
+    const v = knownVersion(inst.mcVersion)
+    if (v) versions.add(v)
   }
   for (const v of standardMcVersions) {
     versions.add(v)
   }
 
-  const sorted = Array.from(versions).sort((a, b) => {
-    const pa = a.split('.').map((n) => parseInt(n, 10) || 0)
-    const pb = b.split('.').map((n) => parseInt(n, 10) || 0)
-    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-      const na = pa[i] ?? 0
-      const nb = pb[i] ?? 0
-      if (na !== nb) return nb - na
-    }
-    return b.localeCompare(a)
-  })
+  const sorted = Array.from(versions).sort(compareVersionsDesc)
 
   return [
     { label: t('comp.search.allMcVersions'), value: '' },
@@ -531,7 +522,7 @@ watch(
             <MImage
               :src="fav.iconUrl"
               :fallback-icon="compTypeMeta[fav.compType as CompTypeKey]?.icon || 'i-lucide-box'"
-              class="w-14 h-14 rounded-xl shrink-0"
+              size="lg"
             />
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
