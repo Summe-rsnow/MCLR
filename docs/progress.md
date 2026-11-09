@@ -53,7 +53,7 @@
 | C | 背景预览居中修复 + 区域格式文化提示 | Wave 2C | done | vitest run src/features/settings-appearance src/features/settings-system |
 | D | 账户保存皮肤/头像（微软 / Authlib / 离线） | Wave 2D | done | cargo test -p mclr-auth; cargo test -p mclr-app --lib; vitest run src/features/accounts |
 | E | 预设解绑版本/加载器 + 移除实例预设 Tab | Wave 2E | done | cargo test -p mclr-comp preset; cargo test -p mclr-app --lib; vitest run src/features/presets src/features/instance-detail |
-| F | 实例模组保存到预设（逐项锁定版本） | Wave 3F | doing | cargo test -p mclr-comp; cargo test -p mclr-app --lib; vitest run src/features/resources |
+| F | 实例模组保存到预设（逐项锁定版本） | Wave 3F | done | cargo test -p mclr-comp; cargo test -p mclr-app --lib; vitest run src/features/resources |
 | G | 绑定再生成、pnpm check、浏览器 Smoke、提交 | integrator | done | pnpm check prints `All check gates passed.` |
 
 ### Notes
