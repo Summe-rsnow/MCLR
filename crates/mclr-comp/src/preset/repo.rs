@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::CompError;
 use crate::model::{CompFile, CompPlatform, CompType};
-use crate::preset::model::{AddItemOutcome, AddStatus, PresetItem, ResourcePreset};
+use crate::preset::model::{AddItemOutcome, AddStatus, PresetItem, PresetPinRule, ResourcePreset};
 use crate::resolver::MatchFailure;
 
 /// Schema version of `presets.json`.
@@ -194,14 +194,57 @@ impl PresetRepo {
 
             if let Some(existing) = preset
                 .items
-                .iter()
+                .iter_mut()
                 .find(|p| p.platform == item.platform && p.project_id == item.project_id)
             {
-                let status = if existing.pinned_file_id == item.pinned_file_id {
-                    AddStatus::AlreadyInPreset
-                } else {
+                let mut pin_changed = false;
+                if !item.pin_rules.is_empty() {
+                    // The incoming rule wins for its `(game_versions, loaders)` context, exactly
+                    // like `pin_rule`; identical rules are never duplicated.
+                    for rule in &item.pin_rules {
+                        match existing.pin_rules.iter_mut().find(|stored| {
+                            stored.game_versions == rule.game_versions
+                                && stored.loaders == rule.loaders
+                        }) {
+                            Some(stored) => {
+                                if stored.file_id != rule.file_id
+                                    || stored.file_name != rule.file_name
+                                {
+                                    stored.file_id = rule.file_id.clone();
+                                    stored.file_name = rule.file_name.clone();
+                                    pin_changed = true;
+                                }
+                            }
+                            None => {
+                                existing.pin_rules.push(rule.clone());
+                                pin_changed = true;
+                            }
+                        }
+                    }
+
+                    // Keep the legacy single pin mirroring the first rule, as `pin_rule` does.
+                    if let Some(first) = existing.pin_rules.first()
+                        && (existing.pinned_file_id.as_deref() != Some(first.file_id.as_str())
+                            || existing.pinned_file_name.as_deref()
+                                != Some(first.file_name.as_str()))
+                    {
+                        existing.pinned_file_id = Some(first.file_id.clone());
+                        existing.pinned_file_name = Some(first.file_name.clone());
+                        pin_changed = true;
+                    }
+                }
+
+                let legacy_conflict =
+                    item.pinned_file_id.is_some() && existing.pinned_file_id != item.pinned_file_id;
+                let status = if pin_changed || legacy_conflict {
                     AddStatus::AlreadyInPresetOtherVersion
+                } else {
+                    AddStatus::AlreadyInPreset
                 };
+                if pin_changed {
+                    preset.updated_at = now_ms();
+                    changed = true;
+                }
                 outcomes.push(outcome(status, None));
                 continue;
             }
@@ -256,6 +299,9 @@ impl PresetRepo {
     }
 
     /// Pins an item to one file version, or unpins it when `file_id` is `None`.
+    ///
+    /// Passing `None` clears every pin rule as well, i.e. the item follows the latest compatible
+    /// file again.
     pub fn pin(
         &mut self,
         preset_id: &str,
@@ -290,10 +336,85 @@ impl PresetRepo {
         self.persist()
     }
 
-    /// Returns every pinned file id across all presets (used to keep store objects alive).
+    /// Adds or updates a pin rule for one `(game_versions, loaders)` context.
     ///
-    /// Legacy `pin_rules` are included so cache objects referenced only by an old
-    /// `presets.json` are not reported as unreferenced.
+    /// The legacy single pin always mirrors the first rule, so older reads keep showing a
+    /// pinned build.
+    pub fn pin_rule(
+        &mut self,
+        preset_id: &str,
+        platform: CompPlatform,
+        project_id: &str,
+        rule: PresetPinRule,
+    ) -> Result<(), CompError> {
+        let preset = self
+            .presets
+            .iter_mut()
+            .find(|p| p.id == preset_id)
+            .ok_or(CompError::Preset("preset.notFound"))?;
+        let item = preset
+            .items
+            .iter_mut()
+            .find(|item| item.platform == platform && item.project_id == project_id)
+            .ok_or(CompError::Preset("preset.itemNotFound"))?;
+
+        match item
+            .pin_rules
+            .iter_mut()
+            .find(|r| r.game_versions == rule.game_versions && r.loaders == rule.loaders)
+        {
+            Some(existing) => {
+                existing.file_id = rule.file_id;
+                existing.file_name = rule.file_name;
+            }
+            None => item.pin_rules.push(rule),
+        }
+
+        if let Some(first) = item.pin_rules.first() {
+            item.pinned_file_id = Some(first.file_id.clone());
+            item.pinned_file_name = Some(first.file_name.clone());
+        }
+        preset.updated_at = now_ms();
+        self.persist()
+    }
+
+    /// Removes the pin rule referencing `file_id`.
+    ///
+    /// The legacy single pin mirrors the remaining first rule, or is cleared when no rule is left.
+    pub fn remove_pin_rule(
+        &mut self,
+        preset_id: &str,
+        platform: CompPlatform,
+        project_id: &str,
+        file_id: &str,
+    ) -> Result<(), CompError> {
+        let preset = self
+            .presets
+            .iter_mut()
+            .find(|p| p.id == preset_id)
+            .ok_or(CompError::Preset("preset.notFound"))?;
+        let item = preset
+            .items
+            .iter_mut()
+            .find(|item| item.platform == platform && item.project_id == project_id)
+            .ok_or(CompError::Preset("preset.itemNotFound"))?;
+
+        item.pin_rules.retain(|r| r.file_id != file_id);
+        match item.pin_rules.first() {
+            Some(first) => {
+                item.pinned_file_id = Some(first.file_id.clone());
+                item.pinned_file_name = Some(first.file_name.clone());
+            }
+            None => {
+                item.pinned_file_id = None;
+                item.pinned_file_name = None;
+            }
+        }
+        preset.updated_at = now_ms();
+        self.persist()
+    }
+
+    /// Returns every pinned file id across all presets (used to keep store objects alive).
     pub fn pinned_file_ids(&self) -> std::collections::HashSet<String> {
         self.presets
             .iter()

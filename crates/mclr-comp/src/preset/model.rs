@@ -33,8 +33,7 @@ pub struct PresetItem {
     pub pinned_file_id: Option<String>,
     #[serde(default)]
     pub pinned_file_name: Option<String>,
-    /// Legacy per-version/loader pin rules. Retained only so older `presets.json` documents keep
-    /// deserializing; the planner ignores them in favour of [`PresetItem::pinned_file_id`].
+    /// Per-context pins: each rule applies only to its `(game_versions, loaders)` context.
     #[serde(default)]
     pub pin_rules: Vec<PresetPinRule>,
 }
@@ -44,11 +43,10 @@ pub struct ResourcePreset {
     pub id: String,
     pub name: String,
     pub description: String,
-    /// Legacy field kept for `presets.json` compatibility. Presets are universal resource lists,
-    /// so this no longer gates anything.
+    /// Game versions this preset is published for. Empty = any version.
     #[serde(default)]
     pub game_versions: Vec<String>,
-    /// Legacy field kept for `presets.json` compatibility; ignored by the planner.
+    /// Mod loaders this preset is published for. Empty = any loader.
     #[serde(default)]
     pub loaders: Vec<String>,
     pub items: Vec<PresetItem>,
@@ -120,6 +118,7 @@ pub struct ApplyRow {
 #[serde(rename_all = "camelCase")]
 pub enum GateReason {
     GameVersion,
+    Loader,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]

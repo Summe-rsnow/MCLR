@@ -740,8 +740,22 @@ describe('SaveModsToPresetDialog', () => {
     fileId: null,
   }
 
-  async function mountSaveDialog() {
-    vi.spyOn(ipcClient, 'presetsList').mockResolvedValue([preset])
+  // A preset published for another loader: the dialog must not offer it.
+  const otherLoaderPreset: ResourcePreset = {
+    id: 'preset-forge',
+    name: '锻造整合',
+    description: '',
+    gameVersions: ['1.20.1'],
+    loaders: ['forge'],
+    items: [],
+    createdAt: 1,
+    updatedAt: 1,
+  }
+
+  async function mountSaveDialog(
+    overrides: { mcVersion?: string | null; loaders?: string[]; presets?: ResourcePreset[] } = {},
+  ) {
+    vi.spyOn(ipcClient, 'presetsList').mockResolvedValue(overrides.presets ?? [preset])
     const addSpy = vi.spyOn(ipcClient, 'presetsAddItems').mockResolvedValue([
       { platform: 'modrinth', projectId: 'AANobbMI', title: 'Sodium', status: 'added' },
       { platform: 'modrinth', projectId: 'P7dR8mSH', title: 'Fabric API', status: 'added' },
@@ -753,7 +767,12 @@ describe('SaveModsToPresetDialog', () => {
       messages: { 'zh-CN': { resources: zhCnResources, common: zhCnCommon } },
     })
     mount(SaveModsToPresetDialog, {
-      props: { open: true, entries: [recognized, noFileId, unrecognized] },
+      props: {
+        open: true,
+        entries: [recognized, noFileId, unrecognized],
+        mcVersion: overrides.mcVersion === undefined ? '1.20.1' : overrides.mcVersion,
+        loaders: overrides.loaders ?? ['fabric'],
+      },
       global: { plugins: [i18n] },
     })
     await flushPromises()
@@ -785,10 +804,22 @@ describe('SaveModsToPresetDialog', () => {
     ).toContain('1')
   })
 
-  it('sends pinnedFileId: null for unlocked mods and the installed file once a row is locked', async () => {
+  it('offers only presets that accept the instance version and loaders', async () => {
+    await mountSaveDialog({ presets: [preset, otherLoaderPreset] })
+
+    const trigger = document.body.querySelector('[role="combobox"]')
+    expect(trigger?.textContent).toContain('性能优化')
+    // The Forge-only preset is hidden instead of being offered and then failing on add.
+    expect(trigger?.textContent).not.toContain('锻造整合')
+    expect(
+      document.body.querySelector('[data-testid="save-to-preset-incompatible"]')?.textContent,
+    ).toContain('1')
+  })
+
+  it('locks a mod for the instance version and loaders instead of pinning globally', async () => {
     const { addSpy, switches, confirm } = await mountSaveDialog()
 
-    // Row 0 = Sodium (has a file id): lock its installed version, leave Fabric API unlocked.
+    // Row 0 = Sodium (has a file id): lock its installed build, leave Fabric API unlocked.
     switches()[0].click()
     await flushPromises()
 
@@ -805,15 +836,63 @@ describe('SaveModsToPresetDialog', () => {
       kind: 'mod',
       title: 'Sodium',
       slug: 'sodium',
-      pinnedFileId: 'file-a',
-      pinnedFileName: 'sodium.jar',
+      // A pinned file id alone would install on every version; the rule carries its context.
+      pinnedFileId: null,
+      pinnedFileName: null,
+      pinRules: [
+        {
+          gameVersions: ['1.20.1'],
+          loaders: ['fabric'],
+          fileId: 'file-a',
+          fileName: 'sodium.jar',
+        },
+      ],
     })
-    // Unlocked: follows the latest compatible file, so no file id is pinned.
+    // Unlocked: follows the latest compatible file, so no rule is written.
     expect(items[1].projectId).toBe('P7dR8mSH')
     expect(items[1].pinnedFileId).toBeNull()
-    expect(items[1].pinnedFileName).toBeNull()
+    expect(items[1].pinRules).toEqual([])
 
     // The outcome badges from the backend are rendered in the dialog.
     expect(document.body.querySelector('[data-testid="save-to-preset-outcomes"]')).not.toBeNull()
+  })
+
+  it('disables the lock switch when the instance version is unknown', async () => {
+    const { switches } = await mountSaveDialog({ mcVersion: null })
+
+    // Nothing to scope the lock to, so the switch must not offer it.
+    expect((switches()[0] as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('creates a new preset prefilled with the instance version and loaders', async () => {
+    const saveSpy = vi.spyOn(ipcClient, 'presetsSave').mockResolvedValue({
+      id: 'preset-new',
+      name: '新预设',
+      description: '',
+      gameVersions: ['1.20.1'],
+      loaders: ['fabric'],
+      items: [],
+      createdAt: 1,
+      updatedAt: 1,
+    })
+
+    // No existing preset: the dialog starts in "create a new preset" mode.
+    const { confirm } = await mountSaveDialog({ presets: [] })
+
+    const nameInput = document.body.querySelector<HTMLInputElement>('input')
+    expect(nameInput).not.toBeNull()
+    nameInput!.value = '新预设'
+    nameInput!.dispatchEvent(new Event('input'))
+    await flushPromises()
+
+    confirm()!.click()
+    await flushPromises()
+
+    expect(saveSpy).toHaveBeenCalledTimes(1)
+    expect(saveSpy.mock.calls[0][0]).toMatchObject({
+      name: '新预设',
+      gameVersions: ['1.20.1'],
+      loaders: ['fabric'],
+    })
   })
 })

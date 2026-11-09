@@ -159,6 +159,8 @@ export const commands = {
 	presetsAddItems: (presetId: string, items: PresetItem_Deserialize[]) => typedError<AddItemOutcome_Serialize[], AppError_Serialize>(__TAURI_INVOKE("presets_add_items", { presetId, items })),
 	presetsRemoveItem: (presetId: string, platform: CompPlatform, projectId: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_remove_item", { presetId, platform, projectId })),
 	presetsPin: (presetId: string, platform: CompPlatform, projectId: string, fileId: string | null, fileName: string | null) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_pin", { presetId, platform, projectId, fileId, fileName })),
+	presetsPinRule: (presetId: string, platform: CompPlatform, projectId: string, rule: PresetPinRule_Deserialize) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_pin_rule", { presetId, platform, projectId, rule })),
+	presetsRemovePinRule: (presetId: string, platform: CompPlatform, projectId: string, fileId: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("presets_remove_pin_rule", { presetId, platform, projectId, fileId })),
 	presetsApply: (request: ApplyRequest_Deserialize) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("presets_apply", { request })),
 	presetsApplyReport: (taskId: string) => typedError<ApplyReport_Serialize, AppError_Serialize>(__TAURI_INVOKE("presets_apply_report", { taskId })),
 	presetsCache: (presetId: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("presets_cache", { presetId })),
@@ -777,7 +779,7 @@ export type GameSettings_Serialize = {
 	sortBy: string,
 };
 
-export type GateReason = "gameVersion";
+export type GateReason = "gameVersion" | "loader";
 
 export type ImportResourcesResult = {
 	imported: string[],
@@ -1367,10 +1369,7 @@ export type PresetItem_Deserialize = {
 	iconUrl?: string | null,
 	pinnedFileId?: string | null,
 	pinnedFileName?: string | null,
-	/**
-	 *  Legacy per-version/loader pin rules. Retained only so older `presets.json` documents keep
-	 *  deserializing; the planner ignores them in favour of [`PresetItem::pinned_file_id`].
-	 */
+	/**  Per-context pins: each rule applies only to its `(game_versions, loaders)` context. */
 	pinRules?: PresetPinRule_Deserialize[],
 };
 
@@ -1383,10 +1382,7 @@ export type PresetItem_Serialize = {
 	iconUrl: string | null,
 	pinnedFileId: string | null,
 	pinnedFileName: string | null,
-	/**
-	 *  Legacy per-version/loader pin rules. Retained only so older `presets.json` documents keep
-	 *  deserializing; the planner ignores them in favour of [`PresetItem::pinned_file_id`].
-	 */
+	/**  Per-context pins: each rule applies only to its `(game_versions, loaders)` context. */
 	pinRules: PresetPinRule_Serialize[],
 };
 
@@ -1538,12 +1534,9 @@ export type ResourcePreset_Deserialize = {
 	id: string,
 	name: string,
 	description: string,
-	/**
-	 *  Legacy field kept for `presets.json` compatibility. Presets are universal resource lists,
-	 *  so this no longer gates anything.
-	 */
+	/**  Game versions this preset is published for. Empty = any version. */
 	gameVersions?: string[],
-	/**  Legacy field kept for `presets.json` compatibility; ignored by the planner. */
+	/**  Mod loaders this preset is published for. Empty = any loader. */
 	loaders?: string[],
 	items: PresetItem_Deserialize[],
 	createdAt: number,
@@ -1554,12 +1547,9 @@ export type ResourcePreset_Serialize = {
 	id: string,
 	name: string,
 	description: string,
-	/**
-	 *  Legacy field kept for `presets.json` compatibility. Presets are universal resource lists,
-	 *  so this no longer gates anything.
-	 */
+	/**  Game versions this preset is published for. Empty = any version. */
 	gameVersions: string[],
-	/**  Legacy field kept for `presets.json` compatibility; ignored by the planner. */
+	/**  Mod loaders this preset is published for. Empty = any loader. */
 	loaders: string[],
 	items: PresetItem_Serialize[],
 	createdAt: number,

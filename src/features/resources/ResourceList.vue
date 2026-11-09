@@ -11,6 +11,7 @@ import type {
   SchematicInfo,
 } from '../../ipc/client'
 import { ipcClient } from '../../ipc/client'
+import { parseLoader } from '../../shared/loader'
 import { MButton, MEmpty, MSkeleton, MVirtualList, useToast, useDialog } from '../../ui'
 import { useInstancesStore } from '../instances/store'
 import { awaitTask } from '../tasks/awaitTask'
@@ -59,6 +60,32 @@ const saveToPresetEntries = computed<ResourceEntry[]>(() =>
     ? entries.value.filter((e) => selectedPaths.value.has(e.path))
     : entries.value,
 )
+/**
+ * Version/loader the saved preset and its locks are scoped to. Instance loaders are detection
+ * labels (`"Fabric 0.15.11"`), so they go through `parseLoader` first.
+ */
+const instanceContext = computed(() => {
+  const target = instancesStore.instances.find((i) => i.id === props.instanceId)
+  const mcVersion = (target?.mcVersion ?? '').trim()
+  const loaders: string[] = []
+  for (const label of target?.loaders ?? []) {
+    const parsed = parseLoader(label)
+    if (parsed && !loaders.includes(parsed)) loaders.push(parsed)
+  }
+  return { mcVersion: mcVersion || null, loaders }
+})
+
+/** The dialog scopes presets and locks to the instance, so its summary must be loaded first. */
+async function openSaveToPreset() {
+  if (!instancesStore.instances.some((i) => i.id === props.instanceId)) {
+    try {
+      await instancesStore.fetchInstances()
+    } catch {
+      // A missing instance summary only means no version filter and no locks; still open.
+    }
+  }
+  saveToPresetOpen.value = true
+}
 
 // Jar-in-Jar Drawer
 const jijDrawerOpen = ref(false)
@@ -1007,7 +1034,7 @@ watch(
       @toggle-select-all="selectAll"
       @add-files="handleAddFiles"
       @apply-preset="applyPresetOpen = true"
-      @save-to-preset="saveToPresetOpen = true"
+      @save-to-preset="openSaveToPreset"
     />
     <!-- Batch selection actions (inline, below the select-all row) -->
     <Transition name="m-selection-bar">
@@ -1055,7 +1082,7 @@ watch(
               size="sm"
               icon="i-lucide-bookmark-plus"
               data-testid="resources-save-selected-to-preset"
-              @click="saveToPresetOpen = true"
+              @click="openSaveToPreset"
             >
               {{ t('resources.actions.saveToPreset') }}
             </MButton>
@@ -1174,7 +1201,12 @@ watch(
       @applied="loadResources"
     />
 
-    <SaveModsToPresetDialog v-model:open="saveToPresetOpen" :entries="saveToPresetEntries" />
+    <SaveModsToPresetDialog
+      v-model:open="saveToPresetOpen"
+      :entries="saveToPresetEntries"
+      :mc-version="instanceContext.mcVersion"
+      :loaders="instanceContext.loaders"
+    />
   </div>
 </template>
 

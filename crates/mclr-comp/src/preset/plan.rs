@@ -8,9 +8,12 @@ use crate::model::{CompFile, CompType};
 
 use crate::preset::installed::{InstalledHit, InstalledIndex};
 use crate::preset::model::{
-    ApplyStatus, OtherVersionPolicy, PresetGate, PresetItem, ResourcePreset,
+    ApplyStatus, GateReason, OtherVersionPolicy, PresetGate, PresetItem, PresetPinRule,
+    ResourcePreset,
 };
-use crate::resolver::{MatchFailure, file_supports_any_loader, select_best_file_filtered};
+use crate::resolver::{
+    MatchFailure, file_supports_any_loader, file_supports_mc, select_best_file_filtered,
+};
 
 /// The instance a preset is applied to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +32,9 @@ pub struct MergedItem {
     pub from_presets: Vec<String>,
     /// Two presets pinned different file ids; the first pin wins.
     pub version_conflict: bool,
+    /// Union of the loader filters of the requesting presets. `None` when at least one of them
+    /// has no loader filter (i.e. it applies to every loader the instance runs).
+    pub preset_loaders: Option<Vec<String>>,
 }
 
 /// The planner's answer for one merged item.
@@ -41,22 +47,51 @@ pub struct Decision {
 
 /// Splits presets into the accepted ones and the merged item list.
 ///
-/// Presets are universal resource lists: their legacy `game_versions`/`loaders` fields are
-/// ignored, so every requested preset is accepted and its files are matched against the target
-/// instance at apply time ([`decide`]). Items are merged by `(platform, project_id)` in request
-/// order: the first preset's metadata wins, the first explicit pin wins, and differing explicit
-/// pins raise `version_conflict`.
-pub fn merge_presets(presets: &[ResourcePreset]) -> (Vec<PresetGate>, Vec<MergedItem>) {
+/// A preset whose game-version filter does not include the instance's version is gated with
+/// [`GateReason::GameVersion`]; a preset whose loader filter shares no loader with the instance is
+/// gated with [`GateReason::Loader`]. Gated presets contribute no items. Accepted presets are
+/// merged by `(platform, project_id)` in request order: the first preset's metadata wins, the
+/// first explicit pin wins, differing explicit pins raise `version_conflict`, and pin rules are
+/// de-duplicated by their `(game_versions, loaders)` context.
+pub fn merge_presets(
+    presets: &[ResourcePreset],
+    ctx: &InstanceCtx,
+) -> (Vec<PresetGate>, Vec<MergedItem>) {
     let mut gates = Vec::with_capacity(presets.len());
     let mut merged: Vec<MergedItem> = Vec::new();
 
     for preset in presets {
+        let version_ok = preset.game_versions.is_empty()
+            || preset
+                .game_versions
+                .iter()
+                .any(|v| v.trim().eq_ignore_ascii_case(ctx.mc_version.trim()));
+        let loader_ok = preset.loaders.is_empty()
+            || preset.loaders.iter().any(|loader| {
+                ctx.loaders
+                    .iter()
+                    .any(|inst| inst.eq_ignore_ascii_case(loader.trim()))
+            });
+        let reason = if !version_ok {
+            Some(GateReason::GameVersion)
+        } else if !loader_ok {
+            Some(GateReason::Loader)
+        } else {
+            None
+        };
+
+        let gated = reason.is_some();
         gates.push(PresetGate {
             preset_id: preset.id.clone(),
             name: preset.name.clone(),
-            ok: true,
-            reason: None,
+            ok: !gated,
+            reason,
         });
+        if gated {
+            continue;
+        }
+
+        let preset_loaders = (!preset.loaders.is_empty()).then(|| preset.loaders.clone());
 
         for item in &preset.items {
             let existing = merged
@@ -68,6 +103,7 @@ pub fn merge_presets(presets: &[ResourcePreset]) -> (Vec<PresetGate>, Vec<Merged
                     item: item.clone(),
                     from_presets: vec![preset.name.clone()],
                     version_conflict: false,
+                    preset_loaders: preset_loaders.clone(),
                 });
                 continue;
             };
@@ -80,6 +116,19 @@ pub fn merge_presets(presets: &[ResourcePreset]) -> (Vec<PresetGate>, Vec<Merged
                 existing.from_presets.push(preset.name.clone());
             }
 
+            // A preset without a loader filter lifts the restriction for this item.
+            match &preset_loaders {
+                None => existing.preset_loaders = None,
+                Some(loaders) => {
+                    let union = existing.preset_loaders.get_or_insert_with(Vec::new);
+                    for loader in loaders {
+                        if !union.iter().any(|l| l.eq_ignore_ascii_case(loader)) {
+                            union.push(loader.clone());
+                        }
+                    }
+                }
+            }
+
             if let Some(pin) = item.pinned_file_id.clone() {
                 match existing.item.pinned_file_id.clone() {
                     None => {
@@ -88,6 +137,17 @@ pub fn merge_presets(presets: &[ResourcePreset]) -> (Vec<PresetGate>, Vec<Merged
                     }
                     Some(current) if current != pin => existing.version_conflict = true,
                     Some(_) => {}
+                }
+            }
+
+            for rule in &item.pin_rules {
+                if !existing
+                    .item
+                    .pin_rules
+                    .iter()
+                    .any(|r| r.game_versions == rule.game_versions && r.loaders == rule.loaders)
+                {
+                    existing.item.pin_rules.push(rule.clone());
                 }
             }
         }
@@ -119,16 +179,25 @@ pub fn decide(
         };
     }
 
-    let loader_filter = if kind == CompType::Mod {
-        ctx.loaders.clone()
-    } else {
-        Vec::new()
+    let loader_filter = match kind {
+        CompType::Mod => match effective_loaders(merged, ctx) {
+            Some(loaders) => loaders,
+            None => {
+                return Decision {
+                    status: ApplyStatus::NoLoader,
+                    file: None,
+                    existing: None,
+                };
+            }
+        },
+        _ => Vec::new(),
     };
 
-    let file = match resolve_pinned_file_for_context(&merged.item, files, ctx) {
+    let file = match resolve_pinned_file_for_context(&merged.item, files, ctx, &loader_filter) {
         Some(pinned) => pinned.clone(),
         None => {
-            // Without a usable pin, take the latest file compatible with the instance.
+            // When no pin rule matches the target instance (or for versions/loaders not covered by
+            // any rule), fall back to selecting the best / latest compatible version.
             let game_versions: &[String] = if ctx.mc_version.trim().is_empty() {
                 &[]
             } else {
@@ -196,6 +265,32 @@ pub fn decide(
     }
 }
 
+/// Loaders a mod item may be installed for.
+///
+/// `None` means the instance's loaders and the preset filters are disjoint, i.e. no build of this
+/// mod can be installed. An instance with no known loader has no restriction.
+fn effective_loaders(merged: &MergedItem, ctx: &InstanceCtx) -> Option<Vec<String>> {
+    if ctx.loaders.is_empty() {
+        return Some(Vec::new());
+    }
+    match &merged.preset_loaders {
+        None => Some(ctx.loaders.clone()),
+        Some(preset_loaders) => {
+            let intersection: Vec<String> = ctx
+                .loaders
+                .iter()
+                .filter(|loader| {
+                    preset_loaders
+                        .iter()
+                        .any(|p| p.eq_ignore_ascii_case(loader))
+                })
+                .cloned()
+                .collect();
+            (!intersection.is_empty()).then_some(intersection)
+        }
+    }
+}
+
 fn status_for_failure(failure: MatchFailure) -> ApplyStatus {
     match failure {
         MatchFailure::NoGameVersion => ApplyStatus::NoGameVersion,
@@ -204,25 +299,77 @@ fn status_for_failure(failure: MatchFailure) -> ApplyStatus {
     }
 }
 
-/// Resolves the item's single pinned file for the target instance.
+/// Resolves the item's pinned file for the target instance.
 ///
-/// The pin wins over version matching: it is only rejected when the file no longer exists in the
-/// project's file list, or (for mods) when it does not support any of the instance's loaders. A
+/// Pin rules are checked first: a rule applies only to the `(game_versions, loaders)` context it
+/// declares (an empty side acts as a wildcard, and a rule with both sides empty is ignored). Its
+/// file must still exist and support the instance's game version and the effective loader filter.
+/// The legacy single [`PresetItem::pinned_file_id`] is honoured under the same validation. Any
 /// rejected or absent pin returns `None`, which makes the planner pick the latest compatible file.
 fn resolve_pinned_file_for_context<'a>(
     item: &PresetItem,
     files: &'a [CompFile],
     ctx: &InstanceCtx,
+    loader_filter: &[String],
 ) -> Option<&'a CompFile> {
-    let pin_id = item.pinned_file_id.as_deref()?;
-    let file = files.iter().find(|f| f.id == pin_id)?;
-
-    if item.kind == CompType::Mod && !ctx.loaders.is_empty() {
-        let loaders: Vec<&str> = ctx.loaders.iter().map(String::as_str).collect();
-        if !file_supports_any_loader(&file.loaders, &loaders) {
-            return None;
+    for rule in &item.pin_rules {
+        if !rule_matches_context(rule, ctx, loader_filter) {
+            continue;
+        }
+        if let Some(file) = files.iter().find(|f| f.id == rule.file_id)
+            && pin_supported_by_context(file, item.kind, ctx, loader_filter)
+        {
+            return Some(file);
         }
     }
 
-    Some(file)
+    let pin_id = item.pinned_file_id.as_deref()?;
+    let file = files.iter().find(|f| f.id == pin_id)?;
+    pin_supported_by_context(file, item.kind, ctx, loader_filter).then_some(file)
+}
+
+/// Whether a pin rule targets the instance's game version and loader filter.
+fn rule_matches_context(rule: &PresetPinRule, ctx: &InstanceCtx, loader_filter: &[String]) -> bool {
+    let by_version = !rule.game_versions.is_empty();
+    let by_loader = !rule.loaders.is_empty();
+    if !by_version && !by_loader {
+        return false;
+    }
+
+    let version_matches = by_version
+        && !ctx.mc_version.trim().is_empty()
+        && rule
+            .game_versions
+            .iter()
+            .any(|v| v.trim().eq_ignore_ascii_case(ctx.mc_version.trim()));
+    let loader_matches = by_loader
+        && rule.loaders.iter().any(|l| {
+            loader_filter
+                .iter()
+                .any(|inst| inst.eq_ignore_ascii_case(l))
+        });
+
+    match (by_version, by_loader) {
+        (true, true) => version_matches && loader_matches,
+        (true, false) => version_matches,
+        (false, true) => loader_matches,
+        (false, false) => false,
+    }
+}
+
+/// Whether a pinned file can be installed on the target instance.
+fn pin_supported_by_context(
+    file: &CompFile,
+    kind: CompType,
+    ctx: &InstanceCtx,
+    loader_filter: &[String],
+) -> bool {
+    let mc_ok = ctx.mc_version.trim().is_empty() || file_supports_mc(file, &ctx.mc_version);
+    let loader_ok = kind != CompType::Mod
+        || loader_filter.is_empty()
+        || file_supports_any_loader(
+            &file.loaders,
+            &loader_filter.iter().map(String::as_str).collect::<Vec<_>>(),
+        );
+    mc_ok && loader_ok
 }

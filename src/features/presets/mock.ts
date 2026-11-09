@@ -4,6 +4,9 @@ import type {
   StoreInfo,
   AddItemOutcome,
   PruneResult,
+  CompPlatform,
+  PresetItem,
+  PresetPinRule,
 } from '../../ipc/client'
 import { mockTasks } from '../tasks/mock'
 export const mockPresets: ResourcePreset[] = [
@@ -33,6 +36,14 @@ export const mockPresets: ResourcePreset[] = [
         iconUrl: 'https://cdn.modrinth.com/data/YL57xq9U/icon.png',
         pinnedFileId: 'v-iris-1.7.0',
         pinnedFileName: 'iris-mc1.20.1-1.7.0.jar',
+        pinRules: [
+          {
+            gameVersions: ['1.20.1'],
+            loaders: ['fabric'],
+            fileId: 'v-iris-1.7.0',
+            fileName: 'iris-mc1.20.1-1.7.0.jar',
+          },
+        ],
       },
     ],
     createdAt: 1700000000000,
@@ -75,6 +86,12 @@ export const mockApplyReport: ApplyReport = {
       name: '旧版本预设',
       ok: false,
       reason: 'gameVersion',
+    },
+    {
+      presetId: 'preset-forge',
+      name: '锻造预设',
+      ok: false,
+      reason: 'loader',
     },
   ],
   rows: [
@@ -300,7 +317,9 @@ export const mockStoreInfo: StoreInfo = {
 let presets = [...mockPresets]
 
 const handlers = {
-  presets_list: (): ResourcePreset[] => [...presets],
+  // Real IPC serialises fresh objects on every call; returning live objects here would hide
+  // reactivity bugs because mutated items keep their identity.
+  presets_list: (): ResourcePreset[] => structuredClone(presets),
   presets_save: (args: Record<string, unknown>): ResourcePreset => {
     const p = (args.preset || {}) as Partial<ResourcePreset>
     const existingIdx = presets.findIndex((item) => item.id === p.id)
@@ -332,14 +351,46 @@ const handlers = {
     presets = presets.filter((p) => p.id !== id)
   },
   presets_add_items: (args: Record<string, unknown>): AddItemOutcome[] => {
-    const items = (args.items || []) as AddItemOutcome[]
-    return items.map((it) => ({
-      platform: it.platform,
-      projectId: it.projectId,
-      title: it.title,
-      status: 'added',
-      latestFileName: 'latest.jar',
-    }))
+    const items = (args.items || []) as PresetItem[]
+    const preset = presets.find((p) => p.id === args.presetId)
+    return items.map((it) => {
+      const outcome: AddItemOutcome = {
+        platform: it.platform,
+        projectId: it.projectId,
+        title: it.title,
+        status: 'added',
+        latestFileName: 'latest.jar',
+      }
+      if (!preset) return { ...outcome, status: 'unsupported' }
+      const existing = preset.items.find(
+        (x) => x.platform === it.platform && x.projectId === it.projectId,
+      )
+      if (!existing) {
+        preset.items.push({ ...it, pinRules: it.pinRules ?? [] })
+        return outcome
+      }
+      let changed = false
+      for (const rule of it.pinRules ?? []) {
+        const rules = (existing.pinRules ??= [])
+        const same = rules.findIndex(
+          (r) =>
+            r.gameVersions.join(',') === rule.gameVersions.join(',') &&
+            r.loaders.join(',') === rule.loaders.join(','),
+        )
+        if (same >= 0) {
+          if (rules[same].fileId !== rule.fileId) changed = true
+          rules[same] = rule
+        } else {
+          rules.push(rule)
+          changed = true
+        }
+      }
+      if (existing.pinRules?.length) {
+        existing.pinnedFileId = existing.pinRules[0].fileId
+        existing.pinnedFileName = existing.pinRules[0].fileName
+      }
+      return { ...outcome, status: changed ? 'alreadyInPresetOtherVersion' : 'alreadyInPreset' }
+    })
   },
   presets_remove_item: (args: Record<string, unknown>): void => {
     const { presetId, platform, projectId } = args
@@ -356,8 +407,51 @@ const handlers = {
       if (it) {
         it.pinnedFileId = (fileId as string) || null
         it.pinnedFileName = (fileName as string) || null
+        // Passing no file means "follow latest", which drops every contextual rule too.
+        if (!fileId) it.pinRules = []
       }
     }
+  },
+  presets_pin_rule: (args: Record<string, unknown>): void => {
+    const { presetId, platform, projectId, rule } = args as {
+      presetId: string
+      platform: CompPlatform
+      projectId: string
+      rule: PresetPinRule
+    }
+    const p = presets.find((x) => x.id === presetId)
+    const it = p?.items.find((item) => item.platform === platform && item.projectId === projectId)
+    if (!it) return
+    const rules = (it.pinRules ??= [])
+    const existing = rules.find(
+      (r) =>
+        r.gameVersions.join(',') === rule.gameVersions.join(',') &&
+        r.loaders.join(',') === rule.loaders.join(','),
+    )
+    if (existing) {
+      existing.fileId = rule.fileId
+      existing.fileName = rule.fileName
+    } else {
+      rules.push(rule)
+    }
+    const first = rules[0]
+    it.pinnedFileId = first.fileId
+    it.pinnedFileName = first.fileName
+  },
+  presets_remove_pin_rule: (args: Record<string, unknown>): void => {
+    const { presetId, platform, projectId, fileId } = args as {
+      presetId: string
+      platform: CompPlatform
+      projectId: string
+      fileId: string
+    }
+    const p = presets.find((x) => x.id === presetId)
+    const it = p?.items.find((item) => item.platform === platform && item.projectId === projectId)
+    if (!it?.pinRules) return
+    it.pinRules = it.pinRules.filter((rule) => rule.fileId !== fileId)
+    const first = it.pinRules[0]
+    it.pinnedFileId = first?.fileId ?? null
+    it.pinnedFileName = first?.fileName ?? null
   },
   presets_apply: (): string => {
     const id = 'task-preset-apply-1'

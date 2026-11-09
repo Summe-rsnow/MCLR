@@ -7,6 +7,7 @@ import {
   type ApplyRequest,
   type CompPlatform,
   type PresetItem,
+  type PresetPinRule,
   type ResourcePreset,
   type StoreInfo,
 } from '../../ipc/client'
@@ -80,6 +81,27 @@ export const usePresetsStore = defineStore('presets', () => {
     await loadPresets()
   }
 
+  /** Pins one file for the drawer's current `(game version, loader)` context. */
+  async function pinRule(
+    presetId: string,
+    platform: CompPlatform,
+    projectId: string,
+    rule: PresetPinRule,
+  ): Promise<void> {
+    await ipcClient.presetsPinRule(presetId, platform, projectId, rule)
+    await loadPresets()
+  }
+
+  async function removePinRule(
+    presetId: string,
+    platform: CompPlatform,
+    projectId: string,
+    fileId: string,
+  ): Promise<void> {
+    await ipcClient.presetsRemovePinRule(presetId, platform, projectId, fileId)
+    await loadPresets()
+  }
+
   async function removeItem(
     presetId: string,
     platform: CompPlatform,
@@ -120,6 +142,8 @@ export const usePresetsStore = defineStore('presets', () => {
     savePreset,
     deletePreset,
     pin,
+    pinRule,
+    removePinRule,
     removeItem,
     addItems,
     applyPresets,

@@ -1,17 +1,17 @@
 //! Task handlers for resource presets application and caching.
 
-use mclr_comp::CompType;
 use mclr_comp::curseforge::CurseForgeClient;
 use mclr_comp::modrinth::ModrinthClient;
 use mclr_comp::preset::model::ApplyRequest;
 use mclr_comp::preset::store::Store;
 use mclr_comp::resolver::select_best_file_filtered;
+use mclr_comp::{CompFile, CompType};
 use mclr_core::AppError;
 use mclr_core::SettingsStore;
 use mclr_core::tasks::{StepPlan, TaskCtx, TaskHandler, TaskPlan};
 use mclr_net::downloader::Downloader;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tauri::{AppHandle, Manager};
 
 use crate::ipc::presets::{PresetState, execute_apply, fetch_files, store_root};
@@ -204,47 +204,73 @@ impl TaskHandler for PresetsCacheHandler {
 
         let modrinth = ModrinthClient::new(settings.net.source_priority);
         let curseforge = CurseForgeClient::new(settings.net.source_priority);
-        let total = preset.items.len().max(1);
 
         ctx.begin_step("resolve").await;
-        let mut resolved_files = Vec::new();
+        let mut resolved_files: Vec<(CompFile, CompType)> = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
         for item in &preset.items {
             if ctx.control().checkpoint().await.is_err() {
                 return Err(AppError::new("task.canceled"));
             }
-            match fetch_files(item.platform, &item.project_id, &modrinth, &curseforge).await {
-                Ok(files) => {
-                    let loaders: Vec<String> = if item.kind == CompType::Mod {
-                        preset.loaders.clone()
-                    } else {
-                        Vec::new()
-                    };
-                    let resolved = match item.pinned_file_id.as_deref() {
-                        Some(pin) => files.into_iter().find(|file| file.id == pin),
-                        None => {
-                            select_best_file_filtered(&files, &preset.game_versions, &loaders).ok()
-                        }
-                    };
-                    resolved_files.push((resolved, item.kind));
-                }
+            let files = match fetch_files(item.platform, &item.project_id, &modrinth, &curseforge)
+                .await
+            {
+                Ok(files) => files,
                 Err(err) => {
                     tracing::warn!(project = %item.project_id, error = %err, "preset cache file lookup failed");
-                    resolved_files.push((None, item.kind));
+                    continue;
+                }
+            };
+
+            let loaders: Vec<String> = if item.kind == CompType::Mod {
+                preset.loaders.clone()
+            } else {
+                Vec::new()
+            };
+            let mut picked: Vec<CompFile> = Vec::new();
+            let mut need_latest = false;
+            if item.pin_rules.is_empty() {
+                match item.pinned_file_id.as_deref() {
+                    Some(pin) => {
+                        if let Some(file) = files.iter().find(|file| file.id == pin) {
+                            picked.push(file.clone());
+                        }
+                    }
+                    None => need_latest = true,
+                }
+            } else {
+                // Every context rule pins its own build; cache all of them, and fall back to the
+                // latest compatible build when a rule's file is gone.
+                for rule in &item.pin_rules {
+                    match files.iter().find(|file| file.id == rule.file_id) {
+                        Some(file) => picked.push(file.clone()),
+                        None => need_latest = true,
+                    }
+                }
+            }
+            if need_latest
+                && let Ok(file) = select_best_file_filtered(&files, &preset.game_versions, &loaders)
+            {
+                picked.push(file);
+            }
+
+            for file in picked {
+                if seen.insert(file.id.clone()) {
+                    resolved_files.push((file, item.kind));
                 }
             }
         }
         ctx.finish_step("resolve").await;
 
+        let total = resolved_files.len().max(1);
         ctx.begin_step("download").await;
         ctx.set_items(0, total as u32).await;
-        for (index, (resolved, kind)) in resolved_files.into_iter().enumerate() {
+        for (index, (file, kind)) in resolved_files.into_iter().enumerate() {
             if ctx.control().checkpoint().await.is_err() {
                 return Err(AppError::new("task.canceled"));
             }
-            if let Some(file) = resolved {
-                if let Err(err) = store.ensure(&downloader, &file, kind).await {
-                    tracing::warn!(file = %file.file_name, error = %err, "preset cache download failed");
-                }
+            if let Err(err) = store.ensure(&downloader, &file, kind).await {
+                tracing::warn!(file = %file.file_name, error = %err, "preset cache download failed");
             }
             let done = (index + 1) as u32;
             ctx.set_items(done, total as u32).await;

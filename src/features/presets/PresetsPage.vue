@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { parseLoader } from '@/shared/loader'
 import { useI18n } from 'vue-i18n'
 import type { CompType, PresetItem, ResourcePreset } from '../../ipc/client'
 import {
@@ -26,13 +27,31 @@ import { usePresetsStore } from './store'
 import PresetPinDrawer from './components/PresetPinDrawer.vue'
 import PresetStoreDialog from './components/PresetStoreDialog.vue'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const toast = useToast()
 const { formatError } = useErrorText()
 const { formatDate } = useFormat()
 const store = usePresetsStore()
 
 const KIND_ORDER: CompType[] = ['mod', 'resourcepack', 'shader', 'datapack', 'world']
+
+// Same canonical list the quick-download dialog offers; the backend keeps preset filters
+// free-form, so whatever a preset already stores is appended to the chip row.
+const CANONICAL_MC_VERSIONS = [
+  '26.3',
+  '26.2',
+  '26.1',
+  '1.21.1',
+  '1.21',
+  '1.20.1',
+  '1.20',
+  '1.19.4',
+  '1.18.2',
+  '1.16.5',
+  '1.12.2',
+]
+
+const LOADERS = ['fabric', 'forge', 'neoforge', 'quilt'] as const
 
 const activePresetId = ref('')
 const activeTab = ref<'items' | 'settings'>('items')
@@ -52,6 +71,8 @@ const storeOpen = ref(false)
 
 const draftName = ref('')
 const draftDescription = ref('')
+const draftGameVersions = ref<string[]>([])
+const draftLoaders = ref<string[]>([])
 
 const activePreset = computed<ResourcePreset | null>(
   () => store.presets.find((p) => p.id === activePresetId.value) ?? null,
@@ -75,12 +96,20 @@ const groupedItems = computed(() =>
 
 const canSaveSettings = computed(() => draftName.value.trim().length > 0)
 
+const gameVersionOptions = computed(() => {
+  const seen = new Set(CANONICAL_MC_VERSIONS)
+  for (const version of draftGameVersions.value) seen.add(version)
+  return [...seen]
+})
+
 watch(
   activePreset,
   (preset) => {
     if (!preset) return
     draftName.value = preset.name
     draftDescription.value = preset.description
+    draftGameVersions.value = [...preset.gameVersions]
+    draftLoaders.value = [...preset.loaders]
   },
   { immediate: true },
 )
@@ -102,8 +131,28 @@ function kindLabel(kind: CompType): string {
   }
 }
 
+function loaderLabel(loader: string): string {
+  const parsed = parseLoader(loader)
+  if (parsed) {
+    const key = `presets.loaders.${parsed}`
+    if (te(key)) return t(key)
+  }
+  return loader
+}
+
 function presetSubtitle(preset: ResourcePreset): string {
   return t('presets.list.items', { count: preset.items.length })
+}
+
+/** Compact one-line summary of the filters that actually gate this preset. */
+function presetFilterText(preset: ResourcePreset): string {
+  const versions =
+    preset.gameVersions.length > 0 ? preset.gameVersions.join(' / ') : t('presets.list.allVersions')
+  const loaders =
+    preset.loaders.length > 0
+      ? preset.loaders.map(loaderLabel).join(' / ')
+      : t('presets.list.allLoaders')
+  return t('presets.list.filters', { versions, loaders })
 }
 
 function isCached(item: PresetItem): boolean {
@@ -155,12 +204,18 @@ async function createPreset(): Promise<void> {
     activePresetId.value = created.id
     draftName.value = created.name
     draftDescription.value = ''
+    draftGameVersions.value = []
+    draftLoaders.value = []
     activeTab.value = 'settings'
     createOpen.value = false
     newPresetName.value = ''
   } catch (error) {
     toast.danger(formatError(error))
   }
+}
+
+function toggleValue(list: string[], value: string): string[] {
+  return list.includes(value) ? list.filter((entry) => entry !== value) : [...list, value]
 }
 
 async function saveSettings(): Promise<void> {
@@ -171,9 +226,8 @@ async function saveSettings(): Promise<void> {
       ...preset,
       name: draftName.value.trim(),
       description: draftDescription.value.trim(),
-      // Presets are universal lists; the legacy filter fields are cleared on every save.
-      gameVersions: [],
-      loaders: [],
+      gameVersions: [...draftGameVersions.value],
+      loaders: [...draftLoaders.value],
     })
     toast.success(t('presets.settings.saved'))
   } catch (error) {
@@ -270,6 +324,11 @@ async function removeItem(item: PresetItem): Promise<void> {
             <template #subtitle>
               <span class="text-xs text-fg-muted truncate">{{ presetSubtitle(preset) }}</span>
             </template>
+            <template #badges>
+              <MBadge v-if="preset.gameVersions.length > 0" variant="neutral" size="sm">
+                {{ preset.gameVersions[0] }}
+              </MBadge>
+            </template>
           </MListItem>
         </div>
       </MCard>
@@ -281,6 +340,9 @@ async function removeItem(item: PresetItem): Promise<void> {
               <h2 class="text-xl font-bold text-fg truncate">{{ activePreset.name }}</h2>
               <p v-if="activePreset.description" class="text-xs text-fg-muted mt-1">
                 {{ activePreset.description }}
+              </p>
+              <p class="text-xs text-fg-subtle mt-1" data-testid="preset-filter-summary">
+                {{ presetFilterText(activePreset) }}
               </p>
             </div>
             <div class="flex items-center gap-2 shrink-0">
@@ -329,7 +391,20 @@ async function removeItem(item: PresetItem): Promise<void> {
                 <MBadge v-if="isCached(item)" variant="success" size="sm" icon="i-lucide-database">
                   {{ t('presets.item.cached') }}
                 </MBadge>
-                <MBadge v-if="item.pinnedFileName" variant="primary" size="sm" icon="i-lucide-pin">
+                <MBadge
+                  v-if="item.pinRules?.length"
+                  variant="primary"
+                  size="sm"
+                  icon="i-lucide-pin"
+                >
+                  {{ t('presets.item.pinnedRules', { count: item.pinRules.length }) }}
+                </MBadge>
+                <MBadge
+                  v-else-if="item.pinnedFileName"
+                  variant="primary"
+                  size="sm"
+                  icon="i-lucide-pin"
+                >
                   {{ t('presets.item.pinned', { name: item.pinnedFileName }) }}
                 </MBadge>
                 <MBadge v-else variant="neutral" size="sm" icon="i-lucide-arrow-down-to-line">
@@ -380,6 +455,58 @@ async function removeItem(item: PresetItem): Promise<void> {
             :placeholder="t('presets.settings.descriptionPlaceholder')"
             :rows="2"
           />
+
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-sm font-medium text-fg">
+                {{ t('presets.settings.gameVersions') }}
+              </span>
+              <span class="text-xs text-fg-subtle">
+                {{ t('presets.settings.gameVersionsHint') }}
+              </span>
+            </div>
+            <div class="flex flex-wrap gap-1.5" data-testid="settings-game-versions">
+              <button
+                v-for="version in gameVersionOptions"
+                :key="version"
+                type="button"
+                class="px-2.5 py-1 rounded-lg text-xs font-mono transition cursor-pointer"
+                :class="
+                  draftGameVersions.includes(version)
+                    ? 'bg-primary text-white shadow-xs font-semibold'
+                    : 'bg-sunken text-fg-muted hover:text-fg'
+                "
+                data-testid="version-chip"
+                @click="draftGameVersions = toggleValue(draftGameVersions, version)"
+              >
+                {{ version }}
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-sm font-medium text-fg">{{ t('presets.settings.loaders') }}</span>
+              <span class="text-xs text-fg-subtle">{{ t('presets.settings.loadersHint') }}</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5" data-testid="settings-loaders">
+              <button
+                v-for="loader in LOADERS"
+                :key="loader"
+                type="button"
+                class="px-2.5 py-1 rounded-lg text-xs transition cursor-pointer"
+                :class="
+                  draftLoaders.includes(loader)
+                    ? 'bg-primary text-white shadow-xs font-semibold'
+                    : 'bg-sunken text-fg-muted hover:text-fg'
+                "
+                data-testid="loader-chip"
+                @click="draftLoaders = toggleValue(draftLoaders, loader)"
+              >
+                {{ loaderLabel(loader) }}
+              </button>
+            </div>
+          </div>
 
           <div class="flex items-center justify-between gap-3 pt-2 border-t border-line">
             <MButton

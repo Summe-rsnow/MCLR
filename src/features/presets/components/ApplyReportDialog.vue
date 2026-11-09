@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, type Router } from 'vue-router'
-import type { ApplyReport, ApplyRow, ApplyStatus } from '../../../ipc/client'
+import type { ApplyReport, ApplyRow, ApplyStatus, PresetGate } from '../../../ipc/client'
 import { MBadge, MButton, MDialog, MEmpty, MImage, MBrandIcon, compTypeMeta } from '../../../ui'
 
 const props = defineProps<{
@@ -83,6 +83,13 @@ const groups = computed(() =>
 )
 
 const failedGates = computed(() => (props.report?.gates ?? []).filter((gate) => !gate.ok))
+
+/** A gated preset was skipped for one concrete reason: say which one. */
+function gateText(gate: PresetGate): string {
+  const key =
+    gate.reason === 'loader' ? 'presets.report.gateLoader' : 'presets.report.gateGameVersion'
+  return t(key, { name: gate.name })
+}
 
 function statusCount(status: ApplyStatus): number {
   return rows.value.filter((row) => row.status === status).length
@@ -187,7 +194,7 @@ function openProject(row: ApplyRow): void {
           class="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning-soft px-3 py-2 text-xs text-warning-fg"
         >
           <span class="i-lucide-triangle-alert w-4 h-4 shrink-0 mt-0.5" />
-          <span>{{ t('presets.report.gateSkipped', { name: gate.name }) }}</span>
+          <span>{{ gateText(gate) }}</span>
         </div>
       </div>
 

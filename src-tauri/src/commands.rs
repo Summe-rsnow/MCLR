@@ -151,6 +151,8 @@ pub fn builder() -> Builder<tauri::Wry> {
             crate::ipc::presets::presets_add_items,
             crate::ipc::presets::presets_remove_item,
             crate::ipc::presets::presets_pin,
+            crate::ipc::presets::presets_pin_rule,
+            crate::ipc::presets::presets_remove_pin_rule,
             crate::ipc::presets::presets_apply,
             crate::ipc::presets::presets_apply_report,
             crate::ipc::presets::presets_cache,

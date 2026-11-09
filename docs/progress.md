@@ -55,6 +55,8 @@
 | E | 预设解绑版本/加载器 + 移除实例预设 Tab | Wave 2E | done | cargo test -p mclr-comp preset; cargo test -p mclr-app --lib; vitest run src/features/presets src/features/instance-detail |
 | F | 实例模组保存到预设（逐项锁定版本） | Wave 3F | done | cargo test -p mclr-comp; cargo test -p mclr-app --lib; vitest run src/features/resources |
 | G | 绑定再生成、pnpm check、浏览器 Smoke、提交 | integrator | done | pnpm check prints `All check gates passed.` |
+| H1 | 预设恢复版本/加载器门禁与上下文固定规则（后端） | Wave 4H1 | done | cargo test -p mclr-comp preset; cargo test -p mclr-app --lib |
+| H2 | 预设筛选 UI、上下文固定、应用/保存过滤（前端） | Wave 4H2 | done | vitest run src/features/presets src/features/resources |
 
 ### Notes
 - Wave order: A → {B, C, D, E} → F → G. A 独占 `MImage` API 与调用点（否则同文件冲突）；E → F 因共用 `ResourceToolbar.vue` / `ResourceList.vue`。

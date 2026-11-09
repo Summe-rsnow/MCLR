@@ -3,7 +3,13 @@ import type { CompPlatform, CompType } from './comp'
 
 export type OtherVersionPolicy = 'skip' | 'replace'
 
-/** Legacy per-version/loader pin rule kept for `presets.json` compatibility; ignored by the app. */
+/**
+ * Pin for one `(game versions, loaders)` context: an empty side matches any value there.
+ *
+ * A project file belongs to a single release line, so a pin is only meaningful for the
+ * contexts it was published for; the backend ignores a rule that cannot satisfy the target
+ * instance and falls back to the latest compatible file.
+ */
 export interface PresetPinRule {
   gameVersions: string[]
   loaders: string[]
@@ -73,7 +79,7 @@ export interface ApplyRow {
   messageCode?: string | null
 }
 
-export type GateReason = 'gameVersion'
+export type GateReason = 'gameVersion' | 'loader'
 
 export interface PresetGate {
   presetId: string
@@ -149,6 +155,25 @@ export const presetsIpc = {
     fileName?: string | null,
   ): Promise<void> =>
     invokeCommand<void>('presets_pin', { presetId, platform, projectId, fileId, fileName }),
+  /**
+   * Adds or updates the pin rule for one `(game version, loader)` context.
+   *
+   * `presetsPin(..., null)` clears every rule and restores "follow latest".
+   */
+  presetsPinRule: (
+    presetId: string,
+    platform: CompPlatform,
+    projectId: string,
+    rule: PresetPinRule,
+  ): Promise<void> =>
+    invokeCommand<void>('presets_pin_rule', { presetId, platform, projectId, rule }),
+  presetsRemovePinRule: (
+    presetId: string,
+    platform: CompPlatform,
+    projectId: string,
+    fileId: string,
+  ): Promise<void> =>
+    invokeCommand<void>('presets_remove_pin_rule', { presetId, platform, projectId, fileId }),
   presetsApply: (request: ApplyRequest): Promise<string> =>
     invokeCommand<string>('presets_apply', { request }),
   presetsApplyReport: (taskId: string): Promise<ApplyReport> =>

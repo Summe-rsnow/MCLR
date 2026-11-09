@@ -16,6 +16,10 @@ const props = defineProps<{
   open: boolean
   /** Mods to offer: the current selection when the user made one, otherwise every installed mod. */
   entries: ResourceEntry[]
+  /** Game version of the target instance; unknown means locks cannot be scoped. */
+  mcVersion?: string | null
+  /** Canonical loader ids of the target instance (`fabric`, `neoforge`, …). */
+  loaders?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -30,7 +34,7 @@ const NEW_PRESET = '__new__'
 interface ModRow {
   entry: ResourceEntry
   checked: boolean
-  /** `true` pins the installed file id; the default follows the latest compatible file. */
+  /** `true` pins the installed file for this instance's version/loaders. */
   lockVersion: boolean
 }
 
@@ -44,21 +48,54 @@ const outcomes = ref<AddItemOutcome[]>([])
 const error = ref<string | null>(null)
 const savedTo = ref<ResourcePreset | null>(null)
 
+const instanceVersion = computed(() => props.mcVersion?.trim() || '')
+const instanceLoaders = computed(() =>
+  [...new Set((props.loaders ?? []).map((loader) => loader.trim().toLowerCase()))].filter(Boolean),
+)
+/** A lock is meaningless without the version it was built for. */
+const canLock = computed(() => instanceVersion.value.length > 0)
+
+const contextText = computed(() => {
+  const versions = instanceVersion.value || t('resources.saveToPreset.unknownVersion')
+  const loaders =
+    instanceLoaders.value.length > 0
+      ? instanceLoaders.value.join(', ')
+      : t('resources.saveToPreset.unknownLoader')
+  return `${versions} · ${loaders}`
+})
+
 /** Only mods resolved to a community project can be re-downloaded from a preset. */
 const recognized = computed(() => props.entries.filter((entry) => Boolean(entry.projectId)))
 const unrecognized = computed(() => props.entries.filter((entry) => !entry.projectId))
 
+function acceptsContext(preset: ResourcePreset): boolean {
+  const versionOk =
+    preset.gameVersions.length === 0 ||
+    (instanceVersion.value.length > 0 && preset.gameVersions.includes(instanceVersion.value))
+  const allowed = preset.loaders.map((loader) => loader.toLowerCase())
+  const loaderOk =
+    allowed.length === 0 || allowed.some((loader) => instanceLoaders.value.includes(loader))
+  return versionOk && loaderOk
+}
+
+/** Presets published for this instance's version/loaders; the rest would reject the mods. */
+const compatiblePresets = computed(() => presets.value.filter(acceptsContext))
+const skippedPresetCount = computed(() => presets.value.length - compatiblePresets.value.length)
+
 const creating = computed(
-  () => selected.value === NEW_PRESET || !presets.value.some((p) => p.id === selected.value),
+  () =>
+    selected.value === NEW_PRESET || !compatiblePresets.value.some((p) => p.id === selected.value),
 )
 
 const options = computed(() => [
-  ...presets.value.map((preset) => ({ label: preset.name, value: preset.id })),
+  ...compatiblePresets.value.map((preset) => ({ label: preset.name, value: preset.id })),
   { label: t('resources.saveToPreset.newPreset'), value: NEW_PRESET },
 ])
 
 const checkedRows = computed(() => rows.value.filter((row) => row.checked))
-const lockableCount = computed(() => rows.value.filter((row) => Boolean(row.entry.fileId)).length)
+const lockableCount = computed(
+  () => rows.value.filter((row) => Boolean(row.entry.fileId) && canLock.value).length,
+)
 
 const canSubmit = computed(
   () =>
@@ -84,8 +121,8 @@ watch(
     loading.value = true
     try {
       presets.value = await ipcClient.presetsList()
-      if (!presets.value.some((preset) => preset.id === selected.value)) {
-        selected.value = presets.value[0]?.id ?? NEW_PRESET
+      if (!compatiblePresets.value.some((preset) => preset.id === selected.value)) {
+        selected.value = compatiblePresets.value[0]?.id ?? NEW_PRESET
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : String(err)
@@ -102,6 +139,7 @@ function close() {
 }
 
 function lockAll() {
+  if (!canLock.value) return
   for (const row of rows.value) {
     // A mod without a known file id has nothing to pin; its switch stays disabled.
     if (row.entry.fileId) row.lockVersion = true
@@ -160,16 +198,21 @@ async function submit() {
 
   try {
     let presetId = selected.value
-    let preset = presets.value.find((item) => item.id === presetId) ?? null
+    let preset = compatiblePresets.value.find((item) => item.id === presetId) ?? null
     if (creating.value) {
-      preset = await ipcClient.presetsSave({ name: newName.value.trim() })
+      // A new preset inherits the instance context, so later adds are validated against it.
+      preset = await ipcClient.presetsSave({
+        name: newName.value.trim(),
+        gameVersions: instanceVersion.value ? [instanceVersion.value] : [],
+        loaders: [...instanceLoaders.value],
+      })
       presets.value = [...presets.value, preset]
       presetId = preset.id
       selected.value = preset.id
     }
 
     const items: PresetItem[] = checkedRows.value.map((row) => {
-      const pinned = row.lockVersion && Boolean(row.entry.fileId)
+      const pinned = row.lockVersion && canLock.value && Boolean(row.entry.fileId)
       return {
         platform: row.entry.platform ?? 'modrinth',
         projectId: row.entry.projectId as string,
@@ -177,8 +220,19 @@ async function submit() {
         title: row.entry.zhName || row.entry.title || row.entry.fileName,
         slug: row.entry.modId ?? null,
         iconUrl: row.entry.icon?.startsWith('http') ? row.entry.icon : null,
-        pinnedFileId: pinned ? row.entry.fileId : null,
-        pinnedFileName: pinned ? row.entry.fileName : null,
+        pinnedFileId: null,
+        pinnedFileName: null,
+        // A build is only valid for the version/loaders it was published for.
+        pinRules: pinned
+          ? [
+              {
+                gameVersions: [instanceVersion.value],
+                loaders: [...instanceLoaders.value],
+                fileId: row.entry.fileId as string,
+                fileName: row.entry.fileName,
+              },
+            ]
+          : [],
       }
     })
     outcomes.value = await ipcClient.presetsAddItems(presetId, items)
@@ -220,6 +274,14 @@ async function submit() {
         </div>
       </div>
 
+      <p
+        v-if="skippedPresetCount > 0"
+        class="text-xs text-fg-subtle"
+        data-testid="save-to-preset-incompatible"
+      >
+        {{ t('resources.saveToPreset.incompatibleHint', { count: skippedPresetCount }) }}
+      </p>
+
       <div v-if="recognized.length > 0" class="space-y-2">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <span class="text-xs font-semibold text-fg-muted">
@@ -246,6 +308,10 @@ async function submit() {
           </div>
         </div>
 
+        <p class="text-[11px] text-fg-subtle" data-testid="save-to-preset-lock-context">
+          {{ t('resources.saveToPreset.lockContextHint', { context: contextText }) }}
+        </p>
+
         <div class="space-y-1.5 max-h-72 overflow-y-auto pr-1" data-testid="save-to-preset-rows">
           <div
             v-for="row in rows"
@@ -265,7 +331,7 @@ async function submit() {
             <MSwitch
               v-model="row.lockVersion"
               size="sm"
-              :disabled="!row.entry.fileId"
+              :disabled="!row.entry.fileId || !canLock"
               :label="
                 row.lockVersion
                   ? t('resources.saveToPreset.locked')

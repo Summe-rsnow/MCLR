@@ -12,6 +12,9 @@
   },
   "list": {
     "items": "{count} 项资源",
+    "allVersions": "全部版本",
+    "allLoaders": "全部加载器",
+    "filters": "游戏版本: {versions} · 加载器: {loaders}",
     "updated": "更新于 {date}"
   },
   "kinds": {
@@ -20,6 +23,12 @@
     "shader": "光影",
     "datapack": "数据包",
     "world": "地图存档"
+  },
+  "loaders": {
+    "fabric": "Fabric",
+    "forge": "Forge",
+    "neoforge": "NeoForge",
+    "quilt": "Quilt"
   },
   "detail": {
     "tabs": {
@@ -31,6 +40,7 @@
   },
   "item": {
     "pinned": "已固定 {name}",
+    "pinnedRules": "已固定 {count} 个版本/加载器规则",
     "followingLatest": "跟随最新",
     "cached": "已缓存",
     "pin": "固定版本",
@@ -43,6 +53,10 @@
     "name": "预设名称",
     "description": "描述",
     "descriptionPlaceholder": "这个预设是做什么的？",
+    "gameVersions": "游戏版本",
+    "gameVersionsHint": "不选表示全部版本",
+    "loaders": "模组加载器",
+    "loadersHint": "不选表示全部加载器",
     "save": "保存设置",
     "delete": "删除预设",
     "saved": "预设已保存",
@@ -59,17 +73,21 @@
   },
   "pin": {
     "title": "固定版本",
-    "hint": "点击文件即可固定该版本，所有实例都安装这个文件；再次点击已固定的文件（或点「取消固定」）恢复安装最新兼容版本。",
-    "pickFile": "点击文件固定版本",
-    "followLatest": "取消固定",
+    "rulesTitle": "已配置的固定规则",
+    "rulesHint": "未匹配上述规则的游戏版本与加载器将自动安装最新版本",
+    "contextHint": "请先在上方选择游戏版本或加载器，再点击文件固定：规则只对该组合生效",
+    "addRuleTitle": "选择游戏版本与加载器后点击文件添加或更新规则",
+    "filterVersion": "游戏版本",
+    "filterLoader": "加载器",
+    "anyVersion": "任意版本",
+    "anyLoader": "任意加载器",
+    "deleteRule": "删除此规则",
+    "followLatest": "跟随最新（清除所有规则）",
     "followingLatest": "已恢复跟随最新版本",
     "empty": "该项目没有可用文件",
     "current": "当前固定",
-    "picked": "已固定版本",
-    "filterVersion": "游戏版本",
-    "filterLoader": "加载器",
-    "allVersions": "全部版本",
-    "allLoaders": "全部加载器"
+    "ruleAdded": "已更新版本规则",
+    "ruleRemoved": "已移除版本规则"
   },
   "storeDialog": {
     "title": "资源缓存",
@@ -125,7 +143,8 @@
     "title": "应用结果",
     "empty": "没有需要处理的资源",
     "separator": "、",
-    "gateSkipped": "预设「{name}」不适用于此游戏版本，已跳过",
+    "gateGameVersion": "预设「{name}」不适用于此游戏版本，已跳过",
+    "gateLoader": "预设「{name}」不适用于当前模组加载器，已跳过",
     "overlap": "与 {presets} 重叠",
     "versionConflict": "版本固定冲突，已采用 {preset}",
     "viaDependency": "作为 {via} 的前置",
