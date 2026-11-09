@@ -100,7 +100,7 @@ export function setupMockIpc(): void {
   }
   const handlers: MockHandlers = {
     // Keep in sync with package.json on release; a stale value hides version bugs.
-    app_info: () => ({ name: 'MCLR', version: '0.1.0' }),
+    app_info: () => ({ name: 'MCLR', version: '0.1.1' }),
     secrets_status: () => ({
       msClientId: false,
       curseforgeApiKey: false,

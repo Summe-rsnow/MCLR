@@ -6,7 +6,7 @@
 
 次世代 Windows 原生 Minecraft 启动器 · 基于 Tauri 2 + Rust 2024 + Vue 3.5
 
-[![Version](https://img.shields.io/badge/version-v0.1.0-blue.svg?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.1.1-blue.svg?style=flat-square)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/Rust-2024%20Edition-DEA584.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8DB.svg?style=flat-square&logo=tauri)](https://tauri.app/)
 [![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D.svg?style=flat-square&logo=vue.js)](https://vuejs.org/)
@@ -61,11 +61,13 @@
 - **第三方统一登录**：全面支持 Authlib-Injector / LittleSkin 多角色自由切换与 OIDC 发现协议。
 - **离线账号安全规范**：标准 RFC 4122 v3 MD5、旧版兼容算法与自定义 32 位 UUID。
 - **硬件级本地加密存储**：账号令牌使用 Windows DPAPI 加密的 32 字节主密钥 (`master.key`) 与 AES-256-GCM 保护 (`accounts.enc`)，绝不明文落盘。
+- **皮肤与头像导出**：微软、Authlib-Injector 与离线账号均可一键导出当前皮肤原图与头像 PNG。
 
 ### 📦 社区资源与整合包生态 (`mclr-comp`)
 - **双平台聚合检索**：无缝聚合 **Modrinth** 与 **CurseForge** 海量资源（模组、整合包、材质包、光影包、数据包、世界存档）。
 - **智能兼容与严谨更新**：严格匹配实例游戏版本与 Mod 加载器（遵循 PCL 校验哲学），不跨加载器误推，已安装 Mod 自动检查更新。
 - **全格式整合包导入导出**：支持 CurseForge `.zip`、Modrinth `.mrpack`、MultiMC/Prism、MCBBS、HMCL 以及原生 `.minecraft` 格式；整合包安装进度平滑单调递增，清晰展示各阶段。
+- **资源预设**：把常用资源整理成预设，按 `(游戏版本, 加载器)` 过滤与门禁，固定版本以“版本/加载器 → 文件”规则存储；实例内可将已装模组一键保存为预设并逐项锁定当前构建。
 
 ### 🛠️ 自动化环境配置与诊断 (`mclr-game`, `mclr-loaders`, `mclr-crash`)
 - **全加载器全自动部署**：一键安装 Vanilla、Fabric、NeoForge、Forge（Legacy & Modern）、Cleanroom、OptiFine、LiteLoader 与 LabyMod。
