@@ -141,7 +141,8 @@ main,
   backdrop-filter: none;
 }
 .m-card-flow {
-  display: block;
+  display: flex;
+  flex-direction: column;
   gap: 0;
 }
 
@@ -159,6 +160,14 @@ main,
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.04),
     var(--shadow-1);
+}
+
+:root[data-mode='dark']:not([data-material='glass']) .m-card.m-card-hover:hover {
+  border-color: rgb(var(--c-primary) / 0.35);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    var(--shadow-2),
+    0 0 18px rgb(var(--c-primary) / 0.12);
 }
 
 .m-well {

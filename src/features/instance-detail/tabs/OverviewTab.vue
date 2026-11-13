@@ -206,7 +206,7 @@ function isCurrentIcon(key: string): boolean {
         </MButton>
       </template>
 
-      <div class="divide-y divide-line">
+      <div class="flex flex-col">
         <MSettingRow :label="t('instanceDetail.overview.name')">
           <span class="font-semibold text-fg">{{ instance.name }}</span>
         </MSettingRow>

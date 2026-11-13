@@ -15,16 +15,17 @@ const props = withDefaults(
   defineProps<{
     status: StatusType
     size?: 'sm' | 'md'
+    material?: 'solid' | 'mica' | 'glass'
     label?: string
     pulse?: boolean
   }>(),
   {
     size: 'md',
+    material: undefined,
     label: undefined,
     pulse: false,
   },
 )
-
 const badgeVariant = computed(() => {
   switch (props.status) {
     case 'online':
@@ -42,10 +43,24 @@ const badgeVariant = computed(() => {
       return 'neutral'
   }
 })
+
+const sizeClass = computed(() =>
+  props.size === 'sm'
+    ? 'h-5 px-2 text-[11px] leading-none'
+    : 'h-[22px] px-2.5 text-xs leading-none',
+)
 </script>
 
 <template>
-  <Badge :variant="badgeVariant" :size="size" :dot="!pulse" :pulse="pulse" pill>
+  <Badge
+    :variant="badgeVariant"
+    :size="size"
+    :material="material"
+    :dot="!pulse"
+    :pulse="pulse"
+    pill
+    :class-names="{ root: sizeClass }"
+  >
     <slot>{{ label || status }}</slot>
   </Badge>
 </template>

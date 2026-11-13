@@ -975,11 +975,29 @@ describe('UI Components', () => {
     expect(root.classes()).toContain('max-w-md')
     expect(root.classes()).not.toContain('flex')
     expect(root.classes()).not.toContain('gap-3')
+    expect(body.classes()).toContain('flex-1')
+    expect(body.classes()).toContain('min-h-0')
     expect(body.classes()).toContain('flex')
     expect(body.classes()).toContain('items-center')
     expect(body.classes()).toContain('justify-between')
     expect(body.classes()).toContain('gap-3')
     expect(body.classes()).toContain('space-y-4')
+  })
+
+  it('MBadge uses compact inline sizing and forwards material tiers', () => {
+    const smBadge = mount(MBadge, {
+      props: { size: 'sm', material: 'glass', variant: 'primary' },
+      slots: { default: 'Fabric' },
+    })
+    expect(smBadge.attributes('data-material')).toBe('glass')
+    expect(smBadge.classes()).toContain('h-5')
+
+    const micaBadge = mount(MBadge, {
+      props: { size: 'md', material: 'mica', variant: 'success' },
+      slots: { default: 'JDK' },
+    })
+    expect(micaBadge.attributes('data-material')).toBe('mica')
+    expect(micaBadge.classes()).toContain('h-[22px]')
   })
 
   it('MInput and MSelect preserve explicit width classes without w-full/w-auto collision', () => {

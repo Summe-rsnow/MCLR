@@ -39,12 +39,12 @@ const { t } = useI18n()
               <MBrandIcon
                 v-if="account.kind === 'microsoft'"
                 name="microsoft"
-                class="w-3.5 h-3.5 mr-1"
+                class="w-3 h-3 mr-0.5"
               />
               <span
                 v-else
                 :class="getAccountKindMeta(account.kind).icon"
-                class="w-3.5 h-3.5 mr-1 inline-block"
+                class="w-3 h-3 mr-0.5 inline-block"
               />
               {{ t(`accounts.types.${account.kind}`) }}
             </MBadge>

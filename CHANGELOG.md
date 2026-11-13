@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-11-13
+
+### Added
+- **`MBadge` & `MStatusBadge` three-tier material support**: Wired `@miuui/vue` `v0.5.1` `solid` / `mica` / `glass` badge materials (both inherited from `ThemeProvider` and overridable via `material` prop).
+
+### Fixed
+- **Full motion restoration**: Explicitly restored `--miu-motion-*` spring/translate/scale tokens and loop animations under `html[data-motion='full']` so in-app `完整` motion works even when OS `prefers-reduced-motion: reduce` is active, kept spinners/indeterminate progress alive in `reduced` mode, and restored dark-flat `.m-card.m-card-hover` hover lift/shadow.
+- **Compact inline `MBadge` / `MStatusBadge` sizing**: Restored `20px` (`sm`) / `22px` (`md`) inline pill heights across Java, Accounts, Instances, and Detail pages.
+- **Bottom-pinned `InstanceCard` badges**: Stretched `MCard` `.miu-card__body` with `flex-1 min-h-0` inside `.m-card-flow` flex column so `h-28 min-h-[112px] justify-between` anchors badges & quick actions to the card bottom.
+- **Eliminated double dividers**: Removed redundant `border-t` and `divide-y` wrappers around `MSettingRow` in `AppearanceThemeSection`, `AppearanceBackgroundSection`, `ExportTab`, `OverviewTab`, and `SettingsTab`.
+- **ColorPicker swatch & SegmentedControl/Skeleton dark contrast**: Consumed `@miuui/vue` `v0.5.1` edge-to-edge native color swatch fill, elevated dark-mode `SegmentedControl` indicator (`--miu-color-bg-elevated`), and higher-contrast dark-mode `Skeleton` shimmer.
+
 ## [0.2.1] - 2026-11-13
 
 ### Fixed

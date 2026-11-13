@@ -151,7 +151,7 @@ function navigateToDevUi() {
       </MSettingRow>
 
       <!-- Live Preview Box -->
-      <div class="pt-4 border-t border-line mt-2">
+      <div class="pt-4">
         <div class="flex items-center justify-between mb-2.5">
           <div class="text-xs font-medium text-fg-muted">
             {{ t('settingsAppearance.theme.livePreview') }}

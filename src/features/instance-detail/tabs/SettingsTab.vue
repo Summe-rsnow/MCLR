@@ -153,7 +153,7 @@ async function saveSettings() {
 
     <!-- Icon & Appearance Section -->
     <MSection :title="t('instanceDetail.overview.icon')" icon="i-lucide-smile">
-      <div class="divide-y divide-line">
+      <div class="flex flex-col">
         <MSettingRow
           :label="t('instanceDetail.overview.icon')"
           :hint="t('instanceDetail.settings.iconHint')"
@@ -201,7 +201,7 @@ async function saveSettings() {
 
     <!-- Isolation & Login Requirement Section -->
     <MSection :title="t('instanceDetail.settings.isolation.title')" icon="i-lucide-shield">
-      <div class="divide-y divide-line">
+      <div class="flex flex-col">
         <MSettingRow
           :label="t('instanceDetail.settings.isolation.title')"
           :hint="t('instanceDetail.settings.isolation.hint')"
@@ -238,7 +238,7 @@ async function saveSettings() {
 
     <!-- Memory & Java Args Section -->
     <MSection :title="t('instanceDetail.settings.memory.title')" icon="i-lucide-cpu">
-      <div class="divide-y divide-line">
+      <div class="flex flex-col">
         <MSettingRow
           :label="t('instanceDetail.settings.memory.title')"
           :hint="t('instanceDetail.settings.memory.hint')"
@@ -277,7 +277,7 @@ async function saveSettings() {
 
     <!-- Window Title & Pre-launch Command & Quick Play -->
     <MSection :title="t('instanceDetail.settings.windowTitle.title')" icon="i-lucide-app-window">
-      <div class="divide-y divide-line">
+      <div class="flex flex-col">
         <MSettingRow :label="t('instanceDetail.settings.windowTitle.title')">
           <MInput
             :model-value="form.windowTitle || ''"

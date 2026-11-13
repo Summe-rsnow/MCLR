@@ -163,7 +163,7 @@ onMounted(() => {
 
     <!-- Configuration Options Section -->
     <MSection :title="t('instanceDetail.export.title')" icon="i-lucide-settings-2">
-      <div class="divide-y divide-line">
+      <div class="flex flex-col">
         <MSettingRow :label="t('instanceDetail.export.formatLabel')">
           <MSegmented v-model="format" :options="formatOptions" size="sm" />
         </MSettingRow>

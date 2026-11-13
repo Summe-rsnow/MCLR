@@ -6,6 +6,7 @@ const props = withDefaults(
   defineProps<{
     variant?: 'primary' | 'success' | 'warning' | 'danger' | 'neutral' | 'info'
     size?: 'sm' | 'md'
+    material?: 'solid' | 'mica' | 'glass'
     icon?: string
     dot?: boolean
     pulse?: boolean
@@ -13,6 +14,7 @@ const props = withDefaults(
   {
     variant: 'primary',
     size: 'md',
+    material: undefined,
     icon: undefined,
     dot: false,
     pulse: false,
@@ -35,16 +37,23 @@ const variantTextClass = computed(() => {
       return 'text-primary-soft-fg'
   }
 })
+
+const sizeClass = computed(() =>
+  props.size === 'sm'
+    ? 'h-5 px-2 text-[11px] leading-none'
+    : 'h-[22px] px-2.5 text-xs leading-none',
+)
 </script>
 
 <template>
   <Badge
     :variant="variant"
     :size="size"
+    :material="material"
     :dot="dot"
     :pulse="pulse"
     pill
-    :class-names="{ root: variantTextClass }"
+    :class-names="{ root: [variantTextClass, sizeClass].join(' ') }"
   >
     <span v-if="icon" :class="icon" class="w-3 h-3 shrink-0" />
     <slot />

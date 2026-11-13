@@ -90,7 +90,7 @@ const rootVariantClass = computed(() => {
       root: ['m-card-flow', rootVariantClass, hoverable ? 'm-card-hover' : '', splitClasses.root]
         .filter(Boolean)
         .join(' '),
-      body: splitClasses.body || undefined,
+      body: ['flex-1 min-h-0', splitClasses.body].filter(Boolean).join(' '),
     }"
   >
     <div v-if="loading" class="space-y-3">

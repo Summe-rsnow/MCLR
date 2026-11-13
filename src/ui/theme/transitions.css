@@ -205,6 +205,31 @@
 }
 
 /* Motion preference: html[data-motion='full'|'reduced'|'off'] */
+html[data-motion='full'] {
+  --miu-motion-duration-fast: 150ms;
+  --miu-motion-duration-base: 260ms;
+  --miu-motion-duration-slow: 380ms;
+  --miu-motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --miu-motion-translate-sm: 8px;
+  --miu-motion-translate-md: 16px;
+  --miu-motion-scale-active: 0.95;
+  --miu-motion-scale-subtle: 0.98;
+  --miu-motion-scale-hover: 1.12;
+  --miu-motion-scale-enter: 0.84;
+  --miu-motion-scale-pop: 0.35;
+  --miu-motion-drawer-offset: 100%;
+  --miu-motion-loop-duration: 1200ms;
+}
+
+html[data-motion='full'] .miu-spinner,
+html[data-motion='full'] .miu-skeleton__shimmer,
+html[data-motion='full'] .miu-badge__dot,
+html[data-motion='full'] .miu-badge__dot--pulse::after,
+html[data-motion='full'] .miu-progress__indicator--indeterminate,
+html[data-motion='full'] .miu-empty-state__icon {
+  animation-play-state: running;
+}
+
 html[data-motion='off'] *,
 html[data-motion='off'] *::before,
 html[data-motion='off'] *::after {
@@ -262,6 +287,11 @@ html[data-motion='reduced'] .m-list-move {
 }
 html[data-motion='reduced'] .ambient-blob {
   animation: none !important;
+}
+html[data-motion='reduced'] .animate-spin,
+html[data-motion='reduced'] .miu-spinner,
+html[data-motion='reduced'] .miu-progress__indicator--indeterminate {
+  animation-play-state: running;
 }
 html[data-motion='reduced'] .animate-spin {
   animation: m-pulse-reduced 1.6s ease-in-out infinite !important;

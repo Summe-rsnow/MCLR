@@ -162,7 +162,7 @@ function clearBackground() {
       </MSettingRow>
 
       <!-- Preview Box -->
-      <div class="pt-4 border-t border-line mt-2 space-y-2">
+      <div class="pt-4 space-y-2">
         <label class="text-xs font-medium text-fg-muted">
           {{ t('settingsAppearance.background.preview') }}
         </label>
