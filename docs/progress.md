@@ -45,7 +45,7 @@
 | v0.1.1 | Skin/avatar export, save mods to preset, preset version/loader rules, image size tiers, search filters & settings tips | done | 834b40a | v0.1.1 | 2026-11-09 |
 | v0.2.0 | Full `@miuui` v0.5.0 UI migration, Reka UI accessible primitives & dependency refresh | done | 160e8a1 | v0.2.0 | 2026-11-13 |
 | v0.2.1 | Fix MCard body layout routing, control corner radius parity & explicit input/select widths | done | 27dbb67 | v0.2.1 | 2026-11-13 |
-| v0.2.2 | Compact Badge + 3-tier material, bottom InstanceCard badges, single dividers, edge-to-edge ColorPicker & full motion restore | doing | — | v0.2.2 | 2026-11-13 |
+| v0.2.2 | Compact Badge + 3-tier material, bottom InstanceCard badges, single dividers, edge-to-edge ColorPicker & full motion restore | done | 8967a17 | v0.2.2 | 2026-11-13 |
 ## v0.2.0 — 全面迁移 `@miuui` v0.5.0 组件库 + Reka UI 无障碍原语 + 前后端库包升级
 
 | ID | slice | owner | status | acceptance |
