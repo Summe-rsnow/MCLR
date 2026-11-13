@@ -29,7 +29,6 @@ const materialOptions = computed(() => [
         data-testid="quick-settings-btn"
         :title="t('shell.quick.title')"
         class="w-7 h-7 flex items-center justify-center rounded hover:bg-sunken text-fg-muted hover:text-fg cursor-pointer transition-colors"
-        @click="open = !open"
       >
         <span class="i-lucide-swatch-book w-3.5 h-3.5" />
       </button>

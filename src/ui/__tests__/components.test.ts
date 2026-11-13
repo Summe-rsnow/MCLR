@@ -672,6 +672,29 @@ describe('UI Components', () => {
     await nextTick()
     expect(document.body.innerHTML).toContain('Popover Body')
     pop.unmount()
+
+    const togglePop = mount(
+      {
+        components: { MPopover },
+        data: () => ({ open: false }),
+        template: `
+          <MPopover v-model:open="open">
+            <template #trigger><button data-testid="pop-trig" type="button">Open</button></template>
+            <button data-testid="pop-inner" type="button">Inner</button>
+          </MPopover>
+        `,
+      },
+      { attachTo: document.body },
+    )
+    expect(document.body.querySelector('[data-testid="pop-inner"]')).toBeNull()
+    await togglePop.get('[data-testid="pop-trig"]').trigger('click')
+    await flushPromises()
+    const innerBtn = document.body.querySelector('[data-testid="pop-inner"]') as HTMLElement | null
+    expect(innerBtn).not.toBeNull()
+    innerBtn?.click()
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="pop-inner"]')).not.toBeNull()
+    togglePop.unmount()
   })
   it('renders MPathPicker non-editable path picker with browse and clear buttons', async () => {
     const wrapper = mount(MPathPicker, {

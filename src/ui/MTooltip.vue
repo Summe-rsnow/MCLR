@@ -5,15 +5,17 @@ withDefaults(
   defineProps<{
     text: string
     placement?: 'top' | 'bottom'
+    material?: 'solid' | 'mica' | 'glass'
   }>(),
   {
     placement: 'top',
+    material: undefined,
   },
 )
 </script>
 
 <template>
-  <Tooltip :side="placement" :delay-duration="140" max-width="280px">
+  <Tooltip :side="placement" :material="material" :delay-duration="140" max-width="280px">
     <template #trigger>
       <span class="inline-flex items-center">
         <slot />

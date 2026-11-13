@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.2.4`
-- **Next Milestone**: `v0.2.5`
+- **Current Version**: `0.2.5`
+- **Next Milestone**: `v0.2.6`
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -48,6 +48,7 @@
 | v0.2.2 | Compact Badge + 3-tier material, bottom InstanceCard badges, single dividers, edge-to-edge ColorPicker & full motion restore | done | 8967a17 | v0.2.2 | 2026-11-13 |
 | v0.2.3 | Modern OKLCH tinted MBadge palette aligned with @miuui/vue v0.5.2 | done | adc14ce | v0.2.3 | 2026-11-13 |
 | v0.2.4 | Harmonized InstanceCard badge hierarchy & @miuui/vue v0.5.3 adaptive high-chroma palette | done | ba48bcb | v0.2.4 | 2026-11-14 |
+| v0.2.5 | Fix MPopover double-toggle instant close & inherit Tooltip 3-tier materials | doing | — | v0.2.5 | 2026-11-14 |
 ## v0.2.0 — 全面迁移 `@miuui` v0.5.0 组件库 + Reka UI 无障碍原语 + 前后端库包升级
 
 | ID | slice | owner | status | acceptance |

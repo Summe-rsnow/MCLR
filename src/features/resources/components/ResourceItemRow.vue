@@ -239,7 +239,6 @@ function onMenuDelete() {
             size="sm"
             variant="text"
             class="text-fg-muted hover:text-fg"
-            @click="menuOpen = !menuOpen"
           />
         </template>
         <div class="w-44 py-1 flex flex-col text-xs text-fg space-y-0.5">

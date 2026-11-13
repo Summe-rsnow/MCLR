@@ -7,10 +7,12 @@ const props = withDefaults(
     text: string
     icon?: string
     size?: 'xs' | 'sm' | 'md'
+    material?: 'solid' | 'mica' | 'glass'
   }>(),
   {
     icon: 'i-lucide-circle-question-mark',
     size: 'sm',
+    material: undefined,
   },
 )
 
@@ -31,6 +33,7 @@ const sizeClasses = computed(() => {
   <HelpTooltip
     :text="text"
     :size="size"
+    :material="material"
     max-width="280px"
     :class-names="{ trigger: 'cursor-help' }"
   >

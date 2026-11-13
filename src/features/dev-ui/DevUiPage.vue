@@ -1008,22 +1008,17 @@ async function triggerConfirmDialog() {
                 <MBadge variant="neutral">{{ t('devUi.tooltipHover') }}</MBadge>
               </MTooltip>
               <MHelpTooltip :text="t('devUi.helpTooltipText')" />
-              <div class="relative">
-                <MButton
-                  size="sm"
-                  variant="tonal"
-                  icon="i-lucide-sliders-horizontal"
-                  @click="popoverOpen = !popoverOpen"
-                >
-                  {{ t('devUi.popoverBtn') }}
-                </MButton>
-                <MPopover :open="popoverOpen" @update:open="popoverOpen = $event">
-                  <div class="text-xs text-fg space-y-1 w-48 p-1">
-                    <div class="font-medium">{{ t('devUi.popoverTitle') }}</div>
-                    <p class="text-fg-muted">{{ t('devUi.popoverDesc') }}</p>
-                  </div>
-                </MPopover>
-              </div>
+              <MPopover v-model:open="popoverOpen">
+                <template #trigger>
+                  <MButton size="sm" variant="tonal" icon="i-lucide-sliders-horizontal">
+                    {{ t('devUi.popoverBtn') }}
+                  </MButton>
+                </template>
+                <div class="text-xs text-fg space-y-1 w-48 p-1">
+                  <div class="font-medium">{{ t('devUi.popoverTitle') }}</div>
+                  <p class="text-fg-muted">{{ t('devUi.popoverDesc') }}</p>
+                </div>
+              </MPopover>
             </div>
           </div>
 

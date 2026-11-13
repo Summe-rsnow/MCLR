@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-11-14
+
+### Fixed
+- **Popover persistence (`QuickSettings`, `ResourceToolbar`, `ResourceItemRow`, `DevUiPage`)**: Removed duplicate `@click="open = !open"` handlers on `#trigger` buttons that caused Reka UI `PopoverTrigger` to double-toggle and immediately dismiss popovers on open; popovers now stay open during multi-step interaction until Escape or outside click.
+- **`MHelpTooltip` & `MTooltip` three-tier materials**: Exposed `material` prop (`solid` / `mica` / `glass`) and consumed `@miuui/vue` `v0.5.4` automatic `ThemeProvider` `[data-material]` inheritance so dark-mode help tooltips render with matching solid/glass surfaces instead of an inverted white box.
+
 ## [0.2.4] - 2026-11-14
 
 ### Changed

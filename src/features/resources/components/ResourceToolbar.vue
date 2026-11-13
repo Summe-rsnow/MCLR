@@ -161,7 +161,7 @@ function pickBatch(action: 'batchEnableAll' | 'batchDisableAll') {
         <!-- Collision-aware menu (MPopover flips/shifts inside the viewport). -->
         <MPopover v-model:open="exportMenuOpen" placement="bottom-end">
           <template #trigger>
-            <MButton variant="tonal" size="sm" @click="exportMenuOpen = !exportMenuOpen">
+            <MButton variant="tonal" size="sm">
               <span class="i-lucide-file-output mr-1 w-4 h-4" />
               {{ t('resources.actions.export') }}
             </MButton>
@@ -185,7 +185,7 @@ function pickBatch(action: 'batchEnableAll' | 'batchDisableAll') {
         <!-- Batch Quick Actions (PCL parity) -->
         <MPopover v-if="kind === 'mod'" v-model:open="batchMenuOpen" placement="bottom-end">
           <template #trigger>
-            <MButton variant="tonal" size="sm" @click="batchMenuOpen = !batchMenuOpen">
+            <MButton variant="tonal" size="sm">
               <span class="i-lucide-list-checks mr-1 w-4 h-4" />
               {{ t('resources.title') }}
             </MButton>
