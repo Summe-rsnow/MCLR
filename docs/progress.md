@@ -43,7 +43,7 @@
 | v0.0.35 | Resource presets, content-addressed store, offline MCMod Chinese names & dependency analysis | done | 31f73f4 | v0.0.35 | 2026-11-04 |
 | v0.1.0 | Persistent task engine, byte-level download resume, canonical version/loader model & selectable text | done | 23b3dbb | v0.1.0 | 2026-11-05 |
 | v0.1.1 | Skin/avatar export, save mods to preset, preset version/loader rules, image size tiers, search filters & settings tips | done | 834b40a | v0.1.1 | 2026-11-09 |
-| v0.2.0 | Full `@miuui` v0.5.0 UI migration, Reka UI accessible primitives & dependency refresh | doing | — | v0.2.0 | 2026-11-13 |
+| v0.2.0 | Full `@miuui` v0.5.0 UI migration, Reka UI accessible primitives & dependency refresh | done | 160e8a1 | v0.2.0 | 2026-11-13 |
 
 ## v0.2.0 — 全面迁移 `@miuui` v0.5.0 组件库 + Reka UI 无障碍原语 + 前后端库包升级
 
