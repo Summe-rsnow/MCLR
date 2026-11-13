@@ -103,7 +103,7 @@ function onPathClick(e: MouseEvent) {
 
 <template>
   <div
-    class="relative inline-flex items-center w-full rounded-lg bg-sunken border border-line-strong transition-all gap-2 px-2.5 overflow-hidden select-none"
+    class="relative inline-flex items-center w-full rounded-md bg-sunken border border-line-strong transition-all gap-2 px-2.5 overflow-hidden select-none"
     :class="[
       size === 'sm' ? 'h-8 text-xs' : 'h-10 text-sm',
       disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-primary/50 cursor-pointer',

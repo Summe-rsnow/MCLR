@@ -69,7 +69,7 @@ const iconSizeClass = computed(() => {
     :loading="loading"
     :disabled="disabled"
     :type="type"
-    radius="lg"
+    radius="md"
     :class-names="{
       root: variant === 'primary' ? 'm-btn-primary' : undefined,
       spinner: 'animate-spin',

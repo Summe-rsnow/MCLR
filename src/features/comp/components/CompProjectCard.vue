@@ -58,11 +58,7 @@ function formatNumber(num: number): string {
                   : 'i-lucide-heart text-fg-muted hover:text-rose-500'
               "
               size="sm"
-              :class="
-                isFavorite
-                  ? 'i-lucide-heart fill-current text-rose-500'
-                  : 'i-lucide-heart text-fg-muted hover:text-rose-500'
-              "
+              :class="isFavorite ? 'text-rose-500' : 'text-fg-muted hover:text-rose-500'"
               @click.stop="emit('toggle-favorite', project)"
             />
           </div>

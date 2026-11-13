@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-11-13
+
+### Fixed
+- **`MCard` inner layout & spacing**: Routed flex/grid/gap/space-y classes from `<MCard>` onto `@miuui/vue` `Card`'s `.miu-card__body` and reset `.m-card-flow` outer block flow, restoring horizontal row alignment (`InstancePreviewCard`, `AccountPreviewCard`, `InstancesToolbar`, `GameLogTerminal`, `AppearanceThemeSection`) and vertical stack spacing (`AccountSkinPanel`, `ToolSkinAvatarSection`, `ToolCacheSection`, `CompSearchToolbar`, `TaskDetail`).
+- **Unified control corner radius (`10px`)**: Switched `MButton`, `MIconButton`, `MSelect`, and `MPathPicker` to `md` (`10px`) corners so buttons, selects, inputs, and segmented controls share consistent geometry.
+- **Explicit width preservation (`MInput` / `MTextarea` / `MSelect`)**: Stopped default `w-full` / `w-auto` wrapper classes from overriding caller-supplied widths (`w-24` resolution inputs, `w-64` window title input, `w-56` renderer select).
+- **`CompProjectCard` favorite icon**: Removed duplicate `i-lucide-heart` class from `<MIconButton>` root.
+
 ## [0.2.0] - 2026-11-13
 
 Second minor release: full UI primitive migration to the `@miuui` design system (`v0.5.0`) + Reka UI accessibility foundation, unified spring motion & material pipeline, and refreshed frontend/Rust dependencies.

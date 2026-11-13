@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MImage from './MImage.vue'
 import { applyFloatingPosition } from './floating'
@@ -42,10 +42,15 @@ try {
   // safe fallback in unit tests mounted without vue-i18n
 }
 
+const attrs = useAttrs()
+const hasExplicitWidth = computed(() => {
+  const cls = typeof attrs.class === 'string' ? attrs.class : ''
+  return /(?:^|\s)(?:[a-z0-9-]+:)*w-(?!auto\b)\S+/.test(cls)
+})
+
 const emit = defineEmits<{
   (e: 'update:modelValue', val: string | number): void
 }>()
-
 const isOpen = ref(false)
 const activeIndex = ref(-1)
 const triggerRef = ref<HTMLButtonElement | null>(null)
@@ -221,7 +226,13 @@ onUnmounted(() => {
 <template>
   <div
     class="relative inline-flex items-center"
-    :class="block ? 'w-full max-w-full' : 'w-auto max-w-[360px] min-w-[104px]'"
+    :class="
+      hasExplicitWidth
+        ? undefined
+        : block
+          ? 'w-full max-w-full'
+          : 'w-auto max-w-[360px] min-w-[104px]'
+    "
   >
     <button
       ref="triggerRef"
@@ -229,9 +240,9 @@ onUnmounted(() => {
       role="combobox"
       :aria-expanded="isOpen"
       :disabled="disabled || loading || options.length === 0"
-      class="px-3 inline-flex items-center justify-between gap-2 rounded-lg text-fg border outline-none select-none text-left transition-colors"
+      class="px-3 inline-flex items-center justify-between gap-2 rounded-md text-fg border outline-none select-none text-left transition-colors"
       :class="[
-        block ? 'w-full max-w-full' : 'w-auto min-w-[104px] max-w-[360px]',
+        block || hasExplicitWidth ? 'w-full max-w-full' : 'w-auto min-w-[104px] max-w-[360px]',
         size === 'sm' ? 'h-8 text-xs' : 'h-10 text-sm',
         disabled || options.length === 0
           ? 'opacity-60 bg-sunken/40 border-line text-fg-subtle cursor-not-allowed'

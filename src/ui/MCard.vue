@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useAttrs } from 'vue'
 import { Card } from '@miuui/vue'
 import MSkeleton from './MSkeleton.vue'
+
+defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
   defineProps<{
@@ -19,6 +21,42 @@ const props = withDefaults(
     skeletonLines: 3,
   },
 )
+
+const attrs = useAttrs()
+
+const BODY_LAYOUT_RE =
+  /^(?:[a-z0-9-]+:)*(?:flex|inline-flex|flex-col|flex-row|flex-col-reverse|flex-row-reverse|flex-wrap|flex-nowrap|items-|justify-|content-|place-|gap-|space-[xy]-|grid|inline-grid|grid-cols-|text-(?:left|center|right|justify)|divide-)/
+
+const splitClasses = computed(() => {
+  const raw =
+    typeof attrs.class === 'string'
+      ? attrs.class
+      : Array.isArray(attrs.class)
+        ? attrs.class.join(' ')
+        : ''
+  const tokens = raw.split(/\s+/).filter(Boolean)
+  const root: string[] = []
+  const body: string[] = []
+  for (const token of tokens) {
+    if (BODY_LAYOUT_RE.test(token)) {
+      body.push(token)
+    } else {
+      root.push(token)
+    }
+  }
+  if (tokens.includes('h-full') && body.some((t) => /(?:^|:)(?:flex|grid)$/.test(t))) {
+    body.push('h-full')
+  }
+  return { root: root.join(' '), body: body.join(' ') }
+})
+
+const passthroughAttrs = computed(() => {
+  const rest: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k !== 'class') rest[k] = v
+  }
+  return rest
+})
 
 const miuVariant = computed(() => {
   if (props.variant === 'ghost') return 'ghost'
@@ -43,12 +81,16 @@ const rootVariantClass = computed(() => {
 
 <template>
   <Card
+    v-bind="passthroughAttrs"
     :variant="miuVariant"
     :padding="padding"
     :interactive="hoverable"
     radius="lg"
     :class-names="{
-      root: [rootVariantClass, hoverable ? 'm-card-hover' : ''].filter(Boolean).join(' '),
+      root: ['m-card-flow', rootVariantClass, hoverable ? 'm-card-hover' : '', splitClasses.root]
+        .filter(Boolean)
+        .join(' '),
+      body: splitClasses.body || undefined,
     }"
   >
     <div v-if="loading" class="space-y-3">

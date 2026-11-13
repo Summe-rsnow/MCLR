@@ -63,7 +63,7 @@ const iconSizeClass = computed(() => {
     :disabled="disabled"
     :title="tooltip ?? title"
     :aria-label="tooltip ?? title ?? icon"
-    radius="lg"
+    radius="md"
     :class-names="{ spinner: 'animate-spin' }"
     @click="emit('click', $event)"
   >

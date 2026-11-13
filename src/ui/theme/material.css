@@ -140,6 +140,10 @@ main,
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+.m-card-flow {
+  display: block;
+  gap: 0;
+}
 
 .m-card,
 :root[data-material='flat'] .m-card {

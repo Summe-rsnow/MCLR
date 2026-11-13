@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Input } from '@miuui/vue'
 
@@ -52,8 +52,13 @@ const emit = defineEmits<{
   (e: 'clear'): void
 }>()
 
-const inputInst = ref<{ focus?: () => void } | null>(null)
+const attrs = useAttrs()
+const hasExplicitWidth = computed(() => {
+  const cls = typeof attrs.class === 'string' ? attrs.class : ''
+  return /(?:^|\s)(?:[a-z0-9-]+:)*w-(?!auto\b)\S+/.test(cls)
+})
 
+const inputInst = ref<{ focus?: () => void } | null>(null)
 onMounted(() => {
   if (props.autofocus) {
     inputInst.value?.focus?.()
@@ -105,7 +110,7 @@ function onClear() {
 </script>
 
 <template>
-  <div class="flex flex-col gap-1 w-full">
+  <div class="flex flex-col gap-1" :class="hasExplicitWidth ? undefined : 'w-full'">
     <label v-if="label" class="text-xs font-medium text-fg">{{ label }}</label>
     <Input
       ref="inputInst"

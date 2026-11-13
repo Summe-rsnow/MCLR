@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, useAttrs } from 'vue'
 import { Textarea } from '@miuui/vue'
 
 withDefaults(
@@ -23,13 +24,19 @@ withDefaults(
   },
 )
 
+const attrs = useAttrs()
+const hasExplicitWidth = computed(() => {
+  const cls = typeof attrs.class === 'string' ? attrs.class : ''
+  return /(?:^|\s)(?:[a-z0-9-]+:)*w-(?!auto\b)\S+/.test(cls)
+})
+
 const emit = defineEmits<{
   (e: 'update:modelValue', val: string): void
 }>()
 </script>
 
 <template>
-  <div class="flex flex-col gap-1 w-full">
+  <div class="flex flex-col gap-1" :class="hasExplicitWidth ? undefined : 'w-full'">
     <label v-if="label" class="text-xs font-medium text-fg">{{ label }}</label>
     <Textarea
       :model-value="modelValue"

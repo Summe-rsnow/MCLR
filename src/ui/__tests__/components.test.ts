@@ -960,4 +960,45 @@ describe('UI Components', () => {
     expect(menus()).toBe(before)
     wrapper.unmount()
   })
+
+  it('MCard routes layout classes to body while keeping box classes on root', () => {
+    const wrapper = mount(MCard, {
+      attrs: {
+        class: 'p-5 max-w-md flex items-center justify-between gap-3 space-y-4',
+      },
+      slots: { default: '<span>A</span><span>B</span>' },
+    })
+    const root = wrapper.find('.miu-card')
+    const body = wrapper.find('.miu-card__body')
+    expect(root.classes()).toContain('m-card-flow')
+    expect(root.classes()).toContain('p-5')
+    expect(root.classes()).toContain('max-w-md')
+    expect(root.classes()).not.toContain('flex')
+    expect(root.classes()).not.toContain('gap-3')
+    expect(body.classes()).toContain('flex')
+    expect(body.classes()).toContain('items-center')
+    expect(body.classes()).toContain('justify-between')
+    expect(body.classes()).toContain('gap-3')
+    expect(body.classes()).toContain('space-y-4')
+  })
+
+  it('MInput and MSelect preserve explicit width classes without w-full/w-auto collision', () => {
+    const input = mount(MInput, {
+      props: { modelValue: '854' },
+      attrs: { class: 'w-24' },
+    })
+    expect(input.classes()).toContain('w-24')
+    expect(input.classes()).not.toContain('w-full')
+
+    const select = mount(MSelect, {
+      props: {
+        modelValue: 'a',
+        options: [{ label: 'A', value: 'a' }],
+      },
+      attrs: { class: 'w-56' },
+    })
+    expect(select.classes()).toContain('w-56')
+    expect(select.classes()).not.toContain('w-full')
+    expect(select.find('button').classes()).toContain('w-full')
+  })
 })
