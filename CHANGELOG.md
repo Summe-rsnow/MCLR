@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-11-14
+
+### Changed
+- **Harmonized `InstanceCard` badge hierarchy & `@miuui/vue` `v0.5.3` palette**: Switched `InstanceCard`'s `隔离` badge from `info` to `neutral` so loader and status badges stand out cleanly without color clutter, and picked up `@miuui/vue` `v0.5.3`'s transparent surface-adaptive badge tints and high-chroma dark-mode semantic foregrounds.
+
 ## [0.2.3] - 2026-11-13
 
 ### Changed

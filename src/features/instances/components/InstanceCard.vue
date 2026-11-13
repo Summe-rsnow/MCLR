@@ -128,7 +128,7 @@ function getLoaderBadgeVariant(kind?: string): 'primary' | 'warning' | 'neutral'
         <MBadge v-if="instance.state !== 'ok'" variant="danger" size="sm">
           {{ t(`instances.card.state.${instance.state}`) }}
         </MBadge>
-        <MBadge v-if="instance.config?.isolation === 'on'" variant="info" size="sm">
+        <MBadge v-if="instance.config?.isolation === 'on'" variant="neutral" size="sm">
           {{ t('instances.actions.isolationOn') }}
         </MBadge>
       </div>
