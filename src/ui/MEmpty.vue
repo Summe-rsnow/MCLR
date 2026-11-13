@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { EmptyState } from '@miuui/vue'
 import MButton from './MButton.vue'
 
 withDefaults(
@@ -22,24 +23,25 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center p-8 text-center">
-    <div
-      class="w-12 h-12 rounded-2xl bg-sunken border border-line flex items-center justify-center text-fg-subtle mb-3"
-    >
-      <span :class="icon" class="w-6 h-6" />
-    </div>
-    <h4 v-if="title" class="text-sm font-medium text-fg mb-1">{{ title }}</h4>
-    <p v-if="description" class="text-xs text-fg-muted max-w-xs select-text">{{ description }}</p>
-    <div
-      v-if="$slots.default || $slots.action || actionText"
-      class="mt-4 flex items-center justify-center gap-2"
-    >
+  <EmptyState
+    :title="title ?? ''"
+    :description="description"
+    :class-names="{ description: 'select-text' }"
+  >
+    <template #icon>
+      <div
+        class="w-12 h-12 rounded-2xl bg-sunken border border-line flex items-center justify-center text-fg-subtle"
+      >
+        <span :class="icon" class="w-6 h-6" />
+      </div>
+    </template>
+    <template v-if="$slots.default || $slots.action || actionText" #actions>
       <slot />
       <slot name="action">
         <MButton v-if="actionText" variant="primary" size="sm" @click="emit('action')">
           {{ actionText }}
         </MButton>
       </slot>
-    </div>
-  </div>
+    </template>
+  </EmptyState>
 </template>

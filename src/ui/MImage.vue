@@ -1,149 +1,131 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { computed } from 'vue'
+import { Image } from '@miuui/vue'
 
 export type MImageSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | 'auto'
-export type MImageRadius = 'none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'full' | 'auto'
+export type MImageRadius = 'none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'full'
 
 const props = withDefaults(
   defineProps<{
     src?: string | null
-    alt?: string
     fallbackSrc?: string | null
     fallbackIcon?: string
+    alt?: string
+    size?: MImageSize
+    radius?: MImageRadius
+    fit?: 'cover' | 'contain'
+    pixelated?: boolean
     loading?: 'lazy' | 'eager'
     decoding?: 'async' | 'sync' | 'auto'
-    fit?: 'cover' | 'contain' | 'fill' | 'none' | 'scale-down'
-    pixelated?: boolean
-    /** Preset box size. `auto` (default) keeps caller-supplied dimensions. */
-    size?: MImageSize
-    /** Corner radius. `auto` (default) follows the `size` tier. */
-    radius?: MImageRadius
   }>(),
   {
     src: null,
-    alt: '',
     fallbackSrc: null,
     fallbackIcon: 'i-lucide-image',
-    loading: 'lazy',
-    decoding: 'async',
+    alt: '',
+    size: 'auto',
+    radius: undefined,
     fit: 'cover',
     pixelated: false,
-    size: 'auto',
-    radius: 'auto',
+    loading: 'lazy',
+    decoding: 'async',
   },
 )
 
-const SIZE_CLASSES: Record<MImageSize, string> = {
-  xs: 'w-5 h-5',
-  sm: 'w-8 h-8',
-  md: 'w-10 h-10',
-  lg: 'w-14 h-14',
-  xl: 'w-20 h-20',
-  '2xl': 'w-44 h-44',
-  full: 'w-full h-full',
-  auto: '',
-}
-
-// Proportional corners: 20 px → 4 px, 32 px → 6 px, 40 px → 8 px,
-// 56 px → 10 px, 80 px+ → 12 px. A tile that fills its parent (`full`)
-// inherits the wrapper's shape instead of rounding twice.
-const DEFAULT_RADIUS: Record<MImageSize, Exclude<MImageRadius, 'auto'>> = {
-  xs: 'xs',
-  sm: 'sm',
-  md: 'md',
-  lg: 'lg',
-  xl: 'xl',
-  '2xl': 'xl',
-  full: 'none',
-  auto: 'sm',
-}
-
-const RADIUS_CLASSES: Record<Exclude<MImageRadius, 'auto'>, string> = {
-  none: 'rounded-none',
-  xs: 'rounded-[4px]',
-  sm: 'rounded-[6px]',
-  md: 'rounded-sm',
-  lg: 'rounded-md',
-  xl: 'rounded-[12px]',
-  full: 'rounded-full',
-}
-
-const sizeClass = computed(() => SIZE_CLASSES[props.size])
-const radius = computed<Exclude<MImageRadius, 'auto'>>(() =>
-  props.radius === 'auto' ? DEFAULT_RADIUS[props.size] : props.radius,
-)
-const radiusClass = computed(() => RADIUS_CLASSES[radius.value])
-
-const emit = defineEmits<{
-  (e: 'load', ev: Event): void
-  (e: 'error', ev: Event): void
-}>()
-
-const currentSrc = ref<string | null>(props.src || props.fallbackSrc || null)
-const hasError = ref(false)
-const isLoaded = ref(false)
-
-const fitClass = computed(() => {
-  switch (props.fit) {
-    case 'contain':
-      return 'object-contain'
-    case 'fill':
-      return 'object-fill'
-    case 'none':
-      return 'object-none'
-    case 'scale-down':
-      return 'object-scale-down'
-    case 'cover':
+const sizeClass = computed(() => {
+  switch (props.size) {
+    case 'xs':
+      return 'w-5 h-5'
+    case 'sm':
+      return 'w-8 h-8'
+    case 'md':
+      return 'w-10 h-10'
+    case 'lg':
+      return 'w-14 h-14'
+    case 'xl':
+      return 'w-20 h-20'
+    case '2xl':
+      return 'w-44 h-44'
+    case 'full':
+      return 'w-full h-full'
+    case 'auto':
     default:
-      return 'object-cover'
+      return ''
   }
 })
 
-watch(
-  () => [props.src, props.fallbackSrc],
-  () => {
-    currentSrc.value = props.src || props.fallbackSrc || null
-    hasError.value = false
-    isLoaded.value = false
-  },
-)
-
-function onLoad(ev: Event) {
-  isLoaded.value = true
-  emit('load', ev)
-}
-
-function onError(ev: Event) {
-  if (currentSrc.value && props.fallbackSrc && currentSrc.value !== props.fallbackSrc) {
-    currentSrc.value = props.fallbackSrc
-  } else {
-    currentSrc.value = null
-    hasError.value = true
+const effectiveRadius = computed<MImageRadius>(() => {
+  if (props.radius) return props.radius
+  switch (props.size) {
+    case 'xs':
+      return 'xs'
+    case 'sm':
+      return 'sm'
+    case 'md':
+      return 'md'
+    case 'lg':
+      return 'lg'
+    case 'xl':
+    case '2xl':
+      return 'xl'
+    case 'full':
+      return 'none'
+    case 'auto':
+    default:
+      return 'sm'
   }
-  emit('error', ev)
-}
+})
+
+const radiusClass = computed(() => {
+  switch (effectiveRadius.value) {
+    case 'none':
+      return 'rounded-none'
+    case 'xs':
+      return 'rounded-[4px]'
+    case 'sm':
+      return 'rounded-[6px]'
+    case 'md':
+      return 'rounded-sm'
+    case 'lg':
+      return 'rounded-md'
+    case 'xl':
+      return 'rounded-[12px]'
+    case 'full':
+      return 'rounded-full'
+    default:
+      return 'rounded-[6px]'
+  }
+})
+
+const fitClass = computed(() => (props.fit === 'contain' ? 'object-contain' : 'object-cover'))
 </script>
 
 <template>
-  <div
-    class="relative inline-flex items-center justify-center overflow-hidden shrink-0 select-none"
-    :class="[sizeClass, radiusClass, pixelated ? '[image-rendering:pixelated]' : '']"
+  <Image
+    :src="src"
+    :fallback-src="fallbackSrc"
+    :alt="alt"
+    :fit="fit"
+    :pixelated="pixelated"
+    :lazy="loading === 'lazy'"
+    radius="none"
+    :class-names="{
+      root: [
+        'shrink-0',
+        sizeClass,
+        radiusClass,
+        fitClass,
+        pixelated ? '[image-rendering:pixelated]' : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    }"
+    :styles="{ root: { background: 'transparent' } }"
   >
-    <img
-      v-if="currentSrc"
-      :src="currentSrc"
-      :alt="alt"
-      :loading="loading"
-      :decoding="decoding"
-      class="w-full h-full transition-opacity duration-200"
-      :class="[fitClass, isLoaded ? 'opacity-100' : 'opacity-0']"
-      @load="onLoad"
-      @error="onError"
-    />
-    <div v-else class="w-full h-full flex items-center justify-center text-fg-subtle">
+    <template #fallback>
       <slot name="fallback">
         <span :class="[fallbackIcon, 'w-1/2 h-1/2 max-w-6 max-h-6 shrink-0']" />
       </slot>
-    </div>
-  </div>
+    </template>
+  </Image>
 </template>

@@ -1,7 +1,7 @@
 # MCLR Progress
 
-- **Current Version**: `0.1.1`
-- **Next Milestone**: `v0.1.2`
+- **Current Version**: `0.2.0`
+- **Next Milestone**: `v0.2.1`
 
 | Milestone | Title | Status | Commit | Tag | Date |
 |---|---|---|---|---|---|
@@ -43,7 +43,15 @@
 | v0.0.35 | Resource presets, content-addressed store, offline MCMod Chinese names & dependency analysis | done | 31f73f4 | v0.0.35 | 2026-11-04 |
 | v0.1.0 | Persistent task engine, byte-level download resume, canonical version/loader model & selectable text | done | 23b3dbb | v0.1.0 | 2026-11-05 |
 | v0.1.1 | Skin/avatar export, save mods to preset, preset version/loader rules, image size tiers, search filters & settings tips | done | 834b40a | v0.1.1 | 2026-11-09 |
+| v0.2.0 | Full `@miuui` v0.5.0 UI migration, Reka UI accessible primitives & dependency refresh | doing | — | v0.2.0 | 2026-11-13 |
 
+## v0.2.0 — 全面迁移 `@miuui` v0.5.0 组件库 + Reka UI 无障碍原语 + 前后端库包升级
+
+| ID | slice | owner | status | acceptance |
+|---|---|---|---|---|
+| A | `@miuui` v0.5.0 新增 `Collapse` / `ColorPicker` / `List` / `ListItem` / `HelpTooltip` 与 `Button`/`Badge`/`Image`/`Pagination`/`Tabs`/`PageHeader`/`FormRow` 增强 | integrator | done | `miuui`: `pnpm check && pnpm test:coverage && pnpm check:visual` |
+| B | MCLR 接入 `ThemeProvider` 并全量迁移 `src/ui/` 组件至 `@miuui/vue` + Reka UI | integrator | done | `pnpm exec vitest run` (355/355) & `lint-ui-contracts` |
+| C | 联调视觉与交互验证（`MImage shrink-0`、`MSettingRow` 去重分隔线、`MPagination` 内联回退）、库包升级与全量门禁 | integrator | done | `pnpm check` prints `All check gates passed.` |
 ## v0.1.1 — 皮肤/头像导出 + 模组存预设 + 预设版本/加载器规则 + 图像尺寸体系 + 区域格式提示
 
 | ID | slice | owner | status | acceptance |

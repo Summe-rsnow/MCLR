@@ -38,6 +38,14 @@ body {
   overflow: hidden;
 }
 
+.miu-theme-provider {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  user-select: text;
+}
+
 /*
  * Interaction surfaces must not paint a selection range when clicked, dragged
  * or double-clicked. Every other node keeps the default `text`, so prose,

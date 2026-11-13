@@ -1,4 +1,5 @@
-import { ref } from 'vue'
+import { computed } from 'vue'
+import { useToast as useMiuToast, type ToastVariant } from '@miuui/vue'
 
 export type ToastType = 'info' | 'success' | 'warning' | 'danger'
 
@@ -9,35 +10,39 @@ export interface ToastItem {
   duration?: number
 }
 
-const toasts = ref<ToastItem[]>([])
-let nextId = 1
+function toMiuVariant(type: ToastType | undefined): ToastVariant {
+  if (type === 'danger') return 'error'
+  return type ?? 'info'
+}
+
+function fromMiuVariant(variant: ToastVariant): ToastType {
+  if (variant === 'error') return 'danger'
+  if (variant === 'default') return 'info'
+  return variant
+}
 
 export function useToast() {
+  const { toasts: miuToasts, toast: miuToast, dismiss } = useMiuToast()
+
+  const toasts = computed<ToastItem[]>(() =>
+    miuToasts.value.map((item) => ({
+      id: item.id,
+      message: item.title,
+      type: fromMiuVariant(item.variant),
+      duration: item.duration,
+    })),
+  )
+
   function show(toast: { message: string; type?: ToastType; duration?: number }) {
-    const id = nextId++
-    const item: ToastItem = {
-      id,
-      message: toast.message,
-      type: toast.type ?? 'info',
+    return miuToast({
+      title: toast.message,
+      variant: toMiuVariant(toast.type),
       duration: toast.duration ?? 3000,
-    }
-    toasts.value.push(item)
-
-    const dur = item.duration ?? 3000
-    if (dur > 0) {
-      setTimeout(() => {
-        remove(id)
-      }, dur)
-    }
-
-    return id
+    })
   }
 
   function remove(id: number) {
-    const index = toasts.value.findIndex((t) => t.id === id)
-    if (index !== -1) {
-      toasts.value.splice(index, 1)
-    }
+    dismiss(id)
   }
 
   function info(message: string, duration?: number) {

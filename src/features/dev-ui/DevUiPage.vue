@@ -402,9 +402,7 @@ async function triggerConfirmDialog() {
             :class="[sw.bgClass, sw.fgClass]"
           >
             <div class="flex items-center justify-between gap-1">
-              <span class="text-xs font-bold font-mono"
-                ><code>{{ sw.name }}</code></span
-              >
+              <span class="text-xs font-bold font-mono"><code>{{ sw.name }}</code></span>
               <span class="text-[11px] opacity-80 font-mono">{{ sw.info }}</span>
             </div>
             <div class="text-[11px] opacity-75 font-mono">{{ sw.rgb }}</div>

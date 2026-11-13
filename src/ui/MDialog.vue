@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Dialog } from '@miuui/vue'
 import MButton from './MButton.vue'
-import MOverlay from './MOverlay.vue'
 
-const { t } = useI18n()
+let t = (key: string) => key
+try {
+  const i18n = useI18n()
+  t = i18n.t
+} catch {
+  // Mounted without vue-i18n (unit tests)
+}
 
 const props = withDefaults(
   defineProps<{
@@ -36,20 +42,26 @@ const emit = defineEmits<{
   (e: 'cancel'): void
 }>()
 
-const maxWidthClass = computed(() => {
+const dialogWidth = computed(() => {
   switch (props.maxWidth) {
     case 'sm':
-      return 'max-w-sm'
+      return '384px'
     case 'lg':
-      return 'max-w-lg'
+      return '512px'
     case 'xl':
-      return 'max-w-xl'
+      return '576px'
     case '2xl':
-      return 'max-w-2xl'
+      return '672px'
+    case 'md':
     default:
-      return 'max-w-md'
+      return '448px'
   }
 })
+
+function onUpdateOpen(next: boolean) {
+  emit('update:open', next)
+  if (!next) emit('cancel')
+}
 
 function onCancel() {
   emit('update:open', false)
@@ -62,46 +74,36 @@ function onConfirm() {
 </script>
 
 <template>
-  <MOverlay :open="open" transition="m-modal" @close="onCancel">
-    <div
-      class="m-overlay m-refract w-full p-6 rounded-2xl flex flex-col gap-4 text-fg shadow-2xl"
-      :class="maxWidthClass"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div v-if="title || $slots.header" class="flex items-center justify-between gap-3">
-        <slot name="header">
-          <h3 class="text-lg font-bold text-fg">{{ title }}</h3>
-        </slot>
-        <button
-          :aria-label="t('common.close')"
-          type="button"
-          class="text-fg-muted hover:text-fg hover:bg-sunken cursor-pointer p-1.5 rounded-lg transition-colors"
-          @click="onCancel"
+  <Dialog
+    :open="open"
+    :title="title"
+    :width="dialogWidth"
+    :hide-header="!title && !$slots.header"
+    :aria-label="title || 'Dialog'"
+    :class-names="{
+      content: 'm-overlay m-refract',
+      body: 'select-text text-sm text-fg-muted',
+    }"
+    @update:open="onUpdateOpen"
+  >
+    <template v-if="$slots.header" #title>
+      <slot name="header" />
+    </template>
+    <slot />
+    <template v-if="!hideFooter" #footer>
+      <slot name="footer">
+        <MButton variant="text" @click="onCancel">
+          {{ cancelText || t('common.cancel') }}
+        </MButton>
+        <MButton
+          :variant="confirmVariant"
+          :loading="confirmLoading"
+          :disabled="confirmDisabled"
+          @click="onConfirm"
         >
-          <span class="i-lucide-x w-4 h-4 block" />
-        </button>
-      </div>
-
-      <div class="text-sm text-fg-muted select-text">
-        <slot />
-      </div>
-
-      <div v-if="!hideFooter" class="flex items-center justify-end gap-2 pt-2">
-        <slot name="footer">
-          <MButton variant="text" @click="onCancel">
-            {{ cancelText || t('common.cancel') }}
-          </MButton>
-          <MButton
-            :variant="confirmVariant"
-            :loading="confirmLoading"
-            :disabled="confirmDisabled"
-            @click="onConfirm"
-          >
-            {{ confirmText || t('common.confirm') }}
-          </MButton>
-        </slot>
-      </div>
-    </div>
-  </MOverlay>
+          {{ confirmText || t('common.confirm') }}
+        </MButton>
+      </slot>
+    </template>
+  </Dialog>
 </template>

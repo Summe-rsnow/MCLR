@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { Card } from '@miuui/vue'
 import MSkeleton from './MSkeleton.vue'
 
 const props = withDefaults(
@@ -19,28 +20,20 @@ const props = withDefaults(
   },
 )
 
-const paddingClass = computed(() => {
-  switch (props.padding) {
-    case 'none':
-      return 'p-0'
-    case 'sm':
-      return 'p-3'
-    case 'lg':
-      return 'p-6'
-    case 'md':
-    default:
-      return 'p-5'
-  }
+const miuVariant = computed(() => {
+  if (props.variant === 'ghost') return 'ghost'
+  if (props.variant === 'well' || props.variant === 'tinted') return 'outline'
+  return 'surface'
 })
 
-const variantClass = computed(() => {
+const rootVariantClass = computed(() => {
   switch (props.variant) {
     case 'well':
       return 'm-well'
     case 'ghost':
-      return 'bg-transparent'
+      return 'bg-transparent border-transparent shadow-none'
     case 'tinted':
-      return 'bg-primary-soft text-fg border border-primary/15'
+      return 'bg-primary-soft text-fg border-primary/15 shadow-none'
     case 'raised':
     default:
       return 'm-card'
@@ -49,13 +42,14 @@ const variantClass = computed(() => {
 </script>
 
 <template>
-  <div
-    class="rounded-xl transition-[transform,box-shadow,background-color,border-color,backdrop-filter] duration-200"
-    :class="[
-      variantClass,
-      paddingClass,
-      hoverable ? 'm-card-hover hover:-translate-y-[1px] hover:shadow-2 cursor-pointer' : '',
-    ]"
+  <Card
+    :variant="miuVariant"
+    :padding="padding"
+    :interactive="hoverable"
+    radius="lg"
+    :class-names="{
+      root: [rootVariantClass, hoverable ? 'm-card-hover' : ''].filter(Boolean).join(' '),
+    }"
   >
     <div v-if="loading" class="space-y-3">
       <MSkeleton height="1.25rem" width="40%" rounded="lg" />
@@ -68,5 +62,5 @@ const variantClass = computed(() => {
       />
     </div>
     <slot v-else />
-  </div>
+  </Card>
 </template>

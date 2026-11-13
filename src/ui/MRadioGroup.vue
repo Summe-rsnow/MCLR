@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { RadioGroup } from '@miuui/vue'
+
 withDefaults(
   defineProps<{
     modelValue: string | number
@@ -16,23 +18,10 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex flex-col gap-2">
-    <label
-      v-for="opt in options"
-      :key="String(opt.value)"
-      class="inline-flex items-center gap-2 cursor-pointer select-none text-sm text-fg"
-      :class="{ 'opacity-45 cursor-not-allowed': opt.disabled }"
-    >
-      <input
-        type="radio"
-        :name="name"
-        :value="opt.value"
-        :checked="modelValue === opt.value"
-        :disabled="opt.disabled"
-        class="w-4 h-4 border-line-strong text-primary accent-primary focus:ring-primary/40 cursor-pointer disabled:cursor-not-allowed"
-        @change="emit('update:modelValue', opt.value)"
-      />
-      <span>{{ opt.label }}</span>
-    </label>
-  </div>
+  <RadioGroup
+    :model-value="modelValue"
+    :options="options"
+    :name="name"
+    @update:model-value="emit('update:modelValue', $event)"
+  />
 </template>

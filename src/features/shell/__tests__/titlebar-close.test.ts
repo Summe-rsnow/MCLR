@@ -100,10 +100,9 @@ describe('TitleBar close behaviour', () => {
     await clickClose()
 
     const checkbox = document.querySelector(
-      '[data-testid="close-prompt"] input[type="checkbox"]',
-    ) as HTMLInputElement
-    checkbox.checked = true
-    checkbox.dispatchEvent(new Event('change'))
+      '[data-testid="close-prompt"] [role="checkbox"]',
+    ) as HTMLElement
+    checkbox.click()
     await flushPromises()
 
     click(document.querySelector('[data-testid="close-prompt-quit"]'))

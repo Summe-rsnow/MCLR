@@ -149,12 +149,12 @@ describe('Appearance and Personalisation feature', () => {
     })
     await flushPromises()
 
-    const slider = wrapper.find('[data-testid="perf-tier-slider"] input[type="range"]')
-    expect((slider.element as HTMLInputElement).value).toBe('1')
+    const slider = wrapper.find('[data-testid="perf-tier-slider"] [role="slider"]')
+    expect(slider.attributes('aria-valuenow')).toBe('1')
 
     await store.setMaterial('glass')
     await flushPromises()
-    expect((slider.element as HTMLInputElement).value).toBe('2')
+    expect(slider.attributes('aria-valuenow')).toBe('2')
   })
 
   it('renders the tier slider with three stops and applies a picked tier', async () => {
@@ -175,10 +175,10 @@ describe('Appearance and Personalisation feature', () => {
     expect(slider.findAll('button')[1].classes()).toContain('text-primary')
     expect(wrapper.text()).toContain('扁平纯色 · 精简动画 · 播放启动动画')
 
-    const range = slider.find('input[type="range"]')
-    expect(range.attributes('max')).toBe('2')
-    await range.setValue('0')
-
+    const range = slider.find('[role="slider"]')
+    expect(range.attributes('aria-valuemax')).toBe('2')
+    await range.trigger('keydown', { key: 'Home' })
+    await flushPromises()
     expect(store.performanceTier).toBe('performance')
     expect(store.motion).toBe('off')
     expect(store.startupSplash).toBe(false)

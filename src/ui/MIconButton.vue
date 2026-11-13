@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { Button } from '@miuui/vue'
+import type { ButtonVariant } from '@miuui/vue'
 
 const props = withDefaults(
   defineProps<{
@@ -21,19 +23,21 @@ const props = withDefaults(
   },
 )
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'click', evt: MouseEvent): void
 }>()
 
-const sizeClass = computed(() => {
-  switch (props.size) {
-    case 'sm':
-      return 'w-7 h-7'
-    case 'lg':
-      return 'w-11 h-11'
-    case 'md':
+const miuVariant = computed<ButtonVariant>(() => {
+  switch (props.variant) {
+    case 'tonal':
+      return 'tonal'
+    case 'outline':
+      return 'outline'
+    case 'danger':
+      return 'danger'
+    case 'text':
     default:
-      return 'w-9 h-9'
+      return 'ghost'
   }
 })
 
@@ -51,27 +55,18 @@ const iconSizeClass = computed(() => {
 </script>
 
 <template>
-  <button
-    type="button"
+  <Button
+    icon-only
+    :variant="miuVariant"
+    :size="size"
+    :loading="loading"
+    :disabled="disabled"
     :title="tooltip ?? title"
-    :disabled="disabled || loading"
-    class="inline-flex items-center justify-center rounded-lg transition active:scale-[.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 select-none outline-none"
-    :class="[
-      sizeClass,
-      {
-        'text-fg hover:bg-sunken': variant === 'text',
-        'bg-primary-soft text-primary-soft-fg hover:brightness-[.97]': variant === 'tonal',
-        'border border-line-strong text-fg hover:bg-sunken': variant === 'outline',
-        'text-danger hover:bg-danger-soft': variant === 'danger',
-      },
-    ]"
-    @click="$emit('click', $event)"
+    :aria-label="tooltip ?? title ?? icon"
+    radius="lg"
+    :class-names="{ spinner: 'animate-spin' }"
+    @click="emit('click', $event)"
   >
-    <span
-      v-if="loading"
-      class="inline-block border-2 border-current border-t-transparent rounded-full animate-spin"
-      :class="iconSizeClass"
-    />
-    <span v-else :class="[icon, iconSizeClass]" />
-  </button>
+    <span :class="[icon, iconSizeClass]" />
+  </Button>
 </template>

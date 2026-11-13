@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-11-13
+
+Second minor release: full UI primitive migration to the `@miuui` design system (`v0.5.0`) + Reka UI accessibility foundation, unified spring motion & material pipeline, and refreshed frontend/Rust dependencies.
+
+### Added
+- **`@miuui` Design System Integration (`v0.5.0`)**:
+  - Root `ThemeProvider` in `App.vue` wired directly to `useThemeStore()` (`mode`, `seed`, `material`, `motion`, and `locale`), coexisting with MCLR's `--c-*` UnoCSS tonal palette and Liquid Glass SVG refraction.
+  - Migrated `MButton`, `MIconButton`, `MCard`, `MInput`, `MTextarea`, `MCheckbox`, `MSwitch`, `MRadioGroup`, `MSlider`, `MSegmented`, `MTabs`, `MList`, `MListItem`, `MDialog`, `MDrawer`, `MPopover`, `MTooltip`, `MHelpTooltip`, `MProgress`, `MCollapse`, `MColorPicker`, `MBadge`, `MStatusBadge`, `MSkeleton`, `MEmpty`, `MPageHeader`, `MSection`, `MSettingRow`, `MPagination`, `MImage`, `MToast`, and `useToast` onto `@miuui/vue` + Reka UI accessible primitives (`role="checkbox"`, `role="radio"`, `role="slider"`, `DialogPortal`, `TooltipPortal`).
+- **i18n**: Added `common.increment` and `common.decrement` labels for numeric steppers.
+
+### Changed
+- **Dependency Refresh**: Upgraded frontend packages (`vue` `3.5.45`, `vue-router` `5.5.0`, `vue-i18n` `11.4.18`, `@tanstack/vue-virtual` `3.13.52`, `@tauri-apps/plugin-notification` `2.8.1`, `@tauri-apps/plugin-opener` `2.7.3`, `vite` `8.3.8`, `vitest` `5.1.0`, `oxlint` `1.93.0`, `oxfmt` `0.78.0`, `@iconify-json/*`) and Rust crates (`redb` `4.5.0`, `trash` `5.3.0`, `uuid` `1.29.2`, `toml` `1.2.1`, `wry` `0.57.2`, `tauri-plugin-notification` `2.8.1`, `tauri-plugin-opener` `2.7.3`, etc.).
+- **Deduplicated `vue` & `reka-ui`** in Vite/Vitest config to guarantee single runtime instances across linked `@miuui/*` workspace packages.
+
+### Fixed
+- **Setting row dividers**: Removed duplicate `border-top` on `MSettingRow` since `FormRow` already provides a single hairline divider.
+- **Flex image shrinking**: Preserved `shrink-0` on `MImage` root containers so `20x20` loader icons never collapse inside horizontal rows.
+- **Inline pagination fallback**: Restored inline `MPagination` rendering when `#m-float-dock` is absent.
+
 ## [0.1.1] - 2026-11-09
 
 ### Added

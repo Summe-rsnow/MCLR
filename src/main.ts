@@ -1,3 +1,7 @@
+import '@miuui/tokens/style.css'
+import '@miuui/materials/style.css'
+import '@miuui/motions/style.css'
+import '@miuui/vue/components.css'
 import './ui/theme/fonts.css'
 import 'uno.css'
 import './ui/theme/material.css'

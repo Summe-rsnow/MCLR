@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// Container for list items
+import { List } from '@miuui/vue'
 </script>
 
 <template>
-  <div class="flex flex-col gap-1 w-full">
+  <List gap="xs">
     <slot />
-  </div>
+  </List>
 </template>

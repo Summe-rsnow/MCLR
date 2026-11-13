@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import MTooltip from './MTooltip.vue'
+import { HelpTooltip } from '@miuui/vue'
 
 const props = withDefaults(
   defineProps<{
@@ -9,7 +9,6 @@ const props = withDefaults(
     size?: 'xs' | 'sm' | 'md'
   }>(),
   {
-    // `help-circle` was renamed in lucide; the old name silently rendered nothing.
     icon: 'i-lucide-circle-question-mark',
     size: 'sm',
   },
@@ -29,15 +28,14 @@ const sizeClasses = computed(() => {
 </script>
 
 <template>
-  <MTooltip :text="text">
-    <button
-      type="button"
-      class="inline-flex items-center justify-center text-fg-muted hover:text-fg focus:text-fg transition-colors p-0.5 rounded cursor-help outline-none focus-visible:ring-1 focus-visible:ring-primary"
-      :aria-label="text"
-      tabindex="0"
-      @click.stop.prevent
-    >
+  <HelpTooltip
+    :text="text"
+    :size="size"
+    max-width="280px"
+    :class-names="{ trigger: 'cursor-help' }"
+  >
+    <template v-if="icon.startsWith('i-')" #icon>
       <span :class="[icon, sizeClasses]" class="shrink-0" />
-    </button>
-  </MTooltip>
+    </template>
+  </HelpTooltip>
 </template>

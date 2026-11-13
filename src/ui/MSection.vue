@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import MCard from './MCard.vue'
+import { Card } from '@miuui/vue'
 
 withDefaults(
   defineProps<{
@@ -16,7 +16,7 @@ withDefaults(
 </script>
 
 <template>
-  <MCard padding="none">
+  <Card padding="none" radius="lg" :class-names="{ root: 'm-card' }">
     <div
       v-if="title || description || icon || $slots.actions"
       class="flex items-center justify-between gap-4 px-5 pt-4 pb-3 border-b border-line"
@@ -42,5 +42,5 @@ withDefaults(
     <div class="p-5">
       <slot />
     </div>
-  </MCard>
+  </Card>
 </template>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { i18n } from '../../i18n'
 import {
@@ -342,15 +342,15 @@ describe('UI Components', () => {
     const wrapper = mount(MCheckbox, {
       props: { modelValue: false, label: 'Agree' },
     })
-    const checkbox = wrapper.find('input[type="checkbox"]')
-    await checkbox.setValue(true)
+    const checkbox = wrapper.find('[role="checkbox"]')
+    await checkbox.trigger('click')
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([true])
   })
   it('MCheckbox respects disabled prop', () => {
     const wrapper = mount(MCheckbox, {
       props: { modelValue: false, label: 'Disabled Checkbox', disabled: true },
     })
-    const checkbox = wrapper.find('input[type="checkbox"]')
+    const checkbox = wrapper.find('[role="checkbox"]')
     expect(checkbox.attributes('disabled')).toBeDefined()
     expect(wrapper.find('label').classes()).toContain('cursor-not-allowed')
   })
@@ -365,8 +365,8 @@ describe('UI Components', () => {
         ],
       },
     })
-    const radios = wrapper.findAll('input[type="radio"]')
-    await radios[1].setValue()
+    const radios = wrapper.findAll('[role="radio"]')
+    await radios[1].trigger('click')
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['2'])
   })
 
@@ -374,9 +374,11 @@ describe('UI Components', () => {
     const wrapper = mount(MSlider, {
       props: { modelValue: 50 },
     })
-    const range = wrapper.find('input[type="range"]')
-    await range.setValue('75')
-    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([75])
+    await flushPromises()
+    const slider = wrapper.find('[role="slider"]')
+    expect(slider.attributes('aria-valuenow')).toBe('50')
+    await slider.trigger('keydown', { key: 'ArrowRight' })
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([51])
   })
 
   it('MSlider stop labels replace the readout, mark the active stop and jump on click', async () => {
@@ -446,6 +448,7 @@ describe('UI Components', () => {
       props: { open: true, title: 'Dialog Title' },
       global: { plugins: [i18n] },
     })
+    await flushPromises()
     expect(document.body.innerHTML).toContain('Dialog Title')
   })
 
@@ -483,7 +486,7 @@ describe('UI Components', () => {
 
     // Regression: an `v-else-if` chain tied the label to the icon branch, so any
     // option with an icon lost its visible text.
-    const buttons = wrapper.findAll('button[data-seg-btn]')
+    const buttons = wrapper.findAll('button.miu-segmented__item')
     expect(buttons).toHaveLength(3)
     expect(buttons[0].text()).toContain('浅色模式')
     expect(buttons[2].text()).toContain('跟随系统')
@@ -500,20 +503,26 @@ describe('UI Components', () => {
     const wrapper = mount(MTooltip, {
       props: { text: 'Help text' },
       slots: { default: '<span>Hover Me</span>' },
+      attachTo: document.body,
     })
     expect(wrapper.text()).toContain('Hover Me')
-    await wrapper.trigger('mouseenter')
+    await wrapper.find('span').trigger('focus')
+    await flushPromises()
     expect(document.body.innerHTML).toContain('Help text')
+    wrapper.unmount()
   })
 
   it('MHelpTooltip renders help icon and provides tooltip text', async () => {
     const wrapper = mount(MHelpTooltip, {
       props: { text: 'Helpful explanation', size: 'sm' },
+      attachTo: document.body,
     })
     expect(wrapper.find('button').exists()).toBe(true)
     expect(wrapper.find('.i-lucide-circle-question-mark').exists()).toBe(true)
-    await wrapper.find('.relative').trigger('mouseenter')
+    await wrapper.find('button').trigger('focus')
+    await flushPromises()
     expect(document.body.innerHTML).toContain('Helpful explanation')
+    wrapper.unmount()
   })
   it('MProgress displays percentage', () => {
     const wrapper = mount(MProgress, {
@@ -775,11 +784,11 @@ describe('UI Components', () => {
   it('asserts MToast, MDialog and MEmpty contain select-text elements', async () => {
     const toast = useToast()
     toast.info('Selectable toast message', 0)
-    const toastWrapper = mount(MToast)
-    await nextTick()
-    expect(toastWrapper.find('.select-text').exists()).toBe(true)
-    expect(toastWrapper.find('.select-text').text()).toContain('Selectable toast message')
-
+    mount(MToast, { attachTo: document.body })
+    await flushPromises()
+    const toastText = document.body.querySelector('.miu-toast .select-text')
+    expect(toastText).not.toBeNull()
+    expect(toastText?.textContent).toContain('Selectable toast message')
     const dialogWrapper = mount(MDialog, {
       props: { open: true, title: 'Dialog Title' },
       slots: { default: '<p>Dialog body text</p>' },
@@ -811,6 +820,7 @@ describe('UI Components', () => {
       slots: { default: '<p>Drawer Body</p>' },
       global: { plugins: [i18n] },
     })
+    await flushPromises()
     expect(document.body.innerHTML).toContain('Drawer Title')
     expect(document.body.innerHTML).toContain('Drawer Body')
     wrapper.unmount()

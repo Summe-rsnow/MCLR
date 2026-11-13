@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Textarea } from '@miuui/vue'
+
 withDefaults(
   defineProps<{
     modelValue: string
@@ -24,35 +26,28 @@ withDefaults(
 const emit = defineEmits<{
   (e: 'update:modelValue', val: string): void
 }>()
-
-function onInput(event: Event) {
-  const target = event.target as HTMLTextAreaElement
-  emit('update:modelValue', target.value)
-}
 </script>
 
 <template>
   <div class="flex flex-col gap-1 w-full">
     <label v-if="label" class="text-xs font-medium text-fg">{{ label }}</label>
-    <textarea
-      :value="modelValue"
+    <Textarea
+      :model-value="modelValue"
       :rows="rows"
       :placeholder="placeholder"
       :disabled="disabled"
-      class="w-full px-3 py-2 text-sm rounded-lg bg-sunken text-fg placeholder:text-fg-subtle border outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-      :class="[
-        resize === 'y'
-          ? 'resize-y'
-          : resize === 'x'
-            ? 'resize-x'
-            : resize === 'both'
-              ? 'resize'
-              : 'resize-none',
-        error
-          ? 'border-danger focus:border-danger focus:ring-2 focus:ring-danger/25'
-          : 'border-line-strong focus:border-primary focus:ring-2 focus:ring-primary/25',
-      ]"
-      @input="onInput"
+      :invalid="Boolean(error)"
+      :class-names="{
+        textarea:
+          resize === 'y'
+            ? 'resize-y'
+            : resize === 'x'
+              ? 'resize-x'
+              : resize === 'both'
+                ? 'resize'
+                : 'resize-none',
+      }"
+      @update:model-value="emit('update:modelValue', $event)"
     />
     <p v-if="error" class="text-xs text-danger-fg">{{ error }}</p>
     <p v-else-if="hint" class="text-xs text-fg-muted">{{ hint }}</p>

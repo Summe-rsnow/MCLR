@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { PageHeader } from '@miuui/vue'
+
 withDefaults(
   defineProps<{
     title: string
@@ -13,8 +15,8 @@ withDefaults(
 </script>
 
 <template>
-  <header class="flex items-center justify-between gap-4 flex-wrap">
-    <div class="flex items-center gap-4 min-w-0">
+  <PageHeader :title="title" :description="description">
+    <template v-if="$slots.icon || icon" #lead>
       <slot name="icon">
         <div
           v-if="icon"
@@ -23,18 +25,12 @@ withDefaults(
           <span :class="icon" class="w-6 h-6" />
         </div>
       </slot>
-      <div class="min-w-0">
-        <div class="flex items-center gap-2.5 flex-wrap">
-          <h1 class="text-3xl font-extrabold text-fg tracking-tight truncate">{{ title }}</h1>
-          <slot name="badge" />
-        </div>
-        <p v-if="description" class="text-xs text-fg-muted mt-1 leading-normal">
-          {{ description }}
-        </p>
-      </div>
-    </div>
-    <div v-if="$slots.actions" class="flex items-center gap-2 shrink-0">
+    </template>
+    <template v-if="$slots.badge" #badge>
+      <slot name="badge" />
+    </template>
+    <template v-if="$slots.actions" #actions>
       <slot name="actions" />
-    </div>
-  </header>
+    </template>
+  </PageHeader>
 </template>

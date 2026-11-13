@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Slider } from '@miuui/vue'
+
 const props = withDefaults(
   defineProps<{
     modelValue: number
@@ -6,11 +8,6 @@ const props = withDefaults(
     max?: number
     step?: number
     disabled?: boolean
-    /**
-     * Evenly spaced stop labels under the track (`min`, `min + step`, …).
-     * Passing labels turns the slider into a discrete picker: the numeric
-     * readout is replaced by the labels, and clicking one jumps to that stop.
-     */
     labels?: string[]
   }>(),
   {
@@ -27,7 +24,6 @@ const emit = defineEmits<{
   (e: 'change', val: number): void
 }>()
 
-/** Value of stop `index`; labels are one `step` apart starting at `min`. */
 function stopValue(index: number) {
   return props.min + index * props.step
 }
@@ -44,30 +40,29 @@ function selectStop(index: number) {
   emit('change', val)
 }
 
-function onInput(event: Event) {
-  const target = event.target as HTMLInputElement
-  emit('update:modelValue', parseFloat(target.value))
+function onUpdate(val: number | [number, number]) {
+  const num = Array.isArray(val) ? val[0] : val
+  emit('update:modelValue', num)
 }
 
-function onChange(event: Event) {
-  const target = event.target as HTMLInputElement
-  emit('change', parseFloat(target.value))
+function onCommit(val: number | [number, number]) {
+  const num = Array.isArray(val) ? val[0] : val
+  emit('change', num)
 }
 </script>
 
 <template>
   <div class="inline-flex flex-col w-full gap-1.5">
     <div class="flex items-center w-full gap-3">
-      <input
-        type="range"
-        :value="modelValue"
+      <Slider
+        :model-value="modelValue"
         :min="min"
         :max="max"
         :step="step"
         :disabled="disabled"
-        class="w-full h-2 bg-sunken rounded-lg appearance-none cursor-pointer accent-primary disabled:opacity-45 disabled:cursor-not-allowed"
-        @input="onInput"
-        @change="onChange"
+        class="flex-1"
+        @update:model-value="onUpdate"
+        @commit="onCommit"
       />
       <span v-if="labels.length === 0" class="text-xs text-fg-muted w-8 text-right tabular-nums">{{
         modelValue
@@ -78,7 +73,7 @@ function onChange(event: Event) {
         v-for="(label, index) in labels"
         :key="label"
         type="button"
-        class="text-xs transition-colors duration-150 disabled:cursor-not-allowed"
+        class="text-xs transition-colors duration-150 disabled:cursor-not-allowed cursor-pointer"
         :class="
           isActiveStop(index)
             ? 'text-primary font-semibold'

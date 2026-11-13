@@ -1,36 +1,52 @@
 <script setup lang="ts">
-withDefaults(
+import { computed } from 'vue'
+import { Badge } from '@miuui/vue'
+
+const props = withDefaults(
   defineProps<{
     variant?: 'primary' | 'success' | 'warning' | 'danger' | 'neutral' | 'info'
     size?: 'sm' | 'md'
     icon?: string
     dot?: boolean
+    pulse?: boolean
   }>(),
   {
     variant: 'primary',
     size: 'md',
     icon: undefined,
     dot: false,
+    pulse: false,
   },
 )
+
+const variantTextClass = computed(() => {
+  switch (props.variant) {
+    case 'success':
+      return 'text-success-fg'
+    case 'warning':
+      return 'text-warning-fg'
+    case 'danger':
+      return 'text-danger-fg'
+    case 'neutral':
+      return 'text-fg-muted'
+    case 'primary':
+    case 'info':
+    default:
+      return 'text-primary-soft-fg'
+  }
+})
 </script>
 
 <template>
-  <span
-    class="inline-flex items-center gap-1 font-medium rounded-full shrink-0"
-    :class="[
-      size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-0.5 text-xs',
-      {
-        'bg-primary-soft text-primary-soft-fg': variant === 'primary' || variant === 'info',
-        'bg-success-soft text-success-fg': variant === 'success',
-        'bg-warning-soft text-warning-fg': variant === 'warning',
-        'bg-danger-soft text-danger-fg': variant === 'danger',
-        'bg-sunken text-fg-muted': variant === 'neutral',
-      },
-    ]"
+  <Badge
+    :variant="variant"
+    :size="size"
+    :dot="dot"
+    :pulse="pulse"
+    pill
+    :class-names="{ root: variantTextClass }"
   >
-    <span v-if="dot" class="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
     <span v-if="icon" :class="icon" class="w-3 h-3 shrink-0" />
     <slot />
-  </span>
+  </Badge>
 </template>

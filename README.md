@@ -6,7 +6,7 @@
 
 次世代 Windows 原生 Minecraft 启动器 · 基于 Tauri 2 + Rust 2024 + Vue 3.5
 
-[![Version](https://img.shields.io/badge/version-v0.1.1-blue.svg?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.2.0-blue.svg?style=flat-square)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/Rust-2024%20Edition-DEA584.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8DB.svg?style=flat-square&logo=tauri)](https://tauri.app/)
 [![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D.svg?style=flat-square&logo=vue.js)](https://vuejs.org/)
@@ -51,7 +51,7 @@
 - **独立任务页与桌面通知**：`系统 → 任务` 双栏界面（列表 + 详情）、孤立下载残留清理、后台完成/失败桌面通知。
 
 ### 🎨 Tonal Layers 现代设计语言
-- **OKLCH 动态取色引擎**：由单颗种子色实时派生出兼顾色彩连贯性与可读性感知的高保真色阶系统。
+- **OKLCH 动态取色与 `@miuui` 组件底座**：由单颗种子色实时派生高保真色阶，结合 `@miuui/vue` + Reka UI 无障碍原语实现统一交互与键盘导航。
 - **双材质即时切换**：**全实色扁平 (Flat)** 与 **液态玻璃 (Liquid Glass)** 材质（Mica/Acrylic 原生模糊 + SVG 微折射特效），无缝贴合 Win10/11 审美。
 - **流式瀑布流与弹性虚拟滚动**：集成官方新闻瀑布流、分页悬浮定位槽 (`MPagination`) 以及自适应视口的虚拟长列表 (`MVirtualList`)。
 - **文本默认可选中**：正文、路径、错误码、版本号与日志均可直接划词复制；仅按钮、开关、侧边栏与窗口拖拽区禁用选择，拖选卡片文字也不会误触跳转。

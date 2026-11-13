@@ -22,6 +22,8 @@
   "chooseDirectory": "选择文件夹",
   "unselected": "未选择",
   "noOptions": "无可用选项",
+  "increment": "增加",
+  "decrement": "减少",
   "pagination": {
     "label": "分页",
     "prev": "上一页",
