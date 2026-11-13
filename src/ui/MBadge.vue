@@ -21,23 +21,6 @@ const props = withDefaults(
   },
 )
 
-const variantTextClass = computed(() => {
-  switch (props.variant) {
-    case 'success':
-      return 'text-success-fg'
-    case 'warning':
-      return 'text-warning-fg'
-    case 'danger':
-      return 'text-danger-fg'
-    case 'neutral':
-      return 'text-fg-muted'
-    case 'primary':
-    case 'info':
-    default:
-      return 'text-primary-soft-fg'
-  }
-})
-
 const sizeClass = computed(() =>
   props.size === 'sm'
     ? 'h-5 px-2 text-[11px] leading-none'
@@ -53,7 +36,7 @@ const sizeClass = computed(() =>
     :dot="dot"
     :pulse="pulse"
     pill
-    :class-names="{ root: [variantTextClass, sizeClass].join(' ') }"
+    :class-names="{ root: sizeClass }"
   >
     <span v-if="icon" :class="icon" class="w-3 h-3 shrink-0" />
     <slot />

@@ -626,7 +626,7 @@ describe('UI Components', () => {
       slots: { default: 'Online' },
     })
     expect(wrapper.text()).toBe('Online')
-    expect(wrapper.classes()).toContain('text-success-fg')
+    expect(wrapper.classes()).toContain('miu-badge--success')
   })
 
   it('MAvatar shows image or initials', async () => {
